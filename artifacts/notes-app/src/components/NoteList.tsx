@@ -383,7 +383,7 @@ export function NoteList() {
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 min-w-[200px] bg-popover border border-panel-border rounded-xl shadow-lg shadow-black/20 py-1 overflow-visible"
+          className="fixed z-50 min-w-[200px] bg-popover text-popover-foreground border border-panel-border rounded-xl shadow-2xl shadow-black/40 py-1 overflow-visible backdrop-blur-none"
           style={{ top: contextMenu.y, left: contextMenu.x }}
         >
           <ContextMenuItem
@@ -460,7 +460,7 @@ export function NoteList() {
                   onClick={() => { setMoveMenuNoteId(moveMenuNoteId === contextMenu.noteId ? null : contextMenu.noteId); setShowTagsPanel(false); }}
                 />
                 {moveMenuNoteId === contextMenu.noteId && (
-                  <div className="absolute left-full top-0 ml-1 min-w-[150px] bg-popover border border-panel-border rounded-xl shadow-lg py-1 z-50">
+                  <div className="absolute left-full top-0 ml-1 min-w-[150px] bg-popover text-popover-foreground border border-panel-border rounded-xl shadow-2xl shadow-black/40 py-1 z-50">
                     <ContextMenuItem icon={<FileText className="w-4 h-4" />} label="No folder" onClick={() => moveNote(contextMenu.noteId, null)} />
                     {folders.map(f => (
                       <ContextMenuItem key={f.id} icon={<FileText className="w-4 h-4" />} label={f.name} onClick={() => moveNote(contextMenu.noteId, f.id)} />

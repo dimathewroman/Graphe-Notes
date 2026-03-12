@@ -22,6 +22,9 @@
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
 
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
   --color-border: hsl(var(--border));
   --color-ring: hsl(var(--ring));
 }
@@ -45,20 +48,22 @@
   --accent: 240 5% 20%;
   --accent-foreground: 0 0% 98%;
 
+  --popover: 240 5% 12%;
+  --popover-foreground: 0 0% 93%;
+
   --border: 240 5% 16%;
   --ring: 217 91% 60%;
 }
 
-/* Light mode overrides (if user toggles, though we default to dark) */
+/* Light mode overrides */
 .light {
   --background: 0 0% 98%;
   --foreground: 240 6% 6%;
   
   --panel: 0 0% 100%;
-  --panel-border: 240 6% 90%;
+  --panel-border: 240 6% 88%;
   --panel-hover: 240 6% 96%;
   
-  --primary: 217 91% 60%;
   --primary-hover: 217 91% 55%;
   --primary-foreground: 0 0% 100%;
   
@@ -68,7 +73,11 @@
   --accent: 240 6% 94%;
   --accent-foreground: 240 6% 10%;
 
-  --border: 240 6% 90%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 6% 6%;
+
+  --border: 240 6% 88%;
+  --ring: var(--primary);
 }
 
 @layer base {
@@ -137,4 +146,22 @@
 }
 .ProseMirror hr {
   @apply border-panel-border my-8;
+}
+.ProseMirror a {
+  @apply text-primary underline underline-offset-2 cursor-pointer hover:text-primary-hover transition-colors;
+}
+
+/* Table styles */
+.ProseMirror table {
+  @apply border-collapse w-full mb-4 text-sm;
+}
+.ProseMirror table td,
+.ProseMirror table th {
+  @apply border border-panel-border px-3 py-2 text-left;
+}
+.ProseMirror table th {
+  @apply bg-panel font-semibold;
+}
+.ProseMirror table tr:nth-child(even) td {
+  @apply bg-panel/40;
 }

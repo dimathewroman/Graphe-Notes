@@ -11,6 +11,7 @@ import Highlight from "@tiptap/extension-highlight";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Table, TableHeader, TableCell } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
+import Link from "@tiptap/extension-link";
 
 import { useAppStore } from "@/store";
 import {
@@ -25,7 +26,8 @@ import {
   List, ListOrdered, Quote, Code, Heading1, Heading2, Heading3,
   Image as ImageIcon, Trash2, Pin, Star, PanelLeft, FileText,
   Lock, Unlock, Table as TableIcon, RowsIcon, Plus, X, Hash,
-  Sparkles, Loader2, Check, RotateCcw, Wand2, BookOpen, Scissors
+  Sparkles, Loader2, Check, RotateCcw, Wand2, BookOpen, Scissors,
+  Link2, Unlink
 } from "lucide-react";
 import { IconButton } from "./ui/IconButton";
 import { cn, formatDate } from "@/lib/utils";
@@ -131,6 +133,20 @@ export function NoteEditor() {
   const [tagInput, setTagInput] = useState("");
   const [showTagInput, setShowTagInput] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
+  const [linkPopover, setLinkPopover] = useState<{ visible: boolean; url: string }>({ visible: false, url: "" });
+  const linkInputRef = useRef<HTMLInputElement>(null);
+  const linkPopoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!linkPopover.visible) return;
+    const handle = (e: MouseEvent) => {
+      if (linkPopoverRef.current && !linkPopoverRef.current.contains(e.target as Node)) {
+        setLinkPopover({ visible: false, url: "" });
+      }
+    };
+    document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
+  }, [linkPopover.visible]);
 
   // AI bubble menu state
   const [aiLoading, setAiLoading] = useState(false);
@@ -152,6 +168,10 @@ export function NoteEditor() {
       TableRow,
       TableHeader,
       TableCell,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" },
+      }),
     ],
     content: note?.content || "",
     onUpdate: ({ editor }) => {
@@ -263,6 +283,26 @@ export function NoteEditor() {
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetTagsQueryKey() });
+  };
+
+  // Link helpers
+  const openLinkPopover = () => {
+    if (!editor) return;
+    const existing = editor.getAttributes("link").href || "";
+    setLinkPopover({ visible: true, url: existing });
+    setTimeout(() => linkInputRef.current?.focus(), 30);
+  };
+
+  const applyLink = () => {
+    if (!editor) return;
+    const trimmed = linkPopover.url.trim();
+    if (!trimmed) {
+      editor.chain().focus().unsetLink().run();
+    } else {
+      const href = /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
+      editor.chain().focus().setLink({ href }).run();
+    }
+    setLinkPopover({ visible: false, url: "" });
   };
 
   // AI writing tools for selected text
@@ -452,6 +492,54 @@ export function NoteEditor() {
           icon={<ImageIcon className="w-4 h-4" />}
           title="Insert image"
         />
+
+        <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+
+        {/* Link button with inline popover */}
+        <div className="relative shrink-0">
+          <ToolbarButton
+            command={openLinkPopover}
+            active={editor.isActive("link")}
+            icon={<Link2 className="w-4 h-4" />}
+            title="Insert / edit link (Ctrl+K)"
+          />
+          {linkPopover.visible && (
+            <div
+              ref={linkPopoverRef}
+              className="absolute top-full left-0 mt-1.5 z-30 flex items-center gap-1.5 bg-popover border border-panel-border rounded-xl shadow-xl px-3 py-2 min-w-[280px]"
+            >
+              <Link2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <input
+                ref={linkInputRef}
+                type="text"
+                placeholder="https://example.com"
+                value={linkPopover.url}
+                onChange={(e) => setLinkPopover((p) => ({ ...p, url: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); applyLink(); }
+                  if (e.key === "Escape") setLinkPopover({ visible: false, url: "" });
+                  e.stopPropagation();
+                }}
+                className="flex-1 bg-transparent text-sm outline-none text-foreground placeholder:text-muted-foreground/60 min-w-0"
+              />
+              {editor.isActive("link") && (
+                <button
+                  onClick={() => { editor.chain().focus().unsetLink().run(); setLinkPopover({ visible: false, url: "" }); }}
+                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                  title="Remove link"
+                >
+                  <Unlink className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button
+                onClick={applyLink}
+                className="shrink-0 px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary-hover transition-colors"
+              >
+                Apply
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* AI Bubble Menu – custom floating menu on text selection */}
