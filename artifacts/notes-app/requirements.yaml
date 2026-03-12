@@ -1,0 +1,26 @@
+packages:
+  "zustand": "State management for the 3-panel layout and complex interactions"
+  "framer-motion": "Smooth animations for panels, modals, and list items"
+  "date-fns": "Formatting dates for note cards and headers"
+  "clsx": "Utility for conditional class names"
+  "tailwind-merge": "Utility for merging tailwind classes"
+  "@tiptap/react": "Core React hooks for the rich text editor"
+  "@tiptap/pm": "ProseMirror dependencies required by Tiptap"
+  "@tiptap/starter-kit": "Standard editor extensions"
+  "@tiptap/extension-underline": "Underline support"
+  "@tiptap/extension-text-style": "Text styling support"
+  "@tiptap/extension-color": "Text color support"
+  "@tiptap/extension-font-family": "Font family support"
+  "@tiptap/extension-image": "Image embedding support"
+  "@tiptap/extension-text-align": "Text alignment support"
+  "@tiptap/extension-highlight": "Text highlighting support"
+  "@tiptap/extension-placeholder": "Editor placeholder support"
+
+images:
+  - path: "artifacts/notes-app/public/images/empty-state-bg.png"
+    description: "Very subtle, dark minimalist abstract background mesh in deep charcoal and black, with a hint of soft geometric light, highly professional and clean, 4k resolution."
+    aspect_ratio: "16:9"
+
+notes:
+  - We use Zustand for UI state (selected note, active panel) and standard React Query (from @workspace/api-client-react) for remote state.
+  - Tiptap is used for the WYSIWYG editor, storing both HTML (content) and plain text (contentText) for searching.

@@ -1,0 +1,140 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  
+  --color-panel: hsl(var(--panel));
+  --color-panel-border: hsl(var(--panel-border));
+  --color-panel-hover: hsl(var(--panel-hover));
+  
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-hover: hsl(var(--primary-hover));
+  
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-border: hsl(var(--border));
+  --color-ring: hsl(var(--ring));
+}
+
+:root {
+  /* Ultra-clean minimal dark theme */
+  --background: 240 6% 6%; /* #0f0f11 */
+  --foreground: 0 0% 93%; /* #ececf1 */
+  
+  --panel: 240 5% 10%; /* #18181b */
+  --panel-border: 240 5% 16%; /* #27272a */
+  --panel-hover: 240 5% 14%;
+  
+  --primary: 217 91% 60%; /* blue-500 */
+  --primary-hover: 217 91% 65%;
+  --primary-foreground: 0 0% 100%;
+  
+  --muted: 240 5% 16%;
+  --muted-foreground: 240 5% 65%; /* #a1a1aa */
+  
+  --accent: 240 5% 20%;
+  --accent-foreground: 0 0% 98%;
+
+  --border: 240 5% 16%;
+  --ring: 217 91% 60%;
+}
+
+/* Light mode overrides (if user toggles, though we default to dark) */
+.light {
+  --background: 0 0% 98%;
+  --foreground: 240 6% 6%;
+  
+  --panel: 0 0% 100%;
+  --panel-border: 240 6% 90%;
+  --panel-hover: 240 6% 96%;
+  
+  --primary: 217 91% 60%;
+  --primary-hover: 217 91% 55%;
+  --primary-foreground: 0 0% 100%;
+  
+  --muted: 240 6% 96%;
+  --muted-foreground: 240 5% 40%;
+  
+  --accent: 240 6% 94%;
+  --accent-foreground: 240 6% 10%;
+
+  --border: 240 6% 90%;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased font-sans overflow-hidden;
+  }
+
+  /* Custom Scrollbar for a premium feel */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-panel-border rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground;
+  }
+}
+
+/* Tiptap Editor Styles */
+.ProseMirror {
+  @apply outline-none min-h-[500px] pb-32;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  @apply text-muted-foreground float-left h-0 pointer-events-none;
+}
+
+.ProseMirror h1 {
+  @apply text-4xl font-bold mt-8 mb-4 tracking-tight;
+}
+.ProseMirror h2 {
+  @apply text-2xl font-semibold mt-6 mb-3 tracking-tight;
+}
+.ProseMirror h3 {
+  @apply text-xl font-medium mt-4 mb-2;
+}
+.ProseMirror p {
+  @apply leading-relaxed mb-4;
+}
+.ProseMirror ul {
+  @apply list-disc list-inside mb-4 pl-4 space-y-1;
+}
+.ProseMirror ol {
+  @apply list-decimal list-inside mb-4 pl-4 space-y-1;
+}
+.ProseMirror blockquote {
+  @apply border-l-4 border-primary pl-4 italic text-muted-foreground mb-4;
+}
+.ProseMirror code {
+  @apply font-mono bg-panel border border-panel-border px-1.5 py-0.5 rounded text-sm text-primary;
+}
+.ProseMirror pre {
+  @apply font-mono bg-panel border border-panel-border p-4 rounded-xl text-sm overflow-x-auto mb-4;
+}
+.ProseMirror pre code {
+  @apply bg-transparent border-none p-0 text-foreground;
+}
+.ProseMirror img {
+  @apply max-w-full rounded-xl border border-panel-border shadow-md my-6;
+}
+.ProseMirror hr {
+  @apply border-panel-border my-8;
+}

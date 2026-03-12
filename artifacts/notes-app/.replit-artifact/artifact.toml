@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Notes App"
+version = "1.0.0"
+id = "artifacts/notes-app"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+localPort = 25135
+name = "web"
+paths = ["/"]
+
+[services.development]
+run = "pnpm --filter @workspace/notes-app run dev"
+
+[services.env]
+PORT = "25135"
+BASE_PATH = "/"
+
+[services.production]
+build = ["pnpm", "--filter", "@workspace/notes-app", "run", "build"]
+publicDir = "artifacts/notes-app/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

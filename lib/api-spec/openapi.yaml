@@ -1,15 +1,22 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Notes App API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: folders
+    description: Folder operations
+  - name: notes
+    description: Note operations
+  - name: tags
+    description: Tag operations
+  - name: ai
+    description: AI assistant operations
 paths:
   /healthz:
     get:
@@ -24,6 +31,364 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /folders:
+    get:
+      operationId: getFolders
+      tags: [folders]
+      summary: List all folders
+      responses:
+        "200":
+          description: List of folders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Folder"
+    post:
+      operationId: createFolder
+      tags: [folders]
+      summary: Create a folder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFolderBody"
+      responses:
+        "201":
+          description: Created folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Folder"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /folders/{id}:
+    patch:
+      operationId: updateFolder
+      tags: [folders]
+      summary: Update a folder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateFolderBody"
+      responses:
+        "200":
+          description: Updated folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Folder"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteFolder
+      tags: [folders]
+      summary: Delete a folder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notes:
+    get:
+      operationId: getNotes
+      tags: [notes]
+      summary: List notes with optional filters
+      parameters:
+        - name: folderId
+          in: query
+          schema:
+            type: ["integer", "null"]
+        - name: search
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: pinned
+          in: query
+          schema:
+            type: ["boolean", "null"]
+        - name: favorite
+          in: query
+          schema:
+            type: ["boolean", "null"]
+        - name: tag
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: sortBy
+          in: query
+          schema:
+            type: ["string", "null"]
+            enum: ["updatedAt", "createdAt", "title", null]
+        - name: sortDir
+          in: query
+          schema:
+            type: ["string", "null"]
+            enum: ["asc", "desc", null]
+      responses:
+        "200":
+          description: List of notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Note"
+    post:
+      operationId: createNote
+      tags: [notes]
+      summary: Create a note
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNoteBody"
+      responses:
+        "201":
+          description: Created note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notes/{id}:
+    get:
+      operationId: getNote
+      tags: [notes]
+      summary: Get a single note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateNote
+      tags: [notes]
+      summary: Update a note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNoteBody"
+      responses:
+        "200":
+          description: Updated note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteNote
+      tags: [notes]
+      summary: Delete a note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notes/{id}/pin:
+    patch:
+      operationId: toggleNotePin
+      tags: [notes]
+      summary: Toggle note pinned status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notes/{id}/favorite:
+    patch:
+      operationId: toggleNoteFavorite
+      tags: [notes]
+      summary: Toggle note favorite status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notes/{id}/move:
+    patch:
+      operationId: moveNote
+      tags: [notes]
+      summary: Move note to a different folder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveNoteBody"
+      responses:
+        "200":
+          description: Updated note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /tags:
+    get:
+      operationId: getTags
+      tags: [tags]
+      summary: Get all unique tags used across notes
+      responses:
+        "200":
+          description: List of tag strings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /ai/complete:
+    post:
+      operationId: aiComplete
+      tags: [ai]
+      summary: Send a prompt to an AI model and get a completion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiCompleteBody"
+      responses:
+        "200":
+          description: AI completion result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiCompleteResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: AI error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +399,201 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    Folder:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        parentId:
+          type: ["integer", "null"]
+        color:
+          type: ["string", "null"]
+        icon:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - parentId
+        - color
+        - icon
+        - sortOrder
+        - createdAt
+        - updatedAt
+
+    CreateFolderBody:
+      type: object
+      properties:
+        name:
+          type: string
+        parentId:
+          type: ["integer", "null"]
+        color:
+          type: ["string", "null"]
+        icon:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+      required:
+        - name
+
+    UpdateFolderBody:
+      type: object
+      properties:
+        name:
+          type: string
+        parentId:
+          type: ["integer", "null"]
+        color:
+          type: ["string", "null"]
+        icon:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+
+    Note:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        content:
+          type: string
+        contentText:
+          type: ["string", "null"]
+        folderId:
+          type: ["integer", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        pinned:
+          type: boolean
+        favorite:
+          type: boolean
+        coverImage:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - title
+        - content
+        - contentText
+        - folderId
+        - tags
+        - pinned
+        - favorite
+        - coverImage
+        - createdAt
+        - updatedAt
+
+    CreateNoteBody:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        contentText:
+          type: ["string", "null"]
+        folderId:
+          type: ["integer", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        pinned:
+          type: boolean
+        favorite:
+          type: boolean
+        coverImage:
+          type: ["string", "null"]
+      required:
+        - title
+        - content
+
+    UpdateNoteBody:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        contentText:
+          type: ["string", "null"]
+        folderId:
+          type: ["integer", "null"]
+        tags:
+          type: array
+          items:
+            type: string
+        pinned:
+          type: boolean
+        favorite:
+          type: boolean
+        coverImage:
+          type: ["string", "null"]
+
+    MoveNoteBody:
+      type: object
+      properties:
+        folderId:
+          type: ["integer", "null"]
+      required:
+        - folderId
+
+    AiCompleteBody:
+      type: object
+      properties:
+        provider:
+          type: string
+          enum: ["openai", "anthropic", "google"]
+        apiKey:
+          type: string
+        model:
+          type: string
+        prompt:
+          type: string
+        systemPrompt:
+          type: ["string", "null"]
+        noteContext:
+          type: ["string", "null"]
+      required:
+        - provider
+        - apiKey
+        - model
+        - prompt
+
+    AiCompleteResponse:
+      type: object
+      properties:
+        result:
+          type: string
+        tokensUsed:
+          type: ["integer", "null"]
+      required:
+        - result
+        - tokensUsed
