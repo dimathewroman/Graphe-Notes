@@ -62,6 +62,9 @@ export interface Note {
   favorite: boolean;
   /** @nullable */
   coverImage: string | null;
+  locked: boolean;
+  /** @nullable */
+  lockPasswordHash: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -92,6 +95,9 @@ export interface UpdateNoteBody {
   favorite?: boolean;
   /** @nullable */
   coverImage?: string | null;
+  locked?: boolean;
+  /** @nullable */
+  lockPasswordHash?: string | null;
 }
 
 export interface MoveNoteBody {
@@ -123,6 +129,37 @@ export interface AiCompleteResponse {
   result: string;
   /** @nullable */
   tokensUsed: number | null;
+}
+
+export interface LockNoteBody {
+  passwordHash: string;
+}
+
+export interface SmartFolder {
+  id: number;
+  name: string;
+  tagRules: string[];
+  /** @nullable */
+  color: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateSmartFolderBody {
+  name: string;
+  tagRules: string[];
+  /** @nullable */
+  color?: string | null;
+  sortOrder?: number;
+}
+
+export interface UpdateSmartFolderBody {
+  name?: string;
+  tagRules?: string[];
+  /** @nullable */
+  color?: string | null;
+  sortOrder?: number;
 }
 
 export type GetNotesParams = {

@@ -18,6 +18,11 @@ import {
   ToggleNotePinResponse,
   ToggleNoteFavoriteResponse,
   MoveNoteResponse,
+  LockNoteParams,
+  LockNoteBody,
+  LockNoteResponse,
+  UnlockNoteParams,
+  UnlockNoteResponse,
 } from "@workspace/api-zod";
 import { desc, asc } from "drizzle-orm";
 
@@ -244,6 +249,36 @@ router.patch("/notes/:id/move", async (req, res): Promise<void> => {
   }
 
   res.json(MoveNoteResponse.parse(note));
+});
+
+router.patch("/notes/:id/lock", async (req, res): Promise<void> => {
+  const params = LockNoteParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const parsed = LockNoteBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const [note] = await db
+    .update(notesTable)
+    .set({ locked: true, lockPasswordHash: parsed.data.passwordHash, updatedAt: new Date() })
+    .where(eq(notesTable.id, params.data.id))
+    .returning();
+
+  if (!note) { res.status(404).json({ error: "Note not found" }); return; }
+  res.json(LockNoteResponse.parse(note));
+});
+
+router.patch("/notes/:id/unlock", async (req, res): Promise<void> => {
+  const params = UnlockNoteParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+
+  const [note] = await db
+    .update(notesTable)
+    .set({ locked: false, lockPasswordHash: null, updatedAt: new Date() })
+    .where(eq(notesTable.id, params.data.id))
+    .returning();
+
+  if (!note) { res.status(404).json({ error: "Note not found" }); return; }
+  res.json(UnlockNoteResponse.parse(note));
 });
 
 export default router;

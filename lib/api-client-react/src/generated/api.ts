@@ -21,14 +21,18 @@ import type {
   AiCompleteResponse,
   CreateFolderBody,
   CreateNoteBody,
+  CreateSmartFolderBody,
   ErrorResponse,
   Folder,
   GetNotesParams,
   HealthStatus,
+  LockNoteBody,
   MoveNoteBody,
   Note,
+  SmartFolder,
   UpdateFolderBody,
   UpdateNoteBody,
+  UpdateSmartFolderBody,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1127,6 +1131,509 @@ export const useMoveNote = <
   TContext
 > => {
   return useMutation(getMoveNoteMutationOptions(options));
+};
+
+/**
+ * @summary Lock a note with a password hash
+ */
+export const getLockNoteUrl = (id: number) => {
+  return `/api/notes/${id}/lock`;
+};
+
+export const lockNote = async (
+  id: number,
+  lockNoteBody: LockNoteBody,
+  options?: RequestInit,
+): Promise<Note> => {
+  return customFetch<Note>(getLockNoteUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(lockNoteBody),
+  });
+};
+
+export const getLockNoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof lockNote>>,
+    TError,
+    { id: number; data: BodyType<LockNoteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof lockNote>>,
+  TError,
+  { id: number; data: BodyType<LockNoteBody> },
+  TContext
+> => {
+  const mutationKey = ["lockNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof lockNote>>,
+    { id: number; data: BodyType<LockNoteBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return lockNote(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LockNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof lockNote>>
+>;
+export type LockNoteMutationBody = BodyType<LockNoteBody>;
+export type LockNoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Lock a note with a password hash
+ */
+export const useLockNote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof lockNote>>,
+    TError,
+    { id: number; data: BodyType<LockNoteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof lockNote>>,
+  TError,
+  { id: number; data: BodyType<LockNoteBody> },
+  TContext
+> => {
+  return useMutation(getLockNoteMutationOptions(options));
+};
+
+/**
+ * @summary Unlock a note
+ */
+export const getUnlockNoteUrl = (id: number) => {
+  return `/api/notes/${id}/unlock`;
+};
+
+export const unlockNote = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Note> => {
+  return customFetch<Note>(getUnlockNoteUrl(id), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getUnlockNoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlockNote>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unlockNote>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["unlockNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unlockNote>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return unlockNote(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnlockNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unlockNote>>
+>;
+
+export type UnlockNoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Unlock a note
+ */
+export const useUnlockNote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlockNote>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unlockNote>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getUnlockNoteMutationOptions(options));
+};
+
+/**
+ * @summary List all smart folders
+ */
+export const getGetSmartFoldersUrl = () => {
+  return `/api/smart-folders`;
+};
+
+export const getSmartFolders = async (
+  options?: RequestInit,
+): Promise<SmartFolder[]> => {
+  return customFetch<SmartFolder[]>(getGetSmartFoldersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSmartFoldersQueryKey = () => {
+  return [`/api/smart-folders`] as const;
+};
+
+export const getGetSmartFoldersQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSmartFolders>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSmartFolders>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSmartFoldersQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSmartFolders>>> = ({
+    signal,
+  }) => getSmartFolders({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSmartFolders>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSmartFoldersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSmartFolders>>
+>;
+export type GetSmartFoldersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all smart folders
+ */
+
+export function useGetSmartFolders<
+  TData = Awaited<ReturnType<typeof getSmartFolders>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSmartFolders>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSmartFoldersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a smart folder
+ */
+export const getCreateSmartFolderUrl = () => {
+  return `/api/smart-folders`;
+};
+
+export const createSmartFolder = async (
+  createSmartFolderBody: CreateSmartFolderBody,
+  options?: RequestInit,
+): Promise<SmartFolder> => {
+  return customFetch<SmartFolder>(getCreateSmartFolderUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createSmartFolderBody),
+  });
+};
+
+export const getCreateSmartFolderMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSmartFolder>>,
+    TError,
+    { data: BodyType<CreateSmartFolderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createSmartFolder>>,
+  TError,
+  { data: BodyType<CreateSmartFolderBody> },
+  TContext
+> => {
+  const mutationKey = ["createSmartFolder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createSmartFolder>>,
+    { data: BodyType<CreateSmartFolderBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createSmartFolder(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateSmartFolderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createSmartFolder>>
+>;
+export type CreateSmartFolderMutationBody = BodyType<CreateSmartFolderBody>;
+export type CreateSmartFolderMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create a smart folder
+ */
+export const useCreateSmartFolder = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSmartFolder>>,
+    TError,
+    { data: BodyType<CreateSmartFolderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createSmartFolder>>,
+  TError,
+  { data: BodyType<CreateSmartFolderBody> },
+  TContext
+> => {
+  return useMutation(getCreateSmartFolderMutationOptions(options));
+};
+
+/**
+ * @summary Update a smart folder
+ */
+export const getUpdateSmartFolderUrl = (id: number) => {
+  return `/api/smart-folders/${id}`;
+};
+
+export const updateSmartFolder = async (
+  id: number,
+  updateSmartFolderBody: UpdateSmartFolderBody,
+  options?: RequestInit,
+): Promise<SmartFolder> => {
+  return customFetch<SmartFolder>(getUpdateSmartFolderUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateSmartFolderBody),
+  });
+};
+
+export const getUpdateSmartFolderMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSmartFolder>>,
+    TError,
+    { id: number; data: BodyType<UpdateSmartFolderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateSmartFolder>>,
+  TError,
+  { id: number; data: BodyType<UpdateSmartFolderBody> },
+  TContext
+> => {
+  const mutationKey = ["updateSmartFolder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateSmartFolder>>,
+    { id: number; data: BodyType<UpdateSmartFolderBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateSmartFolder(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateSmartFolderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateSmartFolder>>
+>;
+export type UpdateSmartFolderMutationBody = BodyType<UpdateSmartFolderBody>;
+export type UpdateSmartFolderMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update a smart folder
+ */
+export const useUpdateSmartFolder = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateSmartFolder>>,
+    TError,
+    { id: number; data: BodyType<UpdateSmartFolderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateSmartFolder>>,
+  TError,
+  { id: number; data: BodyType<UpdateSmartFolderBody> },
+  TContext
+> => {
+  return useMutation(getUpdateSmartFolderMutationOptions(options));
+};
+
+/**
+ * @summary Delete a smart folder
+ */
+export const getDeleteSmartFolderUrl = (id: number) => {
+  return `/api/smart-folders/${id}`;
+};
+
+export const deleteSmartFolder = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteSmartFolderUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteSmartFolderMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSmartFolder>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteSmartFolder>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteSmartFolder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteSmartFolder>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteSmartFolder(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteSmartFolderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteSmartFolder>>
+>;
+
+export type DeleteSmartFolderMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a smart folder
+ */
+export const useDeleteSmartFolder = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSmartFolder>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteSmartFolder>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteSmartFolderMutationOptions(options));
 };
 
 /**

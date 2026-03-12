@@ -106,6 +106,8 @@ export const GetNotesResponseItem = zod.object({
   pinned: zod.boolean(),
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
+  locked: zod.boolean(),
+  lockPasswordHash: zod.string().nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -142,6 +144,8 @@ export const GetNoteResponse = zod.object({
   pinned: zod.boolean(),
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
+  locked: zod.boolean(),
+  lockPasswordHash: zod.string().nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -162,6 +166,8 @@ export const UpdateNoteBody = zod.object({
   pinned: zod.boolean().optional(),
   favorite: zod.boolean().optional(),
   coverImage: zod.string().nullish(),
+  locked: zod.boolean().optional(),
+  lockPasswordHash: zod.string().nullish(),
 });
 
 export const UpdateNoteResponse = zod.object({
@@ -174,6 +180,8 @@ export const UpdateNoteResponse = zod.object({
   pinned: zod.boolean(),
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
+  locked: zod.boolean(),
+  lockPasswordHash: zod.string().nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -202,6 +210,8 @@ export const ToggleNotePinResponse = zod.object({
   pinned: zod.boolean(),
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
+  locked: zod.boolean(),
+  lockPasswordHash: zod.string().nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -223,6 +233,8 @@ export const ToggleNoteFavoriteResponse = zod.object({
   pinned: zod.boolean(),
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
+  locked: zod.boolean(),
+  lockPasswordHash: zod.string().nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -248,8 +260,115 @@ export const MoveNoteResponse = zod.object({
   pinned: zod.boolean(),
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
+  locked: zod.boolean(),
+  lockPasswordHash: zod.string().nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
+});
+
+/**
+ * @summary Lock a note with a password hash
+ */
+export const LockNoteParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const LockNoteBody = zod.object({
+  passwordHash: zod.string(),
+});
+
+export const LockNoteResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  content: zod.string(),
+  contentText: zod.string().nullable(),
+  folderId: zod.number().nullable(),
+  tags: zod.array(zod.string()),
+  pinned: zod.boolean(),
+  favorite: zod.boolean(),
+  coverImage: zod.string().nullable(),
+  locked: zod.boolean(),
+  lockPasswordHash: zod.string().nullable(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Unlock a note
+ */
+export const UnlockNoteParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UnlockNoteResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  content: zod.string(),
+  contentText: zod.string().nullable(),
+  folderId: zod.number().nullable(),
+  tags: zod.array(zod.string()),
+  pinned: zod.boolean(),
+  favorite: zod.boolean(),
+  coverImage: zod.string().nullable(),
+  locked: zod.boolean(),
+  lockPasswordHash: zod.string().nullable(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary List all smart folders
+ */
+export const GetSmartFoldersResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  tagRules: zod.array(zod.string()),
+  color: zod.string().nullable(),
+  sortOrder: zod.number(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const GetSmartFoldersResponse = zod.array(GetSmartFoldersResponseItem);
+
+/**
+ * @summary Create a smart folder
+ */
+export const CreateSmartFolderBody = zod.object({
+  name: zod.string(),
+  tagRules: zod.array(zod.string()),
+  color: zod.string().nullish(),
+  sortOrder: zod.number().optional(),
+});
+
+/**
+ * @summary Update a smart folder
+ */
+export const UpdateSmartFolderParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateSmartFolderBody = zod.object({
+  name: zod.string().optional(),
+  tagRules: zod.array(zod.string()).optional(),
+  color: zod.string().nullish(),
+  sortOrder: zod.number().optional(),
+});
+
+export const UpdateSmartFolderResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  tagRules: zod.array(zod.string()),
+  color: zod.string().nullable(),
+  sortOrder: zod.number(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Delete a smart folder
+ */
+export const DeleteSmartFolderParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**

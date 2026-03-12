@@ -19,6 +19,9 @@ export interface Note {
   favorite: boolean;
   /** @nullable */
   coverImage: string | null;
+  locked: boolean;
+  /** @nullable */
+  lockPasswordHash: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
