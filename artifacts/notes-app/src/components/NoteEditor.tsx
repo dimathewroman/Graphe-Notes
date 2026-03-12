@@ -30,13 +30,98 @@ import {
   Image as ImageIcon, Trash2, Pin, Star, PanelLeft, FileText,
   Lock, Unlock, Table as TableIcon, RowsIcon, Plus, X, Hash,
   Sparkles, Loader2, Check, RotateCcw, Wand2, BookOpen, Scissors,
-  Link2, Unlink
+  Link2, Unlink, ChevronRight, ArrowUp, ArrowDown, MessageSquare, ListChecks
 } from "lucide-react";
 import { IconButton } from "./ui/IconButton";
 import { cn, formatDate } from "@/lib/utils";
 import { LockModal } from "./LockModal";
 
 // Custom floating AI menu that appears on text selection (Tiptap v3 compatible)
+
+type PresetOption = { id: string; label: string };
+
+type SubAction = {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  presets?: PresetOption[];
+};
+
+type ActionGroup = {
+  label: string;
+  icon: React.ReactNode;
+  actions: SubAction[];
+};
+
+const actionGroups: ActionGroup[] = [
+  {
+    label: "Adjust Length",
+    icon: <Scissors className="w-3 h-3" />,
+    actions: [
+      {
+        id: "shorter",
+        label: "Shorter",
+        icon: <ArrowDown className="w-3 h-3" />,
+        presets: [
+          { id: "shorter_25", label: "25% shorter" },
+          { id: "shorter_50", label: "50% shorter" },
+          { id: "shorter_custom", label: "Custom" },
+        ],
+      },
+      {
+        id: "longer",
+        label: "Longer",
+        icon: <ArrowUp className="w-3 h-3" />,
+        presets: [
+          { id: "longer_25", label: "25% longer" },
+          { id: "longer_50", label: "50% longer" },
+          { id: "longer_custom", label: "Custom" },
+        ],
+      },
+    ],
+  },
+  {
+    label: "Improve Writing",
+    icon: <Wand2 className="w-3 h-3" />,
+    actions: [
+      { id: "proofread", label: "Proofread", icon: <Check className="w-3 h-3" /> },
+      { id: "simplify", label: "Simplify", icon: <BookOpen className="w-3 h-3" /> },
+      { id: "improve", label: "Improve", icon: <Wand2 className="w-3 h-3" /> },
+    ],
+  },
+  {
+    label: "Transform",
+    icon: <RotateCcw className="w-3 h-3" />,
+    actions: [
+      { id: "rewrite", label: "Rewrite", icon: <RotateCcw className="w-3 h-3" /> },
+      {
+        id: "tone",
+        label: "Change Tone",
+        icon: <MessageSquare className="w-3 h-3" />,
+        presets: [
+          { id: "tone_casual", label: "Casual" },
+          { id: "tone_professional", label: "Professional" },
+          { id: "tone_friendly", label: "Friendly" },
+          { id: "tone_direct", label: "Direct" },
+          { id: "tone_custom", label: "Custom" },
+        ],
+      },
+      {
+        id: "summarize",
+        label: "Summarize",
+        icon: <BookOpen className="w-3 h-3" />,
+        presets: [
+          { id: "summarize_short", label: "Short (1–2 sentences)" },
+          { id: "summarize_balanced", label: "Balanced (short paragraph)" },
+          { id: "summarize_detailed", label: "Detailed (bullet points)" },
+          { id: "summarize_custom", label: "Custom" },
+        ],
+      },
+      { id: "extract_action_items", label: "Extract Action Items", icon: <ListChecks className="w-3 h-3" /> },
+    ],
+  },
+];
+
 function AiSelectionMenu({
   editor,
   visible,
@@ -44,9 +129,23 @@ function AiSelectionMenu({
 }: {
   editor: ReturnType<typeof useEditor>;
   visible: boolean;
-  onAction: (action: string) => void;
+  onAction: (action: string, customInstruction?: string) => void;
 }) {
   const [rect, setRect] = useState<DOMRect | null>(null);
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  const [expandedAction, setExpandedAction] = useState<string | null>(null);
+  const [customInputFor, setCustomInputFor] = useState<string | null>(null);
+  const [customText, setCustomText] = useState("");
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!visible) {
+      setExpandedGroup(null);
+      setExpandedAction(null);
+      setCustomInputFor(null);
+      setCustomText("");
+    }
+  }, [visible]);
 
   useEffect(() => {
     if (!editor) return;
@@ -63,48 +162,180 @@ function AiSelectionMenu({
       setRect(r);
     };
 
+    const handleBlur = () => setTimeout(() => setRect(null), 150);
+
     editor.on("selectionUpdate", update);
     editor.on("focus", update);
-    editor.on("blur", () => setTimeout(() => setRect(null), 150));
+    editor.on("blur", handleBlur);
 
     return () => {
       editor.off("selectionUpdate", update);
       editor.off("focus", update);
+      editor.off("blur", handleBlur);
     };
   }, [editor, visible]);
 
   if (!rect || !visible) return null;
 
+  const resetMenu = () => {
+    setExpandedGroup(null);
+    setExpandedAction(null);
+    setCustomInputFor(null);
+    setCustomText("");
+  };
+
+  const handlePresetClick = (presetId: string) => {
+    if (presetId.endsWith("_custom")) {
+      setCustomInputFor(presetId);
+      setCustomText("");
+    } else {
+      onAction(presetId);
+      resetMenu();
+    }
+  };
+
+  const handleCustomSubmit = (baseActionId: string) => {
+    if (customText.trim()) {
+      onAction(baseActionId, customText.trim());
+      resetMenu();
+    }
+  };
+
+  const toolbarTop = rect.top - 44 + window.scrollY;
+  const toolbarLeft = rect.left + rect.width / 2;
+
   return (
     <div
-      className="fixed z-50 flex items-center gap-0.5 bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 pointer-events-auto"
-      style={{
-        top: rect.top - 48 + window.scrollY,
-        left: rect.left + rect.width / 2 - 180,
-      }}
+      ref={menuRef}
+      className="fixed z-50 pointer-events-auto"
+      style={{ top: toolbarTop, left: toolbarLeft, transform: "translateX(-50%)" }}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <span className="text-xs text-muted-foreground px-2 font-medium flex items-center gap-1">
-        <Sparkles className="w-3 h-3 text-indigo-400" />
-        AI
-      </span>
-      <div className="w-px h-4 bg-panel-border" />
-      {[
-        { id: "proofread", label: "Proofread", icon: <Check className="w-3 h-3" /> },
-        { id: "rewrite", label: "Rewrite", icon: <RotateCcw className="w-3 h-3" /> },
-        { id: "improve", label: "Improve", icon: <Wand2 className="w-3 h-3" /> },
-        { id: "summarize", label: "Summarize", icon: <BookOpen className="w-3 h-3" /> },
-        { id: "shorter", label: "Shorter", icon: <Scissors className="w-3 h-3" /> },
-      ].map((action) => (
-        <button
-          key={action.id}
-          onClick={() => onAction(action.id)}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400 transition-colors"
-        >
-          {action.icon}
-          {action.label}
-        </button>
-      ))}
+      <div className="flex items-center gap-0.5 bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1">
+        <span className="text-xs text-muted-foreground px-2 font-medium flex items-center gap-1">
+          <Sparkles className="w-3 h-3 text-indigo-400" />
+          AI
+        </span>
+        <div className="w-px h-4 bg-panel-border" />
+
+        {actionGroups.map((group) => (
+          <div key={group.label} className="relative">
+            <button
+              onClick={() => {
+                setExpandedGroup(expandedGroup === group.label ? null : group.label);
+                setExpandedAction(null);
+                setCustomInputFor(null);
+                setCustomText("");
+              }}
+              onMouseEnter={() => {
+                setExpandedGroup(group.label);
+                setExpandedAction(null);
+                setCustomInputFor(null);
+                setCustomText("");
+              }}
+              className={cn(
+                "flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs whitespace-nowrap transition-colors",
+                expandedGroup === group.label
+                  ? "bg-indigo-500/10 text-indigo-400"
+                  : "text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400"
+              )}
+            >
+              {group.icon}
+              {group.label}
+              <ChevronRight className={cn("w-3 h-3 transition-transform", expandedGroup === group.label && "rotate-90")} />
+            </button>
+
+            {expandedGroup === group.label && (
+              <div
+                className="absolute top-full left-0 mt-1 bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 min-w-[160px] z-50"
+                onMouseLeave={() => {
+                  if (!expandedAction && !customInputFor) {
+                    setExpandedGroup(null);
+                  }
+                }}
+              >
+                {group.actions.map((action) => (
+                  <div key={action.id} className="relative">
+                    {action.presets ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            setExpandedAction(expandedAction === action.id ? null : action.id);
+                            setCustomInputFor(null);
+                            setCustomText("");
+                          }}
+                          onMouseEnter={() => {
+                            setExpandedAction(action.id);
+                            setCustomInputFor(null);
+                            setCustomText("");
+                          }}
+                          className={cn(
+                            "flex items-center justify-between w-full px-2 py-1.5 rounded-lg text-xs transition-colors",
+                            expandedAction === action.id
+                              ? "bg-indigo-500/10 text-indigo-400"
+                              : "text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400"
+                          )}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            {action.icon}
+                            {action.label}
+                          </span>
+                          <ChevronRight className="w-3 h-3" />
+                        </button>
+                        {expandedAction === action.id && (
+                          <div className="absolute left-full top-0 ml-1 bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 min-w-[180px] z-50">
+                            {action.presets.map((preset) => (
+                              <div key={preset.id}>
+                                {customInputFor === preset.id ? (
+                                  <div className="flex items-center gap-1 px-1 py-1">
+                                    <input
+                                      type="text"
+                                      value={customText}
+                                      onChange={(e) => setCustomText(e.target.value)}
+                                      onKeyDown={(e) => { if (e.key === "Enter") handleCustomSubmit(preset.id); }}
+                                      placeholder="Type instruction..."
+                                      className="flex-1 bg-transparent border border-panel-border rounded px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-indigo-500 min-w-[120px]"
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={() => handleCustomSubmit(preset.id)}
+                                      className="p-1 rounded hover:bg-indigo-500/10 text-indigo-400"
+                                    >
+                                      <Check className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => handlePresetClick(preset.id)}
+                                    className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400 transition-colors whitespace-nowrap"
+                                  >
+                                    {preset.label}
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          onAction(action.id);
+                          resetMenu();
+                        }}
+                        className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400 transition-colors whitespace-nowrap"
+                      >
+                        {action.icon}
+                        {action.label}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -435,7 +666,7 @@ export function NoteEditor() {
   };
 
   // AI writing tools for selected text
-  const callAI = async (action: string) => {
+  const callAI = async (action: string, customInstruction?: string) => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
     const selected = editor.state.doc.textBetween(from, to);
@@ -452,19 +683,36 @@ export function NoteEditor() {
     setAiPreview(null);
 
     const prompts: Record<string, string> = {
-      proofread: `Proofread and fix grammar/spelling in the following text. Return only the corrected text, no explanations:\n\n${selected}`,
-      rewrite: `Rewrite the following text to be clearer and more engaging. Return only the rewritten text:\n\n${selected}`,
-      improve: `Improve the following text. Make it more professional and polished. Return only the improved text:\n\n${selected}`,
-      summarize: `Summarize the following text in 1-2 sentences. Return only the summary:\n\n${selected}`,
-      shorter: `Make the following text shorter and more concise. Return only the shortened text:\n\n${selected}`,
-      longer: `Expand the following text with more detail and context. Return only the expanded text:\n\n${selected}`,
+      shorter_25: `Make the following text approximately 25% shorter while preserving key meaning. Return only the shortened text:\n\n${selected}`,
+      shorter_50: `Make the following text approximately 50% shorter while preserving key meaning. Return only the shortened text:\n\n${selected}`,
+      shorter_custom: `Make the following text shorter. Additional instruction: ${customInstruction || ""}. Return only the shortened text:\n\n${selected}`,
+      longer_25: `Expand the following text by approximately 25% with more detail and context. Return only the expanded text:\n\n${selected}`,
+      longer_50: `Expand the following text by approximately 50% with more detail and context. Return only the expanded text:\n\n${selected}`,
+      longer_custom: `Expand the following text. Additional instruction: ${customInstruction || ""}. Return only the expanded text:\n\n${selected}`,
+      proofread: `Proofread and fix grammar, spelling, and punctuation in the following text. Do not change wording or structure. Return only the corrected text, no explanations:\n\n${selected}`,
+      simplify: `Rewrite the following text using shorter sentences and simpler vocabulary. Keep the same length and meaning. Return only the simplified text:\n\n${selected}`,
+      improve: `Enhance the clarity, flow, and word choice of the following text while preserving its original meaning. Return only the improved text:\n\n${selected}`,
+      rewrite: `Completely rephrase the following text while preserving its core meaning. Return only the rewritten text:\n\n${selected}`,
+      tone_casual: `Rewrite the following text in a casual tone. Return only the rewritten text:\n\n${selected}`,
+      tone_professional: `Rewrite the following text in a professional tone. Return only the rewritten text:\n\n${selected}`,
+      tone_friendly: `Rewrite the following text in a friendly tone. Return only the rewritten text:\n\n${selected}`,
+      tone_direct: `Rewrite the following text in a direct tone. Return only the rewritten text:\n\n${selected}`,
+      tone_custom: `Rewrite the following text with the following tone/style: ${customInstruction || ""}. Return only the rewritten text:\n\n${selected}`,
+      summarize_short: `Summarize the following text in 1-2 sentences. Return only the summary:\n\n${selected}`,
+      summarize_balanced: `Summarize the following text in a short paragraph. Return only the summary:\n\n${selected}`,
+      summarize_detailed: `Summarize the following text as detailed bullet points. Return only the bullet-point summary:\n\n${selected}`,
+      summarize_custom: `Summarize the following text. Additional instruction: ${customInstruction || ""}. Return only the summary:\n\n${selected}`,
+      extract_action_items: `Extract all action items, tasks, and to-dos from the following text. Return them as a bulleted list. If no action items are found, return "No action items found.":\n\n${selected}`,
     };
+
+    const prompt = prompts[action];
+    if (!prompt) return;
 
     try {
       const res = await fetch("/api/ai/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey, model, prompt: prompts[action] })
+        body: JSON.stringify({ provider, apiKey, model, prompt })
       });
       const data = await res.json();
       setAiPreview(data.result || "");
