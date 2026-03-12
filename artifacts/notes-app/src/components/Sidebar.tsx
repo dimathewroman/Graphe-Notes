@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { 
-  Folder, FolderOpen, FileText, Star, Pin, 
-  Settings, Hash, Plus, MoreVertical, Trash2, Edit2, Zap
+  Folder, FolderOpen, FileText, Star,
+  Settings, Hash, Plus, Trash2, Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
@@ -124,12 +124,6 @@ export function Sidebar() {
             label="All Notes" 
             active={activeFilter === "all"} 
             onClick={() => setFilter("all")} 
-          />
-          <NavItem 
-            icon={<Pin className="w-4 h-4" />} 
-            label="Pinned" 
-            active={activeFilter === "pinned"} 
-            onClick={() => setFilter("pinned")} 
           />
           <NavItem 
             icon={<Star className="w-4 h-4" />} 

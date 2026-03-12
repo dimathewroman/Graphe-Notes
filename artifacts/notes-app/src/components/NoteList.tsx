@@ -1,45 +1,95 @@
-import { useState, useEffect } from "react";
-import { Search, Plus, Filter, Pin, Star, Hash, FileText } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Search, Plus, Pin, Star, FileText, MoreVertical, Trash2, FolderInput } from "lucide-react";
 import { useAppStore } from "@/store";
 import { useDebounce } from "@/hooks/use-debounce";
 import { 
-  useGetNotes, useCreateNote, getGetNotesQueryKey 
+  useGetNotes, useCreateNote, useToggleNotePin, useToggleNoteFavorite,
+  useDeleteNote, getGetNotesQueryKey, useGetFolders
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatDate } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
 
+interface ContextMenu {
+  noteId: number;
+  pinned: boolean;
+  favorite: boolean;
+  x: number;
+  y: number;
+}
+
 export function NoteList() {
   const { 
     activeFilter, activeFolderId, activeTag, 
-    searchQuery, setSearchQuery, sortBy, sortDir, setSort,
+    searchQuery, setSearchQuery, sortBy, sortDir,
     selectedNoteId, selectNote
   } = useAppStore();
   
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const debouncedSearch = useDebounce(localSearch, 300);
-  
-  // Sync debounce to store
+  const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
+  const [moveMenuNoteId, setMoveMenuNoteId] = useState<number | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => { setSearchQuery(debouncedSearch); }, [debouncedSearch, setSearchQuery]);
+
+  // Close context menu on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenu(null);
+        setMoveMenuNoteId(null);
+      }
+    };
+    if (contextMenu) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [contextMenu]);
 
   const queryParams = {
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
     ...(activeFilter === "folder" && activeFolderId != null ? { folderId: activeFolderId } : {}),
-    ...(activeFilter === "pinned" ? { pinned: true } : {}),
     ...(activeFilter === "favorites" ? { favorite: true } : {}),
     ...(activeFilter === "tag" && activeTag ? { tag: activeTag } : {}),
     sortBy,
     sortDir
   };
 
-  const { data: notes = [], isLoading } = useGetNotes(queryParams);
+  const { data: rawNotes = [], isLoading } = useGetNotes(queryParams);
+  const { data: folders = [] } = useGetFolders();
   const queryClient = useQueryClient();
-  
+
+  // Sort pinned notes to top (only in "all" and "folder" views)
+  const notes = useCallback(() => {
+    if (activeFilter === "favorites" || activeFilter === "tag") return rawNotes;
+    return [...rawNotes].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return 0;
+    });
+  }, [rawNotes, activeFilter])();
+
+  const queryClient2 = useQueryClient();
+
   const createNoteMut = useCreateNote({
     mutation: {
       onSuccess: (newNote) => {
         queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
         selectNote(newNote.id);
+      }
+    }
+  });
+
+  const pinMut = useToggleNotePin({
+    mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }) }
+  });
+  const favMut = useToggleNoteFavorite({
+    mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }) }
+  });
+  const deleteMut = useDeleteNote({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+        selectNote(null);
       }
     }
   });
@@ -54,10 +104,21 @@ export function NoteList() {
     });
   };
 
-  // Get title based on filter
+  const handleContextMenu = (e: React.MouseEvent, note: typeof notes[0]) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ noteId: note.id, pinned: note.pinned, favorite: note.favorite, x: e.clientX, y: e.clientY });
+    setMoveMenuNoteId(null);
+  };
+
+  const closeContextMenu = () => {
+    setContextMenu(null);
+    setMoveMenuNoteId(null);
+  };
+
   const listTitle = {
     all: "All Notes",
-    pinned: "Pinned Notes",
+    pinned: "All Notes",
     favorites: "Favorites",
     folder: "Folder",
     tag: `#${activeTag}`
@@ -93,7 +154,9 @@ export function NoteList() {
       {/* Note List */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
         {isLoading ? (
-          <div className="p-4 flex justify-center"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div></div>
+          <div className="p-4 flex justify-center">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          </div>
         ) : notes.length === 0 ? (
           <div className="p-8 text-center flex flex-col items-center justify-center h-full text-muted-foreground">
             <FileText className="w-12 h-12 mb-4 opacity-20" />
@@ -105,8 +168,9 @@ export function NoteList() {
             <div 
               key={note.id}
               onClick={() => selectNote(note.id)}
+              onContextMenu={(e) => handleContextMenu(e, note)}
               className={cn(
-                "p-3 rounded-xl cursor-pointer border transition-all duration-200 group",
+                "p-3 rounded-xl cursor-pointer border transition-all duration-200 group relative",
                 selectedNoteId === note.id 
                   ? "bg-panel border-primary/50 shadow-md shadow-primary/5" 
                   : "bg-transparent border-transparent hover:bg-panel hover:border-panel-border"
@@ -114,14 +178,22 @@ export function NoteList() {
             >
               <div className="flex items-start justify-between mb-1">
                 <h3 className={cn(
-                  "font-medium truncate pr-2 text-sm",
+                  "font-medium truncate pr-2 text-sm flex items-center gap-1.5",
                   selectedNoteId === note.id ? "text-foreground" : "text-foreground/90"
                 )}>
+                  {note.pinned && <Pin className="w-3 h-3 shrink-0 text-primary fill-primary" />}
                   {note.title || "Untitled Note"}
                 </h3>
-                <div className="flex items-center gap-1 shrink-0 opacity-60">
-                  {note.pinned && <Pin className="w-3 h-3 fill-current text-primary" />}
-                  {note.favorite && <Star className="w-3 h-3 fill-current text-yellow-500" />}
+                <div className="flex items-center gap-1 shrink-0">
+                  {note.favorite && <Star className="w-3 h-3 fill-current text-yellow-500 opacity-70" />}
+                  {/* ⋮ button — shown on hover */}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleContextMenu(e, note); }}
+                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-panel-border transition-all"
+                    title="Options"
+                  >
+                    <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
                 </div>
               </div>
               
@@ -151,6 +223,117 @@ export function NoteList() {
           ))
         )}
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed z-50 min-w-[160px] bg-popover border border-panel-border rounded-xl shadow-lg shadow-black/20 py-1 overflow-hidden"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+        >
+          <ContextMenuItem
+            icon={<Pin className={cn("w-4 h-4", contextMenu.pinned && "fill-current text-primary")} />}
+            label={contextMenu.pinned ? "Unpin" : "Pin to top"}
+            onClick={() => {
+              pinMut.mutate({ id: contextMenu.noteId });
+              closeContextMenu();
+            }}
+          />
+          <ContextMenuItem
+            icon={<Star className={cn("w-4 h-4", contextMenu.favorite && "fill-current text-yellow-500")} />}
+            label={contextMenu.favorite ? "Remove from Favorites" : "Add to Favorites"}
+            onClick={() => {
+              favMut.mutate({ id: contextMenu.noteId });
+              closeContextMenu();
+            }}
+          />
+
+          {folders.length > 0 && (
+            <>
+              <div className="h-px bg-panel-border mx-2 my-1" />
+              <div className="relative">
+                <ContextMenuItem
+                  icon={<FolderInput className="w-4 h-4" />}
+                  label="Move to folder"
+                  chevron
+                  onClick={() => setMoveMenuNoteId(moveMenuNoteId === contextMenu.noteId ? null : contextMenu.noteId)}
+                />
+                {moveMenuNoteId === contextMenu.noteId && (
+                  <div className="absolute left-full top-0 ml-1 min-w-[140px] bg-popover border border-panel-border rounded-xl shadow-lg py-1">
+                    <ContextMenuItem
+                      icon={<FileText className="w-4 h-4" />}
+                      label="No folder"
+                      onClick={() => {
+                        import("@workspace/api-client-react").then(({ useGetNotes: _, ...api }) => {});
+                        fetch(`/api/notes/${contextMenu.noteId}/move`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ folderId: null })
+                        }).then(() => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }));
+                        closeContextMenu();
+                      }}
+                    />
+                    {folders.map(f => (
+                      <ContextMenuItem
+                        key={f.id}
+                        icon={<FileText className="w-4 h-4" />}
+                        label={f.name}
+                        onClick={() => {
+                          fetch(`/api/notes/${contextMenu.noteId}/move`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ folderId: f.id })
+                          }).then(() => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }));
+                          closeContextMenu();
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          <div className="h-px bg-panel-border mx-2 my-1" />
+          <ContextMenuItem
+            icon={<Trash2 className="w-4 h-4" />}
+            label="Delete"
+            danger
+            onClick={() => {
+              if (confirm("Delete this note?")) {
+                deleteMut.mutate({ id: contextMenu.noteId });
+              }
+              closeContextMenu();
+            }}
+          />
+        </div>
+      )}
     </div>
+  );
+}
+
+function ContextMenuItem({ 
+  icon, label, onClick, danger, chevron 
+}: { 
+  icon: React.ReactNode; 
+  label: string; 
+  onClick: () => void; 
+  danger?: boolean; 
+  chevron?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left",
+        danger 
+          ? "text-destructive hover:bg-destructive/10" 
+          : "text-foreground hover:bg-panel"
+      )}
+    >
+      <span className="opacity-70">{icon}</span>
+      <span className="flex-1">{label}</span>
+      {chevron && <span className="opacity-40 text-xs">›</span>}
+    </button>
   );
 }
