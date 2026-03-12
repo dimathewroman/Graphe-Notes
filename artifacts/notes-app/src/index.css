@@ -124,10 +124,13 @@
   @apply leading-relaxed mb-4;
 }
 .ProseMirror ul {
-  @apply list-disc list-inside mb-4 pl-4 space-y-1;
+  @apply list-disc list-outside mb-4 pl-6 space-y-1;
 }
 .ProseMirror ol {
-  @apply list-decimal list-inside mb-4 pl-4 space-y-1;
+  @apply list-decimal list-outside mb-4 pl-6 space-y-1;
+}
+.ProseMirror li > p {
+  display: inline;
 }
 .ProseMirror blockquote {
   @apply border-l-4 border-primary pl-4 italic text-muted-foreground mb-4;
