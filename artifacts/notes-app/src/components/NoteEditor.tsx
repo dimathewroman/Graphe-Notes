@@ -30,9 +30,11 @@ import {
   Image as ImageIcon, Trash2, Pin, Star, PanelLeft, FileText,
   Lock, Unlock, Table as TableIcon, RowsIcon, Plus, X, Hash,
   Sparkles, Loader2, Check, RotateCcw, Wand2, BookOpen, Scissors,
-  Link2, Unlink, ChevronRight, ArrowUp, ArrowDown, MessageSquare, ListChecks
+  Link2, Unlink, ChevronRight, ArrowUp, ArrowDown, MessageSquare, ListChecks,
+  Undo2, Redo2, Clock
 } from "lucide-react";
 import { IconButton } from "./ui/IconButton";
+import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { cn, formatDate } from "@/lib/utils";
 import { LockModal } from "./LockModal";
 
@@ -496,6 +498,7 @@ export function NoteEditor() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [showTagInput, setShowTagInput] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
   const tagInputRef = useRef<HTMLInputElement>(null);
   const [linkPopover, setLinkPopover] = useState<{ visible: boolean; url: string }>({ visible: false, url: "" });
   const linkInputRef = useRef<HTMLInputElement>(null);
@@ -558,6 +561,7 @@ export function NoteEditor() {
       }
     }
     setIsUnlocked(false);
+    setShowVersionHistory(false);
   }, [note?.id, editor]);
 
   const debouncedSave = useCallback(
@@ -570,6 +574,8 @@ export function NoteEditor() {
           await updateNoteMut.mutateAsync({ id, data });
           queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
           setSaveStatus("saved");
+          // Fire-and-forget version snapshot (server enforces 5-min interval)
+          fetch(`/api/notes/${id}/versions`, { method: "POST" }).catch(() => {});
         }, 800);
       };
     })(),
@@ -585,6 +591,13 @@ export function NoteEditor() {
   const handleContentChange = (html: string, text: string) => {
     if (selectedNoteId) debouncedSave(selectedNoteId, { content: html, contentText: text });
   };
+
+  const handleRestoreVersion = useCallback((content: string, restoredTitle: string) => {
+    if (!editor || !selectedNoteId) return;
+    editor.commands.setContent(content, { emitUpdate: false });
+    setTitle(restoredTitle);
+    debouncedSave(selectedNoteId, { content, title: restoredTitle, contentText: editor.getText() });
+  }, [editor, selectedNoteId, debouncedSave]);
 
   const handleDelete = async () => {
     if (!selectedNoteId) return;
@@ -858,6 +871,13 @@ export function NoteEditor() {
           >
             {note?.locked ? <Lock className="w-4 h-4 fill-current" /> : <Lock className="w-4 h-4" />}
           </IconButton>
+          <IconButton
+            onClick={() => setShowVersionHistory(v => !v)}
+            active={showVersionHistory}
+            title="Version history"
+          >
+            <Clock className="w-4 h-4" />
+          </IconButton>
           <div className="w-px h-4 bg-panel-border mx-1" />
           <IconButton onClick={handleDelete} className="hover:text-destructive hover:bg-destructive/10" title="Delete">
             <Trash2 className="w-4 h-4" />
@@ -867,6 +887,23 @@ export function NoteEditor() {
 
       {/* Toolbar */}
       <div className="flex items-center gap-0.5 p-2 border-b border-panel-border overflow-x-auto bg-panel/30 shrink-0 hide-scrollbar flex-wrap">
+        <ToolbarButton
+          command={() => editor.chain().focus().undo().run()}
+          active={false}
+          disabled={!editor.can().undo()}
+          icon={<Undo2 className="w-4 h-4" />}
+          title="Undo (Ctrl+Z)"
+        />
+        <ToolbarButton
+          command={() => editor.chain().focus().redo().run()}
+          active={false}
+          disabled={!editor.can().redo()}
+          icon={<Redo2 className="w-4 h-4" />}
+          title="Redo (Ctrl+Shift+Z)"
+        />
+
+        <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+
         <ToolbarButton command={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} icon={<Bold className="w-4 h-4" />} />
         <ToolbarButton command={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} icon={<Italic className="w-4 h-4" />} />
         <ToolbarButton command={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} icon={<UnderlineIcon className="w-4 h-4" />} />
@@ -1046,6 +1083,15 @@ export function NoteEditor() {
         </div>
       </div>
 
+      {/* Version History Panel */}
+      {showVersionHistory && selectedNoteId && (
+        <VersionHistoryPanel
+          noteId={selectedNoteId}
+          onRestore={handleRestoreVersion}
+          onClose={() => setShowVersionHistory(false)}
+        />
+      )}
+
       {/* Lock Modal */}
       {lockModal === "set" && (
         <LockModal mode="set" onConfirm={handleLockSet} onCancel={() => setLockModal(null)} />
@@ -1057,14 +1103,16 @@ export function NoteEditor() {
   );
 }
 
-function ToolbarButton({ command, active, icon, title }: { command: () => void; active: boolean; icon: React.ReactNode; title?: string }) {
+function ToolbarButton({ command, active, icon, title, disabled }: { command: () => void; active: boolean; icon: React.ReactNode; title?: string; disabled?: boolean }) {
   return (
     <button
       onClick={command}
       title={title}
+      disabled={disabled}
       className={cn(
         "p-1.5 rounded text-muted-foreground hover:bg-panel hover:text-foreground transition-colors",
-        active && "bg-panel text-primary"
+        active && "bg-panel text-primary",
+        disabled && "opacity-30 cursor-not-allowed pointer-events-none"
       )}
     >
       {icon}

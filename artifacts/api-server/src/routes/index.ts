@@ -6,12 +6,14 @@ import tagsRouter from "./tags";
 import aiRouter from "./ai";
 import smartFoldersRouter from "./smart-folders";
 import modelsRouter from "./models";
+import versionsRouter from "./versions";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(foldersRouter);
 router.use(notesRouter);
+router.use(versionsRouter);
 router.use(tagsRouter);
 router.use(aiRouter);
 router.use(smartFoldersRouter);
