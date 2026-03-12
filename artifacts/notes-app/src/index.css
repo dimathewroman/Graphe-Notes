@@ -166,6 +166,11 @@
   flex: 1;
   min-width: 0;
 }
+/* Zero out paragraph margins inside task items (same fix as li > p for bullets) */
+.ProseMirror li[data-type="taskItem"] > div > p {
+  margin-top: 0;
+  margin-bottom: 0;
+}
 /* Checked item text: gray + strikethrough */
 .ProseMirror li[data-type="taskItem"][data-checked="true"] > div > p {
   opacity: 0.45;
