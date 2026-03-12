@@ -130,7 +130,8 @@
   @apply list-decimal list-outside mb-4 pl-6 space-y-1;
 }
 .ProseMirror li > p {
-  display: inline;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 .ProseMirror blockquote {
   @apply border-l-4 border-primary pl-4 italic text-muted-foreground mb-4;
