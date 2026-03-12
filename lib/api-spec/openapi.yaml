@@ -17,6 +17,8 @@ tags:
     description: Tag operations
   - name: ai
     description: AI assistant operations
+  - name: smart-folders
+    description: Smart folder operations
 paths:
   /healthz:
     get:
@@ -343,6 +345,150 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /notes/{id}/lock:
+    patch:
+      operationId: lockNote
+      tags: [notes]
+      summary: Lock a note with a password hash
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LockNoteBody"
+      responses:
+        "200":
+          description: Locked note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notes/{id}/unlock:
+    patch:
+      operationId: unlockNote
+      tags: [notes]
+      summary: Unlock a note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Unlocked note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /smart-folders:
+    get:
+      operationId: getSmartFolders
+      tags: [smart-folders]
+      summary: List all smart folders
+      responses:
+        "200":
+          description: List of smart folders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SmartFolder"
+    post:
+      operationId: createSmartFolder
+      tags: [smart-folders]
+      summary: Create a smart folder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSmartFolderBody"
+      responses:
+        "201":
+          description: Created smart folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmartFolder"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /smart-folders/{id}:
+    patch:
+      operationId: updateSmartFolder
+      tags: [smart-folders]
+      summary: Update a smart folder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSmartFolderBody"
+      responses:
+        "200":
+          description: Updated smart folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmartFolder"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteSmartFolder
+      tags: [smart-folders]
+      summary: Delete a smart folder
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /tags:
     get:
       operationId: getTags
@@ -491,6 +637,10 @@ components:
           type: boolean
         coverImage:
           type: ["string", "null"]
+        locked:
+          type: boolean
+        lockPasswordHash:
+          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -507,6 +657,8 @@ components:
         - pinned
         - favorite
         - coverImage
+        - locked
+        - lockPasswordHash
         - createdAt
         - updatedAt
 
@@ -556,6 +708,10 @@ components:
           type: boolean
         coverImage:
           type: ["string", "null"]
+        locked:
+          type: boolean
+        lockPasswordHash:
+          type: ["string", "null"]
 
     MoveNoteBody:
       type: object
@@ -597,3 +753,72 @@ components:
       required:
         - result
         - tokensUsed
+
+    LockNoteBody:
+      type: object
+      properties:
+        passwordHash:
+          type: string
+      required:
+        - passwordHash
+
+    SmartFolder:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        tagRules:
+          type: array
+          items:
+            type: string
+        color:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - tagRules
+        - color
+        - sortOrder
+        - createdAt
+        - updatedAt
+
+    CreateSmartFolderBody:
+      type: object
+      properties:
+        name:
+          type: string
+        tagRules:
+          type: array
+          items:
+            type: string
+        color:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+      required:
+        - name
+        - tagRules
+
+    UpdateSmartFolderBody:
+      type: object
+      properties:
+        name:
+          type: string
+        tagRules:
+          type: array
+          items:
+            type: string
+        color:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer

@@ -12,6 +12,8 @@ export const notesTable = pgTable("notes", {
   pinned: boolean("pinned").notNull().default(false),
   favorite: boolean("favorite").notNull().default(false),
   coverImage: text("cover_image"),
+  locked: boolean("locked").notNull().default(false),
+  lockPasswordHash: text("lock_password_hash"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
