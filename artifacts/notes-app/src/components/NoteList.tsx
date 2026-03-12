@@ -1,10 +1,13 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Search, Plus, Pin, Star, FileText, MoreVertical, Trash2, FolderInput, LayoutGrid, LayoutList, SortAsc, ChevronDown, Lock, Image as ImageIcon } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import {
+  Search, Plus, Pin, Star, FileText, MoreVertical, Trash2, FolderInput,
+  LayoutGrid, LayoutList, SortAsc, Lock, Image as ImageIcon, Hash, X, Tag
+} from "lucide-react";
 import { useAppStore } from "@/store";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   useGetNotes, useCreateNote, useToggleNotePin, useToggleNoteFavorite,
-  useDeleteNote, getGetNotesQueryKey, useGetFolders, useGetSmartFolders
+  useDeleteNote, useUpdateNote, getGetNotesQueryKey, getGetTagsQueryKey, useGetFolders
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatDate } from "@/lib/utils";
@@ -15,6 +18,7 @@ interface ContextMenu {
   pinned: boolean;
   favorite: boolean;
   locked: boolean;
+  tags: string[];
   x: number;
   y: number;
 }
@@ -30,7 +34,7 @@ const SORT_OPTIONS = [
 
 export function NoteList() {
   const {
-    activeFilter, activeFolderId, activeSmartFolderId, activeTag,
+    activeFilter, activeFolderId, activeTag,
     searchQuery, setSearchQuery, sortBy, sortDir, setSort,
     viewMode, setViewMode,
     selectedNoteId, selectNote
@@ -40,9 +44,12 @@ export function NoteList() {
   const debouncedSearch = useDebounce(localSearch, 300);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const [moveMenuNoteId, setMoveMenuNoteId] = useState<number | null>(null);
+  const [showTagsPanel, setShowTagsPanel] = useState(false);
+  const [tagInput, setTagInput] = useState("");
   const [showSortMenu, setShowSortMenu] = useState(false);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const sortMenuRef = useRef<HTMLDivElement>(null);
+  const tagInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setSearchQuery(debouncedSearch); }, [debouncedSearch, setSearchQuery]);
 
@@ -50,7 +57,7 @@ export function NoteList() {
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
-        setContextMenu(null); setMoveMenuNoteId(null);
+        setContextMenu(null); setMoveMenuNoteId(null); setShowTagsPanel(false); setTagInput("");
       }
       if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
         setShowSortMenu(false);
@@ -60,9 +67,20 @@ export function NoteList() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const { data: folders = [] } = useGetFolders();
+  const queryClient = useQueryClient();
+
+  // Find the active folder and check if it has tag rules (smart folder)
+  const activeFolder = useMemo(
+    () => folders.find(f => f.id === activeFolderId),
+    [folders, activeFolderId]
+  );
+  const isFolderSmart = activeFilter === "folder" && (activeFolder?.tagRules?.length ?? 0) > 0;
+
+  // For smart folders, fetch all notes and filter client-side; otherwise use API filters
   const queryParams = {
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
-    ...(activeFilter === "folder" && activeFolderId != null ? { folderId: activeFolderId } : {}),
+    ...(activeFilter === "folder" && activeFolderId != null && !isFolderSmart ? { folderId: activeFolderId } : {}),
     ...(activeFilter === "favorites" ? { favorite: true } : {}),
     ...(activeFilter === "tag" && activeTag ? { tag: activeTag } : {}),
     sortBy,
@@ -70,15 +88,6 @@ export function NoteList() {
   };
 
   const { data: rawNotes = [], isLoading } = useGetNotes(queryParams);
-  const { data: folders = [] } = useGetFolders();
-  const { data: smartFolders = [] } = useGetSmartFolders();
-  const queryClient = useQueryClient();
-
-  // Smart folder filtering (client-side by tag rules)
-  const activeSmartFolder = useMemo(() =>
-    smartFolders.find(sf => sf.id === activeSmartFolderId),
-    [smartFolders, activeSmartFolderId]
-  );
 
   const getFirstImage = (content: string) => {
     const match = content.match(/<img[^>]+src="([^"]+)"/);
@@ -87,19 +96,27 @@ export function NoteList() {
 
   const notes = useMemo(() => {
     let list = rawNotes;
-    if (activeFilter === "smart-folder" && activeSmartFolder) {
-      list = rawNotes.filter(n => n.tags.some(t => activeSmartFolder.tagRules.includes(t)));
+
+    // Smart folder: filter by tag rules
+    if (isFolderSmart && activeFolder) {
+      list = rawNotes.filter(n => n.tags.some(t => activeFolder.tagRules.includes(t)));
     }
+
+    // Attachments: only notes with images
     if (activeFilter === "attachments") {
       list = rawNotes.filter(n => !!getFirstImage(n.content));
     }
-    if (activeFilter === "favorites" || activeFilter === "tag" || activeFilter === "smart-folder" || activeFilter === "attachments") return list;
+
+    // For filters that have their own ordering, return as-is
+    if (activeFilter === "favorites" || activeFilter === "tag" || activeFilter === "attachments") return list;
+
+    // For all/folder views, pin to top
     return [...list].sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
       return 0;
     });
-  }, [rawNotes, activeFilter, activeSmartFolder]);
+  }, [rawNotes, activeFilter, isFolderSmart, activeFolder]);
 
   const createNoteMut = useCreateNote({
     mutation: {
@@ -116,24 +133,39 @@ export function NoteList() {
       onSuccess: () => { queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }); selectNote(null); }
     }
   });
+  const updateNoteMut = useUpdateNote({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetTagsQueryKey() });
+      }
+    }
+  });
 
   const handleCreateNew = () => {
     createNoteMut.mutate({
       data: {
         title: "Untitled Note",
         content: "<p></p>",
-        folderId: activeFilter === "folder" ? activeFolderId : null
+        folderId: activeFilter === "folder" && !isFolderSmart ? activeFolderId : null
       }
     });
   };
 
   const handleContextMenu = (e: React.MouseEvent, note: typeof notes[0]) => {
     e.preventDefault(); e.stopPropagation();
-    setContextMenu({ noteId: note.id, pinned: note.pinned, favorite: note.favorite, locked: note.locked, x: e.clientX, y: e.clientY });
+    setContextMenu({
+      noteId: note.id, pinned: note.pinned, favorite: note.favorite,
+      locked: note.locked, tags: note.tags ?? [], x: e.clientX, y: e.clientY
+    });
     setMoveMenuNoteId(null);
+    setShowTagsPanel(false);
+    setTagInput("");
   };
 
-  const closeContextMenu = () => { setContextMenu(null); setMoveMenuNoteId(null); };
+  const closeContextMenu = () => {
+    setContextMenu(null); setMoveMenuNoteId(null); setShowTagsPanel(false); setTagInput("");
+  };
 
   const moveNote = (noteId: number, folderId: number | null) => {
     fetch(`/api/notes/${noteId}/move`, {
@@ -144,13 +176,29 @@ export function NoteList() {
     closeContextMenu();
   };
 
+  const addTagToNote = () => {
+    if (!contextMenu) return;
+    const tag = tagInput.trim().replace(/^#/, "").toLowerCase();
+    if (!tag || contextMenu.tags.includes(tag)) { setTagInput(""); return; }
+    const newTags = [...contextMenu.tags, tag];
+    setContextMenu(prev => prev ? { ...prev, tags: newTags } : null);
+    updateNoteMut.mutate({ id: contextMenu.noteId, data: { tags: newTags } });
+    setTagInput("");
+  };
+
+  const removeTagFromNote = (tag: string) => {
+    if (!contextMenu) return;
+    const newTags = contextMenu.tags.filter(t => t !== tag);
+    setContextMenu(prev => prev ? { ...prev, tags: newTags } : null);
+    updateNoteMut.mutate({ id: contextMenu.noteId, data: { tags: newTags } });
+  };
+
   const listTitle = {
     all: "All Notes",
     pinned: "All Notes",
     favorites: "Favorites",
-    folder: folders.find(f => f.id === activeFolderId)?.name || "Folder",
+    folder: activeFolder?.name || "Folder",
     tag: `#${activeTag}`,
-    "smart-folder": activeSmartFolder?.name || "Smart Folder",
     attachments: "Attachments",
   }[activeFilter] || "Notes";
 
@@ -161,8 +209,13 @@ export function NoteList() {
       {/* Header */}
       <div className="p-4 border-b border-panel-border flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">{listTitle}</h2>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <h2 className="text-lg font-semibold tracking-tight truncate">{listTitle}</h2>
+            {isFolderSmart && (
+              <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">smart</span>
+            )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
             {/* View toggle */}
             <IconButton onClick={() => setViewMode(viewMode === "list" ? "gallery" : "list")} title={viewMode === "list" ? "Gallery view" : "List view"}>
               {viewMode === "list" ? <LayoutGrid className="w-4 h-4" /> : <LayoutList className="w-4 h-4" />}
@@ -314,7 +367,7 @@ export function NoteList() {
                   <div className="flex gap-1 overflow-hidden">
                     {note.tags.slice(0, 2).map(tag => (
                       <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent text-accent-foreground border border-panel-border truncate max-w-[60px]">
-                        {tag}
+                        #{tag}
                       </span>
                     ))}
                     {note.tags.length > 2 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-panel text-muted-foreground">+{note.tags.length - 2}</span>}
@@ -330,7 +383,7 @@ export function NoteList() {
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 min-w-[170px] bg-popover border border-panel-border rounded-xl shadow-lg shadow-black/20 py-1 overflow-visible"
+          className="fixed z-50 min-w-[200px] bg-popover border border-panel-border rounded-xl shadow-lg shadow-black/20 py-1 overflow-visible"
           style={{ top: contextMenu.y, left: contextMenu.x }}
         >
           <ContextMenuItem
@@ -343,6 +396,58 @@ export function NoteList() {
             label={contextMenu.favorite ? "Remove Favorite" : "Add to Favorites"}
             onClick={() => { favMut.mutate({ id: contextMenu.noteId }); closeContextMenu(); }}
           />
+
+          <div className="h-px bg-panel-border mx-2 my-1" />
+
+          {/* Tags panel */}
+          <ContextMenuItem
+            icon={<Tag className="w-4 h-4" />}
+            label="Edit tags"
+            chevron={!showTagsPanel}
+            active={showTagsPanel}
+            onClick={() => {
+              setShowTagsPanel(!showTagsPanel);
+              setMoveMenuNoteId(null);
+              if (!showTagsPanel) setTimeout(() => tagInputRef.current?.focus(), 50);
+            }}
+          />
+          {showTagsPanel && (
+            <div className="px-2 pb-2 pt-1 space-y-2">
+              {contextMenu.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {contextMenu.tags.map(tag => (
+                    <span key={tag} className="group/tag flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary border border-primary/20">
+                      <Hash className="w-2 h-2" />
+                      {tag}
+                      <button onClick={() => removeTagFromNote(tag)} className="ml-0.5 hover:text-destructive transition-colors">
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-1">
+                <div className="relative flex-1">
+                  <Hash className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    ref={tagInputRef}
+                    value={tagInput}
+                    onChange={e => setTagInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTagToNote(); } e.stopPropagation(); }}
+                    placeholder="Add tag..."
+                    className="w-full bg-background border border-panel-border rounded-lg pl-6 pr-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-all"
+                  />
+                </div>
+                <button
+                  onClick={addTagToNote}
+                  className="px-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 text-xs font-medium transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+          )}
+
           {folders.length > 0 && (
             <>
               <div className="h-px bg-panel-border mx-2 my-1" />
@@ -350,8 +455,9 @@ export function NoteList() {
                 <ContextMenuItem
                   icon={<FolderInput className="w-4 h-4" />}
                   label="Move to folder"
-                  chevron
-                  onClick={() => setMoveMenuNoteId(moveMenuNoteId === contextMenu.noteId ? null : contextMenu.noteId)}
+                  chevron={moveMenuNoteId !== contextMenu.noteId}
+                  active={moveMenuNoteId === contextMenu.noteId}
+                  onClick={() => { setMoveMenuNoteId(moveMenuNoteId === contextMenu.noteId ? null : contextMenu.noteId); setShowTagsPanel(false); }}
                 />
                 {moveMenuNoteId === contextMenu.noteId && (
                   <div className="absolute left-full top-0 ml-1 min-w-[150px] bg-popover border border-panel-border rounded-xl shadow-lg py-1 z-50">
@@ -364,6 +470,7 @@ export function NoteList() {
               </div>
             </>
           )}
+
           <div className="h-px bg-panel-border mx-2 my-1" />
           <ContextMenuItem
             icon={<Trash2 className="w-4 h-4" />}
@@ -380,15 +487,22 @@ export function NoteList() {
   );
 }
 
-function ContextMenuItem({ icon, label, onClick, danger, chevron }: {
-  icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean; chevron?: boolean;
+function ContextMenuItem({
+  icon, label, onClick, danger, chevron, active
+}: {
+  icon: React.ReactNode; label: string; onClick: () => void;
+  danger?: boolean; chevron?: boolean; active?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       className={cn(
         "w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left",
-        danger ? "text-destructive hover:bg-destructive/10" : "text-foreground hover:bg-panel"
+        danger
+          ? "text-destructive hover:bg-destructive/10"
+          : active
+            ? "text-primary bg-primary/10"
+            : "text-foreground hover:bg-panel"
       )}
     >
       <span className="opacity-70">{icon}</span>

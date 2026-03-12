@@ -15,6 +15,7 @@ export interface Folder {
   color: string | null;
   /** @nullable */
   icon: string | null;
+  tagRules: string[];
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;

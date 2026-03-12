@@ -1,28 +1,26 @@
 import { useState } from "react";
 import {
   Folder, FolderOpen, FileText, Star,
-  Settings, Hash, Plus, Trash2, Zap, Paperclip, Edit2
+  Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
 import {
   useGetFolders, useCreateFolder, useDeleteFolder, getGetFoldersQueryKey, useGetTags,
-  useGetSmartFolders, useDeleteSmartFolder, getGetSmartFoldersQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { IconButton } from "./ui/IconButton";
-import { SmartFolderModal } from "./SmartFolderModal";
+import { FolderEditModal } from "./FolderEditModal";
 
 export function Sidebar() {
   const {
-    activeFilter, activeFolderId, activeSmartFolderId, setFilter,
+    activeFilter, activeFolderId, activeTag, setFilter,
     isSidebarOpen, setSettingsOpen, setAIPanelOpen
   } = useAppStore();
   const queryClient = useQueryClient();
 
   const { data: folders = [], isLoading: foldersLoading } = useGetFolders();
   const { data: tags = [] } = useGetTags();
-  const { data: smartFolders = [] } = useGetSmartFolders();
 
   const createFolderMut = useCreateFolder({
     mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetFoldersQueryKey() }) }
@@ -30,15 +28,12 @@ export function Sidebar() {
   const deleteFolderMut = useDeleteFolder({
     mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetFoldersQueryKey() }) }
   });
-  const deleteSmartFolderMut = useDeleteSmartFolder({
-    mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetSmartFoldersQueryKey() }) }
-  });
 
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
   const [newFolderName, setNewFolderName] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderParentId, setNewFolderParentId] = useState<number | null>(null);
-  const [smartFolderModal, setSmartFolderModal] = useState<{ open: boolean; existing?: any }>({ open: false });
+  const [editingFolder, setEditingFolder] = useState<typeof folders[0] | null>(null);
 
   const toggleFolder = (id: number) => {
     const next = new Set(expandedFolders);
@@ -61,6 +56,7 @@ export function Sidebar() {
     const children = folders.filter(f => f.parentId === folder.id).sort((a, b) => a.sortOrder - b.sortOrder);
     const isExpanded = expandedFolders.has(folder.id);
     const isActive = activeFilter === "folder" && activeFolderId === folder.id;
+    const isSmart = folder.tagRules && folder.tagRules.length > 0;
 
     return (
       <div key={folder.id}>
@@ -80,13 +76,27 @@ export function Sidebar() {
               {children.length > 0 ? (
                 isExpanded ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />
               ) : (
-                <Folder className="w-4 h-4 opacity-50" />
+                isSmart
+                  ? <Tag className="w-4 h-4 text-primary/60" />
+                  : <Folder className="w-4 h-4 opacity-50" />
               )}
             </button>
             <span className="text-sm truncate">{folder.name}</span>
+            {isSmart && (
+              <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">
+                smart
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+            <button
+              className="p-1 hover:bg-panel rounded transition-colors"
+              onClick={e => { e.stopPropagation(); setEditingFolder(folder); }}
+              title="Edit folder"
+            >
+              <Edit2 className="w-3 h-3 text-muted-foreground" />
+            </button>
             <button
               className="p-1 hover:bg-panel rounded transition-colors"
               onClick={e => {
@@ -116,6 +126,17 @@ export function Sidebar() {
             </button>
           </div>
         </div>
+
+        {isSmart && (
+          <div style={{ paddingLeft: `${(depth + 2) * 12 + 4}px`, paddingRight: "8px" }} className="pb-0.5 flex flex-wrap gap-1">
+            {folder.tagRules.slice(0, 3).map(t => (
+              <span key={t} className="text-[9px] px-1.5 py-0.5 rounded-full bg-panel border border-panel-border text-muted-foreground">#{t}</span>
+            ))}
+            {folder.tagRules.length > 3 && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-panel border border-panel-border text-muted-foreground">+{folder.tagRules.length - 3}</span>
+            )}
+          </div>
+        )}
 
         {isExpanded && children.map(child => renderFolder(child, depth + 1))}
         {isExpanded && isCreatingFolder && newFolderParentId === folder.id && (
@@ -198,71 +219,6 @@ export function Sidebar() {
           )}
         </div>
 
-        {/* Smart Folders section */}
-        <div className="px-3 mb-1.5 flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          <span>Smart Folders</span>
-          <button
-            onClick={() => setSmartFolderModal({ open: true })}
-            className="hover:text-foreground transition-colors p-1"
-            title="New smart folder"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        <div className="space-y-0 pr-2 mb-4">
-          {smartFolders.length === 0 ? (
-            <div className="px-6 py-2 text-xs text-muted-foreground italic">No smart folders yet</div>
-          ) : (
-            smartFolders.map(sf => {
-              const isActive = activeFilter === "smart-folder" && activeSmartFolderId === sf.id;
-              return (
-                <div key={sf.id} className="group">
-                  <div
-                    className={cn(
-                      "flex items-center justify-between py-1.5 px-3 rounded-lg cursor-pointer transition-colors",
-                      isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
-                    )}
-                    onClick={() => setFilter("smart-folder", sf.id)}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: sf.color || "#6366f1" }} />
-                      <span className="text-sm truncate">{sf.name}</span>
-                    </div>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
-                      <button
-                        className="p-1 hover:bg-panel rounded transition-colors"
-                        onClick={e => { e.stopPropagation(); setSmartFolderModal({ open: true, existing: sf }); }}
-                      >
-                        <Edit2 className="w-3 h-3 text-muted-foreground" />
-                      </button>
-                      <button
-                        className="p-1 hover:bg-panel rounded transition-colors"
-                        onClick={e => {
-                          e.stopPropagation();
-                          if (confirm(`Delete smart folder "${sf.name}"?`)) {
-                            deleteSmartFolderMut.mutate({ id: sf.id });
-                            if (isActive) setFilter("all");
-                          }
-                        }}
-                      >
-                        <Trash2 className="w-3 h-3 text-destructive" />
-                      </button>
-                    </div>
-                  </div>
-                  {sf.tagRules.length > 0 && (
-                    <div className="pl-8 pr-3 pb-1 flex flex-wrap gap-1">
-                      {sf.tagRules.slice(0, 3).map(t => (
-                        <span key={t} className="text-[9px] px-1.5 py-0.5 rounded-full bg-panel border border-panel-border text-muted-foreground">#{t}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-
         {/* Tags section */}
         {tags.length > 0 && (
           <div className="mb-4">
@@ -274,7 +230,7 @@ export function Sidebar() {
                   onClick={() => setFilter("tag", tag)}
                   className={cn(
                     "px-2 py-1 rounded-md text-xs transition-colors border",
-                    activeFilter === "tag" && useAppStore.getState().activeTag === tag
+                    activeFilter === "tag" && activeTag === tag
                       ? "bg-primary/20 border-primary/30 text-primary"
                       : "bg-panel border-panel-border text-muted-foreground hover:text-foreground hover:bg-panel-hover"
                   )}
@@ -299,10 +255,10 @@ export function Sidebar() {
         </button>
       </div>
 
-      {smartFolderModal.open && (
-        <SmartFolderModal
-          existing={smartFolderModal.existing}
-          onClose={() => setSmartFolderModal({ open: false })}
+      {editingFolder && (
+        <FolderEditModal
+          folder={editingFolder}
+          onClose={() => setEditingFolder(null)}
         />
       )}
     </div>

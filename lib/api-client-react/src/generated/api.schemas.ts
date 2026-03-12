@@ -22,6 +22,7 @@ export interface Folder {
   color: string | null;
   /** @nullable */
   icon: string | null;
+  tagRules: string[];
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -35,6 +36,7 @@ export interface CreateFolderBody {
   color?: string | null;
   /** @nullable */
   icon?: string | null;
+  tagRules?: string[];
   sortOrder?: number;
 }
 
@@ -46,6 +48,7 @@ export interface UpdateFolderBody {
   color?: string | null;
   /** @nullable */
   icon?: string | null;
+  tagRules?: string[];
   sortOrder?: number;
 }
 

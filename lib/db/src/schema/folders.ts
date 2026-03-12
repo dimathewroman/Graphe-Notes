@@ -8,6 +8,7 @@ export const foldersTable = pgTable("folders", {
   parentId: integer("parent_id"),
   color: text("color"),
   icon: text("icon"),
+  tagRules: text("tag_rules").array().notNull().default([]),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

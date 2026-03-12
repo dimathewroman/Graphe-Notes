@@ -14,5 +14,6 @@ export interface CreateFolderBody {
   color?: string | null;
   /** @nullable */
   icon?: string | null;
+  tagRules?: string[];
   sortOrder?: number;
 }

@@ -114,7 +114,8 @@ export function NoteEditor() {
   const { selectedNoteId, selectNote, isSidebarOpen, toggleSidebar } = useAppStore();
   const queryClient = useQueryClient();
 
-  const { data: note, isLoading } = useGetNote(selectedNoteId || 0, { query: { enabled: !!selectedNoteId } });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: note, isLoading } = useGetNote(selectedNoteId || 0, { query: { enabled: !!selectedNoteId } as any });
 
   const updateNoteMut = useUpdateNote();
   const deleteNoteMut = useDeleteNote();
@@ -165,7 +166,7 @@ export function NoteEditor() {
     if (note && editor) {
       setTitle(note.title);
       if (editor.getHTML() !== note.content) {
-        editor.commands.setContent(note.content, false);
+        editor.commands.setContent(note.content, { emitUpdate: false });
       }
     }
     setIsUnlocked(false);

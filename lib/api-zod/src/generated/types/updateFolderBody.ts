@@ -14,5 +14,6 @@ export interface UpdateFolderBody {
   color?: string | null;
   /** @nullable */
   icon?: string | null;
+  tagRules?: string[];
   sortOrder?: number;
 }

@@ -24,6 +24,7 @@ export const GetFoldersResponseItem = zod.object({
   parentId: zod.number().nullable(),
   color: zod.string().nullable(),
   icon: zod.string().nullable(),
+  tagRules: zod.array(zod.string()),
   sortOrder: zod.number(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
@@ -38,6 +39,7 @@ export const CreateFolderBody = zod.object({
   parentId: zod.number().nullish(),
   color: zod.string().nullish(),
   icon: zod.string().nullish(),
+  tagRules: zod.array(zod.string()).optional(),
   sortOrder: zod.number().optional(),
 });
 
@@ -53,6 +55,7 @@ export const UpdateFolderBody = zod.object({
   parentId: zod.number().nullish(),
   color: zod.string().nullish(),
   icon: zod.string().nullish(),
+  tagRules: zod.array(zod.string()).optional(),
   sortOrder: zod.number().optional(),
 });
 
@@ -62,6 +65,7 @@ export const UpdateFolderResponse = zod.object({
   parentId: zod.number().nullable(),
   color: zod.string().nullable(),
   icon: zod.string().nullable(),
+  tagRules: zod.array(zod.string()),
   sortOrder: zod.number(),
   createdAt: zod.date(),
   updatedAt: zod.date(),

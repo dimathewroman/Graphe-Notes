@@ -1,13 +1,12 @@
 import { create } from "zustand";
 import type { GetNotesSortBy, GetNotesSortDir } from "@workspace/api-client-react";
 
-type FilterType = "all" | "pinned" | "favorites" | "folder" | "tag" | "smart-folder" | "attachments";
+type FilterType = "all" | "pinned" | "favorites" | "folder" | "tag" | "attachments";
 type ViewMode = "list" | "gallery";
 
 interface AppState {
   activeFilter: FilterType;
   activeFolderId: number | null;
-  activeSmartFolderId: number | null;
   activeTag: string | null;
   searchQuery: string;
   sortBy: GetNotesSortBy;
@@ -35,7 +34,6 @@ interface AppState {
 export const useAppStore = create<AppState>((set) => ({
   activeFilter: "all",
   activeFolderId: null,
-  activeSmartFolderId: null,
   activeTag: null,
   searchQuery: "",
   sortBy: "updatedAt",
@@ -52,7 +50,6 @@ export const useAppStore = create<AppState>((set) => ({
   setFilter: (filter, idOrTag) => set({
     activeFilter: filter,
     activeFolderId: filter === "folder" && typeof idOrTag === "number" ? idOrTag : null,
-    activeSmartFolderId: filter === "smart-folder" && typeof idOrTag === "number" ? idOrTag : null,
     activeTag: filter === "tag" && typeof idOrTag === "string" ? idOrTag : null,
     selectedNoteId: null,
   }),

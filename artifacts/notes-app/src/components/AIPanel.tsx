@@ -11,7 +11,8 @@ export function AIPanel() {
   const { isAIPanelOpen, setAIPanelOpen, selectedNoteId } = useAppStore();
   const queryClient = useQueryClient();
   
-  const { data: note } = useGetNote(selectedNoteId || 0, { query: { enabled: !!selectedNoteId && isAIPanelOpen } });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: note } = useGetNote(selectedNoteId || 0, { query: { enabled: !!selectedNoteId && isAIPanelOpen } as any });
   const updateNoteMut = useUpdateNote();
   const aiMut = useAiComplete();
 
