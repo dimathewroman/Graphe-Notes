@@ -5,6 +5,7 @@ import notesRouter from "./notes";
 import tagsRouter from "./tags";
 import aiRouter from "./ai";
 import smartFoldersRouter from "./smart-folders";
+import modelsRouter from "./models";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(notesRouter);
 router.use(tagsRouter);
 router.use(aiRouter);
 router.use(smartFoldersRouter);
+router.use(modelsRouter);
 
 export default router;
