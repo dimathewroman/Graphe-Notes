@@ -6,11 +6,13 @@ const router: IRouter = Router();
 router.post("/ai/complete", async (req, res): Promise<void> => {
   const parsed = AiCompleteBody.safeParse(req.body);
   if (!parsed.success) {
+    console.error("[AI] Validation failed:", parsed.error.message);
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
   const { provider, apiKey, model, prompt, systemPrompt, noteContext } = parsed.data;
+  console.log(`[AI] Request: provider=${provider} model=${model} keyLen=${apiKey.length} keyStart=${apiKey.slice(0, 8)}...`);
 
   const systemMessage = [
     systemPrompt ?? "You are a helpful AI assistant for a notes app. Help users write, organize, and improve their notes.",
@@ -67,8 +69,11 @@ router.post("/ai/complete", async (req, res): Promise<void> => {
 
       if (!response.ok) {
         let errMsg = `Anthropic ${response.status}`;
+        let rawBody = "";
         try {
-          const errBody = await response.json() as { error?: { type?: string; message?: string } };
+          rawBody = await response.text();
+          console.error(`[AI] Anthropic error ${response.status}:`, rawBody);
+          const errBody = JSON.parse(rawBody) as { error?: { type?: string; message?: string } };
           const type = errBody.error?.type ?? "";
           const msg = errBody.error?.message ?? "";
           if (type === "authentication_error") {
@@ -82,6 +87,7 @@ router.post("/ai/complete", async (req, res): Promise<void> => {
         res.status(500).json({ error: errMsg });
         return;
       }
+      console.log("[AI] Anthropic success");
 
       const data = await response.json() as {
         content: Array<{ text: string }>;
