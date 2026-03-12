@@ -120,7 +120,10 @@ export function SettingsModal() {
         if (!res.ok) throw new Error(`${res.status}`);
         const data = (await res.json()) as { models: string[]; source: "live" | "fallback" };
         setModels(data.models);
-        setCachedModels(prov, data.models);
+        // Only cache live responses — fallback lists may contain wrong model IDs
+        if (data.source === "live") {
+          setCachedModels(prov, data.models);
+        }
         setLastFetchedAt(Date.now());
         setFetchStatus(data.source === "live" ? "live" : "fallback");
         // If the currently stored model isn't in the new list, auto-select the first valid one

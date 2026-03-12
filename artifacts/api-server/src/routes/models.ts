@@ -48,14 +48,20 @@ async function fetchOpenAIModels(apiKey: string): Promise<string[]> {
 }
 
 async function fetchAnthropicModels(apiKey: string): Promise<string[]> {
-  const res = await fetch("https://api.anthropic.com/v1/models", {
+  const res = await fetch("https://api.anthropic.com/v1/models?limit=100", {
     headers: {
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
     },
   });
-  if (!res.ok) throw new Error(`Anthropic ${res.status}`);
-  const data = (await res.json()) as { data: { id: string }[] };
+  if (!res.ok) {
+    const body = await res.text();
+    console.error(`[models] Anthropic ${res.status}:`, body);
+    throw new Error(`Anthropic ${res.status}`);
+  }
+  const raw = await res.json();
+  console.log("[models] Anthropic raw response:", JSON.stringify(raw).slice(0, 500));
+  const data = raw as { data: { id: string }[] };
   return data.data.map((m) => m.id).sort((a, b) => b.localeCompare(a));
 }
 

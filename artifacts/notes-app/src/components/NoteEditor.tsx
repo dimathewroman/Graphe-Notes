@@ -689,11 +689,6 @@ export function NoteEditor() {
 
     const apiKey = (localStorage.getItem("ai_api_key") || "").trim();
     const provider = (localStorage.getItem("ai_provider") || "openai") as "openai" | "anthropic" | "google";
-    const PROVIDER_DEFAULT_MODEL: Record<string, string> = {
-      openai: "gpt-4o-mini",
-      anthropic: "claude-3-5-haiku-20241022",
-      google: "gemini-1.5-flash",
-    };
     const PROVIDER_ID_PREFIX: Record<string, string> = {
       openai: "gpt-|o1|o3|chatgpt",
       anthropic: "claude-",
@@ -704,7 +699,32 @@ export function NoteEditor() {
     const modelLooksValid = prefixPattern
       ? prefixPattern.split("|").some((p) => storedModel.startsWith(p))
       : !!storedModel;
-    const model = modelLooksValid ? storedModel : PROVIDER_DEFAULT_MODEL[provider] ?? storedModel;
+
+    // If stored model looks invalid, fetch the real list from the user's account
+    let model = storedModel;
+    if (!modelLooksValid && apiKey) {
+      try {
+        const params = new URLSearchParams({ provider, apiKey });
+        const r = await fetch(`/api/models?${params}`);
+        if (r.ok) {
+          const d = await r.json() as { models: string[]; source: string };
+          if (d.source === "live" && d.models?.length) {
+            // Cache the live result and heal the saved model
+            localStorage.setItem(`ai_models_${provider}`, JSON.stringify(d.models));
+            localStorage.setItem(`ai_models_${provider}_at`, String(Date.now()));
+            model = d.models[0];
+            localStorage.setItem("ai_model", model);
+          }
+        }
+      } catch { /* ignore */ }
+
+      if (!model || model === storedModel) {
+        setAiError("Your model setting is invalid. Open Settings → AI, let the model list load, select a model, and save.");
+        setTimeout(() => setAiError(null), 7000);
+        setAiLoading(false);
+        return;
+      }
+    }
 
     if (!apiKey) {
       setAiError("No AI API key configured. Open Settings → AI to add one.");
