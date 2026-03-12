@@ -126,10 +126,12 @@ function AiSelectionMenu({
   editor,
   visible,
   onAction,
+  onSelectionCapture,
 }: {
   editor: ReturnType<typeof useEditor>;
   visible: boolean;
   onAction: (action: string, customInstruction?: string) => void;
+  onSelectionCapture: (from: number, to: number, text: string) => void;
 }) {
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
@@ -160,6 +162,10 @@ function AiSelectionMenu({
       const r = sel.getRangeAt(0).getBoundingClientRect();
       if (r.width === 0) { setRect(null); return; }
       setRect(r);
+      // Capture the selection range NOW — before any menu interaction can
+      // disturb the editor's active selection.
+      const text = editor.state.doc.textBetween(from, to);
+      onSelectionCapture(from, to, text);
     };
 
     const handleBlur = () => setTimeout(() => setRect(null), 150);
@@ -173,7 +179,7 @@ function AiSelectionMenu({
       editor.off("focus", update);
       editor.off("blur", handleBlur);
     };
-  }, [editor, visible]);
+  }, [editor, visible, onSelectionCapture]);
 
   if (!rect || !visible) return null;
 
@@ -508,8 +514,10 @@ export function NoteEditor() {
 
   // AI bubble menu state
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiPreview, setAiPreview] = useState<string | null>(null);
-  const [aiSelectedText, setAiSelectedText] = useState("");
+  const [aiError, setAiError] = useState<string | null>(null);
+  // Store the selection range the moment the toolbar appears, before any
+  // menu interaction can disturb the editor's active selection.
+  const savedAiSelection = useRef<{ from: number; to: number; text: string } | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -668,71 +676,78 @@ export function NoteEditor() {
   // AI writing tools for selected text
   const callAI = async (action: string, customInstruction?: string) => {
     if (!editor) return;
-    const { from, to } = editor.state.selection;
-    const selected = editor.state.doc.textBetween(from, to);
-    if (!selected.trim()) return;
+
+    // Use the selection that was captured when the toolbar first appeared.
+    // Falling back to the current editor state handles edge cases where the
+    // toolbar fires without a prior capture.
+    const sel = savedAiSelection.current ?? (() => {
+      const { from, to } = editor.state.selection;
+      return { from, to, text: editor.state.doc.textBetween(from, to) };
+    })();
+
+    if (!sel.text.trim()) return;
 
     const apiKey = localStorage.getItem("ai_api_key") || "";
     const provider = (localStorage.getItem("ai_provider") || "openai") as any;
     const model = localStorage.getItem("ai_model") || "gpt-4o-mini";
 
-    if (!apiKey) { alert("Please configure your AI API key in Settings first."); return; }
+    if (!apiKey) {
+      setAiError("No AI API key configured. Open Settings → AI to add one.");
+      setTimeout(() => setAiError(null), 4000);
+      return;
+    }
 
     setAiLoading(true);
-    setAiSelectedText(selected);
-    setAiPreview(null);
+    setAiError(null);
 
+    const selected = sel.text;
     const prompts: Record<string, string> = {
-      shorter_25: `Make the following text approximately 25% shorter while preserving key meaning. Return only the shortened text:\n\n${selected}`,
-      shorter_50: `Make the following text approximately 50% shorter while preserving key meaning. Return only the shortened text:\n\n${selected}`,
-      shorter_custom: `Make the following text shorter. Additional instruction: ${customInstruction || ""}. Return only the shortened text:\n\n${selected}`,
-      longer_25: `Expand the following text by approximately 25% with more detail and context. Return only the expanded text:\n\n${selected}`,
-      longer_50: `Expand the following text by approximately 50% with more detail and context. Return only the expanded text:\n\n${selected}`,
-      longer_custom: `Expand the following text. Additional instruction: ${customInstruction || ""}. Return only the expanded text:\n\n${selected}`,
+      shorter_25: `Make the following text approximately 25% shorter while preserving key meaning. Return only the shortened text, no explanations:\n\n${selected}`,
+      shorter_50: `Make the following text approximately 50% shorter while preserving key meaning. Return only the shortened text, no explanations:\n\n${selected}`,
+      shorter_custom: `Make the following text shorter. Additional instruction: ${customInstruction || ""}. Return only the shortened text, no explanations:\n\n${selected}`,
+      longer_25: `Expand the following text by approximately 25% with more detail and context. Return only the expanded text, no explanations:\n\n${selected}`,
+      longer_50: `Expand the following text by approximately 50% with more detail and context. Return only the expanded text, no explanations:\n\n${selected}`,
+      longer_custom: `Expand the following text. Additional instruction: ${customInstruction || ""}. Return only the expanded text, no explanations:\n\n${selected}`,
       proofread: `Proofread and fix grammar, spelling, and punctuation in the following text. Do not change wording or structure. Return only the corrected text, no explanations:\n\n${selected}`,
-      simplify: `Rewrite the following text using shorter sentences and simpler vocabulary. Keep the same length and meaning. Return only the simplified text:\n\n${selected}`,
-      improve: `Enhance the clarity, flow, and word choice of the following text while preserving its original meaning. Return only the improved text:\n\n${selected}`,
-      rewrite: `Completely rephrase the following text while preserving its core meaning. Return only the rewritten text:\n\n${selected}`,
-      tone_casual: `Rewrite the following text in a casual tone. Return only the rewritten text:\n\n${selected}`,
-      tone_professional: `Rewrite the following text in a professional tone. Return only the rewritten text:\n\n${selected}`,
-      tone_friendly: `Rewrite the following text in a friendly tone. Return only the rewritten text:\n\n${selected}`,
-      tone_direct: `Rewrite the following text in a direct tone. Return only the rewritten text:\n\n${selected}`,
-      tone_custom: `Rewrite the following text with the following tone/style: ${customInstruction || ""}. Return only the rewritten text:\n\n${selected}`,
-      summarize_short: `Summarize the following text in 1-2 sentences. Return only the summary:\n\n${selected}`,
-      summarize_balanced: `Summarize the following text in a short paragraph. Return only the summary:\n\n${selected}`,
-      summarize_detailed: `Summarize the following text as detailed bullet points. Return only the bullet-point summary:\n\n${selected}`,
-      summarize_custom: `Summarize the following text. Additional instruction: ${customInstruction || ""}. Return only the summary:\n\n${selected}`,
-      extract_action_items: `Extract all action items, tasks, and to-dos from the following text. Return them as a bulleted list. If no action items are found, return "No action items found.":\n\n${selected}`,
+      simplify: `Rewrite the following text using shorter sentences and simpler vocabulary. Keep the same length and meaning. Return only the simplified text, no explanations:\n\n${selected}`,
+      improve: `Enhance the clarity, flow, and word choice of the following text while preserving its original meaning. Return only the improved text, no explanations:\n\n${selected}`,
+      rewrite: `Completely rephrase the following text while preserving its core meaning. Return only the rewritten text, no explanations:\n\n${selected}`,
+      tone_casual: `Rewrite the following text in a casual tone. Return only the rewritten text, no explanations:\n\n${selected}`,
+      tone_professional: `Rewrite the following text in a professional tone. Return only the rewritten text, no explanations:\n\n${selected}`,
+      tone_friendly: `Rewrite the following text in a friendly tone. Return only the rewritten text, no explanations:\n\n${selected}`,
+      tone_direct: `Rewrite the following text in a direct tone. Return only the rewritten text, no explanations:\n\n${selected}`,
+      tone_custom: `Rewrite the following text with the following tone/style: ${customInstruction || ""}. Return only the rewritten text, no explanations:\n\n${selected}`,
+      summarize_short: `Summarize the following text in 1-2 sentences. Return only the summary, no explanations:\n\n${selected}`,
+      summarize_balanced: `Summarize the following text in a short paragraph. Return only the summary, no explanations:\n\n${selected}`,
+      summarize_detailed: `Summarize the following text as detailed bullet points. Return only the bullet-point summary, no explanations:\n\n${selected}`,
+      summarize_custom: `Summarize the following text. Additional instruction: ${customInstruction || ""}. Return only the summary, no explanations:\n\n${selected}`,
+      extract_action_items: `Extract all action items, tasks, and to-dos from the following text. Return them as a bulleted list. If no action items are found, return "No action items found.", no explanations:\n\n${selected}`,
     };
 
     const prompt = prompts[action];
-    if (!prompt) return;
+    if (!prompt) { setAiLoading(false); return; }
 
     try {
       const res = await fetch("/api/ai/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey, model, prompt })
+        body: JSON.stringify({ provider, apiKey, model, prompt }),
       });
       const data = await res.json();
-      setAiPreview(data.result || "");
-    } catch {
-      setAiPreview("Error contacting AI. Please check your settings.");
+      if (data.error) throw new Error(data.error);
+      const result: string = data.result || "";
+      if (result) {
+        // Replace the saved selection range directly in the document.
+        editor.chain().focus().insertContentAt({ from: sel.from, to: sel.to }, result).run();
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "AI request failed";
+      setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
+      setTimeout(() => setAiError(null), 5000);
     } finally {
       setAiLoading(false);
+      savedAiSelection.current = null;
     }
-  };
-
-  const applyAiPreview = () => {
-    if (!editor || !aiPreview) return;
-    editor.chain().focus().insertContentAt(editor.state.selection, aiPreview).run();
-    setAiPreview(null);
-    setAiSelectedText("");
-  };
-
-  const dismissAiPreview = () => {
-    setAiPreview(null);
-    setAiSelectedText("");
   };
 
   if (!selectedNoteId) {
@@ -923,44 +938,27 @@ export function NoteEditor() {
       {/* AI Bubble Menu – custom floating menu on text selection */}
       <AiSelectionMenu
         editor={editor}
-        visible={!aiLoading && !aiPreview}
+        visible={!aiLoading}
         onAction={callAI}
+        onSelectionCapture={(from, to, text) => {
+          savedAiSelection.current = { from, to, text };
+        }}
       />
 
-      {/* AI Preview Overlay */}
-      {(aiLoading || aiPreview) && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 bg-popover border border-indigo-500/30 rounded-2xl shadow-2xl p-4 max-w-lg w-full mx-4">
+      {/* AI Loading / Error indicator */}
+      {(aiLoading || aiError) && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
           {aiLoading ? (
-            <div className="flex items-center gap-3 text-indigo-400">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-sm">AI is processing your text...</span>
+            <div className="flex items-center gap-2.5 px-4 py-2.5 bg-popover border border-indigo-500/30 rounded-full shadow-xl text-indigo-400">
+              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+              <span className="text-xs font-medium whitespace-nowrap">AI is rewriting…</span>
             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-xs text-indigo-400 font-medium">
-                <Sparkles className="w-3.5 h-3.5" />
-                AI Suggestion
-              </div>
-              <p className="text-sm text-foreground/90 bg-background rounded-lg p-3 border border-panel-border whitespace-pre-wrap">
-                {aiPreview}
-              </p>
-              <div className="flex gap-2">
-                <button
-                  onClick={applyAiPreview}
-                  className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  Replace selection
-                </button>
-                <button
-                  onClick={dismissAiPreview}
-                  className="px-4 py-2 rounded-lg border border-panel-border text-sm text-muted-foreground hover:bg-panel hover:text-foreground transition-colors"
-                >
-                  Discard
-                </button>
-              </div>
+          ) : aiError ? (
+            <div className="flex items-center gap-2.5 px-4 py-2.5 bg-popover border border-destructive/30 rounded-full shadow-xl text-destructive pointer-events-auto">
+              <X className="w-3.5 h-3.5 shrink-0" />
+              <span className="text-xs">{aiError}</span>
             </div>
-          )}
+          ) : null}
         </div>
       )}
 
