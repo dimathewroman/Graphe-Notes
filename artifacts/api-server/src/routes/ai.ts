@@ -80,6 +80,8 @@ router.post("/ai/complete", async (req, res): Promise<void> => {
             errMsg = "Anthropic authentication failed — check your API key in Settings → AI.";
           } else if (type === "permission_error" || response.status === 403) {
             errMsg = "Anthropic permission denied — your key may lack API access or credits.";
+          } else if (type === "not_found_error" && msg.startsWith("model:")) {
+            errMsg = `Invalid Anthropic model "${model}" — open Settings → AI and select a valid model from the list.`;
           } else if (msg) {
             errMsg = `Anthropic: ${msg}`;
           }

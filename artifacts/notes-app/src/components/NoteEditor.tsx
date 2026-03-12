@@ -688,8 +688,23 @@ export function NoteEditor() {
     if (!sel.text.trim()) return;
 
     const apiKey = (localStorage.getItem("ai_api_key") || "").trim();
-    const provider = (localStorage.getItem("ai_provider") || "openai") as any;
-    const model = localStorage.getItem("ai_model") || "gpt-4o-mini";
+    const provider = (localStorage.getItem("ai_provider") || "openai") as "openai" | "anthropic" | "google";
+    const PROVIDER_DEFAULT_MODEL: Record<string, string> = {
+      openai: "gpt-4o-mini",
+      anthropic: "claude-3-5-haiku-20241022",
+      google: "gemini-1.5-flash",
+    };
+    const PROVIDER_ID_PREFIX: Record<string, string> = {
+      openai: "gpt-|o1|o3|chatgpt",
+      anthropic: "claude-",
+      google: "gemini-",
+    };
+    const storedModel = localStorage.getItem("ai_model") || "";
+    const prefixPattern = PROVIDER_ID_PREFIX[provider] ?? "";
+    const modelLooksValid = prefixPattern
+      ? prefixPattern.split("|").some((p) => storedModel.startsWith(p))
+      : !!storedModel;
+    const model = modelLooksValid ? storedModel : PROVIDER_DEFAULT_MODEL[provider] ?? storedModel;
 
     if (!apiKey) {
       setAiError("No AI API key configured. Open Settings → AI to add one.");

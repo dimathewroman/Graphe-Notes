@@ -123,6 +123,8 @@ export function SettingsModal() {
         setCachedModels(prov, data.models);
         setLastFetchedAt(Date.now());
         setFetchStatus(data.source === "live" ? "live" : "fallback");
+        // If the currently stored model isn't in the new list, auto-select the first valid one
+        setModel((prev) => (data.models.includes(prev) ? prev : data.models[0] ?? prev));
       } catch {
         setFetchStatus("error");
       }
