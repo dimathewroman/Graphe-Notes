@@ -162,7 +162,7 @@ export function SettingsModal() {
 
   const handleSave = () => {
     localStorage.setItem("ai_provider", provider);
-    localStorage.setItem("ai_api_key", apiKey);
+    localStorage.setItem("ai_api_key", apiKey.trim());
     localStorage.setItem("ai_model", model);
     localStorage.setItem("theme_mode", themeMode);
     localStorage.setItem("theme_accent", accentColor);

@@ -66,8 +66,20 @@ router.post("/ai/complete", async (req, res): Promise<void> => {
       });
 
       if (!response.ok) {
-        const err = await response.text();
-        res.status(500).json({ error: `Anthropic error: ${err}` });
+        let errMsg = `Anthropic ${response.status}`;
+        try {
+          const errBody = await response.json() as { error?: { type?: string; message?: string } };
+          const type = errBody.error?.type ?? "";
+          const msg = errBody.error?.message ?? "";
+          if (type === "authentication_error") {
+            errMsg = "Anthropic authentication failed — check your API key in Settings → AI.";
+          } else if (type === "permission_error" || response.status === 403) {
+            errMsg = "Anthropic permission denied — your key may lack API access or credits.";
+          } else if (msg) {
+            errMsg = `Anthropic: ${msg}`;
+          }
+        } catch { /* leave default message */ }
+        res.status(500).json({ error: errMsg });
         return;
       }
 

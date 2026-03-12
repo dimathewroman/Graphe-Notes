@@ -687,7 +687,7 @@ export function NoteEditor() {
 
     if (!sel.text.trim()) return;
 
-    const apiKey = localStorage.getItem("ai_api_key") || "";
+    const apiKey = (localStorage.getItem("ai_api_key") || "").trim();
     const provider = (localStorage.getItem("ai_provider") || "openai") as any;
     const model = localStorage.getItem("ai_model") || "gpt-4o-mini";
 
