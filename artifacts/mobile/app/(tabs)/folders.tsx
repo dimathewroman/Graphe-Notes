@@ -131,6 +131,7 @@ export default function FoldersScreen() {
             params: {
               smartFolderId: String(item.id),
               folderName: item.name,
+              smartFolderTags: (item.tagRules || []).join(","),
             },
           })
         }
