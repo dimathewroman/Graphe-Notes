@@ -7,6 +7,7 @@ import aiRouter from "./ai";
 import smartFoldersRouter from "./smart-folders";
 import modelsRouter from "./models";
 import versionsRouter from "./versions";
+import vaultRouter from "./vault";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(tagsRouter);
 router.use(aiRouter);
 router.use(smartFoldersRouter);
 router.use(modelsRouter);
+router.use(vaultRouter);
 
 export default router;

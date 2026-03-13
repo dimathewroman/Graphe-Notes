@@ -26,13 +26,18 @@ import type {
   Folder,
   GetNotesParams,
   HealthStatus,
-  LockNoteBody,
   MoveNoteBody,
   Note,
   SmartFolder,
+  ToggleNoteVaultBody,
   UpdateFolderBody,
   UpdateNoteBody,
   UpdateSmartFolderBody,
+  VaultChangePasswordBody,
+  VaultSetupBody,
+  VaultStatusResponse,
+  VaultUnlockBody,
+  VaultUnlockResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1134,43 +1139,43 @@ export const useMoveNote = <
 };
 
 /**
- * @summary Lock a note with a password hash
+ * @summary Move a note in or out of the vault
  */
-export const getLockNoteUrl = (id: number) => {
-  return `/api/notes/${id}/lock`;
+export const getToggleNoteVaultUrl = (id: number) => {
+  return `/api/notes/${id}/vault`;
 };
 
-export const lockNote = async (
+export const toggleNoteVault = async (
   id: number,
-  lockNoteBody: LockNoteBody,
+  toggleNoteVaultBody: ToggleNoteVaultBody,
   options?: RequestInit,
 ): Promise<Note> => {
-  return customFetch<Note>(getLockNoteUrl(id), {
+  return customFetch<Note>(getToggleNoteVaultUrl(id), {
     ...options,
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(lockNoteBody),
+    body: JSON.stringify(toggleNoteVaultBody),
   });
 };
 
-export const getLockNoteMutationOptions = <
+export const getToggleNoteVaultMutationOptions = <
   TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof lockNote>>,
+    Awaited<ReturnType<typeof toggleNoteVault>>,
     TError,
-    { id: number; data: BodyType<LockNoteBody> },
+    { id: number; data: BodyType<ToggleNoteVaultBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof lockNote>>,
+  Awaited<ReturnType<typeof toggleNoteVault>>,
   TError,
-  { id: number; data: BodyType<LockNoteBody> },
+  { id: number; data: BodyType<ToggleNoteVaultBody> },
   TContext
 > => {
-  const mutationKey = ["lockNote"];
+  const mutationKey = ["toggleNoteVault"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -1180,81 +1185,83 @@ export const getLockNoteMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof lockNote>>,
-    { id: number; data: BodyType<LockNoteBody> }
+    Awaited<ReturnType<typeof toggleNoteVault>>,
+    { id: number; data: BodyType<ToggleNoteVaultBody> }
   > = (props) => {
     const { id, data } = props ?? {};
 
-    return lockNote(id, data, requestOptions);
+    return toggleNoteVault(id, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type LockNoteMutationResult = NonNullable<
-  Awaited<ReturnType<typeof lockNote>>
+export type ToggleNoteVaultMutationResult = NonNullable<
+  Awaited<ReturnType<typeof toggleNoteVault>>
 >;
-export type LockNoteMutationBody = BodyType<LockNoteBody>;
-export type LockNoteMutationError = ErrorType<ErrorResponse>;
+export type ToggleNoteVaultMutationBody = BodyType<ToggleNoteVaultBody>;
+export type ToggleNoteVaultMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Lock a note with a password hash
+ * @summary Move a note in or out of the vault
  */
-export const useLockNote = <
+export const useToggleNoteVault = <
   TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof lockNote>>,
+    Awaited<ReturnType<typeof toggleNoteVault>>,
     TError,
-    { id: number; data: BodyType<LockNoteBody> },
+    { id: number; data: BodyType<ToggleNoteVaultBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof lockNote>>,
+  Awaited<ReturnType<typeof toggleNoteVault>>,
   TError,
-  { id: number; data: BodyType<LockNoteBody> },
+  { id: number; data: BodyType<ToggleNoteVaultBody> },
   TContext
 > => {
-  return useMutation(getLockNoteMutationOptions(options));
+  return useMutation(getToggleNoteVaultMutationOptions(options));
 };
 
 /**
- * @summary Unlock a note
+ * @summary Set up vault with a password
  */
-export const getUnlockNoteUrl = (id: number) => {
-  return `/api/notes/${id}/unlock`;
+export const getSetupVaultUrl = () => {
+  return `/api/vault/setup`;
 };
 
-export const unlockNote = async (
-  id: number,
+export const setupVault = async (
+  vaultSetupBody: VaultSetupBody,
   options?: RequestInit,
-): Promise<Note> => {
-  return customFetch<Note>(getUnlockNoteUrl(id), {
+): Promise<VaultStatusResponse> => {
+  return customFetch<VaultStatusResponse>(getSetupVaultUrl(), {
     ...options,
-    method: "PATCH",
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(vaultSetupBody),
   });
 };
 
-export const getUnlockNoteMutationOptions = <
+export const getSetupVaultMutationOptions = <
   TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof unlockNote>>,
+    Awaited<ReturnType<typeof setupVault>>,
     TError,
-    { id: number },
+    { data: BodyType<VaultSetupBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
-  Awaited<ReturnType<typeof unlockNote>>,
+  Awaited<ReturnType<typeof setupVault>>,
   TError,
-  { id: number },
+  { data: BodyType<VaultSetupBody> },
   TContext
 > => {
-  const mutationKey = ["unlockNote"];
+  const mutationKey = ["setupVault"];
   const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation &&
       "mutationKey" in options.mutation &&
@@ -1264,44 +1271,291 @@ export const getUnlockNoteMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof unlockNote>>,
-    { id: number }
+    Awaited<ReturnType<typeof setupVault>>,
+    { data: BodyType<VaultSetupBody> }
   > = (props) => {
-    const { id } = props ?? {};
+    const { data } = props ?? {};
 
-    return unlockNote(id, requestOptions);
+    return setupVault(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
 };
 
-export type UnlockNoteMutationResult = NonNullable<
-  Awaited<ReturnType<typeof unlockNote>>
+export type SetupVaultMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setupVault>>
 >;
-
-export type UnlockNoteMutationError = ErrorType<ErrorResponse>;
+export type SetupVaultMutationBody = BodyType<VaultSetupBody>;
+export type SetupVaultMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Unlock a note
+ * @summary Set up vault with a password
  */
-export const useUnlockNote = <
+export const useSetupVault = <
   TError = ErrorType<ErrorResponse>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof unlockNote>>,
+    Awaited<ReturnType<typeof setupVault>>,
     TError,
-    { id: number },
+    { data: BodyType<VaultSetupBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
-  Awaited<ReturnType<typeof unlockNote>>,
+  Awaited<ReturnType<typeof setupVault>>,
   TError,
-  { id: number },
+  { data: BodyType<VaultSetupBody> },
   TContext
 > => {
-  return useMutation(getUnlockNoteMutationOptions(options));
+  return useMutation(getSetupVaultMutationOptions(options));
+};
+
+/**
+ * @summary Unlock the vault with a password
+ */
+export const getUnlockVaultUrl = () => {
+  return `/api/vault/unlock`;
+};
+
+export const unlockVault = async (
+  vaultUnlockBody: VaultUnlockBody,
+  options?: RequestInit,
+): Promise<VaultUnlockResponse> => {
+  return customFetch<VaultUnlockResponse>(getUnlockVaultUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(vaultUnlockBody),
+  });
+};
+
+export const getUnlockVaultMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlockVault>>,
+    TError,
+    { data: BodyType<VaultUnlockBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unlockVault>>,
+  TError,
+  { data: BodyType<VaultUnlockBody> },
+  TContext
+> => {
+  const mutationKey = ["unlockVault"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unlockVault>>,
+    { data: BodyType<VaultUnlockBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return unlockVault(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnlockVaultMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unlockVault>>
+>;
+export type UnlockVaultMutationBody = BodyType<VaultUnlockBody>;
+export type UnlockVaultMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Unlock the vault with a password
+ */
+export const useUnlockVault = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unlockVault>>,
+    TError,
+    { data: BodyType<VaultUnlockBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unlockVault>>,
+  TError,
+  { data: BodyType<VaultUnlockBody> },
+  TContext
+> => {
+  return useMutation(getUnlockVaultMutationOptions(options));
+};
+
+/**
+ * @summary Check if vault is configured
+ */
+export const getGetVaultStatusUrl = () => {
+  return `/api/vault/status`;
+};
+
+export const getVaultStatus = async (
+  options?: RequestInit,
+): Promise<VaultStatusResponse> => {
+  return customFetch<VaultStatusResponse>(getGetVaultStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetVaultStatusQueryKey = () => {
+  return [`/api/vault/status`] as const;
+};
+
+export const getGetVaultStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getVaultStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getVaultStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetVaultStatusQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getVaultStatus>>> = ({
+    signal,
+  }) => getVaultStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getVaultStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetVaultStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getVaultStatus>>
+>;
+export type GetVaultStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Check if vault is configured
+ */
+
+export function useGetVaultStatus<
+  TData = Awaited<ReturnType<typeof getVaultStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getVaultStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetVaultStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Change vault password
+ */
+export const getChangeVaultPasswordUrl = () => {
+  return `/api/vault/change-password`;
+};
+
+export const changeVaultPassword = async (
+  vaultChangePasswordBody: VaultChangePasswordBody,
+  options?: RequestInit,
+): Promise<VaultStatusResponse> => {
+  return customFetch<VaultStatusResponse>(getChangeVaultPasswordUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(vaultChangePasswordBody),
+  });
+};
+
+export const getChangeVaultPasswordMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof changeVaultPassword>>,
+    TError,
+    { data: BodyType<VaultChangePasswordBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof changeVaultPassword>>,
+  TError,
+  { data: BodyType<VaultChangePasswordBody> },
+  TContext
+> => {
+  const mutationKey = ["changeVaultPassword"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof changeVaultPassword>>,
+    { data: BodyType<VaultChangePasswordBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return changeVaultPassword(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ChangeVaultPasswordMutationResult = NonNullable<
+  Awaited<ReturnType<typeof changeVaultPassword>>
+>;
+export type ChangeVaultPasswordMutationBody = BodyType<VaultChangePasswordBody>;
+export type ChangeVaultPasswordMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Change vault password
+ */
+export const useChangeVaultPassword = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof changeVaultPassword>>,
+    TError,
+    { data: BodyType<VaultChangePasswordBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof changeVaultPassword>>,
+  TError,
+  { data: BodyType<VaultChangePasswordBody> },
+  TContext
+> => {
+  return useMutation(getChangeVaultPasswordMutationOptions(options));
 };
 
 /**

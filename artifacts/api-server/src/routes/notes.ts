@@ -18,11 +18,9 @@ import {
   ToggleNotePinResponse,
   ToggleNoteFavoriteResponse,
   MoveNoteResponse,
-  LockNoteParams,
-  LockNoteBody,
-  LockNoteResponse,
-  UnlockNoteParams,
-  UnlockNoteResponse,
+  ToggleNoteVaultParams,
+  ToggleNoteVaultBody,
+  ToggleNoteVaultResponse,
 } from "@workspace/api-zod";
 import { desc, asc } from "drizzle-orm";
 
@@ -64,25 +62,14 @@ router.get("/notes", async (req, res): Promise<void> => {
     conditions.push(sql`${notesTable.tags} @> ARRAY[${tag}]::text[]`);
   }
 
-  let orderCol = notesTable.updatedAt;
-  if (sortBy === "createdAt") orderCol = notesTable.createdAt;
-  else if (sortBy === "title") {
-    const orderFn = sortDir === "asc" ? asc : desc;
-    const notes = await db
-      .select()
-      .from(notesTable)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(orderFn(notesTable.title));
-    res.json(GetNotesResponse.parse(notes));
-    return;
-  }
+  const orderCol = sortBy === "title" ? notesTable.title : sortBy === "createdAt" ? notesTable.createdAt : notesTable.updatedAt;
+  const orderDir = sortDir === "asc" ? asc(orderCol) : desc(orderCol);
 
-  const orderFn = sortDir === "asc" ? asc : desc;
   const notes = await db
     .select()
     .from(notesTable)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(orderFn(orderCol));
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(orderDir);
 
   res.json(GetNotesResponse.parse(notes));
 });
@@ -94,14 +81,7 @@ router.post("/notes", async (req, res): Promise<void> => {
     return;
   }
 
-  const [note] = await db
-    .insert(notesTable)
-    .values({
-      ...parsed.data,
-      tags: parsed.data.tags ?? [],
-    })
-    .returning();
-
+  const [note] = await db.insert(notesTable).values(parsed.data).returning();
   res.status(201).json(GetNoteResponse.parse(note));
 });
 
@@ -159,17 +139,17 @@ router.delete("/notes/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [note] = await db
+  const [deleted] = await db
     .delete(notesTable)
     .where(eq(notesTable.id, params.data.id))
     .returning();
 
-  if (!note) {
+  if (!deleted) {
     res.status(404).json({ error: "Note not found" });
     return;
   }
 
-  res.sendStatus(204);
+  res.json({ success: true });
 });
 
 router.patch("/notes/:id/pin", async (req, res): Promise<void> => {
@@ -251,34 +231,20 @@ router.patch("/notes/:id/move", async (req, res): Promise<void> => {
   res.json(MoveNoteResponse.parse(note));
 });
 
-router.patch("/notes/:id/lock", async (req, res): Promise<void> => {
-  const params = LockNoteParams.safeParse(req.params);
+router.patch("/notes/:id/vault", async (req, res): Promise<void> => {
+  const params = ToggleNoteVaultParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  const parsed = LockNoteBody.safeParse(req.body);
+  const parsed = ToggleNoteVaultBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const [note] = await db
     .update(notesTable)
-    .set({ locked: true, lockPasswordHash: parsed.data.passwordHash, updatedAt: new Date() })
+    .set({ vaulted: parsed.data.vaulted, updatedAt: new Date() })
     .where(eq(notesTable.id, params.data.id))
     .returning();
 
   if (!note) { res.status(404).json({ error: "Note not found" }); return; }
-  res.json(LockNoteResponse.parse(note));
-});
-
-router.patch("/notes/:id/unlock", async (req, res): Promise<void> => {
-  const params = UnlockNoteParams.safeParse(req.params);
-  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-
-  const [note] = await db
-    .update(notesTable)
-    .set({ locked: false, lockPasswordHash: null, updatedAt: new Date() })
-    .where(eq(notesTable.id, params.data.id))
-    .returning();
-
-  if (!note) { res.status(404).json({ error: "Note not found" }); return; }
-  res.json(UnlockNoteResponse.parse(note));
+  res.json(ToggleNoteVaultResponse.parse(note));
 });
 
 export default router;

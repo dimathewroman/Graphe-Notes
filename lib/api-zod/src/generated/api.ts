@@ -110,8 +110,7 @@ export const GetNotesResponseItem = zod.object({
   pinned: zod.boolean(),
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
-  locked: zod.boolean(),
-  lockPasswordHash: zod.string().nullable(),
+  vaulted: zod.boolean(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -148,8 +147,7 @@ export const GetNoteResponse = zod.object({
   pinned: zod.boolean(),
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
-  locked: zod.boolean(),
-  lockPasswordHash: zod.string().nullable(),
+  vaulted: zod.boolean(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -170,8 +168,6 @@ export const UpdateNoteBody = zod.object({
   pinned: zod.boolean().optional(),
   favorite: zod.boolean().optional(),
   coverImage: zod.string().nullish(),
-  locked: zod.boolean().optional(),
-  lockPasswordHash: zod.string().nullish(),
 });
 
 export const UpdateNoteResponse = zod.object({
@@ -184,8 +180,7 @@ export const UpdateNoteResponse = zod.object({
   pinned: zod.boolean(),
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
-  locked: zod.boolean(),
-  lockPasswordHash: zod.string().nullable(),
+  vaulted: zod.boolean(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -214,8 +209,7 @@ export const ToggleNotePinResponse = zod.object({
   pinned: zod.boolean(),
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
-  locked: zod.boolean(),
-  lockPasswordHash: zod.string().nullable(),
+  vaulted: zod.boolean(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -237,8 +231,7 @@ export const ToggleNoteFavoriteResponse = zod.object({
   pinned: zod.boolean(),
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
-  locked: zod.boolean(),
-  lockPasswordHash: zod.string().nullable(),
+  vaulted: zod.boolean(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -264,60 +257,76 @@ export const MoveNoteResponse = zod.object({
   pinned: zod.boolean(),
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
-  locked: zod.boolean(),
-  lockPasswordHash: zod.string().nullable(),
+  vaulted: zod.boolean(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
 
 /**
- * @summary Lock a note with a password hash
+ * @summary Move a note in or out of the vault
  */
-export const LockNoteParams = zod.object({
+export const ToggleNoteVaultParams = zod.object({
   id: zod.coerce.number(),
 });
 
-export const LockNoteBody = zod.object({
+export const ToggleNoteVaultBody = zod.object({
+  vaulted: zod.boolean(),
+});
+
+export const ToggleNoteVaultResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  content: zod.string(),
+  contentText: zod.string().nullable(),
+  folderId: zod.number().nullable(),
+  tags: zod.array(zod.string()),
+  pinned: zod.boolean(),
+  favorite: zod.boolean(),
+  coverImage: zod.string().nullable(),
+  vaulted: zod.boolean(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Set up vault with a password
+ */
+export const SetupVaultBody = zod.object({
   passwordHash: zod.string(),
 });
 
-export const LockNoteResponse = zod.object({
-  id: zod.number(),
-  title: zod.string(),
-  content: zod.string(),
-  contentText: zod.string().nullable(),
-  folderId: zod.number().nullable(),
-  tags: zod.array(zod.string()),
-  pinned: zod.boolean(),
-  favorite: zod.boolean(),
-  coverImage: zod.string().nullable(),
-  locked: zod.boolean(),
-  lockPasswordHash: zod.string().nullable(),
-  createdAt: zod.date(),
-  updatedAt: zod.date(),
+export const SetupVaultResponse = zod.object({
+  isConfigured: zod.boolean(),
 });
 
 /**
- * @summary Unlock a note
+ * @summary Unlock the vault with a password
  */
-export const UnlockNoteParams = zod.object({
-  id: zod.coerce.number(),
+export const UnlockVaultBody = zod.object({
+  passwordHash: zod.string(),
 });
 
-export const UnlockNoteResponse = zod.object({
-  id: zod.number(),
-  title: zod.string(),
-  content: zod.string(),
-  contentText: zod.string().nullable(),
-  folderId: zod.number().nullable(),
-  tags: zod.array(zod.string()),
-  pinned: zod.boolean(),
-  favorite: zod.boolean(),
-  coverImage: zod.string().nullable(),
-  locked: zod.boolean(),
-  lockPasswordHash: zod.string().nullable(),
-  createdAt: zod.date(),
-  updatedAt: zod.date(),
+export const UnlockVaultResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
+ * @summary Check if vault is configured
+ */
+export const GetVaultStatusResponse = zod.object({
+  isConfigured: zod.boolean(),
+});
+
+/**
+ * @summary Change vault password
+ */
+export const ChangeVaultPasswordBody = zod.object({
+  currentPasswordHash: zod.string(),
+  newPasswordHash: zod.string(),
+});
+
+export const ChangeVaultPasswordResponse = zod.object({
+  isConfigured: zod.boolean(),
 });
 
 /**

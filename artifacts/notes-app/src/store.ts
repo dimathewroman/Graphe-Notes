@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { GetNotesSortBy, GetNotesSortDir } from "@workspace/api-client-react";
 
-type FilterType = "all" | "pinned" | "favorites" | "folder" | "tag" | "attachments";
+type FilterType = "all" | "pinned" | "favorites" | "folder" | "tag" | "attachments" | "vault";
 type ViewMode = "list" | "gallery";
 type MobileView = "list" | "editor";
 
@@ -18,9 +18,13 @@ interface AppState {
   mobileView: MobileView;
 
   isSidebarOpen: boolean;
+  isNoteListOpen: boolean;
   isAIPanelOpen: boolean;
   isSettingsOpen: boolean;
   isAttachmentsOpen: boolean;
+
+  isVaultUnlocked: boolean;
+  setVaultUnlocked: (isUnlocked: boolean) => void;
 
   setFilter: (filter: FilterType, idOrTag?: number | string | null) => void;
   setSearchQuery: (query: string) => void;
@@ -30,6 +34,8 @@ interface AppState {
   setMobileView: (view: MobileView) => void;
   toggleSidebar: () => void;
   setSidebarOpen: (isOpen: boolean) => void;
+  toggleNoteList: () => void;
+  setNoteListOpen: (isOpen: boolean) => void;
   setAIPanelOpen: (isOpen: boolean) => void;
   setSettingsOpen: (isOpen: boolean) => void;
   setAttachmentsOpen: (isOpen: boolean) => void;
@@ -48,9 +54,13 @@ export const useAppStore = create<AppState>((set) => ({
   mobileView: "list",
 
   isSidebarOpen: true,
+  isNoteListOpen: true,
   isAIPanelOpen: false,
   isSettingsOpen: false,
   isAttachmentsOpen: false,
+
+  isVaultUnlocked: false,
+  setVaultUnlocked: (isUnlocked) => set({ isVaultUnlocked: isUnlocked }),
 
   setFilter: (filter, idOrTag) => set({
     activeFilter: filter,
@@ -66,6 +76,8 @@ export const useAppStore = create<AppState>((set) => ({
   setMobileView: (view) => set({ mobileView: view }),
   toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
   setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
+  toggleNoteList: () => set((state) => ({ isNoteListOpen: !state.isNoteListOpen })),
+  setNoteListOpen: (isOpen) => set({ isNoteListOpen: isOpen }),
   setAIPanelOpen: (isOpen) => set({ isAIPanelOpen: isOpen }),
   setSettingsOpen: (isOpen) => set({ isSettingsOpen: isOpen }),
   setAttachmentsOpen: (isOpen) => set({ isAttachmentsOpen: isOpen }),

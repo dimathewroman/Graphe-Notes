@@ -18,7 +18,4 @@ export interface UpdateNoteBody {
   favorite?: boolean;
   /** @nullable */
   coverImage?: string | null;
-  locked?: boolean;
-  /** @nullable */
-  lockPasswordHash?: string | null;
 }

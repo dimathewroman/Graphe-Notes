@@ -13,6 +13,8 @@ tags:
     description: Folder operations
   - name: notes
     description: Note operations
+  - name: vault
+    description: Vault operations
   - name: tags
     description: Tag operations
   - name: ai
@@ -345,11 +347,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /notes/{id}/lock:
+  /notes/{id}/vault:
     patch:
-      operationId: lockNote
+      operationId: toggleNoteVault
       tags: [notes]
-      summary: Lock a note with a password hash
+      summary: Move a note in or out of the vault
       parameters:
         - name: id
           in: path
@@ -361,10 +363,10 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LockNoteBody"
+              $ref: "#/components/schemas/ToggleNoteVaultBody"
       responses:
         "200":
-          description: Locked note
+          description: Updated note
           content:
             application/json:
               schema:
@@ -376,26 +378,95 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /notes/{id}/unlock:
-    patch:
-      operationId: unlockNote
-      tags: [notes]
-      summary: Unlock a note
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
+  /vault/setup:
+    post:
+      operationId: setupVault
+      tags: [vault]
+      summary: Set up vault with a password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultSetupBody"
       responses:
         "200":
-          description: Unlocked note
+          description: Vault configured
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Note"
+                $ref: "#/components/schemas/VaultStatusResponse"
+        "409":
+          description: Vault already configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vault/unlock:
+    post:
+      operationId: unlockVault
+      tags: [vault]
+      summary: Unlock the vault with a password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultUnlockBody"
+      responses:
+        "200":
+          description: Vault unlocked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultUnlockResponse"
+        "401":
+          description: Wrong password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Not found
+          description: Vault not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /vault/status:
+    get:
+      operationId: getVaultStatus
+      tags: [vault]
+      summary: Check if vault is configured
+      responses:
+        "200":
+          description: Vault status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultStatusResponse"
+
+  /vault/change-password:
+    post:
+      operationId: changeVaultPassword
+      tags: [vault]
+      summary: Change vault password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VaultChangePasswordBody"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VaultStatusResponse"
+        "401":
+          description: Wrong current password
           content:
             application/json:
               schema:
@@ -650,10 +721,8 @@ components:
           type: boolean
         coverImage:
           type: ["string", "null"]
-        locked:
+        vaulted:
           type: boolean
-        lockPasswordHash:
-          type: ["string", "null"]
         createdAt:
           type: string
           format: date-time
@@ -670,8 +739,7 @@ components:
         - pinned
         - favorite
         - coverImage
-        - locked
-        - lockPasswordHash
+        - vaulted
         - createdAt
         - updatedAt
 
@@ -721,11 +789,6 @@ components:
           type: boolean
         coverImage:
           type: ["string", "null"]
-        locked:
-          type: boolean
-        lockPasswordHash:
-          type: ["string", "null"]
-
     MoveNoteBody:
       type: object
       properties:
@@ -767,13 +830,56 @@ components:
         - result
         - tokensUsed
 
-    LockNoteBody:
+    ToggleNoteVaultBody:
+      type: object
+      properties:
+        vaulted:
+          type: boolean
+      required:
+        - vaulted
+
+    VaultSetupBody:
       type: object
       properties:
         passwordHash:
           type: string
       required:
         - passwordHash
+
+    VaultUnlockBody:
+      type: object
+      properties:
+        passwordHash:
+          type: string
+      required:
+        - passwordHash
+
+    VaultChangePasswordBody:
+      type: object
+      properties:
+        currentPasswordHash:
+          type: string
+        newPasswordHash:
+          type: string
+      required:
+        - currentPasswordHash
+        - newPasswordHash
+
+    VaultStatusResponse:
+      type: object
+      properties:
+        isConfigured:
+          type: boolean
+      required:
+        - isConfigured
+
+    VaultUnlockResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+        - success
 
     SmartFolder:
       type: object

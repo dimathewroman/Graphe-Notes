@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import UnderlineExt from "@tiptap/extension-underline";
@@ -19,7 +19,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { useAppStore } from "@/store";
 import {
   useGetNote, useUpdateNote, useDeleteNote, useToggleNotePin, useToggleNoteFavorite,
-  useLockNote, useUnlockNote,
+  useToggleNoteVault,
   getGetNotesQueryKey, getGetNoteQueryKey, getGetTagsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -28,15 +28,15 @@ import {
   AlignLeft, AlignCenter, AlignRight,
   List, ListOrdered, ListTodo, Quote, Code, Heading1, Heading2, Heading3,
   Image as ImageIcon, Trash2, Pin, Star, PanelLeft, FileText,
-  Lock, Unlock, Table as TableIcon, RowsIcon, Plus, X, Hash,
+  Lock, ShieldCheck, Table as TableIcon, RowsIcon, Plus, X, Hash,
   Sparkles, Loader2, Check, RotateCcw, Wand2, BookOpen, Scissors,
   Link2, Unlink, ChevronRight, ArrowUp, ArrowDown, MessageSquare, ListChecks,
-  Undo2, Redo2, Clock, ArrowLeft, Menu, MoreHorizontal
+  Undo2, Redo2, Clock, ArrowLeft, Menu, MoreHorizontal, PanelLeftClose
 } from "lucide-react";
 import { IconButton } from "./ui/IconButton";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { cn, formatDate } from "@/lib/utils";
-import { LockModal } from "./LockModal";
+import { VaultModal } from "./VaultModal";
 import { useBreakpoint } from "@/hooks/use-mobile";
 
 // Custom floating AI menu that appears on text selection (Tiptap v3 compatible)
@@ -210,22 +210,49 @@ function AiSelectionMenu({
     }
   };
 
-  const toolbarTop = rect.top - 44 + window.scrollY;
-  const toolbarLeft = rect.left + rect.width / 2;
+  const isMobile = window.innerWidth < 768;
+
+  const menuStyle = useMemo(() => {
+    if (!rect) return {};
+    const pad = 8;
+    const vw = window.innerWidth;
+    const menuW = isMobile ? vw - pad * 2 : 420;
+    let left: number;
+    let top: number;
+
+    if (isMobile) {
+      left = pad;
+      top = rect.bottom + 8;
+      if (top + 200 > window.innerHeight) {
+        top = rect.top - 52;
+      }
+    } else {
+      left = rect.left + rect.width / 2 - menuW / 2;
+      top = rect.top - 44;
+      if (left + menuW > vw - pad) left = vw - menuW - pad;
+      if (left < pad) left = pad;
+      if (top < pad) top = rect.bottom + 8;
+    }
+
+    return { top, left, width: isMobile ? `calc(100vw - ${pad * 2}px)` : undefined };
+  }, [rect, isMobile]);
 
   return (
     <div
       ref={menuRef}
       className="fixed z-50 pointer-events-auto"
-      style={{ top: toolbarTop, left: toolbarLeft, transform: "translateX(-50%)" }}
+      style={menuStyle}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <div className="flex items-center gap-0.5 bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1">
+      <div className={cn(
+        "bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1",
+        isMobile ? "flex flex-wrap items-center gap-0.5" : "flex items-center gap-0.5"
+      )}>
         <span className="text-xs text-muted-foreground px-2 font-medium flex items-center gap-1">
           <Sparkles className="w-3 h-3 text-indigo-400" />
           AI
         </span>
-        <div className="w-px h-4 bg-panel-border" />
+        <div className={cn("bg-panel-border", isMobile ? "w-full h-px my-0.5" : "w-px h-4")} />
 
         {actionGroups.map((group) => (
           <div key={group.label} className="relative">
@@ -237,28 +264,34 @@ function AiSelectionMenu({
                 setCustomText("");
               }}
               onMouseEnter={() => {
-                setExpandedGroup(group.label);
-                setExpandedAction(null);
-                setCustomInputFor(null);
-                setCustomText("");
+                if (!isMobile) {
+                  setExpandedGroup(group.label);
+                  setExpandedAction(null);
+                  setCustomInputFor(null);
+                  setCustomText("");
+                }
               }}
               className={cn(
-                "flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs whitespace-nowrap transition-colors",
+                "flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs whitespace-nowrap transition-colors min-h-[36px]",
                 expandedGroup === group.label
                   ? "bg-indigo-500/10 text-indigo-400"
                   : "text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400"
               )}
             >
               {group.icon}
-              {group.label}
+              {!isMobile && group.label}
               <ChevronRight className={cn("w-3 h-3 transition-transform", expandedGroup === group.label && "rotate-90")} />
             </button>
 
             {expandedGroup === group.label && (
               <div
-                className="absolute top-full left-0 mt-1 bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 min-w-[160px] z-50"
+                className={cn(
+                  "bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 min-w-[160px] z-50",
+                  isMobile ? "fixed left-2 right-2 mt-1" : "absolute top-full left-0 mt-1"
+                )}
+                style={isMobile ? { top: (menuRef.current?.getBoundingClientRect().bottom ?? 0) + 4 } : undefined}
                 onMouseLeave={() => {
-                  if (!expandedAction && !customInputFor) {
+                  if (!isMobile && !expandedAction && !customInputFor) {
                     setExpandedGroup(null);
                   }
                 }}
@@ -274,12 +307,14 @@ function AiSelectionMenu({
                             setCustomText("");
                           }}
                           onMouseEnter={() => {
-                            setExpandedAction(action.id);
-                            setCustomInputFor(null);
-                            setCustomText("");
+                            if (!isMobile) {
+                              setExpandedAction(action.id);
+                              setCustomInputFor(null);
+                              setCustomText("");
+                            }
                           }}
                           className={cn(
-                            "flex items-center justify-between w-full px-2 py-1.5 rounded-lg text-xs transition-colors",
+                            "flex items-center justify-between w-full px-2 py-1.5 rounded-lg text-xs transition-colors min-h-[36px]",
                             expandedAction === action.id
                               ? "bg-indigo-500/10 text-indigo-400"
                               : "text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400"
@@ -292,7 +327,10 @@ function AiSelectionMenu({
                           <ChevronRight className="w-3 h-3" />
                         </button>
                         {expandedAction === action.id && (
-                          <div className="absolute left-full top-0 ml-1 bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 min-w-[180px] z-50">
+                          <div className={cn(
+                            "bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 min-w-[180px] z-50",
+                            isMobile ? "pl-4 border-l border-t-0 border-r-0 border-b-0 rounded-none shadow-none" : "absolute left-full top-0 ml-1"
+                          )}>
                             {action.presets.map((preset) => (
                               <div key={preset.id}>
                                 {customInputFor === preset.id ? (
@@ -316,7 +354,7 @@ function AiSelectionMenu({
                                 ) : (
                                   <button
                                     onClick={() => handlePresetClick(preset.id)}
-                                    className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400 transition-colors whitespace-nowrap"
+                                    className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400 transition-colors whitespace-nowrap min-h-[36px]"
                                   >
                                     {preset.label}
                                   </button>
@@ -332,7 +370,7 @@ function AiSelectionMenu({
                           onAction(action.id);
                           resetMenu();
                         }}
-                        className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400 transition-colors whitespace-nowrap"
+                        className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400 transition-colors whitespace-nowrap min-h-[36px]"
                       >
                         {action.icon}
                         {action.label}
@@ -479,8 +517,49 @@ const SmartTaskItem = TaskItem.extend({
   },
 });
 
+function ScrollableToolbar({ children }: { children: React.ReactNode }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 2);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    checkScroll();
+    el.addEventListener("scroll", checkScroll, { passive: true });
+    const ro = new ResizeObserver(checkScroll);
+    ro.observe(el);
+    return () => { el.removeEventListener("scroll", checkScroll); ro.disconnect(); };
+  }, [checkScroll]);
+
+  return (
+    <div className="relative border-b border-panel-border shrink-0">
+      {canScrollLeft && (
+        <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background/80 to-transparent z-10 pointer-events-none" />
+      )}
+      <div
+        ref={scrollRef}
+        className="flex items-center gap-0.5 p-1.5 md:p-2 overflow-x-auto bg-panel/30 hide-scrollbar"
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
+        {children}
+      </div>
+      {canScrollRight && (
+        <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background/80 to-transparent z-10 pointer-events-none" />
+      )}
+    </div>
+  );
+}
+
 export function NoteEditor() {
-  const { selectedNoteId, selectNote, isSidebarOpen, toggleSidebar, setMobileView, setSidebarOpen } = useAppStore();
+  const { selectedNoteId, selectNote, isSidebarOpen, toggleSidebar, isNoteListOpen, toggleNoteList, setMobileView, setSidebarOpen } = useAppStore();
   const bp = useBreakpoint();
   const queryClient = useQueryClient();
 
@@ -491,13 +570,11 @@ export function NoteEditor() {
   const deleteNoteMut = useDeleteNote();
   const pinMut = useToggleNotePin();
   const favMut = useToggleNoteFavorite();
-  const lockMut = useLockNote();
-  const unlockMut = useUnlockNote();
+  const vaultMut = useToggleNoteVault();
+  const { isVaultUnlocked } = useAppStore();
 
   const [title, setTitle] = useState("");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
-  const [lockModal, setLockModal] = useState<"set" | "verify" | null>(null);
-  const [isUnlocked, setIsUnlocked] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [showTagInput, setShowTagInput] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -562,7 +639,6 @@ export function NoteEditor() {
         editor.commands.setContent(note.content, { emitUpdate: false });
       }
     }
-    setIsUnlocked(false);
     setShowVersionHistory(false);
   }, [note?.id, editor]);
 
@@ -619,31 +695,11 @@ export function NoteEditor() {
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
   };
 
-  const handleLockSet = async (hash: string) => {
-    if (!selectedNoteId) return;
-    await lockMut.mutateAsync({ id: selectedNoteId, data: { passwordHash: hash } });
+  const handleToggleVault = async () => {
+    if (!selectedNoteId || !note) return;
+    await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: !note.vaulted } });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
-    setLockModal(null);
-  };
-
-  const handleLockVerify = async (hash: string) => {
-    if (!note) return;
-    if (note.lockPasswordHash === hash) {
-      setIsUnlocked(true);
-      setLockModal(null);
-    } else {
-      alert("Incorrect password.");
-    }
-  };
-
-  const handleUnlockFully = async () => {
-    if (!selectedNoteId) return;
-    await unlockMut.mutateAsync({ id: selectedNoteId });
-    queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
-    queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
-    setIsUnlocked(false);
-    setLockModal(null);
   };
 
   // Tags
@@ -821,29 +877,14 @@ export function NoteEditor() {
     return <div className="flex-1 flex items-center justify-center bg-background"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
   }
 
-  // Show lock screen for locked + not-yet-unlocked notes
-  if (note?.locked && !isUnlocked) {
+  if (note?.vaulted && !isVaultUnlocked) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-background text-muted-foreground gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-          <Lock className="w-8 h-8 text-amber-500" />
+        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+          <ShieldCheck className="w-8 h-8 text-indigo-500" />
         </div>
-        <h2 className="text-xl font-medium text-foreground/80">This note is locked</h2>
-        <p className="text-sm">Enter your password to view the contents.</p>
-        <button
-          onClick={() => setLockModal("verify")}
-          className="mt-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-medium transition-colors"
-        >
-          Enter Password
-        </button>
-        {lockModal === "verify" && (
-          <LockModal
-            mode="verify"
-            onConfirm={handleLockVerify}
-            onCancel={() => setLockModal(null)}
-            onUnlock={handleUnlockFully}
-          />
-        )}
+        <h2 className="text-xl font-medium text-foreground/80">This note is in the vault</h2>
+        <p className="text-sm">Unlock the vault from the sidebar to view this note.</p>
       </div>
     );
   }
@@ -858,10 +899,19 @@ export function NoteEditor() {
               <ArrowLeft className="w-5 h-5 text-muted-foreground" />
             </button>
           )}
-          {bp === "desktop" && !isSidebarOpen && (
-            <IconButton onClick={toggleSidebar} className="mr-2">
-              <PanelLeft className="w-4 h-4" />
-            </IconButton>
+          {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (
+            <div className="flex items-center gap-0.5 mr-2">
+              {!isSidebarOpen && (
+                <IconButton onClick={toggleSidebar} title="Show sidebar">
+                  <PanelLeft className="w-4 h-4" />
+                </IconButton>
+              )}
+              {!isNoteListOpen && (
+                <IconButton onClick={toggleNoteList} title="Show note list">
+                  <PanelLeftClose className="w-4 h-4 scale-x-[-1]" />
+                </IconButton>
+              )}
+            </div>
           )}
           <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
             <span className={cn("inline-block w-1.5 h-1.5 rounded-full", saveStatus === "saved" ? "bg-emerald-500" : "bg-amber-500 animate-pulse")} />
@@ -880,12 +930,12 @@ export function NoteEditor() {
           {bp === "desktop" && (
             <>
               <IconButton
-                onClick={() => note?.locked ? setLockModal("verify") : setLockModal("set")}
-                active={note?.locked}
-                title={note?.locked ? "Note is locked" : "Lock note"}
-                className={note?.locked ? "text-amber-500" : ""}
+                onClick={handleToggleVault}
+                active={note?.vaulted}
+                title={note?.vaulted ? "Remove from vault" : "Move to vault"}
+                className={note?.vaulted ? "text-indigo-400" : ""}
               >
-                {note?.locked ? <Lock className="w-4 h-4 fill-current" /> : <Lock className="w-4 h-4" />}
+                <ShieldCheck className={cn("w-4 h-4", note?.vaulted && "fill-current")} />
               </IconButton>
               <IconButton
                 onClick={() => setShowVersionHistory(v => !v)}
@@ -899,7 +949,7 @@ export function NoteEditor() {
           {bp !== "desktop" && (
             <OverflowMenu
               note={note}
-              onLock={() => note?.locked ? setLockModal("verify") : setLockModal("set")}
+              onVaultToggle={handleToggleVault}
               onVersionHistory={() => setShowVersionHistory(v => !v)}
               onDelete={handleDelete}
               showVersionHistory={showVersionHistory}
@@ -917,7 +967,7 @@ export function NoteEditor() {
       </header>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-0.5 p-1.5 md:p-2 border-b border-panel-border overflow-x-auto bg-panel/30 shrink-0 hide-scrollbar">
+      <ScrollableToolbar>
         <ToolbarButton
           command={() => editor.chain().focus().undo().run()}
           active={false}
@@ -1036,7 +1086,7 @@ export function NoteEditor() {
             </div>
           )}
         </div>
-      </div>
+      </ScrollableToolbar>
 
       {/* AI Bubble Menu – custom floating menu on text selection */}
       <AiSelectionMenu
@@ -1123,20 +1173,13 @@ export function NoteEditor() {
         />
       )}
 
-      {/* Lock Modal */}
-      {lockModal === "set" && (
-        <LockModal mode="set" onConfirm={handleLockSet} onCancel={() => setLockModal(null)} />
-      )}
-      {lockModal === "verify" && note?.locked && (
-        <LockModal mode="verify" onConfirm={handleLockVerify} onCancel={() => setLockModal(null)} onUnlock={handleUnlockFully} />
-      )}
     </div>
   );
 }
 
-function OverflowMenu({ note, onLock, onVersionHistory, onDelete, showVersionHistory }: {
-  note: { locked: boolean } | null | undefined;
-  onLock: () => void;
+function OverflowMenu({ note, onVaultToggle, onVersionHistory, onDelete, showVersionHistory }: {
+  note: { vaulted: boolean } | null | undefined;
+  onVaultToggle: () => void;
   onVersionHistory: () => void;
   onDelete: () => void;
   showVersionHistory: boolean;
@@ -1160,9 +1203,9 @@ function OverflowMenu({ note, onLock, onVersionHistory, onDelete, showVersionHis
       </IconButton>
       {open && (
         <div className="absolute right-0 top-full mt-1 z-50 min-w-[180px] bg-popover border border-panel-border rounded-xl shadow-2xl py-1">
-          <button onClick={() => { onLock(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
-            <Lock className="w-4 h-4" />
-            {note?.locked ? "Unlock Note" : "Lock Note"}
+          <button onClick={() => { onVaultToggle(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
+            <ShieldCheck className="w-4 h-4" />
+            {note?.vaulted ? "Remove from Vault" : "Move to Vault"}
           </button>
           <button onClick={() => { onVersionHistory(); setOpen(false); }} className={cn("w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-panel transition-colors", showVersionHistory ? "text-primary" : "text-foreground")}>
             <Clock className="w-4 h-4" />

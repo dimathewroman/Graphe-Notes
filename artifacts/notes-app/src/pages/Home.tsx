@@ -10,7 +10,7 @@ import { Drawer, DrawerPortal, DrawerOverlay } from "@/components/ui/drawer";
 import { DrawerPrimitive } from "@/components/ui/drawer-left";
 
 export default function Home() {
-  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, mobileView, selectedNoteId } = useAppStore();
+  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId } = useAppStore();
   const bp = useBreakpoint();
 
   useEffect(() => {
@@ -40,7 +40,7 @@ export default function Home() {
 
   const isCompact = bp === "mobile" || bp === "tablet";
   const showEditor = bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor");
-  const showList = bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "list");
+  const showList = bp === "desktop" ? isNoteListOpen : (bp === "tablet" || (bp === "mobile" && mobileView === "list"));
 
   return (
     <div className="flex h-screen w-full bg-background overflow-hidden relative">
