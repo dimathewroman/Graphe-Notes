@@ -118,9 +118,14 @@ router.patch("/notes/:id", async (req, res): Promise<void> => {
     return;
   }
 
+  const isContentChange = parsed.data.title !== undefined || parsed.data.content !== undefined || parsed.data.contentText !== undefined;
+  const updatePayload = isContentChange
+    ? { ...parsed.data, updatedAt: new Date() }
+    : { ...parsed.data };
+
   const [note] = await db
     .update(notesTable)
-    .set({ ...parsed.data, updatedAt: new Date() })
+    .set(updatePayload)
     .where(eq(notesTable.id, params.data.id))
     .returning();
 
