@@ -210,18 +210,25 @@ export default function NoteEditorScreen() {
   }, [deleteMut]);
 
   const handleRestoreVersion = useCallback(
-    (version: NoteVersion) => {
-      editorRef.current?.setContent(version.content);
-      setTitle(version.title);
-      pendingHtmlRef.current = version.content;
-      updateMut.mutate({
-        title: version.title,
-        content: version.content,
-        contentText: version.contentText || "",
-      });
-      setShowVersions(false);
+    async (version: NoteVersion) => {
+      try {
+        const fullVersion = await api.getVersion(noteId, version.id);
+        const content = fullVersion.version.content;
+        editorRef.current?.setContent(content);
+        setTitle(version.title);
+        pendingHtmlRef.current = content;
+        updateMut.mutate({
+          title: version.title,
+          content,
+          contentText: fullVersion.version.contentText || "",
+        });
+        setShowVersions(false);
+      } catch (error) {
+        console.warn("Failed to fetch version content:", error);
+        Alert.alert("Error", "Failed to load version content");
+      }
     },
-    [updateMut]
+    [updateMut, noteId]
   );
 
   const handleDeleteVersion = useCallback(
@@ -535,7 +542,7 @@ export default function NoteEditorScreen() {
               keyExtractor={(v) => String(v.id)}
               contentContainerStyle={styles.versionsList}
               renderItem={({ item }) => {
-                const wc = wordCount(stripHtml(item.content));
+                const wc = wordCount(item.contentText || "");
                 const isExpanded = expandedVersion === item.id;
                 return (
                   <View>
@@ -556,7 +563,7 @@ export default function NoteEditorScreen() {
                     {isExpanded && (
                       <View style={[styles.versionPreview, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
                         <Text style={[styles.versionPreviewText, { color: colors.foreground }]} numberOfLines={6}>
-                          {stripHtml(item.content).slice(0, 500)}
+                          {(item.contentText || "").slice(0, 500) || "No preview available"}
                         </Text>
                         <View style={styles.versionActions}>
                           <Pressable

@@ -32,12 +32,14 @@ export default function NotesScreen() {
     folderId?: string;
     folderName?: string;
     smartFolderId?: string;
+    smartFolderTags?: string;
     tag?: string;
     favorite?: string;
     pinned?: string;
   }>();
   const activeFolderId = params.folderId ? Number(params.folderId) : undefined;
   const activeTag = params.tag || undefined;
+  const smartFolderTags = params.smartFolderTags ? params.smartFolderTags.split(",") : undefined;
   const showFavorites = params.favorite === "true";
   const showPinned = params.pinned === "true";
   const folderLabel = showFavorites ? "Favorites" : showPinned ? "Pinned" : params.folderName || undefined;
@@ -47,7 +49,7 @@ export default function NotesScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
 
   const { data: notes, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ["notes", { sortBy, sortDir, folderId: activeFolderId, tag: activeTag, favorite: showFavorites, pinned: showPinned }],
+    queryKey: ["notes", { sortBy, sortDir, folderId: activeFolderId, tag: activeTag, smartFolderTags, favorite: showFavorites, pinned: showPinned }],
     queryFn: async () => {
       try {
         const data = await api.getNotes({
@@ -58,10 +60,16 @@ export default function NotesScreen() {
           ...(showFavorites ? { favorite: true } : {}),
           ...(showPinned ? { pinned: true } : {}),
         });
-        if (!activeFolderId && !activeTag && !showFavorites && !showPinned) {
+        let result = data;
+        if (smartFolderTags && smartFolderTags.length > 0) {
+          result = result.filter((n) =>
+            smartFolderTags.some((tag) => n.tags?.includes(tag))
+          );
+        }
+        if (!activeFolderId && !activeTag && !showFavorites && !showPinned && !smartFolderTags) {
           cache.setNotes(data);
         }
-        return data;
+        return result;
       } catch (err) {
         const cached = await cache.getNotes();
         if (cached) {
@@ -71,6 +79,11 @@ export default function NotesScreen() {
           }
           if (activeTag) {
             filtered = filtered.filter((n) => n.tags?.includes(activeTag));
+          }
+          if (smartFolderTags && smartFolderTags.length > 0) {
+            filtered = filtered.filter((n) =>
+              smartFolderTags.some((tag) => n.tags?.includes(tag))
+            );
           }
           if (showFavorites) {
             filtered = filtered.filter((n) => n.favorite);
@@ -177,7 +190,7 @@ export default function NotesScreen() {
         <View style={styles.titleRow}>
           {folderLabel && (
             <Pressable
-              onPress={() => router.setParams({ folderId: "", folderName: "", smartFolderId: "", tag: "", favorite: "", pinned: "" })}
+              onPress={() => router.setParams({ folderId: "", folderName: "", smartFolderId: "", smartFolderTags: "", tag: "", favorite: "", pinned: "" })}
               hitSlop={8}
             >
               <Feather name="chevron-left" size={22} color={colors.primary} />
