@@ -2,7 +2,7 @@ import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   Pressable,
   TextInput,
   ActivityIndicator,
@@ -122,48 +122,6 @@ export default function FoldersScreen() {
 
   const webTopPad = Platform.OS === "web" ? 67 : 0;
 
-  const renderFolder = useCallback(
-    ({ item }: { item: Folder }) => (
-      <Pressable
-        onPress={() =>
-          router.push({
-            pathname: "/(tabs)",
-            params: { folderId: String(item.id), folderName: item.name },
-          })
-        }
-        style={({ pressed }) => [
-          styles.folderRow,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-            opacity: pressed ? 0.7 : 1,
-          },
-        ]}
-      >
-        <View style={styles.folderIcon}>
-          <Feather name="folder" size={20} color={colors.primary} />
-        </View>
-        <View style={styles.folderInfo}>
-          <Text style={[styles.folderName, { color: colors.foreground }]}>
-            {item.name}
-          </Text>
-          <Text style={[styles.folderDate, { color: colors.muted }]}>
-            {formatRelativeTime(item.updatedAt)}
-          </Text>
-        </View>
-        <View style={styles.folderActions}>
-          <Pressable onPress={() => handleEdit(item)} hitSlop={8}>
-            <Feather name="edit-2" size={16} color={colors.muted} />
-          </Pressable>
-          <Pressable onPress={() => handleDelete(item)} hitSlop={8}>
-            <Feather name="trash-2" size={16} color={colors.destructive} />
-          </Pressable>
-        </View>
-      </Pressable>
-    ),
-    [colors, handleEdit, handleDelete]
-  );
-
   const renderSmartFolder = useCallback(
     ({ item }: { item: SmartFolder }) => (
       <Pressable
@@ -192,15 +150,68 @@ export default function FoldersScreen() {
           <Text style={[styles.folderName, { color: colors.foreground }]}>
             {item.name}
           </Text>
-          <Text style={[styles.folderDate, { color: colors.muted }]}>
-            {item.tagRules.map((t) => `#${t}`).join(", ")}
-          </Text>
+          {item.noteCount > 0 && (
+            <Text style={[styles.folderDate, { color: colors.muted }]}>
+              {item.noteCount} note{item.noteCount !== 1 ? "s" : ""}
+            </Text>
+          )}
         </View>
         <Feather name="chevron-right" size={18} color={colors.muted} />
       </Pressable>
     ),
     [colors]
   );
+
+  const rootFolders = (folders || []).filter((f) => !f.parentId);
+  const childFoldersMap = (folders || []).reduce<Record<number, Folder[]>>((acc, f) => {
+    if (f.parentId) {
+      if (!acc[f.parentId]) acc[f.parentId] = [];
+      acc[f.parentId].push(f);
+    }
+    return acc;
+  }, {});
+
+  const renderFolderTree = (folder: Folder, depth: number = 0) => {
+    const children = childFoldersMap[folder.id] || [];
+    return (
+      <View key={folder.id}>
+        <Pressable
+          onPress={() =>
+            router.push({
+              pathname: "/(tabs)",
+              params: { folderId: String(folder.id), folderName: folder.name },
+            })
+          }
+          style={({ pressed }) => [
+            styles.folderRow,
+            {
+              backgroundColor: colors.surface,
+              borderColor: colors.border,
+              opacity: pressed ? 0.7 : 1,
+              marginLeft: depth * 20,
+            },
+          ]}
+        >
+          <View style={[styles.folderIcon, folder.color ? { backgroundColor: folder.color + "20" } : undefined]}>
+            <Feather name="folder" size={20} color={folder.color || colors.primary} />
+          </View>
+          <View style={styles.folderInfo}>
+            <Text style={[styles.folderName, { color: colors.foreground }]}>{folder.name}</Text>
+            <Text style={[styles.folderDate, { color: colors.muted }]}>{formatRelativeTime(folder.updatedAt)}</Text>
+          </View>
+          <View style={styles.folderActions}>
+            <Pressable onPress={() => handleEdit(folder)} hitSlop={8}>
+              <Feather name="edit-2" size={16} color={colors.muted} />
+            </Pressable>
+            <Pressable onPress={() => handleDelete(folder)} hitSlop={8}>
+              <Feather name="trash-2" size={16} color={colors.destructive} />
+            </Pressable>
+          </View>
+        </Pressable>
+        {children.map((child) => renderFolderTree(child, depth + 1))}
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -234,66 +245,79 @@ export default function FoldersScreen() {
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
-        <FlatList
-          data={[
-            ...(smartFolders && smartFolders.length > 0
-              ? [{ type: "smart-header" as const }]
-              : []),
-            ...(smartFolders || []).map((f) => ({
-              type: "smart" as const,
-              folder: f,
-            })),
-            { type: "header" as const },
-            ...(folders || []).map((f) => ({
-              type: "folder" as const,
-              folder: f,
-            })),
-          ]}
-          renderItem={({ item }) => {
-            if (item.type === "header")
-              return (
-                <Text
-                  style={[styles.sectionTitle, { color: colors.muted }]}
-                >
-                  FOLDERS
-                </Text>
-              );
-            if (item.type === "smart-header")
-              return (
-                <Text
-                  style={[styles.sectionTitle, { color: colors.muted }]}
-                >
-                  SMART FOLDERS
-                </Text>
-              );
-            if (item.type === "smart")
-              return renderSmartFolder({ item: item.folder });
-            return renderFolder({ item: item.folder as Folder });
-          }}
-          keyExtractor={(item, idx) =>
-            item.type === "header" || item.type === "smart-header"
-              ? `h-${idx}`
-              : item.type === "smart"
-                ? `sf-${item.folder.id}`
-                : `f-${item.folder.id}`
-          }
+        <ScrollView
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl
-              refreshing={isRefetching}
-              onRefresh={refetch}
-              tintColor={colors.primary}
-            />
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary} />
           }
-          ListEmptyComponent={
-            <View style={styles.center}>
-              <Feather name="folder" size={48} color={colors.muted} />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-                No folders yet
-              </Text>
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.muted }]}>QUICK ACCESS</Text>
+          <Pressable
+            onPress={() => router.push({ pathname: "/(tabs)", params: {} })}
+            style={({ pressed }) => [
+              styles.folderRow,
+              { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <View style={styles.folderIcon}>
+              <Feather name="file-text" size={20} color={colors.primary} />
             </View>
-          }
-        />
+            <View style={styles.folderInfo}>
+              <Text style={[styles.folderName, { color: colors.foreground }]}>All Notes</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.muted} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push({ pathname: "/(tabs)", params: { favorite: "true" } })}
+            style={({ pressed }) => [
+              styles.folderRow,
+              { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <View style={styles.folderIcon}>
+              <Feather name="star" size={20} color="#f59e0b" />
+            </View>
+            <View style={styles.folderInfo}>
+              <Text style={[styles.folderName, { color: colors.foreground }]}>Favorites</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.muted} />
+          </Pressable>
+          <Pressable
+            onPress={() => router.push({ pathname: "/(tabs)", params: { pinned: "true" } })}
+            style={({ pressed }) => [
+              styles.folderRow,
+              { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+            ]}
+          >
+            <View style={styles.folderIcon}>
+              <Feather name="bookmark" size={20} color={colors.primary} />
+            </View>
+            <View style={styles.folderInfo}>
+              <Text style={[styles.folderName, { color: colors.foreground }]}>Pinned</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.muted} />
+          </Pressable>
+
+          {smartFolders && smartFolders.length > 0 && (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.muted }]}>SMART FOLDERS</Text>
+              {(smartFolders || []).map((sf) => (
+                <View key={`sf-${sf.id}`}>{renderSmartFolder({ item: sf })}</View>
+              ))}
+            </>
+          )}
+
+          <Text style={[styles.sectionTitle, { color: colors.muted }]}>FOLDERS</Text>
+          {rootFolders.length > 0 ? (
+            rootFolders.map((folder) => renderFolderTree(folder, 0))
+          ) : (
+            <View style={styles.emptyFolders}>
+              <Feather name="folder" size={32} color={colors.muted} />
+              <Text style={[styles.emptyTitle, { color: colors.muted }]}>No folders yet</Text>
+            </View>
+          )}
+        </ScrollView>
       )}
 
       <Modal
@@ -396,8 +420,13 @@ const styles = StyleSheet.create({
     paddingTop: 60,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    fontFamily: "Inter_500Medium",
+  },
+  emptyFolders: {
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 24,
   },
   listContent: {
     paddingHorizontal: 20,

@@ -113,20 +113,23 @@ React Native (Expo) cross-platform notes app. Uses NativeWind for styling, expo-
 
 Key files:
 - `app/_layout.tsx` — Root layout with providers (QueryClient, Theme, GestureHandler, Keyboard)
-- `app/(tabs)/index.tsx` — Notes list with search, sort, list/gallery toggle, offline cache fallback
-- `app/(tabs)/folders.tsx` — Folder management with CRUD, offline cache fallback
-- `app/(tabs)/settings.tsx` — Theme, accent color, about
-- `app/note/[id].tsx` — Note editor with rich text, toolbar, tags, version history, AI assistant
+- `app/(tabs)/index.tsx` — Notes list with search, sort, list/gallery toggle, offline cache fallback, favorite/pinned filtering
+- `app/(tabs)/folders.tsx` — Folder management with Quick Access (All Notes, Favorites, Pinned), Smart Folders, nested folder tree with CRUD
+- `app/(tabs)/settings.tsx` — Theme, accent color, AI assistant configuration (provider, API key, model selection)
+- `app/note/[id].tsx` — Note editor with rich text, toolbar, tags, version history (preview/delete/restore), lock/unlock, AI assistant
 - `lib/api.ts` — API client wrapping all backend endpoints
-- `lib/cache.ts` — AsyncStorage-based offline cache for notes, folders, smart folders
+- `lib/cache.ts` — SQLite-backed offline cache (native) with AsyncStorage for settings
+- `lib/database.ts` — Web fallback (in-memory store) for offline cache
+- `lib/database.native.ts` — Native SQLite offline storage (expo-sqlite) with write queue and sync meta
 - `contexts/ThemeContext.tsx` — Dark/light/system theme with AsyncStorage persistence
-- `components/RichTextEditor.tsx` — Cross-platform editor (iframe/contentEditable on web, WebView on native)
-- `components/AIAssistant.tsx` — AI assistant bottom sheet with quick actions and custom prompts
+- `components/RichTextEditor.tsx` — Rich text editor using @10play/tentap-editor with bridge extensions
+- `components/AIAssistant.tsx` — AI assistant bottom sheet with quick actions, custom prompts, settings integration
 - `components/NoteCard.tsx` — Note card component
 
 Architecture decisions:
-- **Rich text editor**: Uses `contentEditable` div in an iframe (web) / WebView (native) instead of `@10play/tentap-editor`. Tentap requires custom dev clients (no Expo Go support) and has complex native build dependencies. The contentEditable approach provides basic formatting (bold, italic, underline, headings, lists) and works across all platforms without native builds.
-- **Offline cache**: Uses AsyncStorage instead of expo-sqlite for simplicity. The cache stores recent notes, folders, and smart folders as JSON. Queries fall back to cached data when the API is unreachable. expo-sqlite is installed but reserved for future use if more complex offline queries are needed.
+- **Rich text editor**: Uses `@10play/tentap-editor` with `useEditorBridge` hook and bridge extensions (bold, italic, underline, tasklist, link, color, highlight, placeholder, image). Exposes a ref interface for getHTML/getText/setContent/insertText/focus.
+- **Offline cache**: Platform-specific approach — `database.native.ts` uses expo-sqlite with full schema (notes, folders, smart_folders, write_queue, sync_meta tables). `database.ts` provides an in-memory fallback for web. The `cache.ts` layer wraps both with a unified API. AsyncStorage is reserved for user settings only.
+- **AI configuration**: Provider/API key/model stored via AsyncStorage settings store. Settings screen supports Anthropic, OpenAI, Google providers with live model fetching from the API server.
 
 ### `lib/db` (`@workspace/db`)
 

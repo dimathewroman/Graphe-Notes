@@ -39,6 +39,7 @@ export type Note = {
   favorite: boolean;
   locked: boolean;
   lockPasswordHash: string | null;
+  coverImage: string | null | undefined;
   tags: string[];
   createdAt: string;
   updatedAt: string;
@@ -48,6 +49,8 @@ export type Folder = {
   id: number;
   name: string;
   parentId: number | null;
+  color: string | null;
+  icon: string | null;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -56,10 +59,13 @@ export type Folder = {
 export type SmartFolder = {
   id: number;
   name: string;
-  tagRules: string[];
-  sortOrder: number;
-  createdAt: string;
-  updatedAt: string;
+  filters: Record<string, unknown>;
+  icon: string | null;
+  noteCount: number;
+  tagRules?: string[];
+  sortOrder?: number;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type NoteVersion = {

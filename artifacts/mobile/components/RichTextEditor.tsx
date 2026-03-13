@@ -1,121 +1,99 @@
-import React, { useRef, useCallback, useEffect, useMemo, forwardRef, useImperativeHandle } from "react";
-import { View, StyleSheet, Platform } from "react-native";
+import React from "react";
+import { Platform, StyleSheet, View } from "react-native";
+import {
+  RichText,
+  Toolbar,
+  useEditorBridge,
+  useEditorContent,
+  TenTapStartKit,
+  CoreBridge,
+  UnderlineBridge,
+  TaskListBridge,
+  LinkBridge,
+  ColorBridge,
+  HighlightBridge,
+  PlaceholderBridge,
+  ImageBridge,
+  darkEditorTheme,
+  darkEditorCss,
+} from "@10play/tentap-editor";
 
-export type RichTextEditorRef = {
+export type TentapEditorRef = {
+  getHTML: () => Promise<string>;
+  getText: () => Promise<string>;
   setContent: (html: string) => void;
-  sendCommand: (command: string) => void;
   insertText: (text: string) => void;
+  focus: () => void;
 };
 
 type Props = {
-  editorHtml: string;
-  backgroundColor: string;
-  onReady: () => void;
-  onContentChange: (html: string, text: string) => void;
+  initialContent?: string;
+  isDark?: boolean;
+  editable?: boolean;
+  onChange?: (html: string) => void;
+  editorRef?: React.MutableRefObject<TentapEditorRef | null>;
 };
 
-const RichTextEditorWeb = forwardRef<RichTextEditorRef, Props>(
-  ({ editorHtml, backgroundColor, onReady, onContentChange }, ref) => {
-    const iframeRef = useRef<HTMLIFrameElement | null>(null);
+export function TentapEditor({
+  initialContent,
+  isDark,
+  editable = true,
+  onChange,
+  editorRef,
+}: Props) {
+  const editor = useEditorBridge({
+    bridgeExtensions: [
+      ...TenTapStartKit,
+      UnderlineBridge,
+      TaskListBridge,
+      LinkBridge,
+      ColorBridge,
+      HighlightBridge,
+      PlaceholderBridge.configureExtension({ placeholder: "Start writing..." }),
+      ImageBridge,
+    ],
+    initialContent: initialContent || "",
+    autofocus: false,
+    editable,
+    avoidIosKeyboard: true,
+    onChange: () => {
+      if (onChange && editor) {
+        editor.getHTML().then((html: string) => onChange(html));
+      }
+    },
+    theme: isDark ? darkEditorTheme : undefined,
+  });
 
-    const postMessage = useCallback((msg: object) => {
-      iframeRef.current?.contentWindow?.postMessage(JSON.stringify(msg), "*");
-    }, []);
-
-    useImperativeHandle(ref, () => ({
-      setContent: (html: string) => postMessage({ type: "set-content", html }),
-      sendCommand: (command: string) => postMessage({ type: "command", command }),
-      insertText: (text: string) => postMessage({ type: "insert-text", text }),
-    }), [postMessage]);
-
-    useEffect(() => {
-      const handler = (e: MessageEvent) => {
-        try {
-          const msg = JSON.parse(e.data);
-          if (msg.type === "ready") onReady();
-          else if (msg.type === "content-change") onContentChange(msg.html, msg.text);
-        } catch {}
+  React.useEffect(() => {
+    if (editorRef) {
+      editorRef.current = {
+        getHTML: () => editor.getHTML(),
+        getText: () => editor.getText(),
+        setContent: (html: string) => editor.setContent(html),
+        insertText: async (text: string) => {
+          const current = await editor.getHTML();
+          editor.setContent(current + text);
+        },
+        focus: () => editor.focus("end"),
       };
-      window.addEventListener("message", handler);
-      return () => window.removeEventListener("message", handler);
-    }, [onReady, onContentChange]);
-
-    return (
-      <View style={styles.container}>
-        <iframe
-          ref={(el: HTMLIFrameElement | null) => { iframeRef.current = el; }}
-          srcDoc={editorHtml}
-          style={{
-            width: "100%",
-            height: "100%",
-            border: "none",
-            backgroundColor,
-          }}
-        />
-      </View>
-    );
-  }
-);
-
-const RichTextEditorNative = forwardRef<RichTextEditorRef, Props>(
-  ({ editorHtml, backgroundColor, onReady, onContentChange }, ref) => {
-    const { WebView } = require("react-native-webview");
-    const webViewRef = useRef<any>(null);
-
-    useImperativeHandle(ref, () => ({
-      setContent: (html: string) =>
-        webViewRef.current?.postMessage(JSON.stringify({ type: "set-content", html })),
-      sendCommand: (command: string) =>
-        webViewRef.current?.postMessage(JSON.stringify({ type: "command", command })),
-      insertText: (text: string) =>
-        webViewRef.current?.postMessage(JSON.stringify({ type: "insert-text", text })),
-    }), []);
-
-    const handleMessage = useCallback(
-      (event: { nativeEvent: { data: string } }) => {
-        try {
-          const msg = JSON.parse(event.nativeEvent.data);
-          if (msg.type === "ready") onReady();
-          else if (msg.type === "content-change") onContentChange(msg.html, msg.text);
-        } catch {}
-      },
-      [onReady, onContentChange]
-    );
-
-    const htmlWithRNBridge = useMemo(() => {
-      return editorHtml.replace(
-        "window.ReactNativeWebView && window.ReactNativeWebView.postMessage",
-        "window.ReactNativeWebView.postMessage"
-      );
-    }, [editorHtml]);
-
-    return (
-      <WebView
-        ref={webViewRef}
-        source={{ html: htmlWithRNBridge }}
-        style={[styles.container, { backgroundColor }]}
-        onMessage={handleMessage}
-        scrollEnabled
-        javaScriptEnabled
-        domStorageEnabled
-        originWhitelist={["*"]}
-        keyboardDisplayRequiresUserAction={false}
-        hideKeyboardAccessoryView
-        showsVerticalScrollIndicator={false}
-      />
-    );
-  }
-);
-
-export const RichTextEditor = forwardRef<RichTextEditorRef, Props>(
-  (props, ref) => {
-    if (Platform.OS === "web") {
-      return <RichTextEditorWeb ref={ref} {...props} />;
     }
-    return <RichTextEditorNative ref={ref} {...props} />;
-  }
-);
+  }, [editor, editorRef]);
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.editorWrap}>
+        <RichText editor={editor} />
+      </View>
+      <Toolbar editor={editor} />
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+  },
+  editorWrap: {
+    flex: 1,
+  },
 });
