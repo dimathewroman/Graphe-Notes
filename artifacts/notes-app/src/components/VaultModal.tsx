@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Lock, Eye, EyeOff, X, ShieldCheck, KeyRound } from "lucide-react";
+import { useState, useCallback } from "react";
+import { X, ShieldCheck, Lock, KeyRound } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PinPad } from "./PinPad";
 
 async function sha256(text: string): Promise<string> {
   const encoded = new TextEncoder().encode(text);
@@ -15,49 +16,94 @@ interface VaultModalProps {
   error?: string;
 }
 
+type PinStep = "enter" | "confirm" | "current" | "new" | "new-confirm";
+
 export function VaultModal({ mode, onConfirm, onCancel, error: externalError }: VaultModalProps) {
-  const [password, setPassword] = useState("");
-  const [confirm, setConfirm] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [newConfirm, setNewConfirm] = useState("");
-  const [show, setShow] = useState(false);
+  const [step, setStep] = useState<PinStep>(mode === "change-password" ? "current" : "enter");
+  const [firstPin, setFirstPin] = useState("");
+  const [currentPin, setCurrentPin] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const displayError = externalError || error;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!password) { setError("Please enter a password."); return; }
-    if (password.length < 4) { setError("Password must be at least 4 characters."); return; }
+  const getStepInfo = (): { title: string; subtitle: string } => {
+    switch (step) {
+      case "enter":
+        return mode === "setup"
+          ? { title: "Create Vault PIN", subtitle: "Enter a 4–6 digit PIN" }
+          : { title: "Unlock Vault", subtitle: "Enter your PIN to access vault notes" };
+      case "confirm":
+        return { title: "Confirm PIN", subtitle: "Re-enter your PIN to confirm" };
+      case "current":
+        return { title: "Current PIN", subtitle: "Enter your current vault PIN" };
+      case "new":
+        return { title: "New PIN", subtitle: "Enter a new 4–6 digit PIN" };
+      case "new-confirm":
+        return { title: "Confirm New PIN", subtitle: "Re-enter your new PIN" };
+    }
+  };
 
-    if (mode === "setup" && password !== confirm) { setError("Passwords don't match."); return; }
+  const handlePinSubmit = useCallback(async (pin: string) => {
+    setError("");
 
-    if (mode === "change-password") {
-      if (!newPassword) { setError("Please enter a new password."); return; }
-      if (newPassword.length < 4) { setError("New password must be at least 4 characters."); return; }
-      if (newPassword !== newConfirm) { setError("New passwords don't match."); return; }
-      setLoading(true);
-      const currentHash = await sha256(password);
-      const newHash = await sha256(newPassword);
-      onConfirm(currentHash, newHash);
-      setLoading(false);
+    if (mode === "unlock") {
+      const hash = await sha256(pin);
+      onConfirm(hash);
       return;
     }
 
-    setLoading(true);
-    const hash = await sha256(password);
-    onConfirm(hash);
-    setLoading(false);
-  };
+    if (mode === "setup") {
+      if (step === "enter") {
+        setFirstPin(pin);
+        setStep("confirm");
+        return;
+      }
+      if (step === "confirm") {
+        if (pin !== firstPin) {
+          setError("PINs don't match. Try again.");
+          setFirstPin("");
+          setStep("enter");
+          return;
+        }
+        const hash = await sha256(pin);
+        onConfirm(hash);
+        return;
+      }
+    }
 
-  const titles = {
-    setup: { title: "Set Up Vault", subtitle: "Create a password to protect your vault notes" },
-    unlock: { title: "Unlock Vault", subtitle: "Enter your password to access vault notes" },
-    "change-password": { title: "Change Vault Password", subtitle: "Enter current and new passwords" },
-  };
+    if (mode === "change-password") {
+      if (step === "current") {
+        setCurrentPin(pin);
+        setStep("new");
+        return;
+      }
+      if (step === "new") {
+        setFirstPin(pin);
+        setStep("new-confirm");
+        return;
+      }
+      if (step === "new-confirm") {
+        if (pin !== firstPin) {
+          setError("PINs don't match. Try again.");
+          setFirstPin("");
+          setStep("new");
+          return;
+        }
+        const currentHash = await sha256(currentPin);
+        const newHash = await sha256(pin);
+        onConfirm(currentHash, newHash);
+        return;
+      }
+    }
+  }, [mode, step, firstPin, currentPin, onConfirm]);
 
-  const { title, subtitle } = titles[mode];
+  const headerConfig = {
+    setup: { icon: <ShieldCheck className="w-5 h-5 text-indigo-500" />, bg: "bg-indigo-500/10 border-indigo-500/20" },
+    unlock: { icon: <Lock className="w-5 h-5 text-amber-500" />, bg: "bg-amber-500/10 border-amber-500/20" },
+    "change-password": { icon: <KeyRound className="w-5 h-5 text-amber-500" />, bg: "bg-amber-500/10 border-amber-500/20" },
+  }[mode];
+
+  const { title, subtitle } = getStepInfo();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -67,82 +113,25 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError }: 
         </button>
 
         <div className="flex items-center gap-3 mb-5">
-          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center border",
-            mode === "setup" ? "bg-indigo-500/10 border-indigo-500/20" : "bg-amber-500/10 border-amber-500/20"
-          )}>
-            {mode === "setup" ? <ShieldCheck className="w-5 h-5 text-indigo-500" /> :
-             mode === "change-password" ? <KeyRound className="w-5 h-5 text-amber-500" /> :
-             <Lock className="w-5 h-5 text-amber-500" />}
+          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center border", headerConfig.bg)}>
+            {headerConfig.icon}
           </div>
           <div>
-            <h2 className="font-semibold text-foreground">{title}</h2>
-            <p className="text-xs text-muted-foreground">{subtitle}</p>
+            <h2 className="font-semibold text-foreground">
+              {mode === "setup" ? "Set Up Vault" : mode === "change-password" ? "Change Vault PIN" : "Unlock Vault"}
+            </h2>
+            <p className="text-xs text-muted-foreground">Secure your notes with a PIN</p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="relative">
-            <input
-              autoFocus
-              type={show ? "text" : "password"}
-              value={password}
-              onChange={e => { setPassword(e.target.value); setError(""); }}
-              placeholder={mode === "change-password" ? "Current password" : "Password"}
-              className="w-full bg-background border border-panel-border rounded-xl px-4 py-2.5 pr-10 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-foreground placeholder:text-muted-foreground"
-            />
-            <button type="button" onClick={() => setShow(!show)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
-              {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-
-          {mode === "setup" && (
-            <input
-              type={show ? "text" : "password"}
-              value={confirm}
-              onChange={e => { setConfirm(e.target.value); setError(""); }}
-              placeholder="Confirm password"
-              className="w-full bg-background border border-panel-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-foreground placeholder:text-muted-foreground"
-            />
-          )}
-
-          {mode === "change-password" && (
-            <>
-              <div className="w-full h-px bg-panel-border my-2" />
-              <input
-                type={show ? "text" : "password"}
-                value={newPassword}
-                onChange={e => { setNewPassword(e.target.value); setError(""); }}
-                placeholder="New password"
-                className="w-full bg-background border border-panel-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-foreground placeholder:text-muted-foreground"
-              />
-              <input
-                type={show ? "text" : "password"}
-                value={newConfirm}
-                onChange={e => { setNewConfirm(e.target.value); setError(""); }}
-                placeholder="Confirm new password"
-                className="w-full bg-background border border-panel-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-foreground placeholder:text-muted-foreground"
-              />
-            </>
-          )}
-
-          {displayError && <p className="text-xs text-destructive">{displayError}</p>}
-
-          <div className="flex gap-2 pt-2">
-            <button type="button" onClick={onCancel} className="flex-1 py-2.5 rounded-xl border border-panel-border text-sm text-muted-foreground hover:bg-panel hover:text-foreground transition-colors">
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className={cn(
-                "flex-1 py-2.5 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-50",
-                mode === "setup" ? "bg-indigo-500 hover:bg-indigo-600" : "bg-amber-500 hover:bg-amber-600"
-              )}
-            >
-              {mode === "setup" ? "Set Up Vault" : mode === "change-password" ? "Change Password" : "Unlock"}
-            </button>
-          </div>
-        </form>
+        <PinPad
+          title={title}
+          subtitle={subtitle}
+          error={displayError}
+          onSubmit={handlePinSubmit}
+          onCancel={onCancel}
+          submitLabel={step === "confirm" || step === "new-confirm" ? "Confirm" : mode === "unlock" ? "Unlock" : "Next"}
+        />
       </div>
     </div>
   );

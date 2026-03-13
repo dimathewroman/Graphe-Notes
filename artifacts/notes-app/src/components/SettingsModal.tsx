@@ -1,12 +1,19 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   X, Key, Cloud, Download, Server, Palette, Sun, Moon, Monitor,
-  RefreshCw, AlertCircle, CheckCircle2, ChevronDown
+  RefreshCw, AlertCircle, CheckCircle2, ChevronDown, Shield, ShieldCheck, KeyRound
 } from "lucide-react";
 import { useAppStore } from "@/store";
 import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { PinPad } from "./PinPad";
+
+async function sha256(text: string): Promise<string> {
+  const encoded = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
 
 const ACCENT_PRESETS = [
   { name: "Blue",    value: "217 91% 60%",  hex: "#3b82f6" },
@@ -63,12 +70,21 @@ export function SettingsModal() {
   const [model, setModel] = useState("gpt-4o");
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [accentColor, setAccentColor] = useState(ACCENT_PRESETS[0].value);
-  const [activeTab, setActiveTab] = useState<"appearance" | "ai" | "data">("appearance");
+  const [activeTab, setActiveTab] = useState<"appearance" | "ai" | "data" | "security">("appearance");
 
   // Model list state
   const [models, setModels] = useState<string[]>([]);
   const [fetchStatus, setFetchStatus] = useState<FetchStatus>("idle");
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
+
+  // Security / vault state
+  const [vaultConfigured, setVaultConfigured] = useState(false);
+  const [securityMode, setSecurityMode] = useState<"idle" | "setup" | "reset">("idle");
+  const [securityStep, setSecurityStep] = useState<"current" | "new" | "confirm">("current");
+  const [securityFirstPin, setSecurityFirstPin] = useState("");
+  const [securityCurrentPin, setSecurityCurrentPin] = useState("");
+  const [securityError, setSecurityError] = useState("");
+  const [securityLoading, setSecurityLoading] = useState(false);
 
   // ── Load saved prefs on open ────────────────────────────────────
   useEffect(() => {
@@ -142,6 +158,107 @@ export function SettingsModal() {
     }
   }, [activeTab, isSettingsOpen, provider]); // intentionally excludes apiKey to avoid re-fetching on every keystroke
 
+  useEffect(() => {
+    if (activeTab === "security" && isSettingsOpen) {
+      fetch("/api/vault/status")
+        .then(r => r.json())
+        .then((data: { isConfigured: boolean }) => setVaultConfigured(data.isConfigured))
+        .catch(() => {});
+      setSecurityMode("idle");
+      setSecurityStep("current");
+      setSecurityFirstPin("");
+      setSecurityCurrentPin("");
+      setSecurityError("");
+    }
+  }, [activeTab, isSettingsOpen]);
+
+  const handleSecurityPinSubmit = useCallback(async (pin: string) => {
+    setSecurityError("");
+    setSecurityLoading(true);
+
+    try {
+      if (securityMode === "setup") {
+        if (securityStep === "new") {
+          setSecurityFirstPin(pin);
+          setSecurityStep("confirm");
+          setSecurityLoading(false);
+          return;
+        }
+        if (securityStep === "confirm") {
+          if (pin !== securityFirstPin) {
+            setSecurityError("PINs don't match. Try again.");
+            setSecurityFirstPin("");
+            setSecurityStep("new");
+            setSecurityLoading(false);
+            return;
+          }
+          const hash = await sha256(pin);
+          const res = await fetch("/api/vault/setup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ passwordHash: hash }),
+          });
+          if (!res.ok) throw new Error("Setup failed");
+          setVaultConfigured(true);
+          setSecurityMode("idle");
+        }
+      }
+
+      if (securityMode === "reset") {
+        if (securityStep === "current") {
+          setSecurityCurrentPin(pin);
+          setSecurityStep("new");
+          setSecurityLoading(false);
+          return;
+        }
+        if (securityStep === "new") {
+          setSecurityFirstPin(pin);
+          setSecurityStep("confirm");
+          setSecurityLoading(false);
+          return;
+        }
+        if (securityStep === "confirm") {
+          if (pin !== securityFirstPin) {
+            setSecurityError("PINs don't match. Try again.");
+            setSecurityFirstPin("");
+            setSecurityStep("new");
+            setSecurityLoading(false);
+            return;
+          }
+          const currentHash = await sha256(securityCurrentPin);
+          const newHash = await sha256(pin);
+          const res = await fetch("/api/vault/change-password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ currentPasswordHash: currentHash, newPasswordHash: newHash }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || "Failed to change PIN");
+          }
+          setSecurityMode("idle");
+        }
+      }
+    } catch (err: unknown) {
+      setSecurityError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setSecurityLoading(false);
+    }
+  }, [securityMode, securityStep, securityFirstPin, securityCurrentPin]);
+
+  const getSecurityStepInfo = () => {
+    if (securityMode === "setup") {
+      if (securityStep === "new") return { title: "Create Vault PIN", subtitle: "Enter a 4–6 digit PIN" };
+      if (securityStep === "confirm") return { title: "Confirm PIN", subtitle: "Re-enter your PIN to confirm" };
+    }
+    if (securityMode === "reset") {
+      if (securityStep === "current") return { title: "Current PIN", subtitle: "Enter your current vault PIN" };
+      if (securityStep === "new") return { title: "New PIN", subtitle: "Enter a new 4–6 digit PIN" };
+      if (securityStep === "confirm") return { title: "Confirm New PIN", subtitle: "Re-enter your new PIN" };
+    }
+    return { title: "", subtitle: "" };
+  };
+
   // When provider changes, reset model to first of new list
   const handleProviderChange = (newProvider: string) => {
     setProvider(newProvider);
@@ -190,6 +307,7 @@ export function SettingsModal() {
     { id: "appearance" as const, label: "Appearance", icon: Palette },
     { id: "ai" as const, label: "AI", icon: Key },
     { id: "data" as const, label: "Data", icon: Cloud },
+    { id: "security" as const, label: "Security", icon: Shield },
   ];
 
   const statusInfo = {
@@ -444,6 +562,56 @@ export function SettingsModal() {
                       Export All JSON
                     </button>
                   </div>
+                </section>
+              )}
+
+              {activeTab === "security" && (
+                <section className="space-y-4">
+                  {securityMode === "idle" ? (
+                    <>
+                      <div className="p-4 rounded-xl bg-background border border-panel-border flex items-start gap-4">
+                        <div className={cn("p-2 rounded-lg shrink-0", vaultConfigured ? "bg-emerald-500/10 text-emerald-500" : "bg-muted-foreground/10 text-muted-foreground")}>
+                          <ShieldCheck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-medium mb-1">Vault Protection</h4>
+                          <p className="text-xs text-muted-foreground leading-relaxed">
+                            {vaultConfigured
+                              ? "Your vault is configured. Notes moved to the vault are protected with your PIN."
+                              : "Set up a PIN to protect sensitive notes in your vault."}
+                          </p>
+                        </div>
+                      </div>
+                      {vaultConfigured ? (
+                        <button
+                          onClick={() => { setSecurityMode("reset"); setSecurityStep("current"); setSecurityError(""); setSecurityFirstPin(""); setSecurityCurrentPin(""); }}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 hover:bg-amber-500/20 text-sm font-medium transition-colors"
+                        >
+                          <KeyRound className="w-4 h-4" />
+                          Reset Vault PIN
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => { setSecurityMode("setup"); setSecurityStep("new"); setSecurityError(""); setSecurityFirstPin(""); }}
+                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 text-sm font-medium transition-colors"
+                        >
+                          <ShieldCheck className="w-4 h-4" />
+                          Set Vault PIN
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="py-2">
+                      <PinPad
+                        title={getSecurityStepInfo().title}
+                        subtitle={getSecurityStepInfo().subtitle}
+                        error={securityError}
+                        onSubmit={handleSecurityPinSubmit}
+                        onCancel={() => { setSecurityMode("idle"); setSecurityError(""); }}
+                        submitLabel={securityStep === "confirm" ? "Confirm" : "Next"}
+                      />
+                    </div>
+                  )}
                 </section>
               )}
 
