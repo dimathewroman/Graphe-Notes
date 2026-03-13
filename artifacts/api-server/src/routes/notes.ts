@@ -171,7 +171,7 @@ router.patch("/notes/:id/pin", async (req, res): Promise<void> => {
 
   const [note] = await db
     .update(notesTable)
-    .set({ pinned: !existing.pinned, updatedAt: new Date() })
+    .set({ pinned: !existing.pinned })
     .where(eq(notesTable.id, params.data.id))
     .returning();
 
@@ -197,7 +197,7 @@ router.patch("/notes/:id/favorite", async (req, res): Promise<void> => {
 
   const [note] = await db
     .update(notesTable)
-    .set({ favorite: !existing.favorite, updatedAt: new Date() })
+    .set({ favorite: !existing.favorite })
     .where(eq(notesTable.id, params.data.id))
     .returning();
 
@@ -219,7 +219,7 @@ router.patch("/notes/:id/move", async (req, res): Promise<void> => {
 
   const [note] = await db
     .update(notesTable)
-    .set({ folderId: parsed.data.folderId, updatedAt: new Date() })
+    .set({ folderId: parsed.data.folderId })
     .where(eq(notesTable.id, params.data.id))
     .returning();
 
@@ -239,7 +239,7 @@ router.patch("/notes/:id/vault", async (req, res): Promise<void> => {
 
   const [note] = await db
     .update(notesTable)
-    .set({ vaulted: parsed.data.vaulted, updatedAt: new Date() })
+    .set({ vaulted: parsed.data.vaulted })
     .where(eq(notesTable.id, params.data.id))
     .returning();
 
