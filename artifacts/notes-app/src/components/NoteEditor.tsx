@@ -1178,10 +1178,26 @@ export function NoteEditor() {
   if (!selectedNoteId) {
     if (bp === "mobile") return null;
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-background text-muted-foreground relative">
-        <FileText className="w-16 h-16 mb-4 opacity-20" />
-        <h2 className="text-xl font-medium mb-2 text-foreground/80">Select a note</h2>
-        <p className="text-sm">Choose a note from the list or create a new one to start writing.</p>
+      <div className="flex-1 flex flex-col bg-background relative">
+        {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (
+          <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-background/80 backdrop-blur-md shrink-0">
+            {!isSidebarOpen && (
+              <IconButton onClick={toggleSidebar} title="Show sidebar">
+                <PanelLeft className="w-4 h-4" />
+              </IconButton>
+            )}
+            {!isNoteListOpen && (
+              <IconButton onClick={toggleNoteList} title="Show note list">
+                <PanelLeftClose className="w-4 h-4 scale-x-[-1]" />
+              </IconButton>
+            )}
+          </div>
+        )}
+        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+          <FileText className="w-16 h-16 mb-4 opacity-20" />
+          <h2 className="text-xl font-medium mb-2 text-foreground/80">Select a note</h2>
+          <p className="text-sm">Choose a note from the list or create a new one to start writing.</p>
+        </div>
       </div>
     );
   }
@@ -1192,12 +1208,28 @@ export function NoteEditor() {
 
   if (note?.vaulted && !isVaultUnlocked) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-background text-muted-foreground gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-          <ShieldCheck className="w-8 h-8 text-indigo-500" />
+      <div className="flex-1 flex flex-col bg-background">
+        {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (
+          <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-background/80 backdrop-blur-md shrink-0">
+            {!isSidebarOpen && (
+              <IconButton onClick={toggleSidebar} title="Show sidebar">
+                <PanelLeft className="w-4 h-4" />
+              </IconButton>
+            )}
+            {!isNoteListOpen && (
+              <IconButton onClick={toggleNoteList} title="Show note list">
+                <PanelLeftClose className="w-4 h-4 scale-x-[-1]" />
+              </IconButton>
+            )}
+          </div>
+        )}
+        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
+            <ShieldCheck className="w-8 h-8 text-indigo-500" />
+          </div>
+          <h2 className="text-xl font-medium text-foreground/80">This note is in the vault</h2>
+          <p className="text-sm">Unlock the vault from the sidebar to view this note.</p>
         </div>
-        <h2 className="text-xl font-medium text-foreground/80">This note is in the vault</h2>
-        <p className="text-sm">Unlock the vault from the sidebar to view this note.</p>
       </div>
     );
   }
