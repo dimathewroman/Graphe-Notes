@@ -56,6 +56,9 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     e.preventDefault();
     if (!newFolderName.trim()) return;
     (document.activeElement as HTMLElement)?.blur();
+    // iOS Safari shifts window.scrollY when the keyboard opens inside a fixed drawer.
+    // Reset it immediately after blur so the drawer snaps back to full height.
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior }));
     await createFolderMut.mutateAsync({ data: { name: newFolderName, sortOrder: folders.length, parentId: newFolderParentId } });
     setNewFolderName(""); setIsCreatingFolder(false); setNewFolderParentId(null);
   };
