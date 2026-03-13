@@ -2,7 +2,7 @@
 
 ## Overview
 
-Full-stack notes app with a React + Vite web frontend and Express API backend. Stores notes in PostgreSQL via Drizzle ORM.
+Full-stack notes app with a React + Vite web frontend, Express API backend, and React Native (Expo) mobile app. Stores notes in PostgreSQL via Drizzle ORM.
 
 ## Stack
 
@@ -20,7 +20,8 @@ Full-stack notes app with a React + Vite web frontend and Express API backend. S
 - **State management**: Zustand
 - **Animations**: Framer Motion
 - **Mobile**: Expo (SDK 54), NativeWind v4, expo-router, React Native WebView (contentEditable rich text editor)
-- **Mobile state**: TanStack React Query (shared with web via API)
+- **Mobile state**: TanStack React Query (shared with web via API), AsyncStorage-based offline cache
+- **Mobile AI**: AIAssistant component with quick actions and custom prompts, integrated into note editor
 
 ## Features
 
@@ -71,6 +72,7 @@ All endpoints prefixed with `/api`:
 - `PATCH /notes/:id/move`
 - `GET /tags`
 - `POST /ai/complete` (provider: openai|anthropic|google, apiKey, model, prompt)
+- `GET/POST /api/models` (GET for web backward compat, POST with body for mobile)
 
 ## TypeScript & Composite Projects
 
@@ -111,14 +113,20 @@ React Native (Expo) cross-platform notes app. Uses NativeWind for styling, expo-
 
 Key files:
 - `app/_layout.tsx` — Root layout with providers (QueryClient, Theme, GestureHandler, Keyboard)
-- `app/(tabs)/index.tsx` — Notes list with search, sort, list/gallery toggle
-- `app/(tabs)/folders.tsx` — Folder management with CRUD
+- `app/(tabs)/index.tsx` — Notes list with search, sort, list/gallery toggle, offline cache fallback
+- `app/(tabs)/folders.tsx` — Folder management with CRUD, offline cache fallback
 - `app/(tabs)/settings.tsx` — Theme, accent color, about
-- `app/note/[id].tsx` — Note editor with rich text (contentEditable iframe), toolbar, tags, version history
+- `app/note/[id].tsx` — Note editor with rich text, toolbar, tags, version history, AI assistant
 - `lib/api.ts` — API client wrapping all backend endpoints
+- `lib/cache.ts` — AsyncStorage-based offline cache for notes, folders, smart folders
 - `contexts/ThemeContext.tsx` — Dark/light/system theme with AsyncStorage persistence
-- `components/RichTextEditor.tsx` — Cross-platform editor (iframe on web, WebView on native)
+- `components/RichTextEditor.tsx` — Cross-platform editor (iframe/contentEditable on web, WebView on native)
+- `components/AIAssistant.tsx` — AI assistant bottom sheet with quick actions and custom prompts
 - `components/NoteCard.tsx` — Note card component
+
+Architecture decisions:
+- **Rich text editor**: Uses `contentEditable` div in an iframe (web) / WebView (native) instead of `@10play/tentap-editor`. Tentap requires custom dev clients (no Expo Go support) and has complex native build dependencies. The contentEditable approach provides basic formatting (bold, italic, underline, headings, lists) and works across all platforms without native builds.
+- **Offline cache**: Uses AsyncStorage instead of expo-sqlite for simplicity. The cache stores recent notes, folders, and smart folders as JSON. Queries fall back to cached data when the API is unreachable. expo-sqlite is installed but reserved for future use if more complex offline queries are needed.
 
 ### `lib/db` (`@workspace/db`)
 

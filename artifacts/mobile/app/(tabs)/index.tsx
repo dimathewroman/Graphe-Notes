@@ -12,12 +12,13 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { api, Note } from "@/lib/api";
+import { cache } from "@/lib/cache";
 import { NoteCard } from "@/components/NoteCard";
 
 type SortOption = "updatedAt" | "createdAt" | "title";
@@ -27,14 +28,49 @@ export default function NotesScreen() {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const params = useLocalSearchParams<{
+    folderId?: string;
+    folderName?: string;
+    smartFolderId?: string;
+    tag?: string;
+  }>();
+  const activeFolderId = params.folderId ? Number(params.folderId) : undefined;
+  const activeTag = params.tag || undefined;
+  const folderLabel = params.folderName || undefined;
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("updatedAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
 
   const { data: notes, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ["notes", { sortBy, sortDir }],
-    queryFn: () => api.getNotes({ sortBy, sortDir }),
+    queryKey: ["notes", { sortBy, sortDir, folderId: activeFolderId, tag: activeTag }],
+    queryFn: async () => {
+      try {
+        const data = await api.getNotes({
+          sortBy,
+          sortDir,
+          ...(activeFolderId ? { folderId: activeFolderId } : {}),
+          ...(activeTag ? { tag: activeTag } : {}),
+        });
+        if (!activeFolderId && !activeTag) {
+          cache.setNotes(data);
+        }
+        return data;
+      } catch (err) {
+        const cached = await cache.getNotes();
+        if (cached) {
+          let filtered = cached;
+          if (activeFolderId) {
+            filtered = filtered.filter((n) => String(n.folderId) === String(activeFolderId));
+          }
+          if (activeTag) {
+            filtered = filtered.filter((n) => n.tags?.includes(activeTag));
+          }
+          return filtered;
+        }
+        throw err;
+      }
+    },
   });
 
   const createNoteMut = useMutation({
@@ -126,9 +162,19 @@ export default function NotesScreen() {
           },
         ]}
       >
-        <Text style={[styles.screenTitle, { color: colors.foreground }]}>
-          Notes
-        </Text>
+        <View style={styles.titleRow}>
+          {folderLabel && (
+            <Pressable
+              onPress={() => router.setParams({ folderId: "", folderName: "", smartFolderId: "", tag: "" })}
+              hitSlop={8}
+            >
+              <Feather name="chevron-left" size={22} color={colors.primary} />
+            </Pressable>
+          )}
+          <Text style={[styles.screenTitle, { color: colors.foreground }]}>
+            {folderLabel || "Notes"}
+          </Text>
+        </View>
         <View style={styles.headerActions}>
           <Pressable
             onPress={() => setViewMode((m) => (m === "list" ? "gallery" : "list"))}
@@ -250,6 +296,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingBottom: 12,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   screenTitle: {
     fontSize: 28,
