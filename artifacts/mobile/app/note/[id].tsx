@@ -22,6 +22,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { api, Note, NoteVersion } from "@/lib/api";
 import { formatRelativeTime, wordCount, stripHtml } from "@/lib/utils";
 import { RichTextEditor, RichTextEditorRef } from "@/components/RichTextEditor";
+import { AIAssistant } from "@/components/AIAssistant";
 
 const AUTOSAVE_DELAY = 1500;
 
@@ -174,9 +175,10 @@ export default function NoteEditorScreen() {
   );
   const [showToolbar, setShowToolbar] = useState(true);
   const [showVersions, setShowVersions] = useState(false);
+  const [showAI, setShowAI] = useState(false);
   const [showTagInput, setShowTagInput] = useState(false);
   const [tagInput, setTagInput] = useState("");
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingContentRef = useRef<{ html: string; text: string } | null>(null);
 
   const { data: note, isLoading } = useQuery({
@@ -401,6 +403,12 @@ export default function NoteEditorScreen() {
             />
           </Pressable>
           <Pressable
+            onPress={() => setShowAI(true)}
+            hitSlop={8}
+          >
+            <Feather name="cpu" size={18} color={colors.primary} />
+          </Pressable>
+          <Pressable
             onPress={() => setShowVersions(true)}
             hitSlop={8}
           >
@@ -575,6 +583,15 @@ export default function NoteEditorScreen() {
         </Pressable>
       </Modal>
 
+      <AIAssistant
+        visible={showAI}
+        onClose={() => setShowAI(false)}
+        noteContent={pendingContentRef.current?.html || note?.content || ""}
+        onInsert={(text) => {
+          editorRef.current?.insertText(text);
+        }}
+      />
+
       <Modal
         visible={showVersions}
         transparent
@@ -667,13 +684,15 @@ export default function NoteEditorScreen() {
   );
 }
 
+type FeatherIconName = React.ComponentProps<typeof Feather>["name"];
+
 function ToolbarBtn({
   icon,
   label,
   onPress,
   colors,
 }: {
-  icon: string;
+  icon: FeatherIconName;
   label?: string;
   onPress: () => void;
   colors: ReturnType<typeof useTheme>["colors"];
@@ -691,7 +710,7 @@ function ToolbarBtn({
           {label}
         </Text>
       ) : (
-        <Feather name={icon as any} size={18} color={colors.foreground} />
+        <Feather name={icon} size={18} color={colors.foreground} />
       )}
     </Pressable>
   );

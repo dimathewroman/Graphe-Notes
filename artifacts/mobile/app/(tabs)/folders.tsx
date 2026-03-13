@@ -20,6 +20,7 @@ import * as Haptics from "expo-haptics";
 
 import { useTheme } from "@/contexts/ThemeContext";
 import { api, Folder, SmartFolder } from "@/lib/api";
+import { cache } from "@/lib/cache";
 import { formatRelativeTime } from "@/lib/utils";
 
 export default function FoldersScreen() {
@@ -32,12 +33,32 @@ export default function FoldersScreen() {
 
   const { data: folders, isLoading, refetch, isRefetching } = useQuery({
     queryKey: ["folders"],
-    queryFn: api.getFolders,
+    queryFn: async () => {
+      try {
+        const data = await api.getFolders();
+        cache.setFolders(data);
+        return data;
+      } catch (err) {
+        const cached = await cache.getFolders();
+        if (cached) return cached;
+        throw err;
+      }
+    },
   });
 
   const { data: smartFolders } = useQuery({
     queryKey: ["smartFolders"],
-    queryFn: api.getSmartFolders,
+    queryFn: async () => {
+      try {
+        const data = await api.getSmartFolders();
+        cache.setSmartFolders(data);
+        return data;
+      } catch (err) {
+        const cached = await cache.getSmartFolders();
+        if (cached) return cached;
+        throw err;
+      }
+    },
   });
 
   const createMut = useMutation({

@@ -195,6 +195,10 @@ export const api = {
 
   getModels: (provider: string, apiKey: string) =>
     apiFetch<{ models: { id: string; name: string }[]; source: string }>(
-      `/api/models?provider=${provider}&apiKey=${encodeURIComponent(apiKey)}`
+      "/api/models",
+      {
+        method: "POST",
+        body: JSON.stringify({ provider, apiKey }),
+      }
     ),
 };

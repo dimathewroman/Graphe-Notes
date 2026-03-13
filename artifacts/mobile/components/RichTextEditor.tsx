@@ -16,7 +16,7 @@ type Props = {
 
 const RichTextEditorWeb = forwardRef<RichTextEditorRef, Props>(
   ({ editorHtml, backgroundColor, onReady, onContentChange }, ref) => {
-    const iframeRef = useRef<HTMLIFrameElement>(null);
+    const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
     const postMessage = useCallback((msg: object) => {
       iframeRef.current?.contentWindow?.postMessage(JSON.stringify(msg), "*");
@@ -43,7 +43,7 @@ const RichTextEditorWeb = forwardRef<RichTextEditorRef, Props>(
     return (
       <View style={styles.container}>
         <iframe
-          ref={iframeRef as any}
+          ref={(el: HTMLIFrameElement | null) => { iframeRef.current = el; }}
           srcDoc={editorHtml}
           style={{
             width: "100%",

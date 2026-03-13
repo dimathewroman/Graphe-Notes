@@ -6,7 +6,6 @@ import {
   Pressable,
   StyleSheet,
   Platform,
-  Linking,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,7 +22,8 @@ const ACCENT_COLORS = [
   "#3b82f6",
 ];
 
-type ThemeOption = { label: string; value: "system" | "light" | "dark"; icon: string };
+type FeatherIcon = React.ComponentProps<typeof Feather>["name"];
+type ThemeOption = { label: string; value: "system" | "light" | "dark"; icon: FeatherIcon };
 const THEME_OPTIONS: ThemeOption[] = [
   { label: "System", value: "system", icon: "smartphone" },
   { label: "Light", value: "light", icon: "sun" },
@@ -86,7 +86,7 @@ export default function SettingsScreen() {
                 ]}
               >
                 <Feather
-                  name={opt.icon as any}
+                  name={opt.icon}
                   size={18}
                   color={mode === opt.value ? colors.primary : colors.muted}
                 />

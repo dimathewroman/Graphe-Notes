@@ -78,6 +78,33 @@ async function fetchGoogleModels(apiKey: string): Promise<string[]> {
     .sort((a, b) => b.localeCompare(a));
 }
 
+router.post("/models", async (req, res) => {
+  const { provider, apiKey } = req.body as { provider?: string; apiKey?: string };
+
+  if (!provider || !FALLBACK_MODELS[provider]) {
+    return res.status(400).json({ error: "Invalid or missing provider" });
+  }
+
+  if (!apiKey || !apiKey.trim()) {
+    return res.json({ models: FALLBACK_MODELS[provider], source: "fallback" });
+  }
+
+  try {
+    let models: string[];
+    if (provider === "openai") {
+      models = await fetchOpenAIModels(apiKey);
+    } else if (provider === "anthropic") {
+      models = await fetchAnthropicModels(apiKey);
+    } else {
+      models = await fetchGoogleModels(apiKey);
+    }
+    return res.json({ models, source: "live" });
+  } catch (err) {
+    console.warn(`[models] Failed to fetch from ${provider}:`, (err as Error).message);
+    return res.json({ models: FALLBACK_MODELS[provider], source: "fallback" });
+  }
+});
+
 router.get("/models", async (req, res) => {
   const { provider, apiKey } = req.query as { provider?: string; apiKey?: string };
 
