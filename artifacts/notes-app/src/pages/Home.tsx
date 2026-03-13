@@ -14,8 +14,11 @@ export default function Home() {
   const bp = useBreakpoint();
 
   useEffect(() => {
-    if (bp === "desktop") return;
-    setSidebarOpen(false);
+    if (bp === "desktop") {
+      setSidebarOpen(true);
+    } else {
+      setSidebarOpen(false);
+    }
   }, [bp]);
 
   useEffect(() => {
