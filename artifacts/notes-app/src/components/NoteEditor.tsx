@@ -853,7 +853,7 @@ export function NoteEditor() {
       {/* Top Header */}
       <header className="h-14 border-b border-panel-border flex items-center justify-between px-2 md:px-4 shrink-0 bg-background/80 backdrop-blur-md z-10">
         <div className="flex items-center gap-2">
-          {bp !== "desktop" && (
+          {bp === "mobile" && (
             <button onClick={handleBack} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors">
               <ArrowLeft className="w-5 h-5 text-muted-foreground" />
             </button>
