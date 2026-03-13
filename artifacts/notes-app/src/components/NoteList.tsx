@@ -231,7 +231,7 @@ export function NoteList() {
             {bp !== "desktop" && (
               <button
                 onClick={() => setSidebarOpen(true)}
-                className="p-2 -ml-1 mr-1 rounded-lg hover:bg-panel transition-colors"
+                className="min-w-[44px] min-h-[44px] -ml-1 mr-1 rounded-lg hover:bg-panel transition-colors flex items-center justify-center"
               >
                 <Menu className="w-5 h-5 text-muted-foreground" />
               </button>
@@ -333,7 +333,7 @@ export function NoteList() {
                       {note.locked && <Lock className="w-2.5 h-2.5 shrink-0 text-amber-500" />}
                       {note.title || "Untitled Note"}
                     </h3>
-                    <button onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }} className={cn("p-1 rounded hover:bg-panel-border transition-all ml-1 shrink-0", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70")}>
+                    <button onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }} className={cn("rounded hover:bg-panel-border transition-all ml-1 shrink-0", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}>
                       <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
                     </button>
                   </div>
@@ -377,7 +377,7 @@ export function NoteList() {
                   {note.favorite && <Star className="w-3 h-3 fill-current text-yellow-500 opacity-70" />}
                   <button
                     onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }}
-                    className={cn("p-1 rounded hover:bg-panel-border transition-all", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70")}
+                    className={cn("rounded hover:bg-panel-border transition-all", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}
                     title="Options"
                   >
                     <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />

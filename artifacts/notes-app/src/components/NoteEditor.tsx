@@ -854,7 +854,7 @@ export function NoteEditor() {
       <header className="h-14 border-b border-panel-border flex items-center justify-between px-2 md:px-4 shrink-0 bg-background/80 backdrop-blur-md z-10">
         <div className="flex items-center gap-2">
           {bp !== "desktop" && (
-            <button onClick={handleBack} className="p-2 rounded-lg hover:bg-panel transition-colors">
+            <button onClick={handleBack} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors">
               <ArrowLeft className="w-5 h-5 text-muted-foreground" />
             </button>
           )}
@@ -1186,7 +1186,7 @@ function ToolbarButton({ command, active, icon, title, disabled }: { command: ()
       title={title}
       disabled={disabled}
       className={cn(
-        "p-2 md:p-1.5 rounded text-muted-foreground hover:bg-panel hover:text-foreground transition-colors shrink-0",
+        "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded text-muted-foreground hover:bg-panel hover:text-foreground transition-colors shrink-0 flex items-center justify-center",
         active && "bg-panel text-primary",
         disabled && "opacity-30 cursor-not-allowed pointer-events-none"
       )}
