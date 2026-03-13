@@ -125,6 +125,7 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError }: 
         </div>
 
         <PinPad
+          key={step}
           title={title}
           subtitle={subtitle}
           error={displayError}

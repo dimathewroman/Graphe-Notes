@@ -603,6 +603,7 @@ export function SettingsModal() {
                   ) : (
                     <div className="py-2">
                       <PinPad
+                        key={`${securityMode}-${securityStep}`}
                         title={getSecurityStepInfo().title}
                         subtitle={getSecurityStepInfo().subtitle}
                         error={securityError}
