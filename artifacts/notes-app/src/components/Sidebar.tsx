@@ -91,7 +91,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         setVaultModal(null);
       }
     } catch {
-      setVaultError(vaultModal === "unlock" ? "Wrong password." : vaultModal === "change-password" ? "Wrong current password." : "Failed to set up vault.");
+      setVaultError(vaultModal === "unlock" ? "Wrong PIN." : vaultModal === "change-password" ? "Wrong current PIN." : "Failed to set up vault.");
     }
   };
 

@@ -116,9 +116,10 @@ Key components:
 - `src/components/NoteList.tsx` — Filtered note list with search, hamburger menu on mobile/tablet
 - `src/components/NoteEditor.tsx` — Tiptap editor with mobile-native top bar (back/undo/redo/overflow), bottom keyboard-aware toolbar, expanded overflow menu (MoreVertical with Pin/Fav/Share/Vault/History/Find/Delete)
 - `src/components/AIPanel.tsx` — AI assistant (full-screen on mobile, side panel on desktop)
-- `src/components/SettingsModal.tsx` — Settings modal (full-screen on mobile)
+- `src/components/SettingsModal.tsx` — Settings modal with Appearance, AI, Data, and Security tabs
 - `src/components/VersionHistoryPanel.tsx` — Version history (full-width on mobile)
-- `src/components/VaultModal.tsx` — Vault setup/unlock/change-password modal
+- `src/components/PinPad.tsx` — Reusable 6-digit PIN pad with 3x4 grid, dot indicators, backspace
+- `src/components/VaultModal.tsx` — Vault setup/unlock/change-PIN modal using PinPad
 
 ### `lib/db` (`@workspace/db`)
 
