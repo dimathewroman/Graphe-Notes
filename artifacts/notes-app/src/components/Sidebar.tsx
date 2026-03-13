@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Folder, FolderOpen, FileText, Star,
-  Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag
+  Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag, Menu, X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
@@ -11,11 +11,12 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { IconButton } from "./ui/IconButton";
 import { FolderEditModal } from "./FolderEditModal";
+import { useBreakpoint } from "@/hooks/use-mobile";
 
-export function Sidebar() {
+export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const {
     activeFilter, activeFolderId, activeTag, setFilter,
-    isSidebarOpen, setSettingsOpen, setAIPanelOpen
+    setSettingsOpen, setAIPanelOpen
   } = useAppStore();
   const queryClient = useQueryClient();
 
@@ -48,7 +49,10 @@ export function Sidebar() {
     setNewFolderName(""); setIsCreatingFolder(false); setNewFolderParentId(null);
   };
 
-  if (!isSidebarOpen) return null;
+  const handleNavClick = (filter: "all" | "favorites" | "attachments" | "folder" | "tag", idOrTag?: number | string | null) => {
+    setFilter(filter, idOrTag);
+    onNavigate?.();
+  };
 
   const rootFolders = folders.filter(f => !f.parentId).sort((a, b) => a.sortOrder - b.sortOrder);
 
@@ -62,15 +66,15 @@ export function Sidebar() {
       <div key={folder.id}>
         <div
           className={cn(
-            "group flex items-center justify-between py-1.5 rounded-lg cursor-pointer transition-colors",
+            "group flex items-center justify-between py-2 md:py-1.5 rounded-lg cursor-pointer transition-colors",
             isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
           )}
           style={{ paddingLeft: `${(depth + 1) * 12 + 4}px`, paddingRight: "8px" }}
-          onClick={() => setFilter("folder", folder.id)}
+          onClick={() => handleNavClick("folder", folder.id)}
         >
           <div className="flex items-center gap-2 min-w-0">
             <button
-              className="p-0.5 hover:bg-panel rounded opacity-60 hover:opacity-100 shrink-0"
+              className="p-1 md:p-0.5 hover:bg-panel rounded opacity-60 hover:opacity-100 shrink-0"
               onClick={e => { e.stopPropagation(); toggleFolder(folder.id); }}
             >
               {children.length > 0 ? (
@@ -91,14 +95,14 @@ export function Sidebar() {
 
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
             <button
-              className="p-1 hover:bg-panel rounded transition-colors"
+              className="p-1.5 md:p-1 hover:bg-panel rounded transition-colors"
               onClick={e => { e.stopPropagation(); setEditingFolder(folder); }}
               title="Edit folder"
             >
-              <Edit2 className="w-3 h-3 text-muted-foreground" />
+              <Edit2 className="w-3.5 h-3.5 md:w-3 md:h-3 text-muted-foreground" />
             </button>
             <button
-              className="p-1 hover:bg-panel rounded transition-colors"
+              className="p-1.5 md:p-1 hover:bg-panel rounded transition-colors"
               onClick={e => {
                 e.stopPropagation();
                 setNewFolderParentId(folder.id);
@@ -109,20 +113,20 @@ export function Sidebar() {
               }}
               title="Add subfolder"
             >
-              <Plus className="w-3 h-3 text-muted-foreground" />
+              <Plus className="w-3.5 h-3.5 md:w-3 md:h-3 text-muted-foreground" />
             </button>
             <button
-              className="p-1 hover:bg-panel rounded transition-colors"
+              className="p-1.5 md:p-1 hover:bg-panel rounded transition-colors"
               onClick={e => {
                 e.stopPropagation();
                 if (confirm(`Delete folder "${folder.name}"?`)) {
                   deleteFolderMut.mutate({ id: folder.id });
-                  if (isActive) setFilter("all");
+                  if (isActive) handleNavClick("all");
                 }
               }}
               title="Delete folder"
             >
-              <Trash2 className="w-3 h-3 text-destructive" />
+              <Trash2 className="w-3.5 h-3.5 md:w-3 md:h-3 text-destructive" />
             </button>
           </div>
         </div>
@@ -159,8 +163,7 @@ export function Sidebar() {
   };
 
   return (
-    <div className="w-64 border-r border-panel-border bg-panel flex flex-col h-screen shrink-0">
-      {/* App header */}
+    <div className="flex flex-col h-full">
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-2 text-foreground font-semibold">
           <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
@@ -168,25 +171,23 @@ export function Sidebar() {
           </div>
           <span>Notes App</span>
         </div>
-        <IconButton onClick={() => setSettingsOpen(true)}>
+        <IconButton onClick={() => { setSettingsOpen(true); onNavigate?.(); }}>
           <Settings className="w-4 h-4" />
         </IconButton>
       </div>
 
       <div className="flex-1 overflow-y-auto py-2">
-        {/* Top nav */}
         <div className="px-3 space-y-0.5 mb-4">
-          <NavItem icon={<FileText className="w-4 h-4" />} label="All Notes" active={activeFilter === "all"} onClick={() => setFilter("all")} />
-          <NavItem icon={<Star className="w-4 h-4" />} label="Favorites" active={activeFilter === "favorites"} onClick={() => setFilter("favorites")} />
-          <NavItem icon={<Paperclip className="w-4 h-4" />} label="Attachments" active={activeFilter === "attachments"} onClick={() => setFilter("attachments")} />
+          <NavItem icon={<FileText className="w-4 h-4" />} label="All Notes" active={activeFilter === "all"} onClick={() => handleNavClick("all")} />
+          <NavItem icon={<Star className="w-4 h-4" />} label="Favorites" active={activeFilter === "favorites"} onClick={() => handleNavClick("favorites")} />
+          <NavItem icon={<Paperclip className="w-4 h-4" />} label="Attachments" active={activeFilter === "attachments"} onClick={() => handleNavClick("attachments")} />
         </div>
 
-        {/* Folders section */}
         <div className="px-3 mb-1.5 flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           <span>Folders</span>
           <button
             onClick={() => { setNewFolderParentId(null); setIsCreatingFolder(true); }}
-            className="hover:text-foreground transition-colors p-1"
+            className="hover:text-foreground transition-colors p-1.5 md:p-1"
             title="New folder"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -219,7 +220,6 @@ export function Sidebar() {
           )}
         </div>
 
-        {/* Tags section */}
         {tags.length > 0 && (
           <div className="mb-4">
             <div className="px-3 mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tags</div>
@@ -227,9 +227,9 @@ export function Sidebar() {
               {tags.map(tag => (
                 <button
                   key={tag}
-                  onClick={() => setFilter("tag", tag)}
+                  onClick={() => handleNavClick("tag", tag)}
                   className={cn(
-                    "px-2 py-1 rounded-md text-xs transition-colors border",
+                    "px-2.5 py-1.5 md:px-2 md:py-1 rounded-md text-xs transition-colors border",
                     activeFilter === "tag" && activeTag === tag
                       ? "bg-primary/20 border-primary/30 text-primary"
                       : "bg-panel border-panel-border text-muted-foreground hover:text-foreground hover:bg-panel-hover"
@@ -244,11 +244,10 @@ export function Sidebar() {
         )}
       </div>
 
-      {/* AI Button */}
       <div className="p-4 border-t border-panel-border">
         <button
-          onClick={() => setAIPanelOpen(true)}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500/10 to-purple-500/10 hover:from-indigo-500/20 hover:to-purple-500/20 border border-indigo-500/20 text-indigo-400 hover:text-indigo-300 font-medium transition-all"
+          onClick={() => { setAIPanelOpen(true); onNavigate?.(); }}
+          className="w-full flex items-center justify-center gap-2 py-3 md:py-2.5 rounded-xl bg-gradient-to-r from-indigo-500/10 to-purple-500/10 hover:from-indigo-500/20 hover:to-purple-500/20 border border-indigo-500/20 text-indigo-400 hover:text-indigo-300 font-medium transition-all"
         >
           <Zap className="w-4 h-4" />
           <span>AI Assistant</span>
@@ -265,12 +264,25 @@ export function Sidebar() {
   );
 }
 
+export function Sidebar() {
+  const { isSidebarOpen } = useAppStore();
+  const bp = useBreakpoint();
+
+  if (bp !== "desktop" || !isSidebarOpen) return null;
+
+  return (
+    <div className="w-64 border-r border-panel-border bg-panel flex flex-col h-screen shrink-0">
+      <SidebarContent />
+    </div>
+  );
+}
+
 function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active?: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
       className={cn(
-        "w-full flex items-center gap-3 py-2 px-3 rounded-lg text-sm transition-all duration-200",
+        "w-full flex items-center gap-3 py-2.5 md:py-2 px-3 rounded-lg text-sm transition-all duration-200",
         active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
       )}
     >

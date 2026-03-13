@@ -3,6 +3,7 @@ import type { GetNotesSortBy, GetNotesSortDir } from "@workspace/api-client-reac
 
 type FilterType = "all" | "pinned" | "favorites" | "folder" | "tag" | "attachments";
 type ViewMode = "list" | "gallery";
+type MobileView = "list" | "editor";
 
 interface AppState {
   activeFilter: FilterType;
@@ -14,6 +15,7 @@ interface AppState {
   viewMode: ViewMode;
 
   selectedNoteId: number | null;
+  mobileView: MobileView;
 
   isSidebarOpen: boolean;
   isAIPanelOpen: boolean;
@@ -25,7 +27,9 @@ interface AppState {
   setSort: (by: GetNotesSortBy, dir: GetNotesSortDir) => void;
   setViewMode: (mode: ViewMode) => void;
   selectNote: (id: number | null) => void;
+  setMobileView: (view: MobileView) => void;
   toggleSidebar: () => void;
+  setSidebarOpen: (isOpen: boolean) => void;
   setAIPanelOpen: (isOpen: boolean) => void;
   setSettingsOpen: (isOpen: boolean) => void;
   setAttachmentsOpen: (isOpen: boolean) => void;
@@ -41,6 +45,7 @@ export const useAppStore = create<AppState>((set) => ({
   viewMode: "list",
 
   selectedNoteId: null,
+  mobileView: "list",
 
   isSidebarOpen: true,
   isAIPanelOpen: false,
@@ -52,12 +57,15 @@ export const useAppStore = create<AppState>((set) => ({
     activeFolderId: filter === "folder" && typeof idOrTag === "number" ? idOrTag : null,
     activeTag: filter === "tag" && typeof idOrTag === "string" ? idOrTag : null,
     selectedNoteId: null,
+    mobileView: "list",
   }),
   setSearchQuery: (query) => set({ searchQuery: query }),
   setSort: (by, dir) => set({ sortBy: by, sortDir: dir }),
   setViewMode: (mode) => set({ viewMode: mode }),
   selectNote: (id) => set({ selectedNoteId: id }),
+  setMobileView: (view) => set({ mobileView: view }),
   toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
+  setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
   setAIPanelOpen: (isOpen) => set({ isAIPanelOpen: isOpen }),
   setSettingsOpen: (isOpen) => set({ isSettingsOpen: isOpen }),
   setAttachmentsOpen: (isOpen) => set({ isAttachmentsOpen: isOpen }),

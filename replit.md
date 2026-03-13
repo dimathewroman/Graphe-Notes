@@ -2,7 +2,7 @@
 
 ## Overview
 
-Full-stack notes app with a React + Vite web frontend, Express API backend, and React Native (Expo) mobile app. Stores notes in PostgreSQL via Drizzle ORM.
+Full-stack notes app with a responsive React + Vite web frontend and Express API backend. Stores notes in PostgreSQL via Drizzle ORM. The web app is fully responsive across desktop (1024px+), tablet (768–1023px), and mobile (<768px).
 
 ## Stack
 
@@ -19,13 +19,11 @@ Full-stack notes app with a React + Vite web frontend, Express API backend, and 
 - **Rich text editor**: Tiptap (with Color, FontFamily, TextAlign, Highlight, Image, Underline, Placeholder)
 - **State management**: Zustand
 - **Animations**: Framer Motion
-- **Mobile**: Expo (SDK 54), NativeWind v4, expo-router, React Native WebView (contentEditable rich text editor)
-- **Mobile state**: TanStack React Query (shared with web via API), AsyncStorage-based offline cache
-- **Mobile AI**: AIAssistant component with quick actions and custom prompts, integrated into note editor
+- **Responsive**: Custom useBreakpoint hook (mobile <768px, tablet 768-1023px, desktop 1024px+)
 
 ## Features
 
-- Three-panel layout: sidebar / note list / rich text editor
+- Responsive layout: desktop 3-panel (sidebar/list/editor), tablet 2-panel (drawer sidebar + list/editor), mobile single-column (list/editor navigation)
 - Rich text editing (bold, italic, underline, headings, lists, colors, fonts, images)
 - Nested folder organization with colors and icons
 - Pinning and favorites
@@ -42,7 +40,7 @@ artifacts-monorepo/
 ├── artifacts/
 │   ├── api-server/         # Express API server
 │   ├── notes-app/          # React + Vite frontend
-│   └── mobile/             # React Native (Expo) mobile app
+│   └── mockup-sandbox/      # Component preview sandbox
 ├── lib/
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
@@ -100,36 +98,15 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 React + Vite frontend. Uses `@workspace/api-client-react` for type-safe API calls via React Query hooks.
 
 Key components:
-- `src/store.ts` — Zustand store (active filter, selected note, UI state)
-- `src/components/Sidebar.tsx` — Folder tree, navigation sections
-- `src/components/NoteList.tsx` — Filtered note list with search
-- `src/components/NoteEditor.tsx` — Tiptap rich text editor with auto-save
-- `src/components/AIPanel.tsx` — AI assistant slide-out panel
-- `src/components/SettingsModal.tsx` — Settings and export options
-
-### `artifacts/mobile` (`@workspace/mobile`)
-
-React Native (Expo) cross-platform notes app. Uses NativeWind for styling, expo-router for navigation, and TanStack Query for API data.
-
-Key files:
-- `app/_layout.tsx` — Root layout with providers (QueryClient, Theme, GestureHandler, Keyboard)
-- `app/(tabs)/index.tsx` — Notes list with search, sort, list/gallery toggle, offline cache fallback, favorite/pinned filtering
-- `app/(tabs)/folders.tsx` — Folder management with Quick Access (All Notes, Favorites, Pinned), Smart Folders, nested folder tree with CRUD
-- `app/(tabs)/settings.tsx` — Theme, accent color, AI assistant configuration (provider, API key, model selection)
-- `app/note/[id].tsx` — Note editor with rich text, toolbar, tags, version history (preview/delete/restore), lock/unlock, AI assistant
-- `lib/api.ts` — API client wrapping all backend endpoints
-- `lib/cache.ts` — SQLite-backed offline cache (native) with AsyncStorage for settings
-- `lib/database.ts` — Web fallback (in-memory store) for offline cache
-- `lib/database.native.ts` — Native SQLite offline storage (expo-sqlite) with write queue and sync meta
-- `contexts/ThemeContext.tsx` — Dark/light/system theme with AsyncStorage persistence
-- `components/RichTextEditor.tsx` — Rich text editor using @10play/tentap-editor with bridge extensions
-- `components/AIAssistant.tsx` — AI assistant bottom sheet with quick actions, custom prompts, settings integration
-- `components/NoteCard.tsx` — Note card component
-
-Architecture decisions:
-- **Rich text editor**: Uses `@10play/tentap-editor` with `useEditorBridge` hook and bridge extensions (bold, italic, underline, tasklist, link, color, highlight, placeholder, image). Exposes a ref interface for getHTML/getText/setContent/insertText/focus.
-- **Offline cache**: Platform-specific approach — `database.native.ts` uses expo-sqlite with full schema (notes, folders, smart_folders, write_queue, sync_meta tables). `database.ts` provides an in-memory fallback for web. The `cache.ts` layer wraps both with a unified API. AsyncStorage is reserved for user settings only.
-- **AI configuration**: Provider/API key/model stored via AsyncStorage settings store. Settings screen supports Anthropic, OpenAI, Google providers with live model fetching from the API server.
+- `src/store.ts` — Zustand store (active filter, selected note, mobileView, sidebar state)
+- `src/hooks/use-mobile.tsx` — Responsive hooks: useIsMobile, useIsTablet, useBreakpoint
+- `src/pages/Home.tsx` — Layout shell with breakpoint-conditional panel rendering and animated sidebar drawer
+- `src/components/Sidebar.tsx` — Folder tree (SidebarContent extracted for drawer reuse)
+- `src/components/NoteList.tsx` — Filtered note list with search, hamburger menu on mobile/tablet
+- `src/components/NoteEditor.tsx` — Tiptap editor with back button and overflow menu on mobile
+- `src/components/AIPanel.tsx` — AI assistant (full-screen on mobile, side panel on desktop)
+- `src/components/SettingsModal.tsx` — Settings modal (full-screen on mobile)
+- `src/components/VersionHistoryPanel.tsx` — Version history (full-width on mobile)
 
 ### `lib/db` (`@workspace/db`)
 

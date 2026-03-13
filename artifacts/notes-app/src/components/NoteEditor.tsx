@@ -31,12 +31,13 @@ import {
   Lock, Unlock, Table as TableIcon, RowsIcon, Plus, X, Hash,
   Sparkles, Loader2, Check, RotateCcw, Wand2, BookOpen, Scissors,
   Link2, Unlink, ChevronRight, ArrowUp, ArrowDown, MessageSquare, ListChecks,
-  Undo2, Redo2, Clock
+  Undo2, Redo2, Clock, ArrowLeft, Menu, MoreHorizontal
 } from "lucide-react";
 import { IconButton } from "./ui/IconButton";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { cn, formatDate } from "@/lib/utils";
 import { LockModal } from "./LockModal";
+import { useBreakpoint } from "@/hooks/use-mobile";
 
 // Custom floating AI menu that appears on text selection (Tiptap v3 compatible)
 
@@ -479,7 +480,8 @@ const SmartTaskItem = TaskItem.extend({
 });
 
 export function NoteEditor() {
-  const { selectedNoteId, selectNote, isSidebarOpen, toggleSidebar } = useAppStore();
+  const { selectedNoteId, selectNote, isSidebarOpen, toggleSidebar, setMobileView, setSidebarOpen } = useAppStore();
+  const bp = useBreakpoint();
   const queryClient = useQueryClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -605,6 +607,7 @@ export function NoteEditor() {
       await deleteNoteMut.mutateAsync({ id: selectedNoteId });
       queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
       selectNote(null);
+      if (bp !== "desktop") setMobileView("list");
     }
   };
 
@@ -798,7 +801,13 @@ export function NoteEditor() {
     }
   };
 
+  const handleBack = () => {
+    setMobileView("list");
+    selectNote(null);
+  };
+
   if (!selectedNoteId) {
+    if (bp === "mobile") return null;
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-background text-muted-foreground relative">
         <FileText className="w-16 h-16 mb-4 opacity-20" />
@@ -842,9 +851,14 @@ export function NoteEditor() {
   return (
     <div className="flex-1 flex flex-col bg-background h-screen overflow-hidden relative">
       {/* Top Header */}
-      <header className="h-14 border-b border-panel-border flex items-center justify-between px-4 shrink-0 bg-background/80 backdrop-blur-md z-10">
+      <header className="h-14 border-b border-panel-border flex items-center justify-between px-2 md:px-4 shrink-0 bg-background/80 backdrop-blur-md z-10">
         <div className="flex items-center gap-2">
-          {!isSidebarOpen && (
+          {bp !== "desktop" && (
+            <button onClick={handleBack} className="p-2 rounded-lg hover:bg-panel transition-colors">
+              <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+            </button>
+          )}
+          {bp === "desktop" && !isSidebarOpen && (
             <IconButton onClick={toggleSidebar} className="mr-2">
               <PanelLeft className="w-4 h-4" />
             </IconButton>
@@ -852,41 +866,58 @@ export function NoteEditor() {
           <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
             <span className={cn("inline-block w-1.5 h-1.5 rounded-full", saveStatus === "saved" ? "bg-emerald-500" : "bg-amber-500 animate-pulse")} />
             {saveStatus === "saved" ? "Saved" : "Saving..."}
-            {note && <span className="ml-2 border-l border-panel-border pl-2">Updated {formatDate(note.updatedAt)}</span>}
+            {bp === "desktop" && note && <span className="ml-2 border-l border-panel-border pl-2">Updated {formatDate(note.updatedAt)}</span>}
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5 md:gap-1">
           <IconButton onClick={() => handleAction("pin")} active={note?.pinned} title="Pin Note">
             <Pin className={cn("w-4 h-4", note?.pinned && "fill-current")} />
           </IconButton>
           <IconButton onClick={() => handleAction("fav")} active={note?.favorite} title="Favorite">
             <Star className={cn("w-4 h-4", note?.favorite && "fill-current text-yellow-500")} />
           </IconButton>
-          <IconButton
-            onClick={() => note?.locked ? setLockModal("verify") : setLockModal("set")}
-            active={note?.locked}
-            title={note?.locked ? "Note is locked" : "Lock note"}
-            className={note?.locked ? "text-amber-500" : ""}
-          >
-            {note?.locked ? <Lock className="w-4 h-4 fill-current" /> : <Lock className="w-4 h-4" />}
-          </IconButton>
-          <IconButton
-            onClick={() => setShowVersionHistory(v => !v)}
-            active={showVersionHistory}
-            title="Version history"
-          >
-            <Clock className="w-4 h-4" />
-          </IconButton>
-          <div className="w-px h-4 bg-panel-border mx-1" />
-          <IconButton onClick={handleDelete} className="hover:text-destructive hover:bg-destructive/10" title="Delete">
-            <Trash2 className="w-4 h-4" />
-          </IconButton>
+          {bp === "desktop" && (
+            <>
+              <IconButton
+                onClick={() => note?.locked ? setLockModal("verify") : setLockModal("set")}
+                active={note?.locked}
+                title={note?.locked ? "Note is locked" : "Lock note"}
+                className={note?.locked ? "text-amber-500" : ""}
+              >
+                {note?.locked ? <Lock className="w-4 h-4 fill-current" /> : <Lock className="w-4 h-4" />}
+              </IconButton>
+              <IconButton
+                onClick={() => setShowVersionHistory(v => !v)}
+                active={showVersionHistory}
+                title="Version history"
+              >
+                <Clock className="w-4 h-4" />
+              </IconButton>
+            </>
+          )}
+          {bp !== "desktop" && (
+            <OverflowMenu
+              note={note}
+              onLock={() => note?.locked ? setLockModal("verify") : setLockModal("set")}
+              onVersionHistory={() => setShowVersionHistory(v => !v)}
+              onDelete={handleDelete}
+              showVersionHistory={showVersionHistory}
+            />
+          )}
+          {bp === "desktop" && (
+            <>
+              <div className="w-px h-4 bg-panel-border mx-1" />
+              <IconButton onClick={handleDelete} className="hover:text-destructive hover:bg-destructive/10" title="Delete">
+                <Trash2 className="w-4 h-4" />
+              </IconButton>
+            </>
+          )}
         </div>
       </header>
 
       {/* Toolbar */}
-      <div className="flex items-center gap-0.5 p-2 border-b border-panel-border overflow-x-auto bg-panel/30 shrink-0 hide-scrollbar flex-wrap">
+      <div className="flex items-center gap-0.5 p-1.5 md:p-2 border-b border-panel-border overflow-x-auto bg-panel/30 shrink-0 hide-scrollbar">
         <ToolbarButton
           command={() => editor.chain().focus().undo().run()}
           active={false}
@@ -1036,13 +1067,13 @@ export function NoteEditor() {
 
       {/* Editor Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-8 py-12">
+        <div className="max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12">
           <input
             type="text"
             value={title}
             onChange={handleTitleChange}
             placeholder="Note Title"
-            className="w-full text-4xl font-bold bg-transparent border-none outline-none mb-4 text-foreground placeholder:text-muted-foreground/30 resize-none tracking-tight"
+            className="w-full text-2xl md:text-4xl font-bold bg-transparent border-none outline-none mb-4 text-foreground placeholder:text-muted-foreground/30 resize-none tracking-tight"
           />
 
           {/* Tags Row */}
@@ -1103,6 +1134,51 @@ export function NoteEditor() {
   );
 }
 
+function OverflowMenu({ note, onLock, onVersionHistory, onDelete, showVersionHistory }: {
+  note: { locked: boolean } | null | undefined;
+  onLock: () => void;
+  onVersionHistory: () => void;
+  onDelete: () => void;
+  showVersionHistory: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <IconButton onClick={() => setOpen(!open)}>
+        <MoreHorizontal className="w-4 h-4" />
+      </IconButton>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 min-w-[180px] bg-popover border border-panel-border rounded-xl shadow-2xl py-1">
+          <button onClick={() => { onLock(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
+            <Lock className="w-4 h-4" />
+            {note?.locked ? "Unlock Note" : "Lock Note"}
+          </button>
+          <button onClick={() => { onVersionHistory(); setOpen(false); }} className={cn("w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-panel transition-colors", showVersionHistory ? "text-primary" : "text-foreground")}>
+            <Clock className="w-4 h-4" />
+            Version History
+          </button>
+          <div className="h-px bg-panel-border mx-2 my-1" />
+          <button onClick={() => { onDelete(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors">
+            <Trash2 className="w-4 h-4" />
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ToolbarButton({ command, active, icon, title, disabled }: { command: () => void; active: boolean; icon: React.ReactNode; title?: string; disabled?: boolean }) {
   return (
     <button
@@ -1110,7 +1186,7 @@ function ToolbarButton({ command, active, icon, title, disabled }: { command: ()
       title={title}
       disabled={disabled}
       className={cn(
-        "p-1.5 rounded text-muted-foreground hover:bg-panel hover:text-foreground transition-colors",
+        "p-2 md:p-1.5 rounded text-muted-foreground hover:bg-panel hover:text-foreground transition-colors shrink-0",
         active && "bg-panel text-primary",
         disabled && "opacity-30 cursor-not-allowed pointer-events-none"
       )}
