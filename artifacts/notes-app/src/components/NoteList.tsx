@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Search, Plus, Pin, Star, FileText, MoreVertical, Trash2, FolderInput,
-  LayoutGrid, LayoutList, SortAsc, Lock, Image as ImageIcon, Hash, X, Tag
+  LayoutGrid, LayoutList, SortAsc, Lock, Image as ImageIcon, Hash, X, Tag, Menu
 } from "lucide-react";
 import { useAppStore } from "@/store";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -12,6 +12,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatDate } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
+import { useBreakpoint } from "@/hooks/use-mobile";
 
 interface ContextMenu {
   noteId: number;
@@ -37,8 +38,9 @@ export function NoteList() {
     activeFilter, activeFolderId, activeTag,
     searchQuery, setSearchQuery, sortBy, sortDir, setSort,
     viewMode, setViewMode,
-    selectedNoteId, selectNote
+    selectedNoteId, selectNote, setMobileView, setSidebarOpen
   } = useAppStore();
+  const bp = useBreakpoint();
 
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const debouncedSearch = useDebounce(localSearch, 300);
@@ -123,6 +125,7 @@ export function NoteList() {
       onSuccess: (newNote) => {
         queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
         selectNote(newNote.id);
+        if (bp === "mobile") setMobileView("editor");
       }
     }
   });
@@ -130,7 +133,11 @@ export function NoteList() {
   const favMut = useToggleNoteFavorite({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }) } });
   const deleteMut = useDeleteNote({
     mutation: {
-      onSuccess: () => { queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }); selectNote(null); }
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+        selectNote(null);
+        if (bp === "mobile") setMobileView("list");
+      }
     }
   });
   const updateNoteMut = useUpdateNote({
@@ -141,6 +148,13 @@ export function NoteList() {
       }
     }
   });
+
+  const handleSelectNote = (id: number) => {
+    selectNote(id);
+    if (bp === "mobile") {
+      setMobileView("editor");
+    }
+  };
 
   const handleCreateNew = () => {
     createNoteMut.mutate({
@@ -204,12 +218,24 @@ export function NoteList() {
 
   const currentSort = SORT_OPTIONS.find(o => o.sortBy === sortBy && o.sortDir === sortDir);
 
+  const containerClass = bp === "mobile"
+    ? "flex-1 bg-background flex flex-col h-screen"
+    : cn("border-r border-panel-border bg-background flex flex-col h-screen shrink-0 transition-all", viewMode === "gallery" ? "w-96" : bp === "tablet" ? "w-72" : "w-80");
+
   return (
-    <div className={cn("border-r border-panel-border bg-background flex flex-col h-screen shrink-0 transition-all", viewMode === "gallery" ? "w-96" : "w-80")}>
+    <div className={containerClass}>
       {/* Header */}
       <div className="p-4 border-b border-panel-border flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
+            {bp !== "desktop" && (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 -ml-1 mr-1 rounded-lg hover:bg-panel transition-colors"
+              >
+                <Menu className="w-5 h-5 text-muted-foreground" />
+              </button>
+            )}
             <h2 className="text-lg font-semibold tracking-tight truncate">{listTitle}</h2>
             {isFolderSmart && (
               <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">smart</span>
@@ -286,7 +312,7 @@ export function NoteList() {
             return (
               <div
                 key={note.id}
-                onClick={() => selectNote(note.id)}
+                onClick={() => handleSelectNote(note.id)}
                 onContextMenu={e => handleContextMenu(e, note)}
                 className={cn(
                   "rounded-xl cursor-pointer border transition-all duration-200 group overflow-hidden",
@@ -307,8 +333,8 @@ export function NoteList() {
                       {note.locked && <Lock className="w-2.5 h-2.5 shrink-0 text-amber-500" />}
                       {note.title || "Untitled Note"}
                     </h3>
-                    <button onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }} className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-panel-border transition-all ml-1 shrink-0">
-                      <MoreVertical className="w-3 h-3 text-muted-foreground" />
+                    <button onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }} className={cn("p-1 rounded hover:bg-panel-border transition-all ml-1 shrink-0", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70")}>
+                      <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
                     </button>
                   </div>
                   <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
@@ -329,7 +355,7 @@ export function NoteList() {
           notes.map(note => (
             <div
               key={note.id}
-              onClick={() => selectNote(note.id)}
+              onClick={() => handleSelectNote(note.id)}
               onContextMenu={e => handleContextMenu(e, note)}
               className={cn(
                 "p-3 rounded-xl cursor-pointer border transition-all duration-200 group relative",
@@ -351,7 +377,7 @@ export function NoteList() {
                   {note.favorite && <Star className="w-3 h-3 fill-current text-yellow-500 opacity-70" />}
                   <button
                     onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }}
-                    className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-panel-border transition-all"
+                    className={cn("p-1 rounded hover:bg-panel-border transition-all", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70")}
                     title="Options"
                   >
                     <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />

@@ -6,10 +6,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
+import { useBreakpoint } from "@/hooks/use-mobile";
 
 export function AIPanel() {
   const { isAIPanelOpen, setAIPanelOpen, selectedNoteId } = useAppStore();
   const queryClient = useQueryClient();
+  const bp = useBreakpoint();
   
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: note } = useGetNote(selectedNoteId || 0, { query: { enabled: !!selectedNoteId && isAIPanelOpen } as any });
@@ -65,15 +67,22 @@ export function AIPanel() {
     "Make the tone more professional"
   ];
 
+  const isMobileOrTablet = bp === "mobile" || bp === "tablet";
+  const panelClass = isMobileOrTablet
+    ? "fixed inset-0 z-50 bg-panel flex flex-col"
+    : "w-80 border-l border-panel-border bg-panel flex flex-col h-screen shrink-0 absolute right-0 top-0 z-20 shadow-2xl";
+
+  const animationProps = isMobileOrTablet
+    ? { initial: { y: "100%", opacity: 0 }, animate: { y: 0, opacity: 1 }, exit: { y: "100%", opacity: 0 } }
+    : { initial: { x: 320, opacity: 0 }, animate: { x: 0, opacity: 1 }, exit: { x: 320, opacity: 0 } };
+
   return (
     <AnimatePresence>
       {isAIPanelOpen && (
         <motion.div 
-          initial={{ x: 320, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          exit={{ x: 320, opacity: 0 }}
+          {...animationProps}
           transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-          className="w-80 border-l border-panel-border bg-panel flex flex-col h-screen shrink-0 absolute right-0 top-0 z-20 shadow-2xl"
+          className={panelClass}
         >
           <div className="p-4 border-b border-panel-border flex items-center justify-between bg-background/50">
             <div className="flex items-center gap-2 font-semibold text-indigo-400">
@@ -93,7 +102,7 @@ export function AIPanel() {
                   <button
                     key={p}
                     onClick={() => { setPrompt(p); }}
-                    className="block w-full text-left p-2 rounded-lg bg-background border border-panel-border hover:border-primary/50 text-sm text-foreground transition-colors"
+                    className="block w-full text-left p-3 md:p-2 rounded-lg bg-background border border-panel-border hover:border-primary/50 text-sm text-foreground transition-colors"
                   >
                     {p}
                   </button>
@@ -121,7 +130,7 @@ export function AIPanel() {
                 </div>
                 <button 
                   onClick={insertIntoNote}
-                  className="w-full flex items-center justify-center gap-2 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-3 md:py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
                 >
                   <CheckCheck className="w-4 h-4" />
                   Insert into note
@@ -148,9 +157,9 @@ export function AIPanel() {
               <button
                 onClick={handleComplete}
                 disabled={aiMut.isPending || !prompt.trim()}
-                className="absolute right-2 bottom-2 p-1.5 rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="absolute right-2 bottom-2 p-2 md:p-1.5 rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                <Send className="w-3.5 h-3.5" />
+                <Send className="w-4 h-4 md:w-3.5 md:h-3.5" />
               </button>
             </div>
             <p className="text-[10px] text-center text-muted-foreground mt-2">

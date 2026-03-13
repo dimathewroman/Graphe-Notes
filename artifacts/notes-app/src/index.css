@@ -101,9 +101,17 @@
   }
 }
 
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* Tiptap Editor Styles */
 .ProseMirror {
-  @apply outline-none min-h-[500px] pb-32;
+  @apply outline-none min-h-[300px] md:min-h-[500px] pb-32;
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {

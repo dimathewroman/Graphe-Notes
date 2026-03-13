@@ -101,7 +101,7 @@ export function VersionHistoryPanel({ noteId, onRestore, onClose }: Props) {
   };
 
   return (
-    <div className="absolute inset-y-0 right-0 w-80 bg-panel border-l border-panel-border flex flex-col z-20 shadow-2xl">
+    <div className="absolute inset-y-0 right-0 w-full md:w-80 bg-panel border-l border-panel-border flex flex-col z-20 shadow-2xl">
       {/* Header */}
       <div className="h-14 border-b border-panel-border flex items-center justify-between px-4 shrink-0">
         <div className="flex items-center gap-2 text-sm font-medium">
