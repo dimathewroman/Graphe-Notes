@@ -184,32 +184,6 @@ function AiSelectionMenu({
     };
   }, [editor, visible, onSelectionCapture]);
 
-  if (!rect || !visible) return null;
-
-  const resetMenu = () => {
-    setExpandedGroup(null);
-    setExpandedAction(null);
-    setCustomInputFor(null);
-    setCustomText("");
-  };
-
-  const handlePresetClick = (presetId: string) => {
-    if (presetId.endsWith("_custom")) {
-      setCustomInputFor(presetId);
-      setCustomText("");
-    } else {
-      onAction(presetId);
-      resetMenu();
-    }
-  };
-
-  const handleCustomSubmit = (baseActionId: string) => {
-    if (customText.trim()) {
-      onAction(baseActionId, customText.trim());
-      resetMenu();
-    }
-  };
-
   const isMobile = window.innerWidth < 768;
 
   const menuStyle = useMemo(() => {
@@ -236,6 +210,32 @@ function AiSelectionMenu({
 
     return { top, left, width: isMobile ? `calc(100vw - ${pad * 2}px)` : undefined };
   }, [rect, isMobile]);
+
+  if (!rect || !visible) return null;
+
+  const resetMenu = () => {
+    setExpandedGroup(null);
+    setExpandedAction(null);
+    setCustomInputFor(null);
+    setCustomText("");
+  };
+
+  const handlePresetClick = (presetId: string) => {
+    if (presetId.endsWith("_custom")) {
+      setCustomInputFor(presetId);
+      setCustomText("");
+    } else {
+      onAction(presetId);
+      resetMenu();
+    }
+  };
+
+  const handleCustomSubmit = (baseActionId: string) => {
+    if (customText.trim()) {
+      onAction(baseActionId, customText.trim());
+      resetMenu();
+    }
+  };
 
   return (
     <div
