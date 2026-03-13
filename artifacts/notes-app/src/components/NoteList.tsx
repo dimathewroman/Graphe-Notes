@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Search, Plus, Pin, Star, FileText, MoreVertical, Trash2, FolderInput,
-  LayoutGrid, LayoutList, SortAsc, ShieldCheck, Image as ImageIcon, Hash, X, Tag, Menu, PanelLeftClose
+  LayoutGrid, LayoutList, SortAsc, ShieldCheck, Image as ImageIcon, Hash, X, Tag, Menu, PanelLeftClose, PanelLeft
 } from "lucide-react";
 import { useAppStore } from "@/store";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -39,6 +39,7 @@ export function NoteList() {
     searchQuery, setSearchQuery, sortBy, sortDir, setSort,
     viewMode, setViewMode,
     selectedNoteId, selectNote, setMobileView, setSidebarOpen, toggleNoteList,
+    isSidebarOpen, toggleSidebar,
     isVaultUnlocked,
   } = useAppStore();
   const bp = useBreakpoint();
@@ -254,6 +255,11 @@ export function NoteList() {
               >
                 <Menu className="w-5 h-5 text-muted-foreground" />
               </button>
+            )}
+            {bp === "desktop" && !isSidebarOpen && (
+              <IconButton onClick={toggleSidebar} title="Show sidebar">
+                <PanelLeft className="w-4 h-4" />
+              </IconButton>
             )}
             <h2 className="text-lg font-semibold tracking-tight truncate">{listTitle}</h2>
             {isFolderSmart && (
