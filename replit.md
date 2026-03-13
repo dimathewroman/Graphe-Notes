@@ -110,11 +110,11 @@ React + Vite frontend. Uses `@workspace/api-client-react` for type-safe API call
 
 Key components:
 - `src/store.ts` — Zustand store (active filter, selected note, mobileView, sidebar state, vault unlock state)
-- `src/hooks/use-mobile.tsx` — Responsive hooks: useIsMobile, useIsTablet, useBreakpoint
+- `src/hooks/use-mobile.tsx` — Responsive hooks: useIsMobile, useIsTablet, useBreakpoint, useKeyboardHeight
 - `src/pages/Home.tsx` — Layout shell with breakpoint-conditional panel rendering and animated sidebar drawer
 - `src/components/Sidebar.tsx` — Folder tree (SidebarContent extracted for drawer reuse)
 - `src/components/NoteList.tsx` — Filtered note list with search, hamburger menu on mobile/tablet
-- `src/components/NoteEditor.tsx` — Tiptap editor with back button and overflow menu on mobile
+- `src/components/NoteEditor.tsx` — Tiptap editor with mobile-native top bar (back/undo/redo/overflow), bottom keyboard-aware toolbar, expanded overflow menu (MoreVertical with Pin/Fav/Share/Vault/History/Find/Delete)
 - `src/components/AIPanel.tsx` — AI assistant (full-screen on mobile, side panel on desktop)
 - `src/components/SettingsModal.tsx` — Settings modal (full-screen on mobile)
 - `src/components/VersionHistoryPanel.tsx` — Version history (full-width on mobile)

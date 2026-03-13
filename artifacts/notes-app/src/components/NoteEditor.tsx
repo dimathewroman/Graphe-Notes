@@ -31,13 +31,14 @@ import {
   Lock, ShieldCheck, Table as TableIcon, RowsIcon, Plus, X, Hash,
   Sparkles, Loader2, Check, RotateCcw, Wand2, BookOpen, Scissors,
   Link2, Unlink, ChevronRight, ArrowUp, ArrowDown, MessageSquare, ListChecks,
-  Undo2, Redo2, Clock, ArrowLeft, Menu, MoreHorizontal, PanelLeftClose
+  Undo2, Redo2, Clock, ArrowLeft, Menu, MoreHorizontal, MoreVertical, PanelLeftClose,
+  Share, Search
 } from "lucide-react";
 import { IconButton } from "./ui/IconButton";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { cn, formatDate } from "@/lib/utils";
 import { VaultModal } from "./VaultModal";
-import { useBreakpoint } from "@/hooks/use-mobile";
+import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
 
 // Custom floating AI menu that appears on text selection (Tiptap v3 compatible)
 
@@ -517,7 +518,7 @@ const SmartTaskItem = TaskItem.extend({
   },
 });
 
-function ScrollableToolbar({ children }: { children: React.ReactNode }) {
+function ScrollableToolbar({ children, className, style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
@@ -540,7 +541,7 @@ function ScrollableToolbar({ children }: { children: React.ReactNode }) {
   }, [checkScroll]);
 
   return (
-    <div className="relative border-b border-panel-border shrink-0">
+    <div className={cn("relative border-b border-panel-border shrink-0", className)} style={style}>
       {canScrollLeft && (
         <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background/80 to-transparent z-10 pointer-events-none" />
       )}
@@ -561,6 +562,7 @@ function ScrollableToolbar({ children }: { children: React.ReactNode }) {
 export function NoteEditor() {
   const { selectedNoteId, selectNote, isSidebarOpen, toggleSidebar, isNoteListOpen, toggleNoteList, setMobileView, setSidebarOpen } = useAppStore();
   const bp = useBreakpoint();
+  const keyboardHeight = useKeyboardHeight();
   const queryClient = useQueryClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -921,12 +923,34 @@ export function NoteEditor() {
         </div>
 
         <div className="flex items-center gap-0.5 md:gap-1">
-          <IconButton onClick={() => handleAction("pin")} active={note?.pinned} title="Pin Note">
-            <Pin className={cn("w-4 h-4", note?.pinned && "fill-current")} />
-          </IconButton>
-          <IconButton onClick={() => handleAction("fav")} active={note?.favorite} title="Favorite">
-            <Star className={cn("w-4 h-4", note?.favorite && "fill-current text-yellow-500")} />
-          </IconButton>
+          {bp === "mobile" && editor && (
+            <>
+              <IconButton
+                onClick={() => editor.chain().focus().undo().run()}
+                title="Undo"
+                className={!editor.can().undo() ? "opacity-30 pointer-events-none" : ""}
+              >
+                <Undo2 className="w-4 h-4" />
+              </IconButton>
+              <IconButton
+                onClick={() => editor.chain().focus().redo().run()}
+                title="Redo"
+                className={!editor.can().redo() ? "opacity-30 pointer-events-none" : ""}
+              >
+                <Redo2 className="w-4 h-4" />
+              </IconButton>
+            </>
+          )}
+          {bp !== "mobile" && (
+            <>
+              <IconButton onClick={() => handleAction("pin")} active={note?.pinned} title="Pin Note">
+                <Pin className={cn("w-4 h-4", note?.pinned && "fill-current")} />
+              </IconButton>
+              <IconButton onClick={() => handleAction("fav")} active={note?.favorite} title="Favorite">
+                <Star className={cn("w-4 h-4", note?.favorite && "fill-current text-yellow-500")} />
+              </IconButton>
+            </>
+          )}
           {bp === "desktop" && (
             <>
               <IconButton
@@ -949,10 +973,13 @@ export function NoteEditor() {
           {bp !== "desktop" && (
             <OverflowMenu
               note={note}
+              onPin={() => handleAction("pin")}
+              onFav={() => handleAction("fav")}
               onVaultToggle={handleToggleVault}
               onVersionHistory={() => setShowVersionHistory(v => !v)}
               onDelete={handleDelete}
               showVersionHistory={showVersionHistory}
+              isMobile={bp === "mobile"}
             />
           )}
           {bp === "desktop" && (
@@ -966,127 +993,10 @@ export function NoteEditor() {
         </div>
       </header>
 
-      {/* Toolbar */}
-      <ScrollableToolbar>
-        <ToolbarButton
-          command={() => editor.chain().focus().undo().run()}
-          active={false}
-          disabled={!editor.can().undo()}
-          icon={<Undo2 className="w-4 h-4" />}
-          title="Undo (Ctrl+Z)"
-        />
-        <ToolbarButton
-          command={() => editor.chain().focus().redo().run()}
-          active={false}
-          disabled={!editor.can().redo()}
-          icon={<Redo2 className="w-4 h-4" />}
-          title="Redo (Ctrl+Shift+Z)"
-        />
-
-        <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
-
-        <ToolbarButton command={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} icon={<Bold className="w-4 h-4" />} />
-        <ToolbarButton command={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} icon={<Italic className="w-4 h-4" />} />
-        <ToolbarButton command={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} icon={<UnderlineIcon className="w-4 h-4" />} />
-        <ToolbarButton command={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive("strike")} icon={<Strikethrough className="w-4 h-4" />} />
-
-        <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
-
-        <ToolbarButton command={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive("heading", { level: 1 })} icon={<Heading1 className="w-4 h-4" />} />
-        <ToolbarButton command={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive("heading", { level: 2 })} icon={<Heading2 className="w-4 h-4" />} />
-        <ToolbarButton command={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive("heading", { level: 3 })} icon={<Heading3 className="w-4 h-4" />} />
-
-        <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
-
-        <ToolbarButton command={() => editor.chain().focus().setTextAlign("left").run()} active={editor.isActive({ textAlign: "left" })} icon={<AlignLeft className="w-4 h-4" />} />
-        <ToolbarButton command={() => editor.chain().focus().setTextAlign("center").run()} active={editor.isActive({ textAlign: "center" })} icon={<AlignCenter className="w-4 h-4" />} />
-        <ToolbarButton command={() => editor.chain().focus().setTextAlign("right").run()} active={editor.isActive({ textAlign: "right" })} icon={<AlignRight className="w-4 h-4" />} />
-
-        <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
-
-        <ToolbarButton command={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive("bulletList")} icon={<List className="w-4 h-4" />} />
-        <ToolbarButton command={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} icon={<ListOrdered className="w-4 h-4" />} />
-        <ToolbarButton command={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive("taskList")} icon={<ListTodo className="w-4 h-4" />} title="Checklist" />
-        <ToolbarButton command={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive("blockquote")} icon={<Quote className="w-4 h-4" />} />
-        <ToolbarButton command={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive("codeBlock")} icon={<Code className="w-4 h-4" />} />
-
-        <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
-
-        {/* Table controls */}
-        <ToolbarButton
-          command={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-          active={false}
-          icon={<TableIcon className="w-4 h-4" />}
-          title="Insert table"
-        />
-        {editor.isActive("table") && (
-          <>
-            <ToolbarButton command={() => editor.chain().focus().addRowAfter().run()} active={false} icon={<RowsIcon className="w-4 h-4" />} title="Add row" />
-            <ToolbarButton command={() => editor.chain().focus().deleteRow().run()} active={false} icon={<Scissors className="w-4 h-4" />} title="Delete row" />
-            <ToolbarButton command={() => editor.chain().focus().deleteTable().run()} active={false} icon={<X className="w-4 h-4" />} title="Delete table" />
-          </>
-        )}
-
-        <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
-
-        <ToolbarButton
-          command={() => {
-            const url = window.prompt("Image URL");
-            if (url) editor.chain().focus().setImage({ src: url }).run();
-          }}
-          active={false}
-          icon={<ImageIcon className="w-4 h-4" />}
-          title="Insert image"
-        />
-
-        <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
-
-        {/* Link button with inline popover */}
-        <div className="relative shrink-0">
-          <ToolbarButton
-            command={openLinkPopover}
-            active={editor.isActive("link")}
-            icon={<Link2 className="w-4 h-4" />}
-            title="Insert / edit link (Ctrl+K)"
-          />
-          {linkPopover.visible && (
-            <div
-              ref={linkPopoverRef}
-              className="absolute top-full left-0 mt-1.5 z-30 flex items-center gap-1.5 bg-popover border border-panel-border rounded-xl shadow-xl px-3 py-2 min-w-[280px]"
-            >
-              <Link2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              <input
-                ref={linkInputRef}
-                type="text"
-                placeholder="https://example.com"
-                value={linkPopover.url}
-                onChange={(e) => setLinkPopover((p) => ({ ...p, url: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); applyLink(); }
-                  if (e.key === "Escape") setLinkPopover({ visible: false, url: "" });
-                  e.stopPropagation();
-                }}
-                className="flex-1 bg-transparent text-sm outline-none text-foreground placeholder:text-muted-foreground/60 min-w-0"
-              />
-              {editor.isActive("link") && (
-                <button
-                  onClick={() => { editor.chain().focus().unsetLink().run(); setLinkPopover({ visible: false, url: "" }); }}
-                  className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                  title="Remove link"
-                >
-                  <Unlink className="w-3.5 h-3.5" />
-                </button>
-              )}
-              <button
-                onClick={applyLink}
-                className="shrink-0 px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary-hover transition-colors"
-              >
-                Apply
-              </button>
-            </div>
-          )}
-        </div>
-      </ScrollableToolbar>
+      {/* Toolbar — desktop/tablet: below header; mobile: at bottom */}
+      {bp !== "mobile" && (
+        <EditorToolbar editor={editor} linkPopover={linkPopover} setLinkPopover={setLinkPopover} linkInputRef={linkInputRef} linkPopoverRef={linkPopoverRef} openLinkPopover={openLinkPopover} applyLink={applyLink} showUndoRedo />
+      )}
 
       {/* AI Bubble Menu – custom floating menu on text selection */}
       <AiSelectionMenu
@@ -1117,7 +1027,7 @@ export function NoteEditor() {
 
       {/* Editor Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12">
+        <div className={cn("max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12", bp === "mobile" && "pb-20")}>
           <input
             type="text"
             value={title}
@@ -1173,16 +1083,172 @@ export function NoteEditor() {
         />
       )}
 
+      {/* Mobile bottom toolbar — keyboard-aware */}
+      {bp === "mobile" && (
+        <EditorToolbar
+          editor={editor}
+          linkPopover={linkPopover}
+          setLinkPopover={setLinkPopover}
+          linkInputRef={linkInputRef}
+          linkPopoverRef={linkPopoverRef}
+          openLinkPopover={openLinkPopover}
+          applyLink={applyLink}
+          className="fixed left-0 right-0 z-40 border-t border-panel-border bg-background/95 backdrop-blur-md"
+          style={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
+        />
+      )}
+
     </div>
   );
 }
 
-function OverflowMenu({ note, onVaultToggle, onVersionHistory, onDelete, showVersionHistory }: {
-  note: { vaulted: boolean } | null | undefined;
+function EditorToolbar({ editor, linkPopover, setLinkPopover, linkInputRef, linkPopoverRef, openLinkPopover, applyLink, showUndoRedo, className, style }: {
+  editor: ReturnType<typeof useEditor>;
+  linkPopover: { visible: boolean; url: string };
+  setLinkPopover: React.Dispatch<React.SetStateAction<{ visible: boolean; url: string }>>;
+  linkInputRef: React.RefObject<HTMLInputElement | null>;
+  linkPopoverRef: React.RefObject<HTMLDivElement | null>;
+  openLinkPopover: () => void;
+  applyLink: () => void;
+  showUndoRedo?: boolean;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  if (!editor) return null;
+  return (
+    <ScrollableToolbar className={className} style={style}>
+      {showUndoRedo && (
+        <>
+          <ToolbarButton
+            command={() => editor.chain().focus().undo().run()}
+            active={false}
+            disabled={!editor.can().undo()}
+            icon={<Undo2 className="w-4 h-4" />}
+            title="Undo (Ctrl+Z)"
+          />
+          <ToolbarButton
+            command={() => editor.chain().focus().redo().run()}
+            active={false}
+            disabled={!editor.can().redo()}
+            icon={<Redo2 className="w-4 h-4" />}
+            title="Redo (Ctrl+Shift+Z)"
+          />
+          <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+        </>
+      )}
+
+      <ToolbarButton command={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} icon={<Bold className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} icon={<Italic className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} icon={<UnderlineIcon className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive("strike")} icon={<Strikethrough className="w-4 h-4" />} />
+
+      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+
+      <ToolbarButton command={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive("heading", { level: 1 })} icon={<Heading1 className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive("heading", { level: 2 })} icon={<Heading2 className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive("heading", { level: 3 })} icon={<Heading3 className="w-4 h-4" />} />
+
+      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+
+      <ToolbarButton command={() => editor.chain().focus().setTextAlign("left").run()} active={editor.isActive({ textAlign: "left" })} icon={<AlignLeft className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().setTextAlign("center").run()} active={editor.isActive({ textAlign: "center" })} icon={<AlignCenter className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().setTextAlign("right").run()} active={editor.isActive({ textAlign: "right" })} icon={<AlignRight className="w-4 h-4" />} />
+
+      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+
+      <ToolbarButton command={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive("bulletList")} icon={<List className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} icon={<ListOrdered className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive("taskList")} icon={<ListTodo className="w-4 h-4" />} title="Checklist" />
+      <ToolbarButton command={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive("blockquote")} icon={<Quote className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive("codeBlock")} icon={<Code className="w-4 h-4" />} />
+
+      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+
+      <ToolbarButton
+        command={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+        active={false}
+        icon={<TableIcon className="w-4 h-4" />}
+        title="Insert table"
+      />
+      {editor.isActive("table") && (
+        <>
+          <ToolbarButton command={() => editor.chain().focus().addRowAfter().run()} active={false} icon={<RowsIcon className="w-4 h-4" />} title="Add row" />
+          <ToolbarButton command={() => editor.chain().focus().deleteRow().run()} active={false} icon={<Scissors className="w-4 h-4" />} title="Delete row" />
+          <ToolbarButton command={() => editor.chain().focus().deleteTable().run()} active={false} icon={<X className="w-4 h-4" />} title="Delete table" />
+        </>
+      )}
+
+      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+
+      <ToolbarButton
+        command={() => {
+          const url = window.prompt("Image URL");
+          if (url) editor.chain().focus().setImage({ src: url }).run();
+        }}
+        active={false}
+        icon={<ImageIcon className="w-4 h-4" />}
+        title="Insert image"
+      />
+
+      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+
+      <div className="relative shrink-0">
+        <ToolbarButton
+          command={openLinkPopover}
+          active={editor.isActive("link")}
+          icon={<Link2 className="w-4 h-4" />}
+          title="Insert / edit link (Ctrl+K)"
+        />
+        {linkPopover.visible && (
+          <div
+            ref={linkPopoverRef}
+            className="absolute top-full left-0 mt-1.5 z-30 flex items-center gap-1.5 bg-popover border border-panel-border rounded-xl shadow-xl px-3 py-2 min-w-[280px]"
+          >
+            <Link2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <input
+              ref={linkInputRef}
+              type="text"
+              placeholder="https://example.com"
+              value={linkPopover.url}
+              onChange={(e) => setLinkPopover((p) => ({ ...p, url: e.target.value }))}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { e.preventDefault(); applyLink(); }
+                if (e.key === "Escape") setLinkPopover({ visible: false, url: "" });
+                e.stopPropagation();
+              }}
+              className="flex-1 bg-transparent text-sm outline-none text-foreground placeholder:text-muted-foreground/60 min-w-0"
+            />
+            {editor.isActive("link") && (
+              <button
+                onClick={() => { editor.chain().focus().unsetLink().run(); setLinkPopover({ visible: false, url: "" }); }}
+                className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                title="Remove link"
+              >
+                <Unlink className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button
+              onClick={applyLink}
+              className="shrink-0 px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary-hover transition-colors"
+            >
+              Apply
+            </button>
+          </div>
+        )}
+      </div>
+    </ScrollableToolbar>
+  );
+}
+
+function OverflowMenu({ note, onPin, onFav, onVaultToggle, onVersionHistory, onDelete, showVersionHistory, isMobile }: {
+  note: { vaulted: boolean; pinned: boolean; favorite: boolean } | null | undefined;
+  onPin?: () => void;
+  onFav?: () => void;
   onVaultToggle: () => void;
   onVersionHistory: () => void;
   onDelete: () => void;
   showVersionHistory: boolean;
+  isMobile?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -1199,17 +1265,38 @@ function OverflowMenu({ note, onVaultToggle, onVersionHistory, onDelete, showVer
   return (
     <div className="relative" ref={ref}>
       <IconButton onClick={() => setOpen(!open)}>
-        <MoreHorizontal className="w-4 h-4" />
+        <MoreVertical className="w-4 h-4" />
       </IconButton>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-[180px] bg-popover border border-panel-border rounded-xl shadow-2xl py-1">
+        <div className="absolute right-0 top-full mt-1 z-50 min-w-[200px] bg-popover border border-panel-border rounded-xl shadow-2xl py-1">
+          {isMobile && onPin && (
+            <button onClick={() => { onPin(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
+              <Pin className={cn("w-4 h-4", note?.pinned && "fill-current text-primary")} />
+              {note?.pinned ? "Unpin" : "Pin"}
+            </button>
+          )}
+          {isMobile && onFav && (
+            <button onClick={() => { onFav(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
+              <Star className={cn("w-4 h-4", note?.favorite && "fill-current text-yellow-500")} />
+              {note?.favorite ? "Unfavorite" : "Favorite"}
+            </button>
+          )}
+          <button onClick={() => { setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-muted-foreground hover:bg-panel transition-colors cursor-default">
+            <Share className="w-4 h-4" />
+            Share
+          </button>
+          {(isMobile && (onPin || onFav)) && <div className="h-px bg-panel-border mx-2 my-1" />}
           <button onClick={() => { onVaultToggle(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
-            <ShieldCheck className="w-4 h-4" />
+            <ShieldCheck className={cn("w-4 h-4", note?.vaulted && "fill-current text-indigo-400")} />
             {note?.vaulted ? "Remove from Vault" : "Move to Vault"}
           </button>
           <button onClick={() => { onVersionHistory(); setOpen(false); }} className={cn("w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-panel transition-colors", showVersionHistory ? "text-primary" : "text-foreground")}>
             <Clock className="w-4 h-4" />
             Version History
+          </button>
+          <button onClick={() => { setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-muted-foreground hover:bg-panel transition-colors cursor-default">
+            <Search className="w-4 h-4" />
+            Find in Page
           </button>
           <div className="h-px bg-panel-border mx-2 my-1" />
           <button onClick={() => { onDelete(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors">
