@@ -19,6 +19,8 @@ Full-stack notes app with a React + Vite web frontend and Express API backend. S
 - **Rich text editor**: Tiptap (with Color, FontFamily, TextAlign, Highlight, Image, Underline, Placeholder)
 - **State management**: Zustand
 - **Animations**: Framer Motion
+- **Mobile**: Expo (SDK 54), NativeWind v4, expo-router, React Native WebView (contentEditable rich text editor)
+- **Mobile state**: TanStack React Query (shared with web via API)
 
 ## Features
 
@@ -38,7 +40,8 @@ Full-stack notes app with a React + Vite web frontend and Express API backend. S
 artifacts-monorepo/
 ├── artifacts/
 │   ├── api-server/         # Express API server
-│   └── notes-app/          # React + Vite frontend
+│   ├── notes-app/          # React + Vite frontend
+│   └── mobile/             # React Native (Expo) mobile app
 ├── lib/
 │   ├── api-spec/           # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/   # Generated React Query hooks
@@ -101,6 +104,21 @@ Key components:
 - `src/components/NoteEditor.tsx` — Tiptap rich text editor with auto-save
 - `src/components/AIPanel.tsx` — AI assistant slide-out panel
 - `src/components/SettingsModal.tsx` — Settings and export options
+
+### `artifacts/mobile` (`@workspace/mobile`)
+
+React Native (Expo) cross-platform notes app. Uses NativeWind for styling, expo-router for navigation, and TanStack Query for API data.
+
+Key files:
+- `app/_layout.tsx` — Root layout with providers (QueryClient, Theme, GestureHandler, Keyboard)
+- `app/(tabs)/index.tsx` — Notes list with search, sort, list/gallery toggle
+- `app/(tabs)/folders.tsx` — Folder management with CRUD
+- `app/(tabs)/settings.tsx` — Theme, accent color, about
+- `app/note/[id].tsx` — Note editor with rich text (contentEditable iframe), toolbar, tags, version history
+- `lib/api.ts` — API client wrapping all backend endpoints
+- `contexts/ThemeContext.tsx` — Dark/light/system theme with AsyncStorage persistence
+- `components/RichTextEditor.tsx` — Cross-platform editor (iframe on web, WebView on native)
+- `components/NoteCard.tsx` — Note card component
 
 ### `lib/db` (`@workspace/db`)
 
