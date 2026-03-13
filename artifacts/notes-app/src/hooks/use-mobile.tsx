@@ -52,3 +52,26 @@ export function useBreakpoint() {
 
   return bp
 }
+
+export function useKeyboardHeight() {
+  const [keyboardHeight, setKeyboardHeight] = React.useState(0)
+
+  React.useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+
+    const update = () => {
+      const diff = window.innerHeight - vv.height
+      setKeyboardHeight(diff > 50 ? diff : 0)
+    }
+
+    vv.addEventListener("resize", update)
+    vv.addEventListener("scroll", update)
+    return () => {
+      vv.removeEventListener("resize", update)
+      vv.removeEventListener("scroll", update)
+    }
+  }, [])
+
+  return keyboardHeight
+}
