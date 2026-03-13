@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -18,10 +18,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/contexts/ThemeContext";
 import { api } from "@/lib/api";
 import { stripHtml } from "@/lib/utils";
+import { settingsStore } from "@/lib/cache";
+
+type FeatherIconName = React.ComponentProps<typeof Feather>["name"];
 
 type QuickAction = {
   label: string;
-  icon: keyof typeof Feather.glyphMap;
+  icon: FeatherIconName;
   prompt: string;
 };
 
@@ -65,13 +68,20 @@ export function AIAssistant({ visible, onClose, noteContent, onInsert }: Props) 
   const insets = useSafeAreaInsets();
   const [customPrompt, setCustomPrompt] = useState("");
   const [result, setResult] = useState("");
+  const [aiConfig, setAiConfig] = useState({ provider: "anthropic", apiKey: "", model: "claude-sonnet-4-6" });
+
+  useEffect(() => {
+    if (visible) {
+      settingsStore.getAIConfig().then(setAiConfig);
+    }
+  }, [visible]);
 
   const aiMutation = useMutation({
     mutationFn: (prompt: string) =>
       api.aiComplete({
-        provider: "anthropic",
-        apiKey: "",
-        model: "claude-sonnet-4-6",
+        provider: aiConfig.provider,
+        apiKey: aiConfig.apiKey,
+        model: aiConfig.model,
         prompt,
         noteContext: stripHtml(noteContent),
       }),
@@ -130,36 +140,30 @@ export function AIAssistant({ visible, onClose, noteContent, onInsert }: Props) 
             onPress={() => {}}
           >
             <View style={styles.handle}>
-              <View
-                style={[
-                  styles.handleBar,
-                  { backgroundColor: colors.border },
-                ]}
-              />
+              <View style={[styles.handleBar, { backgroundColor: colors.border }]} />
             </View>
 
             <View style={styles.sheetHeader}>
               <View style={styles.sheetTitleRow}>
                 <Feather name="cpu" size={18} color={colors.primary} />
-                <Text
-                  style={[styles.sheetTitle, { color: colors.foreground }]}
-                >
-                  AI Assistant
-                </Text>
+                <Text style={[styles.sheetTitle, { color: colors.foreground }]}>AI Assistant</Text>
               </View>
               <Pressable onPress={handleClose} hitSlop={8}>
                 <Feather name="x" size={20} color={colors.muted} />
               </Pressable>
             </View>
 
-            <Text style={[styles.sectionLabel, { color: colors.muted }]}>
-              QUICK ACTIONS
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.actionsRow}
-            >
+            {!aiConfig.apiKey && (
+              <View style={[styles.warningBox, { backgroundColor: "#f59e0b15" }]}>
+                <Feather name="alert-triangle" size={14} color="#f59e0b" />
+                <Text style={[styles.warningText, { color: "#f59e0b" }]}>
+                  No API key configured. Go to Settings to add one.
+                </Text>
+              </View>
+            )}
+
+            <Text style={[styles.sectionLabel, { color: colors.muted }]}>QUICK ACTIONS</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionsRow}>
               {QUICK_ACTIONS.map((action) => (
                 <Pressable
                   key={action.label}
@@ -174,35 +178,18 @@ export function AIAssistant({ visible, onClose, noteContent, onInsert }: Props) 
                     },
                   ]}
                 >
-                  <Feather
-                    name={action.icon}
-                    size={16}
-                    color={colors.primary}
-                  />
-                  <Text
-                    style={[
-                      styles.actionLabel,
-                      { color: colors.foreground },
-                    ]}
-                  >
-                    {action.label}
-                  </Text>
+                  <Feather name={action.icon} size={16} color={colors.primary} />
+                  <Text style={[styles.actionLabel, { color: colors.foreground }]}>{action.label}</Text>
                 </Pressable>
               ))}
             </ScrollView>
 
-            <Text style={[styles.sectionLabel, { color: colors.muted }]}>
-              CUSTOM PROMPT
-            </Text>
+            <Text style={[styles.sectionLabel, { color: colors.muted }]}>CUSTOM PROMPT</Text>
             <View style={styles.promptRow}>
               <TextInput
                 style={[
                   styles.promptInput,
-                  {
-                    color: colors.foreground,
-                    backgroundColor: colors.surfaceElevated,
-                    borderColor: colors.border,
-                  },
+                  { color: colors.foreground, backgroundColor: colors.surfaceElevated, borderColor: colors.border },
                 ]}
                 placeholder="Ask anything about this note..."
                 placeholderTextColor={colors.muted}
@@ -216,11 +203,7 @@ export function AIAssistant({ visible, onClose, noteContent, onInsert }: Props) 
                 disabled={aiMutation.isPending || !customPrompt.trim()}
                 style={[
                   styles.sendBtn,
-                  {
-                    backgroundColor: colors.primary,
-                    opacity:
-                      aiMutation.isPending || !customPrompt.trim() ? 0.5 : 1,
-                  },
+                  { backgroundColor: colors.primary, opacity: aiMutation.isPending || !customPrompt.trim() ? 0.5 : 1 },
                 ]}
               >
                 <Feather name="send" size={16} color="#fff" />
@@ -230,22 +213,13 @@ export function AIAssistant({ visible, onClose, noteContent, onInsert }: Props) 
             {aiMutation.isPending && (
               <View style={styles.loadingRow}>
                 <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={[styles.loadingText, { color: colors.muted }]}>
-                  Generating...
-                </Text>
+                <Text style={[styles.loadingText, { color: colors.muted }]}>Generating...</Text>
               </View>
             )}
 
             {aiMutation.isError && (
-              <View
-                style={[
-                  styles.resultBox,
-                  { backgroundColor: colors.destructive + "15" },
-                ]}
-              >
-                <Text
-                  style={[styles.resultText, { color: colors.destructive }]}
-                >
+              <View style={[styles.resultBox, { backgroundColor: colors.destructive + "15" }]}>
+                <Text style={[styles.resultText, { color: colors.destructive }]}>
                   {aiMutation.error?.message || "Something went wrong"}
                 </Text>
               </View>
@@ -253,30 +227,14 @@ export function AIAssistant({ visible, onClose, noteContent, onInsert }: Props) 
 
             {result && !aiMutation.isPending && (
               <View>
-                <Text style={[styles.sectionLabel, { color: colors.muted }]}>
-                  RESULT
-                </Text>
-                <ScrollView
-                  style={[
-                    styles.resultBox,
-                    { backgroundColor: colors.surfaceElevated },
-                  ]}
-                >
-                  <Text
-                    style={[styles.resultText, { color: colors.foreground }]}
-                    selectable
-                  >
+                <Text style={[styles.sectionLabel, { color: colors.muted }]}>RESULT</Text>
+                <ScrollView style={[styles.resultBox, { backgroundColor: colors.surfaceElevated }]}>
+                  <Text style={[styles.resultText, { color: colors.foreground }]} selectable>
                     {result}
                   </Text>
                 </ScrollView>
                 <View style={styles.resultActions}>
-                  <Pressable
-                    onPress={handleInsert}
-                    style={[
-                      styles.insertBtn,
-                      { backgroundColor: colors.primary },
-                    ]}
-                  >
+                  <Pressable onPress={handleInsert} style={[styles.insertBtn, { backgroundColor: colors.primary }]}>
                     <Feather name="download" size={14} color="#fff" />
                     <Text style={styles.insertBtnText}>Insert into Note</Text>
                   </Pressable>
@@ -292,127 +250,27 @@ export function AIAssistant({ visible, onClose, noteContent, onInsert }: Props) 
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
-    maxHeight: "80%",
-  },
-  handle: {
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  handleBar: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-  },
-  sheetHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  sheetTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  sheetTitle: {
-    fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  actionsRow: {
-    flexDirection: "row",
-    gap: 8,
-    paddingBottom: 4,
-  },
-  actionBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  actionLabel: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-  },
-  promptRow: {
-    flexDirection: "row",
-    gap: 8,
-    alignItems: "flex-end",
-  },
-  promptInput: {
-    flex: 1,
-    minHeight: 44,
-    maxHeight: 100,
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-  },
-  sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 12,
-  },
-  loadingText: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-  },
-  resultBox: {
-    borderRadius: 10,
-    padding: 14,
-    maxHeight: 200,
-  },
-  resultText: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    lineHeight: 20,
-  },
-  resultActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: 10,
-    marginBottom: 8,
-  },
-  insertBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  insertBtnText: {
-    color: "#fff",
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-  },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingHorizontal: 20, maxHeight: "80%" },
+  handle: { alignItems: "center", paddingVertical: 10 },
+  handleBar: { width: 36, height: 4, borderRadius: 2 },
+  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
+  sheetTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  sheetTitle: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
+  warningBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, marginBottom: 8 },
+  warningText: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 },
+  sectionLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 1, marginTop: 8, marginBottom: 8 },
+  actionsRow: { flexDirection: "row", gap: 8, paddingBottom: 4 },
+  actionBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, borderWidth: StyleSheet.hairlineWidth },
+  actionLabel: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  promptRow: { flexDirection: "row", gap: 8, alignItems: "flex-end" },
+  promptInput: { flex: 1, minHeight: 44, maxHeight: 100, borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, fontFamily: "Inter_400Regular" },
+  sendBtn: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  loadingRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 12 },
+  loadingText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  resultBox: { borderRadius: 10, padding: 14, maxHeight: 200 },
+  resultText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  resultActions: { flexDirection: "row", justifyContent: "flex-end", marginTop: 10, marginBottom: 8 },
+  insertBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  insertBtnText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
 });

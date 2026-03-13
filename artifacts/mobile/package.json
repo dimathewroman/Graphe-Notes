@@ -57,6 +57,8 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "@10play/tentap-editor": "^1.0.1",
+    "@floating-ui/dom": "^1.7.6",
     "expo-sqlite": "^55.0.10",
     "react-native-css-interop": "^0.2.2",
     "react-native-webview": "^13.16.1",

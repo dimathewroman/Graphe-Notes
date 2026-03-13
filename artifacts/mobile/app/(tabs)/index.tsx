@@ -33,17 +33,21 @@ export default function NotesScreen() {
     folderName?: string;
     smartFolderId?: string;
     tag?: string;
+    favorite?: string;
+    pinned?: string;
   }>();
   const activeFolderId = params.folderId ? Number(params.folderId) : undefined;
   const activeTag = params.tag || undefined;
-  const folderLabel = params.folderName || undefined;
+  const showFavorites = params.favorite === "true";
+  const showPinned = params.pinned === "true";
+  const folderLabel = showFavorites ? "Favorites" : showPinned ? "Pinned" : params.folderName || undefined;
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("updatedAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
 
   const { data: notes, isLoading, refetch, isRefetching } = useQuery({
-    queryKey: ["notes", { sortBy, sortDir, folderId: activeFolderId, tag: activeTag }],
+    queryKey: ["notes", { sortBy, sortDir, folderId: activeFolderId, tag: activeTag, favorite: showFavorites, pinned: showPinned }],
     queryFn: async () => {
       try {
         const data = await api.getNotes({
@@ -51,8 +55,10 @@ export default function NotesScreen() {
           sortDir,
           ...(activeFolderId ? { folderId: activeFolderId } : {}),
           ...(activeTag ? { tag: activeTag } : {}),
+          ...(showFavorites ? { favorite: true } : {}),
+          ...(showPinned ? { pinned: true } : {}),
         });
-        if (!activeFolderId && !activeTag) {
+        if (!activeFolderId && !activeTag && !showFavorites && !showPinned) {
           cache.setNotes(data);
         }
         return data;
@@ -65,6 +71,12 @@ export default function NotesScreen() {
           }
           if (activeTag) {
             filtered = filtered.filter((n) => n.tags?.includes(activeTag));
+          }
+          if (showFavorites) {
+            filtered = filtered.filter((n) => n.favorite);
+          }
+          if (showPinned) {
+            filtered = filtered.filter((n) => n.pinned);
           }
           return filtered;
         }
@@ -165,7 +177,7 @@ export default function NotesScreen() {
         <View style={styles.titleRow}>
           {folderLabel && (
             <Pressable
-              onPress={() => router.setParams({ folderId: "", folderName: "", smartFolderId: "", tag: "" })}
+              onPress={() => router.setParams({ folderId: "", folderName: "", smartFolderId: "", tag: "", favorite: "", pinned: "" })}
               hitSlop={8}
             >
               <Feather name="chevron-left" size={22} color={colors.primary} />
