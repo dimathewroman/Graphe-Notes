@@ -1,5 +1,8 @@
 import * as SQLite from "expo-sqlite";
+import type { SQLiteBindValue } from "expo-sqlite";
 import type { Note, Folder, SmartFolder } from "./api";
+
+type BindParams = Record<string, SQLiteBindValue>;
 
 const DB_NAME = "notes_offline.db";
 
@@ -65,7 +68,7 @@ async function initSchema(database: SQLite.SQLiteDatabase): Promise<void> {
   `);
 }
 
-function noteToRow(note: Note): Record<string, unknown> {
+function noteToRow(note: Note): BindParams {
   return {
     $id: note.id,
     $title: note.title || "",
@@ -140,7 +143,7 @@ export const offlineDb = {
   }): Promise<Note[]> {
     const database = await getDb();
     let sql = "SELECT * FROM notes WHERE 1=1";
-    const params: Record<string, unknown> = {};
+    const params: BindParams = {};
 
     if (options?.folderId) {
       sql += " AND folderId = $folderId";
