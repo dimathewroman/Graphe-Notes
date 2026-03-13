@@ -199,6 +199,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 autoFocus
                 value={newFolderName}
                 onChange={e => setNewFolderName(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleCreateFolder(e as any); } }}
                 onBlur={() => { if (!newFolderName) { setIsCreatingFolder(false); setNewFolderParentId(null); } }}
                 placeholder="Subfolder name..."
                 className="bg-transparent border-none outline-none text-sm w-full text-foreground placeholder:text-muted-foreground"
@@ -283,6 +284,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 autoFocus
                 value={newFolderName}
                 onChange={e => setNewFolderName(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleCreateFolder(e as any); } }}
                 onBlur={() => { if (!newFolderName) setIsCreatingFolder(false); }}
                 placeholder="Folder name..."
                 className="bg-transparent border-none outline-none text-sm w-full text-foreground placeholder:text-muted-foreground"
