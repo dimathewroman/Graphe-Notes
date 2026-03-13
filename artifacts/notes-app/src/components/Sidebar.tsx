@@ -55,6 +55,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFolderName.trim()) return;
+    (document.activeElement as HTMLElement)?.blur();
     await createFolderMut.mutateAsync({ data: { name: newFolderName, sortOrder: folders.length, parentId: newFolderParentId } });
     setNewFolderName(""); setIsCreatingFolder(false); setNewFolderParentId(null);
   };
