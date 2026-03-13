@@ -1,13 +1,15 @@
 import { useState } from "react";
 import {
   Folder, FolderOpen, FileText, Star,
-  Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag, Menu, X
+  Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag, Menu, X, ShieldCheck, Lock, Unlock, KeyRound
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
 import {
   useGetFolders, useCreateFolder, useDeleteFolder, getGetFoldersQueryKey, useGetTags,
+  useGetVaultStatus, useSetupVault, useUnlockVault, useChangeVaultPassword,
 } from "@workspace/api-client-react";
+import { VaultModal } from "./VaultModal";
 import { useQueryClient } from "@tanstack/react-query";
 import { IconButton } from "./ui/IconButton";
 import { FolderEditModal } from "./FolderEditModal";
@@ -16,7 +18,8 @@ import { useBreakpoint } from "@/hooks/use-mobile";
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const {
     activeFilter, activeFolderId, activeTag, setFilter,
-    setSettingsOpen, setAIPanelOpen
+    setSettingsOpen, setAIPanelOpen,
+    isVaultUnlocked, setVaultUnlocked,
   } = useAppStore();
   const queryClient = useQueryClient();
 
@@ -30,11 +33,18 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetFoldersQueryKey() }) }
   });
 
+  const { data: vaultStatus } = useGetVaultStatus();
+  const setupVaultMut = useSetupVault();
+  const unlockVaultMut = useUnlockVault();
+  const changePasswordMut = useChangeVaultPassword();
+
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
   const [newFolderName, setNewFolderName] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderParentId, setNewFolderParentId] = useState<number | null>(null);
   const [editingFolder, setEditingFolder] = useState<typeof folders[0] | null>(null);
+  const [vaultModal, setVaultModal] = useState<"setup" | "unlock" | "change-password" | null>(null);
+  const [vaultError, setVaultError] = useState("");
 
   const toggleFolder = (id: number) => {
     const next = new Set(expandedFolders);
@@ -49,9 +59,47 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     setNewFolderName(""); setIsCreatingFolder(false); setNewFolderParentId(null);
   };
 
-  const handleNavClick = (filter: "all" | "favorites" | "attachments" | "folder" | "tag", idOrTag?: number | string | null) => {
+  const handleNavClick = (filter: "all" | "favorites" | "attachments" | "folder" | "tag" | "vault", idOrTag?: number | string | null) => {
     setFilter(filter, idOrTag);
     onNavigate?.();
+  };
+
+  const handleVaultClick = () => {
+    if (!vaultStatus?.isConfigured) {
+      setVaultModal("setup");
+    } else if (!isVaultUnlocked) {
+      setVaultModal("unlock");
+    } else {
+      handleNavClick("vault");
+    }
+  };
+
+  const handleVaultConfirm = async (hash: string, newHash?: string) => {
+    setVaultError("");
+    try {
+      if (vaultModal === "setup") {
+        await setupVaultMut.mutateAsync({ data: { passwordHash: hash } });
+        setVaultUnlocked(true);
+        setVaultModal(null);
+        queryClient.invalidateQueries({ queryKey: ["/api/vault/status"] });
+      } else if (vaultModal === "unlock") {
+        await unlockVaultMut.mutateAsync({ data: { passwordHash: hash } });
+        setVaultUnlocked(true);
+        setVaultModal(null);
+      } else if (vaultModal === "change-password" && newHash) {
+        await changePasswordMut.mutateAsync({ data: { currentPasswordHash: hash, newPasswordHash: newHash } });
+        setVaultModal(null);
+      }
+    } catch {
+      setVaultError(vaultModal === "unlock" ? "Wrong password." : vaultModal === "change-password" ? "Wrong current password." : "Failed to set up vault.");
+    }
+  };
+
+  const handleVaultLock = () => {
+    setVaultUnlocked(false);
+    if (activeFilter === "vault") {
+      setFilter("all");
+    }
   };
 
   const rootFolders = folders.filter(f => !f.parentId).sort((a, b) => a.sortOrder - b.sortOrder);
@@ -183,6 +231,39 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <NavItem icon={<Paperclip className="w-4 h-4" />} label="Attachments" active={activeFilter === "attachments"} onClick={() => handleNavClick("attachments")} />
         </div>
 
+        <div className="px-3 mb-4">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleVaultClick}
+              className={cn(
+                "flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors min-h-[44px] md:min-h-0",
+                activeFilter === "vault" && isVaultUnlocked
+                  ? "bg-primary/10 text-primary font-medium"
+                  : "text-muted-foreground hover:bg-panel hover:text-foreground"
+              )}
+            >
+              <ShieldCheck className={cn("w-4 h-4", isVaultUnlocked && "text-indigo-400")} />
+              <span>Vault</span>
+              {!vaultStatus?.isConfigured && (
+                <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-panel border border-panel-border text-muted-foreground">new</span>
+              )}
+              {vaultStatus?.isConfigured && !isVaultUnlocked && (
+                <Lock className="ml-auto w-3 h-3 text-muted-foreground" />
+              )}
+            </button>
+            {isVaultUnlocked && (
+              <div className="flex items-center gap-0.5">
+                <IconButton onClick={handleVaultLock} title="Lock vault">
+                  <Lock className="w-3.5 h-3.5" />
+                </IconButton>
+                <IconButton onClick={() => setVaultModal("change-password")} title="Change vault password">
+                  <KeyRound className="w-3.5 h-3.5" />
+                </IconButton>
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="px-3 mb-1.5 flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           <span>Folders</span>
           <button
@@ -258,6 +339,15 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <FolderEditModal
           folder={editingFolder}
           onClose={() => setEditingFolder(null)}
+        />
+      )}
+
+      {vaultModal && (
+        <VaultModal
+          mode={vaultModal}
+          onConfirm={handleVaultConfirm}
+          onCancel={() => { setVaultModal(null); setVaultError(""); }}
+          error={vaultError}
         />
       )}
     </div>

@@ -32,6 +32,11 @@ Full-stack notes app with a responsive React + Vite web frontend and Express API
 - AI assistant panel (supports OpenAI, Anthropic, Google Gemini — user provides API key, stored in localStorage)
 - Auto-save with 800ms debounce
 - Dark/light mode toggle
+- Collapsible note list panel (toggle via toolbar button)
+- Smart popup/menu positioning (viewport boundary clamping, sub-menu flipping)
+- Swipeable toolbar with gradient fade scroll indicators
+- Responsive AI selection toolbar (icon-only/stacked layout on mobile)
+- Vault system: password-protected vault folder for sensitive notes (setup, unlock, lock, change password)
 
 ## Structure
 
@@ -56,7 +61,8 @@ artifacts-monorepo/
 ## Database Schema
 
 - **folders**: id, name, parentId, color, icon, sortOrder, createdAt, updatedAt
-- **notes**: id, title, content (HTML), contentText (plain), folderId, tags (text[]), pinned, favorite, coverImage, createdAt, updatedAt
+- **notes**: id, title, content (HTML), contentText (plain), folderId, tags (text[]), pinned, favorite, vaulted, coverImage, createdAt, updatedAt
+- **vault_settings**: id, passwordHash, createdAt, updatedAt
 
 ## API Endpoints
 
@@ -68,7 +74,12 @@ All endpoints prefixed with `/api`:
 - `PATCH /notes/:id/pin`
 - `PATCH /notes/:id/favorite`
 - `PATCH /notes/:id/move`
+- `PATCH /notes/:id/vault` (body: { vaulted: boolean })
 - `GET /tags`
+- `GET /vault/status`
+- `POST /vault/setup` (body: { passwordHash })
+- `POST /vault/unlock` (body: { passwordHash })
+- `POST /vault/change-password` (body: { currentPasswordHash, newPasswordHash })
 - `POST /ai/complete` (provider: openai|anthropic|google, apiKey, model, prompt)
 - `GET/POST /api/models` (GET for web backward compat, POST with body for mobile)
 
@@ -98,7 +109,7 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 React + Vite frontend. Uses `@workspace/api-client-react` for type-safe API calls via React Query hooks.
 
 Key components:
-- `src/store.ts` — Zustand store (active filter, selected note, mobileView, sidebar state)
+- `src/store.ts` — Zustand store (active filter, selected note, mobileView, sidebar state, vault unlock state)
 - `src/hooks/use-mobile.tsx` — Responsive hooks: useIsMobile, useIsTablet, useBreakpoint
 - `src/pages/Home.tsx` — Layout shell with breakpoint-conditional panel rendering and animated sidebar drawer
 - `src/components/Sidebar.tsx` — Folder tree (SidebarContent extracted for drawer reuse)
@@ -107,6 +118,7 @@ Key components:
 - `src/components/AIPanel.tsx` — AI assistant (full-screen on mobile, side panel on desktop)
 - `src/components/SettingsModal.tsx` — Settings modal (full-screen on mobile)
 - `src/components/VersionHistoryPanel.tsx` — Version history (full-width on mobile)
+- `src/components/VaultModal.tsx` — Vault setup/unlock/change-password modal
 
 ### `lib/db` (`@workspace/db`)
 

@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Search, Plus, Pin, Star, FileText, MoreVertical, Trash2, FolderInput,
-  LayoutGrid, LayoutList, SortAsc, Lock, Image as ImageIcon, Hash, X, Tag, Menu
+  LayoutGrid, LayoutList, SortAsc, ShieldCheck, Image as ImageIcon, Hash, X, Tag, Menu, PanelLeftClose
 } from "lucide-react";
 import { useAppStore } from "@/store";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   useGetNotes, useCreateNote, useToggleNotePin, useToggleNoteFavorite,
-  useDeleteNote, useUpdateNote, getGetNotesQueryKey, getGetTagsQueryKey, useGetFolders
+  useDeleteNote, useUpdateNote, useToggleNoteVault, getGetNotesQueryKey, getGetTagsQueryKey, useGetFolders
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatDate } from "@/lib/utils";
@@ -18,7 +18,7 @@ interface ContextMenu {
   noteId: number;
   pinned: boolean;
   favorite: boolean;
-  locked: boolean;
+  vaulted: boolean;
   tags: string[];
   x: number;
   y: number;
@@ -38,7 +38,8 @@ export function NoteList() {
     activeFilter, activeFolderId, activeTag,
     searchQuery, setSearchQuery, sortBy, sortDir, setSort,
     viewMode, setViewMode,
-    selectedNoteId, selectNote, setMobileView, setSidebarOpen
+    selectedNoteId, selectNote, setMobileView, setSidebarOpen, toggleNoteList,
+    isVaultUnlocked,
   } = useAppStore();
   const bp = useBreakpoint();
 
@@ -99,26 +100,30 @@ export function NoteList() {
   const notes = useMemo(() => {
     let list = rawNotes;
 
-    // Smart folder: filter by tag rules
-    if (isFolderSmart && activeFolder) {
-      list = rawNotes.filter(n => n.tags.some(t => activeFolder.tagRules.includes(t)));
+    if (activeFilter === "vault" && isVaultUnlocked) {
+      list = rawNotes.filter(n => n.vaulted);
+    } else if (activeFilter === "vault" && !isVaultUnlocked) {
+      list = [];
+    } else {
+      list = list.filter(n => !n.vaulted || isVaultUnlocked);
+
+      if (isFolderSmart && activeFolder) {
+        list = list.filter(n => n.tags.some(t => activeFolder.tagRules.includes(t)));
+      }
+
+      if (activeFilter === "attachments") {
+        list = list.filter(n => !!getFirstImage(n.content));
+      }
     }
 
-    // Attachments: only notes with images
-    if (activeFilter === "attachments") {
-      list = rawNotes.filter(n => !!getFirstImage(n.content));
-    }
+    if (activeFilter === "favorites" || activeFilter === "tag" || activeFilter === "attachments" || activeFilter === "vault") return list;
 
-    // For filters that have their own ordering, return as-is
-    if (activeFilter === "favorites" || activeFilter === "tag" || activeFilter === "attachments") return list;
-
-    // For all/folder views, pin to top
     return [...list].sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
       return 0;
     });
-  }, [rawNotes, activeFilter, isFolderSmart, activeFolder]);
+  }, [rawNotes, activeFilter, isFolderSmart, activeFolder, isVaultUnlocked]);
 
   const createNoteMut = useCreateNote({
     mutation: {
@@ -131,6 +136,7 @@ export function NoteList() {
   });
   const pinMut = useToggleNotePin({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }) } });
   const favMut = useToggleNoteFavorite({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }) } });
+  const vaultMut = useToggleNoteVault({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }) } });
   const deleteMut = useDeleteNote({
     mutation: {
       onSuccess: () => {
@@ -170,7 +176,7 @@ export function NoteList() {
     e.preventDefault(); e.stopPropagation();
     setContextMenu({
       noteId: note.id, pinned: note.pinned, favorite: note.favorite,
-      locked: note.locked, tags: note.tags ?? [], x: e.clientX, y: e.clientY
+      vaulted: note.vaulted, tags: note.tags ?? [], x: e.clientX, y: e.clientY
     });
     setMoveMenuNoteId(null);
     setShowTagsPanel(false);
@@ -214,9 +220,22 @@ export function NoteList() {
     folder: activeFolder?.name || "Folder",
     tag: `#${activeTag}`,
     attachments: "Attachments",
+    vault: "Vault",
   }[activeFilter] || "Notes";
 
   const currentSort = SORT_OPTIONS.find(o => o.sortBy === sortBy && o.sortDir === sortDir);
+
+  const clampMenuStyle = (x: number, y: number) => {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const menuW = 220;
+    const menuH = 300;
+    const pad = 8;
+    return {
+      top: Math.min(y, vh - menuH - pad),
+      left: Math.min(Math.max(x, pad), vw - menuW - pad),
+    };
+  };
 
   const containerClass = bp === "mobile"
     ? "flex-1 bg-background flex flex-col h-screen"
@@ -242,7 +261,11 @@ export function NoteList() {
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {/* View toggle */}
+            {bp === "desktop" && (
+              <IconButton onClick={toggleNoteList} title="Collapse note list">
+                <PanelLeftClose className="w-4 h-4" />
+              </IconButton>
+            )}
             <IconButton onClick={() => setViewMode(viewMode === "list" ? "gallery" : "list")} title={viewMode === "list" ? "Gallery view" : "List view"}>
               {viewMode === "list" ? <LayoutGrid className="w-4 h-4" /> : <LayoutList className="w-4 h-4" />}
             </IconButton>
@@ -330,7 +353,7 @@ export function NoteList() {
                   <div className="flex items-start justify-between mb-1">
                     <h3 className="font-medium text-sm text-foreground/90 truncate flex-1 flex items-center gap-1">
                       {note.pinned && <Pin className="w-2.5 h-2.5 shrink-0 text-primary fill-primary" />}
-                      {note.locked && <Lock className="w-2.5 h-2.5 shrink-0 text-amber-500" />}
+                      {note.vaulted && <ShieldCheck className="w-2.5 h-2.5 shrink-0 text-indigo-400" />}
                       {note.title || "Untitled Note"}
                     </h3>
                     <button onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }} className={cn("rounded hover:bg-panel-border transition-all ml-1 shrink-0", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}>
@@ -338,7 +361,7 @@ export function NoteList() {
                     </button>
                   </div>
                   <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-                    {note.locked ? "🔒 Locked note" : (note.contentText || "No content")}
+                    {note.vaulted ? "🔒 Vault note" : (note.contentText || "No content")}
                   </p>
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-[9px] text-muted-foreground/70 font-mono">{formatDate(note.updatedAt)}</span>
@@ -370,7 +393,7 @@ export function NoteList() {
                   selectedNoteId === note.id ? "text-foreground" : "text-foreground/90"
                 )}>
                   {note.pinned && <Pin className="w-3 h-3 shrink-0 text-primary fill-primary" />}
-                  {note.locked && <Lock className="w-3 h-3 shrink-0 text-amber-500" />}
+                  {note.vaulted && <ShieldCheck className="w-3 h-3 shrink-0 text-indigo-400" />}
                   {note.title || "Untitled Note"}
                 </h3>
                 <div className="flex items-center gap-1 shrink-0">
@@ -385,7 +408,7 @@ export function NoteList() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed mb-2">
-                {note.locked ? "🔒 Locked note" : (note.contentText || "No content")}
+                {note.vaulted ? "🔒 Vault note" : (note.contentText || "No content")}
               </p>
               <div className="flex items-center justify-between mt-2">
                 <span className="text-[10px] text-muted-foreground/70 font-mono">{formatDate(note.updatedAt)}</span>
@@ -410,7 +433,7 @@ export function NoteList() {
         <div
           ref={contextMenuRef}
           className="fixed z-50 min-w-[200px] bg-popover text-popover-foreground border border-panel-border rounded-xl shadow-2xl shadow-black/40 py-1 overflow-visible backdrop-blur-none"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
+          style={clampMenuStyle(contextMenu.x, contextMenu.y)}
         >
           <ContextMenuItem
             icon={<Pin className={cn("w-4 h-4", contextMenu.pinned && "fill-current text-primary")} />}
@@ -486,7 +509,7 @@ export function NoteList() {
                   onClick={() => { setMoveMenuNoteId(moveMenuNoteId === contextMenu.noteId ? null : contextMenu.noteId); setShowTagsPanel(false); }}
                 />
                 {moveMenuNoteId === contextMenu.noteId && (
-                  <div className="absolute left-full top-0 ml-1 min-w-[150px] bg-popover text-popover-foreground border border-panel-border rounded-xl shadow-2xl shadow-black/40 py-1 z-50">
+                  <div className={cn("absolute top-0 min-w-[150px] bg-popover text-popover-foreground border border-panel-border rounded-xl shadow-2xl shadow-black/40 py-1 z-50", contextMenu.x > window.innerWidth / 2 ? "right-full mr-1" : "left-full ml-1")}>
                     <ContextMenuItem icon={<FileText className="w-4 h-4" />} label="No folder" onClick={() => moveNote(contextMenu.noteId, null)} />
                     {folders.map(f => (
                       <ContextMenuItem key={f.id} icon={<FileText className="w-4 h-4" />} label={f.name} onClick={() => moveNote(contextMenu.noteId, f.id)} />
@@ -494,6 +517,17 @@ export function NoteList() {
                   </div>
                 )}
               </div>
+            </>
+          )}
+
+          {isVaultUnlocked && (
+            <>
+              <div className="h-px bg-panel-border mx-2 my-1" />
+              <ContextMenuItem
+                icon={<ShieldCheck className={cn("w-4 h-4", contextMenu.vaulted && "text-indigo-400")} />}
+                label={contextMenu.vaulted ? "Remove from Vault" : "Move to Vault"}
+                onClick={() => { vaultMut.mutate({ id: contextMenu.noteId, data: { vaulted: !contextMenu.vaulted } }); closeContextMenu(); }}
+              />
             </>
           )}
 

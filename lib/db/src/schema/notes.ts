@@ -12,8 +12,7 @@ export const notesTable = pgTable("notes", {
   pinned: boolean("pinned").notNull().default(false),
   favorite: boolean("favorite").notNull().default(false),
   coverImage: text("cover_image"),
-  locked: boolean("locked").notNull().default(false),
-  lockPasswordHash: text("lock_password_hash"),
+  vaulted: boolean("vaulted").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
@@ -27,7 +26,15 @@ export const noteVersionsTable = pgTable("note_versions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const vaultSettingsTable = pgTable("vault_settings", {
+  id: serial("id").primaryKey(),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+});
+
 export const insertNoteSchema = createInsertSchema(notesTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertNote = z.infer<typeof insertNoteSchema>;
 export type Note = typeof notesTable.$inferSelect;
 export type NoteVersion = typeof noteVersionsTable.$inferSelect;
+export type VaultSettings = typeof vaultSettingsTable.$inferSelect;

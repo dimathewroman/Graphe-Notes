@@ -65,9 +65,7 @@ export interface Note {
   favorite: boolean;
   /** @nullable */
   coverImage: string | null;
-  locked: boolean;
-  /** @nullable */
-  lockPasswordHash: string | null;
+  vaulted: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -98,9 +96,6 @@ export interface UpdateNoteBody {
   favorite?: boolean;
   /** @nullable */
   coverImage?: string | null;
-  locked?: boolean;
-  /** @nullable */
-  lockPasswordHash?: string | null;
 }
 
 export interface MoveNoteBody {
@@ -134,8 +129,29 @@ export interface AiCompleteResponse {
   tokensUsed: number | null;
 }
 
-export interface LockNoteBody {
+export interface ToggleNoteVaultBody {
+  vaulted: boolean;
+}
+
+export interface VaultSetupBody {
   passwordHash: string;
+}
+
+export interface VaultUnlockBody {
+  passwordHash: string;
+}
+
+export interface VaultChangePasswordBody {
+  currentPasswordHash: string;
+  newPasswordHash: string;
+}
+
+export interface VaultStatusResponse {
+  isConfigured: boolean;
+}
+
+export interface VaultUnlockResponse {
+  success: boolean;
 }
 
 export interface SmartFolder {
