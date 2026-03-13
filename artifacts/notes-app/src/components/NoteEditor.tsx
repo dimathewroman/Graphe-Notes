@@ -450,14 +450,36 @@ function MobileSelectionMenu({
     };
   }, [editor, visible, onSelectionCapture]);
 
-  const menuStyle = useMemo(() => {
-    if (!rect) return {};
+  const [menuTop, setMenuTop] = useState<number>(0);
+
+  const clampMenu = useCallback(() => {
+    if (!rect || !menuRef.current) return;
     const pad = 8;
-    let top = rect.top - 48;
+    const menuH = menuRef.current.getBoundingClientRect().height || 48;
+    const vh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    let top = rect.top - menuH - 8;
     if (top < pad) top = rect.bottom + 8;
-    if (top + 48 > window.innerHeight - pad) top = rect.top - 48;
-    return { top, left: pad, right: pad };
+    if (top + menuH > vh - pad) top = Math.max(pad, vh - menuH - pad);
+    setMenuTop(top);
   }, [rect]);
+
+  useEffect(() => {
+    clampMenu();
+  }, [clampMenu, showWritingTools, expandedGroup, expandedAction]);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handler = () => clampMenu();
+    vv.addEventListener("resize", handler);
+    return () => vv.removeEventListener("resize", handler);
+  }, [clampMenu]);
+
+  const menuStyle = useMemo(() => {
+    if (!rect) return { display: "none" as const };
+    const pad = 8;
+    return { top: menuTop, left: pad, right: pad };
+  }, [rect, menuTop]);
 
   if (!rect || !visible) return null;
 
@@ -660,9 +682,9 @@ function MobileSelectionMenu({
           <Trash2 className="w-3.5 h-3.5" />
           Delete
         </button>
-        <button onClick={handleSelectAll} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px]">
+        <button onClick={handleSelectAll} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] whitespace-nowrap">
           <Type className="w-3.5 h-3.5" />
-          All
+          Select All
         </button>
         <div className="w-px h-5 bg-panel-border mx-0.5 shrink-0" />
         <button
