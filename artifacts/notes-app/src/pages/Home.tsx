@@ -6,7 +6,8 @@ import { AIPanel } from "@/components/AIPanel";
 import { SettingsModal } from "@/components/SettingsModal";
 import { useAppStore } from "@/store";
 import { useBreakpoint } from "@/hooks/use-mobile";
-import { AnimatePresence, motion } from "framer-motion";
+import { Drawer, DrawerPortal, DrawerOverlay } from "@/components/ui/drawer";
+import { DrawerPrimitive } from "@/components/ui/drawer-left";
 
 export default function Home() {
   const { setSettingsOpen, isSidebarOpen, setSidebarOpen, mobileView, selectedNoteId } = useAppStore();
@@ -43,28 +44,20 @@ export default function Home() {
       {bp === "desktop" && <Sidebar />}
 
       {isCompact && (
-        <AnimatePresence>
-          {isSidebarOpen && (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setSidebarOpen(false)}
-                className="fixed inset-0 bg-black/60 z-40"
-              />
-              <motion.div
-                initial={{ x: -280 }}
-                animate={{ x: 0 }}
-                exit={{ x: -280 }}
-                transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-                className="fixed inset-y-0 left-0 z-50 w-[280px] bg-panel border-r border-panel-border shadow-2xl"
-              >
-                <SidebarContent onNavigate={() => setSidebarOpen(false)} />
-              </motion.div>
-            </>
-          )}
-        </AnimatePresence>
+        <Drawer
+          open={isSidebarOpen}
+          onOpenChange={setSidebarOpen}
+          direction="left"
+        >
+          <DrawerPortal>
+            <DrawerOverlay />
+            <DrawerPrimitive
+              className="fixed inset-y-0 left-0 z-50 w-[280px] bg-panel border-r border-panel-border shadow-2xl"
+            >
+              <SidebarContent onNavigate={() => setSidebarOpen(false)} />
+            </DrawerPrimitive>
+          </DrawerPortal>
+        </Drawer>
       )}
 
       {showList && <NoteList />}
