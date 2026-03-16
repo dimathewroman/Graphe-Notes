@@ -1,11 +1,12 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, createContext, useContext } from "react";
 import { useAuth } from "@workspace/replit-auth-web";
 import Home from "@/pages/Home";
 import NotFound from "@/pages/not-found";
 import { Mail, Loader2 } from "lucide-react";
 import grapheLogo from "@assets/graphe_minimalist_1773640203523.png";
+import { DEMO_NOTES } from "@/lib/demo-data";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -16,7 +17,19 @@ const queryClient = new QueryClient({
   },
 });
 
-function LoginScreen() {
+// Demo mode context
+export const DemoContext = createContext(false);
+export const useDemoMode = () => useContext(DemoContext);
+
+function enterDemoMode(setIsDemo: (v: boolean) => void) {
+  // Pre-populate the query cache with fake notes so useGetNotes returns them instantly
+  queryClient.setQueryData(["/api/notes"], DEMO_NOTES);
+  queryClient.setQueryData(["/api/folders"], []);
+  queryClient.setQueryData(["/api/tags"], []);
+  setIsDemo(true);
+}
+
+function LoginScreen({ onDemo }: { onDemo: () => void }) {
   const { loginWithOAuth, loginWithEmail, signUpWithEmail, isLoading: authLoading } = useAuth();
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
@@ -142,13 +155,20 @@ function LoginScreen() {
               </button>
             </form>
           )}
+
+          <button
+            onClick={onDemo}
+            className="w-full py-2 text-xs text-muted-foreground hover:text-foreground transition-colors text-center"
+          >
+            Try a demo without signing in →
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-function AuthGate({ children }: { children: React.ReactNode }) {
+function AuthGate({ children, isDemo, onDemo }: { children: React.ReactNode; isDemo: boolean; onDemo: () => void }) {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
@@ -159,8 +179,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isAuthenticated) {
-    return <LoginScreen />;
+  if (!isAuthenticated && !isDemo) {
+    return <LoginScreen onDemo={onDemo} />;
   }
 
   return <>{children}</>;
@@ -176,13 +196,19 @@ function Router() {
 }
 
 function App() {
+  const [isDemo, setIsDemo] = useState(false);
+
+  const handleEnterDemo = () => enterDemoMode(setIsDemo);
+
   return (
     <QueryClientProvider client={queryClient}>
-      <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-        <AuthGate>
-          <Router />
-        </AuthGate>
-      </WouterRouter>
+      <DemoContext.Provider value={isDemo}>
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <AuthGate isDemo={isDemo} onDemo={handleEnterDemo}>
+            <Router />
+          </AuthGate>
+        </WouterRouter>
+      </DemoContext.Provider>
     </QueryClientProvider>
   );
 }
