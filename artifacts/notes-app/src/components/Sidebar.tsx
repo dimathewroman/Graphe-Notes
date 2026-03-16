@@ -182,16 +182,6 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         </div>
 
-        {isSmart && (
-          <div style={{ paddingLeft: `${(depth + 2) * 12 + 4}px`, paddingRight: "8px" }} className="pb-0.5 flex flex-wrap gap-1">
-            {folder.tagRules.slice(0, 3).map(t => (
-              <span key={t} className="text-[9px] px-1.5 py-0.5 rounded-full bg-panel border border-panel-border text-muted-foreground">#{t}</span>
-            ))}
-            {folder.tagRules.length > 3 && (
-              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-panel border border-panel-border text-muted-foreground">+{folder.tagRules.length - 3}</span>
-            )}
-          </div>
-        )}
 
         {isExpanded && children.map(child => renderFolder(child, depth + 1))}
         {isExpanded && isCreatingFolder && newFolderParentId === folder.id && (
