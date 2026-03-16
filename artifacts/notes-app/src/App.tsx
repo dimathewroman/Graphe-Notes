@@ -6,7 +6,7 @@ import Home from "@/pages/Home";
 import NotFound from "@/pages/not-found";
 import { Mail, Loader2 } from "lucide-react";
 import grapheLogo from "@assets/graphe_minimalist_1773640203523.png";
-import { DEMO_NOTES } from "@/lib/demo-data";
+import { DEMO_NOTES, DEMO_FOLDERS, DEMO_TAGS } from "@/lib/demo-data";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,10 +22,12 @@ export const DemoContext = createContext(false);
 export const useDemoMode = () => useContext(DemoContext);
 
 function enterDemoMode(setIsDemo: (v: boolean) => void) {
-  // Pre-populate the query cache with fake notes so useGetNotes returns them instantly
-  queryClient.setQueryData(["/api/notes"], DEMO_NOTES);
-  queryClient.setQueryData(["/api/folders"], []);
-  queryClient.setQueryData(["/api/tags"], []);
+  // Pre-populate folders, tags and each individual note in the cache
+  queryClient.setQueryData(["/api/folders"], DEMO_FOLDERS);
+  queryClient.setQueryData(["/api/tags"], DEMO_TAGS);
+  DEMO_NOTES.forEach((note) => {
+    queryClient.setQueryData([`/api/notes/${note.id}`], note);
+  });
   setIsDemo(true);
 }
 
