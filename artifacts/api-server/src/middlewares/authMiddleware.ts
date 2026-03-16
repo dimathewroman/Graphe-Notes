@@ -1,14 +1,8 @@
-import * as oidc from "openid-client";
 import { type Request, type Response, type NextFunction } from "express";
 import type { AuthUser } from "@workspace/api-zod";
-import {
-  clearSession,
-  getOidcConfig,
-  getSessionId,
-  getSession,
-  updateSession,
-  type SessionData,
-} from "../lib/auth";
+import { supabaseAdmin, getTokenFromRequest } from "../lib/auth";
+import { db } from "@workspace/db";
+import { usersTable } from "@workspace/db/schema";
 
 declare global {
   namespace Express {
@@ -16,7 +10,6 @@ declare global {
 
     interface Request {
       isAuthenticated(): this is AuthedRequest;
-
       user?: User | undefined;
     }
 
@@ -26,62 +19,69 @@ declare global {
   }
 }
 
-async function refreshIfExpired(
-  sid: string,
-  session: SessionData,
-): Promise<SessionData | null> {
-  const now = Math.floor(Date.now() / 1000);
-  if (!session.expires_at || now <= session.expires_at) return session;
-
-  if (!session.refresh_token) return null;
-
-  try {
-    const config = await getOidcConfig();
-    const tokens = await oidc.refreshTokenGrant(
-      config,
-      session.refresh_token,
-    );
-    session.access_token = tokens.access_token;
-    session.refresh_token = tokens.refresh_token ?? session.refresh_token;
-    session.expires_at = tokens.expiresIn()
-      ? now + tokens.expiresIn()!
-      : session.expires_at;
-    await updateSession(sid, session);
-    return session;
-  } catch {
-    return null;
-  }
-}
-
 export async function authMiddleware(
   req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction,
 ) {
   req.isAuthenticated = function (this: Request) {
     return this.user != null;
   } as Request["isAuthenticated"];
 
-  const sid = getSessionId(req);
-  if (!sid) {
+  const token = getTokenFromRequest(req);
+  if (!token) {
     next();
     return;
   }
 
-  const session = await getSession(sid);
-  if (!session?.user?.id) {
-    await clearSession(res, sid);
-    next();
-    return;
+  try {
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+    if (error) {
+      if (error.status !== 401) {
+        console.error("[auth] Supabase getUser error:", error.message);
+      }
+      next();
+      return;
+    }
+    if (!user) {
+      next();
+      return;
+    }
+
+    const authUser: AuthUser = {
+      id: user.id,
+      email: user.email ?? null,
+      firstName: user.user_metadata?.full_name?.split(" ")[0] ?? user.user_metadata?.first_name ?? null,
+      lastName: user.user_metadata?.full_name?.split(" ").slice(1).join(" ") ?? user.user_metadata?.last_name ?? null,
+      profileImageUrl: user.user_metadata?.avatar_url ?? user.user_metadata?.picture ?? null,
+    };
+
+    req.user = authUser;
+
+    db.insert(usersTable)
+      .values({
+        id: authUser.id,
+        email: authUser.email,
+        firstName: authUser.firstName,
+        lastName: authUser.lastName,
+        profileImageUrl: authUser.profileImageUrl,
+      })
+      .onConflictDoUpdate({
+        target: usersTable.id,
+        set: {
+          email: authUser.email,
+          firstName: authUser.firstName,
+          lastName: authUser.lastName,
+          profileImageUrl: authUser.profileImageUrl,
+        },
+      })
+      .execute()
+      .catch((err) => {
+        console.error("[auth] User upsert failed:", err?.message ?? err);
+      });
+  } catch (err) {
+    console.error("[auth] Unexpected error in auth middleware:", err);
   }
 
-  const refreshed = await refreshIfExpired(sid, session);
-  if (!refreshed) {
-    await clearSession(res, sid);
-    next();
-    return;
-  }
-
-  req.user = refreshed.user;
   next();
 }

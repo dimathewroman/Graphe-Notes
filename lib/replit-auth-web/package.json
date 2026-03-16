@@ -7,6 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.99.1",
     "@workspace/api-client-react": "workspace:*"
   },
   "peerDependencies": {

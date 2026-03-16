@@ -11,7 +11,8 @@ Full-stack notes app with a responsive React + Vite web frontend and Express API
 - **Package manager**: pnpm
 - **TypeScript version**: 5.9
 - **API framework**: Express 5
-- **Database**: PostgreSQL + Drizzle ORM
+- **Database**: Supabase PostgreSQL + Drizzle ORM
+- **Auth**: Supabase Auth (Google/Apple OAuth, email/password)
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
@@ -123,9 +124,19 @@ Key components:
 
 ### `lib/db` (`@workspace/db`)
 
-Database layer using Drizzle ORM with PostgreSQL.
+Database layer using Drizzle ORM with Supabase PostgreSQL. Connection uses `SUPABASE_DB_URL` (session-mode pooler).
 
-Production migrations are handled by Replit when publishing. In development, we just use `pnpm --filter @workspace/db run push`, and we fallback to `pnpm --filter @workspace/db run push-force`.
+In development, use `pnpm --filter @workspace/db run push`, and fallback to `pnpm --filter @workspace/db run push-force`.
+
+### `lib/replit-auth-web` (`@workspace/replit-auth-web`)
+
+Frontend auth hook using Supabase Auth. Exports `useAuth()` (user, isLoading, isAuthenticated, login, logout) and the `supabase` client instance. Supabase URL and anon key are injected via Vite `define` from `SUPABASE_URL` / `SUPABASE_ANON_KEY` env vars.
+
+### Auth Architecture
+
+- **Frontend**: `@workspace/replit-auth-web` creates a Supabase client with anon key, handles OAuth sign-in via `signInWithOAuth`, tracks session via `onAuthStateChange`, and sets the access token on `customFetch` via `setAccessToken()`.
+- **Backend**: `authMiddleware` extracts Bearer token from Authorization header, validates via `supabaseAdmin.auth.getUser()`, upserts user into `users` table, and sets `req.user`.
+- **Env vars**: `SUPABASE_URL`, `SUPABASE_ANON_KEY` (frontend via Vite define), `SUPABASE_SERVICE_ROLE_KEY` (backend only), `SUPABASE_DB_URL` (backend DB connection).
 
 ### `lib/api-spec` (`@workspace/api-spec`)
 
