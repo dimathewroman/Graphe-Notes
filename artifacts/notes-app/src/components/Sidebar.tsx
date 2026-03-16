@@ -292,28 +292,6 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           )}
         </div>
 
-        {tags.length > 0 && (
-          <div className="mb-4">
-            <div className="px-3 mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tags</div>
-            <div className="px-3 flex flex-wrap gap-1.5">
-              {tags.map(tag => (
-                <button
-                  key={tag}
-                  onClick={() => handleNavClick("tag", tag)}
-                  className={cn(
-                    "px-2.5 py-1.5 md:px-2 md:py-1 rounded-md text-xs transition-colors border",
-                    activeFilter === "tag" && activeTag === tag
-                      ? "bg-primary/20 border-primary/30 text-primary"
-                      : "bg-panel border-panel-border text-muted-foreground hover:text-foreground hover:bg-panel-hover"
-                  )}
-                >
-                  <Hash className="w-3 h-3 inline mr-1 opacity-50" />
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="p-4 border-t border-panel-border space-y-2">
