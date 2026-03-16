@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, ilike, and, or, sql } from "drizzle-orm";
-import { db, notesTable } from "@workspace/db";
+import { db, notesTable, foldersTable } from "@workspace/db";
 import {
   CreateNoteBody,
   UpdateNoteBody,
@@ -131,9 +131,25 @@ router.patch("/notes/:id", async (req, res): Promise<void> => {
   }
 
   const isContentChange = parsed.data.title !== undefined || parsed.data.content !== undefined || parsed.data.contentText !== undefined;
-  const updatePayload = isContentChange
+  let updatePayload: typeof parsed.data & { updatedAt?: Date; folderId?: number | null } = isContentChange
     ? { ...parsed.data, updatedAt: new Date() }
     : { ...parsed.data };
+
+  // Auto-move note to a matching smart folder when tags are updated
+  if (parsed.data.tags !== undefined) {
+    const folders = await db
+      .select()
+      .from(foldersTable)
+      .where(eq(foldersTable.userId, userId));
+
+    const matchingFolder = folders.find(
+      f => f.tagRules?.length > 0 && parsed.data.tags!.some(t => f.tagRules.includes(t))
+    );
+
+    if (matchingFolder) {
+      updatePayload = { ...updatePayload, folderId: matchingFolder.id };
+    }
+  }
 
   const [note] = await db
     .update(notesTable)

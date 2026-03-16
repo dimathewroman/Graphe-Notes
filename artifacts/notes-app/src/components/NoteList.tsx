@@ -116,6 +116,9 @@ export function NoteList() {
 
       if (isFolderSmart && activeFolder) {
         list = list.filter(n => n.tags.some(t => activeFolder.tagRules.includes(t)));
+      } else if (isDemo && activeFilter === "folder" && activeFolderId != null) {
+        // In demo mode there's no API, so filter by folderId client-side
+        list = list.filter(n => n.folderId === activeFolderId);
       }
 
       if (activeFilter === "attachments") {
