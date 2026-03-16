@@ -223,9 +223,6 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <NavItem icon={<FileText className="w-4 h-4" />} label="All Notes" active={activeFilter === "all"} onClick={() => handleNavClick("all")} />
           <NavItem icon={<Star className="w-4 h-4" />} label="Favorites" active={activeFilter === "favorites"} onClick={() => handleNavClick("favorites")} />
           <NavItem icon={<Paperclip className="w-4 h-4" />} label="Attachments" active={activeFilter === "attachments"} onClick={() => handleNavClick("attachments")} />
-        </div>
-
-        <div className="px-3 mb-4">
           <div className="flex items-center gap-1">
             <button
               onClick={handleVaultClick}
