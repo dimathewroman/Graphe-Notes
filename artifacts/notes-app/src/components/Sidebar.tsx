@@ -378,7 +378,7 @@ export function Sidebar() {
   if (bp !== "desktop" || !isSidebarOpen) return null;
 
   return (
-    <div className="w-64 border-r border-panel-border bg-panel flex flex-col h-screen shrink-0">
+    <div className="w-64 border-r border-panel-border bg-panel flex flex-col h-full shrink-0">
       <SidebarContent />
     </div>
   );
