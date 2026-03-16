@@ -8,6 +8,7 @@ const MAX_VERSIONS = 50;
 const MIN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 router.get("/notes/:id/versions", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   const noteId = Number(req.params.id);
   if (isNaN(noteId)) { res.status(400).json({ error: "Invalid note id" }); return; }
 
@@ -22,6 +23,7 @@ router.get("/notes/:id/versions", async (req, res): Promise<void> => {
 });
 
 router.get("/notes/:id/versions/:versionId", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   const noteId = Number(req.params.id);
   const versionId = Number(req.params.versionId);
   if (isNaN(noteId) || isNaN(versionId)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -36,6 +38,7 @@ router.get("/notes/:id/versions/:versionId", async (req, res): Promise<void> => 
 });
 
 router.post("/notes/:id/versions", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   const noteId = Number(req.params.id);
   if (isNaN(noteId)) { res.status(400).json({ error: "Invalid note id" }); return; }
 
@@ -89,6 +92,7 @@ router.post("/notes/:id/versions", async (req, res): Promise<void> => {
 });
 
 router.delete("/notes/:id/versions/:versionId", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   const noteId = Number(req.params.id);
   const versionId = Number(req.params.versionId);
   if (isNaN(noteId) || isNaN(versionId)) { res.status(400).json({ error: "Invalid id" }); return; }

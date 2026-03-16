@@ -1,8 +1,9 @@
 import { useState } from "react";
 import {
   Folder, FolderOpen, FileText, Star,
-  Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag, Menu, X, ShieldCheck, Lock, Unlock, KeyRound
+  Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag, Menu, X, ShieldCheck, Lock, Unlock, KeyRound, LogOut
 } from "lucide-react";
+import { useAuth } from "@workspace/replit-auth-web";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/store";
 import {
@@ -21,6 +22,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     setSettingsOpen, setAIPanelOpen,
     isVaultUnlocked, setVaultUnlocked,
   } = useAppStore();
+  const { user, logout } = useAuth();
   const queryClient = useQueryClient();
 
   const { data: folders = [], isLoading: foldersLoading } = useGetFolders();
@@ -328,7 +330,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         )}
       </div>
 
-      <div className="p-4 border-t border-panel-border">
+      <div className="p-4 border-t border-panel-border space-y-2">
         <button
           onClick={() => { setAIPanelOpen(true); onNavigate?.(); }}
           className="w-full flex items-center justify-center gap-2 py-3 md:py-2.5 rounded-xl bg-gradient-to-r from-indigo-500/10 to-purple-500/10 hover:from-indigo-500/20 hover:to-purple-500/20 border border-indigo-500/20 text-indigo-400 hover:text-indigo-300 font-medium transition-all"
@@ -336,6 +338,28 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <Zap className="w-4 h-4" />
           <span>AI Assistant</span>
         </button>
+
+        {user && (
+          <div className="flex items-center gap-2 px-1 pt-1">
+            {user.profileImageUrl ? (
+              <img src={user.profileImageUrl} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0 text-xs font-medium text-primary">
+                {(user.firstName?.[0] ?? user.email?.[0] ?? "?").toUpperCase()}
+              </div>
+            )}
+            <span className="flex-1 text-xs text-muted-foreground truncate">
+              {user.firstName ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ""}` : (user.email ?? "User")}
+            </span>
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-panel-hover transition-colors shrink-0"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
 
       {editingFolder && (

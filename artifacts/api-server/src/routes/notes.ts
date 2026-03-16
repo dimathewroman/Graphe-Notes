@@ -27,6 +27,9 @@ import { desc, asc } from "drizzle-orm";
 const router: IRouter = Router();
 
 router.get("/notes", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const userId = req.user.id;
+
   const query = GetNotesQueryParams.safeParse(req.query);
   if (!query.success) {
     res.status(400).json({ error: query.error.message });
@@ -35,7 +38,7 @@ router.get("/notes", async (req, res): Promise<void> => {
 
   const { folderId, search, pinned, favorite, tag, sortBy, sortDir } = query.data;
 
-  const conditions = [];
+  const conditions = [eq(notesTable.userId, userId)];
 
   if (folderId !== undefined && folderId !== null) {
     conditions.push(eq(notesTable.folderId, folderId));
@@ -54,7 +57,7 @@ router.get("/notes", async (req, res): Promise<void> => {
       or(
         ilike(notesTable.title, `%${search}%`),
         ilike(notesTable.contentText, `%${search}%`)
-      )
+      )!
     );
   }
 
@@ -68,24 +71,30 @@ router.get("/notes", async (req, res): Promise<void> => {
   const notes = await db
     .select()
     .from(notesTable)
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(orderDir);
 
   res.json(GetNotesResponse.parse(notes));
 });
 
 router.post("/notes", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const userId = req.user.id;
+
   const parsed = CreateNoteBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
 
-  const [note] = await db.insert(notesTable).values(parsed.data).returning();
+  const [note] = await db.insert(notesTable).values({ ...parsed.data, userId }).returning();
   res.status(201).json(GetNoteResponse.parse(note));
 });
 
 router.get("/notes/:id", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const userId = req.user.id;
+
   const params = GetNoteParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -95,7 +104,7 @@ router.get("/notes/:id", async (req, res): Promise<void> => {
   const [note] = await db
     .select()
     .from(notesTable)
-    .where(eq(notesTable.id, params.data.id));
+    .where(and(eq(notesTable.id, params.data.id), eq(notesTable.userId, userId)));
 
   if (!note) {
     res.status(404).json({ error: "Note not found" });
@@ -106,6 +115,9 @@ router.get("/notes/:id", async (req, res): Promise<void> => {
 });
 
 router.patch("/notes/:id", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const userId = req.user.id;
+
   const params = UpdateNoteParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -126,7 +138,7 @@ router.patch("/notes/:id", async (req, res): Promise<void> => {
   const [note] = await db
     .update(notesTable)
     .set(updatePayload)
-    .where(eq(notesTable.id, params.data.id))
+    .where(and(eq(notesTable.id, params.data.id), eq(notesTable.userId, userId)))
     .returning();
 
   if (!note) {
@@ -138,6 +150,9 @@ router.patch("/notes/:id", async (req, res): Promise<void> => {
 });
 
 router.delete("/notes/:id", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const userId = req.user.id;
+
   const params = DeleteNoteParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -146,7 +161,7 @@ router.delete("/notes/:id", async (req, res): Promise<void> => {
 
   const [deleted] = await db
     .delete(notesTable)
-    .where(eq(notesTable.id, params.data.id))
+    .where(and(eq(notesTable.id, params.data.id), eq(notesTable.userId, userId)))
     .returning();
 
   if (!deleted) {
@@ -158,6 +173,9 @@ router.delete("/notes/:id", async (req, res): Promise<void> => {
 });
 
 router.patch("/notes/:id/pin", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const userId = req.user.id;
+
   const params = ToggleNotePinParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -167,7 +185,7 @@ router.patch("/notes/:id/pin", async (req, res): Promise<void> => {
   const [existing] = await db
     .select()
     .from(notesTable)
-    .where(eq(notesTable.id, params.data.id));
+    .where(and(eq(notesTable.id, params.data.id), eq(notesTable.userId, userId)));
 
   if (!existing) {
     res.status(404).json({ error: "Note not found" });
@@ -177,13 +195,16 @@ router.patch("/notes/:id/pin", async (req, res): Promise<void> => {
   const [note] = await db
     .update(notesTable)
     .set({ pinned: !existing.pinned })
-    .where(eq(notesTable.id, params.data.id))
+    .where(and(eq(notesTable.id, params.data.id), eq(notesTable.userId, userId)))
     .returning();
 
   res.json(ToggleNotePinResponse.parse(note));
 });
 
 router.patch("/notes/:id/favorite", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const userId = req.user.id;
+
   const params = ToggleNoteFavoriteParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -193,7 +214,7 @@ router.patch("/notes/:id/favorite", async (req, res): Promise<void> => {
   const [existing] = await db
     .select()
     .from(notesTable)
-    .where(eq(notesTable.id, params.data.id));
+    .where(and(eq(notesTable.id, params.data.id), eq(notesTable.userId, userId)));
 
   if (!existing) {
     res.status(404).json({ error: "Note not found" });
@@ -203,13 +224,16 @@ router.patch("/notes/:id/favorite", async (req, res): Promise<void> => {
   const [note] = await db
     .update(notesTable)
     .set({ favorite: !existing.favorite })
-    .where(eq(notesTable.id, params.data.id))
+    .where(and(eq(notesTable.id, params.data.id), eq(notesTable.userId, userId)))
     .returning();
 
   res.json(ToggleNoteFavoriteResponse.parse(note));
 });
 
 router.patch("/notes/:id/move", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const userId = req.user.id;
+
   const params = MoveNoteParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -225,7 +249,7 @@ router.patch("/notes/:id/move", async (req, res): Promise<void> => {
   const [note] = await db
     .update(notesTable)
     .set({ folderId: parsed.data.folderId })
-    .where(eq(notesTable.id, params.data.id))
+    .where(and(eq(notesTable.id, params.data.id), eq(notesTable.userId, userId)))
     .returning();
 
   if (!note) {
@@ -237,6 +261,9 @@ router.patch("/notes/:id/move", async (req, res): Promise<void> => {
 });
 
 router.patch("/notes/:id/vault", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const userId = req.user.id;
+
   const params = ToggleNoteVaultParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = ToggleNoteVaultBody.safeParse(req.body);
@@ -245,7 +272,7 @@ router.patch("/notes/:id/vault", async (req, res): Promise<void> => {
   const [note] = await db
     .update(notesTable)
     .set({ vaulted: parsed.data.vaulted })
-    .where(eq(notesTable.id, params.data.id))
+    .where(and(eq(notesTable.id, params.data.id), eq(notesTable.userId, userId)))
     .returning();
 
   if (!note) { res.status(404).json({ error: "Note not found" }); return; }
