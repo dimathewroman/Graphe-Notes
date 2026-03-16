@@ -1,4 +1,5 @@
 import { useState } from "react";
+import grapheLogo from "@assets/graphe_minimalist_1773640203523.png";
 import {
   Folder, FolderOpen, FileText, Star,
   Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag, Menu, X, ShieldCheck, Lock, Unlock, KeyRound, LogOut
@@ -208,10 +209,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     <div className="flex flex-col h-full">
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-2 text-foreground font-semibold">
-          <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
-            <FileText className="w-3.5 h-3.5 text-white" />
-          </div>
-          <span>Notes App</span>
+          <img src={grapheLogo} alt="Graphe Notes" className="w-6 h-6 rounded-md" />
+          <span>Graphe Notes</span>
         </div>
         <IconButton onClick={() => { setSettingsOpen(true); onNavigate?.(); }}>
           <Settings className="w-4 h-4" />
