@@ -258,8 +258,6 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         </div>
 
-        <div className="mx-3 mb-3 border-t border-border/50" />
-
         <div className="px-3 mb-1.5 flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           <span>Folders</span>
           <button
