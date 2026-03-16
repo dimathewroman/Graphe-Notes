@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { X, Clock, RotateCcw, Loader2, Trash2, ChevronRight } from "lucide-react";
 import { IconButton } from "./ui/IconButton";
 import { cn } from "@/lib/utils";
+import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 
 interface NoteVersionMeta {
   id: number;
@@ -60,7 +61,7 @@ export function VersionHistoryPanel({ noteId, onRestore, onClose }: Props) {
   const fetchVersions = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch(`/api/notes/${noteId}/versions`);
+      const r = await authenticatedFetch(`/api/notes/${noteId}/versions`);
       const data = await r.json() as { versions: NoteVersionMeta[] };
       setVersions(data.versions ?? []);
     } finally {
@@ -74,7 +75,7 @@ export function VersionHistoryPanel({ noteId, onRestore, onClose }: Props) {
     if (selected?.id === v.id) { setSelected(null); return; }
     setLoadingPreview(true);
     try {
-      const r = await fetch(`/api/notes/${noteId}/versions/${v.id}`);
+      const r = await authenticatedFetch(`/api/notes/${noteId}/versions/${v.id}`);
       const data = await r.json() as { version: NoteVersionFull };
       setSelected(data.version);
     } finally {
@@ -86,7 +87,7 @@ export function VersionHistoryPanel({ noteId, onRestore, onClose }: Props) {
     e.stopPropagation();
     setDeleting(id);
     try {
-      await fetch(`/api/notes/${noteId}/versions/${id}`, { method: "DELETE" });
+      await authenticatedFetch(`/api/notes/${noteId}/versions/${id}`, { method: "DELETE" });
       if (selected?.id === id) setSelected(null);
       setVersions(vs => vs.filter(v => v.id !== id));
     } finally {

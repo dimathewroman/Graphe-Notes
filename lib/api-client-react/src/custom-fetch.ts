@@ -273,6 +273,15 @@ async function parseSuccessBody(
 
 let _accessToken: string | null = null;
 export function setAccessToken(token: string | null) { _accessToken = token; }
+export function getAccessToken(): string | null { return _accessToken; }
+
+export function authenticatedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  if (_accessToken && !headers.has("authorization")) {
+    headers.set("authorization", `Bearer ${_accessToken}`);
+  }
+  return fetch(input, { ...init, headers });
+}
 
 export async function customFetch<T = unknown>(
   input: RequestInfo | URL,

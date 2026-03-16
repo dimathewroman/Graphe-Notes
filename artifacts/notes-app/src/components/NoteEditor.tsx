@@ -39,6 +39,7 @@ import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { cn, formatDate } from "@/lib/utils";
 import { VaultModal } from "./VaultModal";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
+import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 
 // Custom floating AI menu that appears on text selection (Tiptap v3 compatible)
 
@@ -966,7 +967,7 @@ export function NoteEditor() {
           queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
           setSaveStatus("saved");
           // Fire-and-forget version snapshot (server enforces 5-min interval)
-          fetch(`/api/notes/${id}/versions`, { method: "POST" }).catch(() => {});
+          authenticatedFetch(`/api/notes/${id}/versions`, { method: "POST" }).catch(() => {});
         }, 800);
       };
     })(),
@@ -1090,7 +1091,7 @@ export function NoteEditor() {
     if (!modelLooksValid && apiKey) {
       try {
         const params = new URLSearchParams({ provider, apiKey });
-        const r = await fetch(`/api/models?${params}`);
+        const r = await authenticatedFetch(`/api/models?${params}`);
         if (r.ok) {
           const d = await r.json() as { models: string[]; source: string };
           if (d.source === "live" && d.models?.length) {
@@ -1148,7 +1149,7 @@ export function NoteEditor() {
     if (!prompt) { setAiLoading(false); return; }
 
     try {
-      const res = await fetch("/api/ai/complete", {
+      const res = await authenticatedFetch("/api/ai/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider, apiKey, model, prompt }),

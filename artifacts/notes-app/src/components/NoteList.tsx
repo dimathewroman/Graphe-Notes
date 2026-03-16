@@ -13,6 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatDate } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
 import { useBreakpoint } from "@/hooks/use-mobile";
+import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 
 interface ContextMenu {
   noteId: number;
@@ -189,7 +190,7 @@ export function NoteList() {
   };
 
   const moveNote = (noteId: number, folderId: number | null) => {
-    fetch(`/api/notes/${noteId}/move`, {
+    authenticatedFetch(`/api/notes/${noteId}/move`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folderId })

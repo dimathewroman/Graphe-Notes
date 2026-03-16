@@ -9,6 +9,7 @@ import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { PinPad } from "./PinPad";
+import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 
 async function sha256(text: string): Promise<string> {
   const encoded = new TextEncoder().encode(text);
@@ -134,7 +135,7 @@ export function SettingsModal() {
       try {
         const params = new URLSearchParams({ provider: prov });
         if (key.trim()) params.set("apiKey", key.trim());
-        const res = await fetch(`/api/models?${params}`);
+        const res = await authenticatedFetch(`/api/models?${params}`);
         if (!res.ok) throw new Error(`${res.status}`);
         const data = (await res.json()) as { models: string[]; source: "live" | "fallback" };
         setModels(data.models);
@@ -162,7 +163,7 @@ export function SettingsModal() {
 
   useEffect(() => {
     if (activeTab === "security" && isSettingsOpen) {
-      fetch("/api/vault/status")
+      authenticatedFetch("/api/vault/status")
         .then(r => r.json())
         .then((data: { isConfigured: boolean }) => setVaultConfigured(data.isConfigured))
         .catch(() => {});
@@ -195,7 +196,7 @@ export function SettingsModal() {
             return;
           }
           const hash = await sha256(pin);
-          const res = await fetch("/api/vault/setup", {
+          const res = await authenticatedFetch("/api/vault/setup", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ passwordHash: hash }),
@@ -229,7 +230,7 @@ export function SettingsModal() {
           }
           const currentHash = await sha256(securityCurrentPin);
           const newHash = await sha256(pin);
-          const res = await fetch("/api/vault/change-password", {
+          const res = await authenticatedFetch("/api/vault/change-password", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ currentPasswordHash: currentHash, newPasswordHash: newHash }),
