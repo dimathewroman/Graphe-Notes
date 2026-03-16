@@ -124,9 +124,23 @@ export function NoteList() {
       if (activeFilter === "attachments") {
         list = list.filter(n => !!getFirstImage(n.content));
       }
+
+      // In demo mode the API isn't called, so filter favorites client-side
+      if (activeFilter === "favorites" && isDemo) {
+        list = list.filter(n => n.favorite);
+      }
     }
 
-    if (activeFilter === "favorites" || activeFilter === "tag" || activeFilter === "attachments" || activeFilter === "vault") return list;
+    // Favorites: only favorited notes, pinned+favorited float to top
+    if (activeFilter === "favorites") {
+      return [...list].sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return 0;
+      });
+    }
+
+    if (activeFilter === "tag" || activeFilter === "attachments" || activeFilter === "vault") return list;
 
     return [...list].sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
