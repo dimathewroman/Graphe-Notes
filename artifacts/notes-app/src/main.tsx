@@ -3,7 +3,7 @@ import App from "./App";
 import "./index.css";
 
 // Apply saved theme before first render to avoid flash
-const savedMode = localStorage.getItem("theme_mode") || "dark";
+const savedMode = localStorage.getItem("theme_mode") || "light";
 const savedAccent = localStorage.getItem("theme_accent") || "";
 if (savedMode === "light") document.documentElement.classList.add("light");
 if (savedAccent) {

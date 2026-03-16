@@ -63,9 +63,9 @@ function LoginScreen() {
       <div className="w-full max-w-sm flex flex-col items-center gap-6">
         <div className="flex flex-col items-center gap-3">
           <img src={grapheLogo} alt="Graphe Notes" className="w-20 h-20 rounded-2xl shadow-lg" />
-          <h1 className="text-2xl font-semibold text-foreground">Notes App</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Graphe Notes</h1>
           <p className="text-sm text-muted-foreground text-center">
-            Your personal notes, synced across all your devices.
+            Notes that get you, wherever you go.
           </p>
         </div>
 
