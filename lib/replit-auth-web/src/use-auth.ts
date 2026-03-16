@@ -28,8 +28,11 @@ interface AuthState {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (provider?: "google" | "apple") => void;
+  loginWithOAuth: (provider: "google" | "apple") => void;
+  loginWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUpWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
   logout: () => void;
+  login: (provider?: "google" | "apple") => void;
 }
 
 export function useAuth(): AuthState {
@@ -69,15 +72,39 @@ export function useAuth(): AuthState {
     return () => { subscription.unsubscribe(); };
   }, []);
 
-  const login = useCallback((provider: "google" | "apple" = "google") => {
+  const loginWithOAuth = useCallback((provider: "google" | "apple") => {
     supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: window.location.origin + (import.meta.env.BASE_URL || "/"),
       },
     }).catch((err) => {
-      console.error("Sign-in failed:", err);
+      console.error("OAuth sign-in failed:", err);
     });
+  }, []);
+
+  const login = useCallback((provider: "google" | "apple" = "google") => {
+    loginWithOAuth(provider);
+  }, [loginWithOAuth]);
+
+  const loginWithEmail = useCallback(async (email: string, password: string): Promise<{ error: string | null }> => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { error: error.message };
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Sign-in failed" };
+    }
+  }, []);
+
+  const signUpWithEmail = useCallback(async (email: string, password: string): Promise<{ error: string | null }> => {
+    try {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) return { error: error.message };
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Sign-up failed" };
+    }
   }, []);
 
   const logout = useCallback(async () => {
@@ -95,6 +122,9 @@ export function useAuth(): AuthState {
     user,
     isLoading,
     isAuthenticated: !!user,
+    loginWithOAuth,
+    loginWithEmail,
+    signUpWithEmail,
     login,
     logout,
   };
