@@ -31,7 +31,7 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.shared]
-DATABASE_URL = "postgresql://postgres:kge.jcq0ZMD!cdm6ged@db.zlgykorwebitjxbuxrsq.supabase.co:5432/postgres"
+DATABASE_URL = "postgresql://postgres.zlgykorwebitjxbuxrsq:kge.jcq0ZMD!cdm6ged@aws-0-us-west-2.pooler.supabase.com:5432/postgres"
 SUPABASE_URL = "https://zlgykorwebitjxbuxrsq.supabase.co"
 SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsZ3lrb3J3ZWJpdGp4YnV4cnNxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MTk0MjEsImV4cCI6MjA4OTE5NTQyMX0.iUIabWQkxXSXAWtquFQRJkaEfe_dbIIQPQ-VBdvYvKY"
 SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpsZ3lrb3J3ZWJpdGp4YnV4cnNxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzYxOTQyMSwiZXhwIjoyMDg5MTk1NDIxfQ.S9pBBZzJWzHI_cIR9X_7Tj1iPnLJ00gZkYIoNRd_Z88"
