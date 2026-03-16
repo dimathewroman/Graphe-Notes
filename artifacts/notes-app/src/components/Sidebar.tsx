@@ -226,10 +226,10 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             <button
               onClick={handleVaultClick}
               className={cn(
-                "flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors min-h-[44px] md:min-h-0",
+                "flex-1 flex items-center gap-3 px-3 py-2.5 md:py-2 rounded-lg text-sm transition-all duration-200",
                 activeFilter === "vault" && isVaultUnlocked
                   ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-panel hover:text-foreground"
+                  : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
               )}
             >
               <ShieldCheck className={cn("w-4 h-4", isVaultUnlocked && "text-indigo-400")} />
