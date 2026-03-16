@@ -571,15 +571,15 @@ export function SettingsModal() {
                 <section className="space-y-4">
                   {user && (
                     <div className="p-4 rounded-xl bg-background border border-panel-border flex items-center gap-3">
-                      {user.profileImage ? (
-                        <img src={user.profileImage} alt="" className="w-9 h-9 rounded-full shrink-0" />
+                      {user.profileImageUrl ? (
+                        <img src={user.profileImageUrl} alt="" className="w-9 h-9 rounded-full shrink-0" />
                       ) : (
                         <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-medium shrink-0">
-                          {(user.username || "U")[0].toUpperCase()}
+                          {(user.firstName || user.email || "U")[0].toUpperCase()}
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{user.username}</p>
+                        <p className="text-sm font-medium truncate">{[user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "User"}</p>
                         <p className="text-xs text-muted-foreground truncate">Signed in</p>
                       </div>
                       <button
