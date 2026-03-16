@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useAuth } from "@workspace/replit-auth-web";
 import Home from "@/pages/Home";
 import NotFound from "@/pages/not-found";
-import { FileText, Mail, Loader2 } from "lucide-react";
+import { Mail, Loader2 } from "lucide-react";
+import grapheLogo from "@assets/graphe_minimalist_1773640203523.png";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,9 +62,7 @@ function LoginScreen() {
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm flex flex-col items-center gap-6">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
-            <FileText className="w-8 h-8 text-white" />
-          </div>
+          <img src={grapheLogo} alt="Graphe Notes" className="w-20 h-20 rounded-2xl shadow-lg" />
           <h1 className="text-2xl font-semibold text-foreground">Notes App</h1>
           <p className="text-sm text-muted-foreground text-center">
             Your personal notes, synced across all your devices.
