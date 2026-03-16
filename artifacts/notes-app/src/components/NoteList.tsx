@@ -14,6 +14,8 @@ import { cn, formatDate } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
+import { useDemoMode } from "@/App";
+import { DEMO_NOTES } from "@/lib/demo-data";
 
 interface ContextMenu {
   noteId: number;
@@ -44,6 +46,7 @@ export function NoteList() {
     isVaultUnlocked,
   } = useAppStore();
   const bp = useBreakpoint();
+  const isDemo = useDemoMode();
 
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const debouncedSearch = useDebounce(localSearch, 300);
@@ -92,7 +95,9 @@ export function NoteList() {
     sortDir
   };
 
-  const { data: rawNotes = [], isLoading } = useGetNotes(queryParams);
+  const { data: apiNotes = [], isLoading: apiLoading } = useGetNotes(queryParams, { query: { enabled: !isDemo } });
+  const rawNotes = isDemo ? DEMO_NOTES : apiNotes;
+  const isLoading = isDemo ? false : apiLoading;
 
   const getFirstImage = (content: string) => {
     const match = content.match(/<img[^>]+src="([^"]+)"/);
@@ -111,14 +116,31 @@ export function NoteList() {
 
       if (isFolderSmart && activeFolder) {
         list = list.filter(n => n.tags.some(t => activeFolder.tagRules.includes(t)));
+      } else if (isDemo && activeFilter === "folder" && activeFolderId != null) {
+        // In demo mode there's no API, so filter by folderId client-side
+        list = list.filter(n => n.folderId === activeFolderId);
       }
 
       if (activeFilter === "attachments") {
         list = list.filter(n => !!getFirstImage(n.content));
       }
+
+      // In demo mode the API isn't called, so filter favorites client-side
+      if (activeFilter === "favorites" && isDemo) {
+        list = list.filter(n => n.favorite);
+      }
     }
 
-    if (activeFilter === "favorites" || activeFilter === "tag" || activeFilter === "attachments" || activeFilter === "vault") return list;
+    // Favorites: only favorited notes, pinned+favorited float to top
+    if (activeFilter === "favorites") {
+      return [...list].sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return 0;
+      });
+    }
+
+    if (activeFilter === "tag" || activeFilter === "attachments" || activeFilter === "vault") return list;
 
     return [...list].sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
