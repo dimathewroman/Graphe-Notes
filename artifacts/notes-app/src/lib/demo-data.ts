@@ -6,6 +6,7 @@ const ago = (d: number, h = 0) =>
 
 export const DEMO_FOLDERS: Folder[] = [
   {
+    // Smart folder — auto-collects notes tagged work/meetings/clients/planning/ideas
     id: 1,
     name: "Work",
     parentId: null,
@@ -17,6 +18,7 @@ export const DEMO_FOLDERS: Folder[] = [
     updatedAt: ago(1),
   },
   {
+    // Smart folder — auto-collects notes tagged personal/journal/recipes/health/shopping
     id: 2,
     name: "Personal",
     parentId: null,
@@ -28,15 +30,28 @@ export const DEMO_FOLDERS: Folder[] = [
     updatedAt: ago(2),
   },
   {
+    // Regular folder — notes manually moved here (folderId: 3)
     id: 3,
-    name: "Learning",
+    name: "Archive",
     parentId: null,
-    color: "#a855f7",
-    icon: "book",
-    tagRules: ["learning", "dev", "books", "languages"],
+    color: "#f59e0b",
+    icon: "archive",
+    tagRules: [],
     sortOrder: 2,
-    createdAt: ago(30),
-    updatedAt: ago(3),
+    createdAt: ago(90),
+    updatedAt: ago(30),
+  },
+  {
+    // Regular folder — notes manually moved here (folderId: 4)
+    id: 4,
+    name: "Reading List",
+    parentId: null,
+    color: "#ec4899",
+    icon: "bookmark",
+    tagRules: [],
+    sortOrder: 3,
+    createdAt: ago(20),
+    updatedAt: ago(5),
   },
 ];
 
@@ -147,7 +162,7 @@ export const DEMO_NOTES: Note[] = [
     pinned: false,
     favorite: false,
     vaulted: false,
-    folderId: 2,
+    folderId: 3,
     tags: ["recipes"],
     coverImage: null,
     createdAt: ago(20),
@@ -175,7 +190,7 @@ export const DEMO_NOTES: Note[] = [
     pinned: false,
     favorite: true,
     vaulted: false,
-    folderId: 3,
+    folderId: 4,
     tags: ["books"],
     coverImage: null,
     createdAt: ago(18),
@@ -190,7 +205,7 @@ export const DEMO_NOTES: Note[] = [
     favorite: false,
     vaulted: false,
     folderId: 3,
-    tags: ["learning", "languages"],
+    tags: ["languages"],
     coverImage: null,
     createdAt: ago(8),
     updatedAt: ago(1),
@@ -221,7 +236,7 @@ h2 + p { ... }
     pinned: false,
     favorite: false,
     vaulted: false,
-    folderId: 3,
+    folderId: 4,
     tags: ["dev", "learning"],
     coverImage: null,
     createdAt: ago(22),
