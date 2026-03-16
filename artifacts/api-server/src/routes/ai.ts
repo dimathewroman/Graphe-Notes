@@ -4,6 +4,7 @@ import { AiCompleteBody, AiCompleteResponse } from "@workspace/api-zod";
 const router: IRouter = Router();
 
 router.post("/ai/complete", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   const parsed = AiCompleteBody.safeParse(req.body);
   if (!parsed.success) {
     console.error("[AI] Validation failed:", parsed.error.message);

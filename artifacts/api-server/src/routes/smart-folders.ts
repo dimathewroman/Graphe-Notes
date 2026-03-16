@@ -12,12 +12,13 @@ import { z } from "zod/v4";
 
 const router: IRouter = Router();
 
-router.get("/smart-folders", async (_req, res): Promise<void> => {
+router.get("/smart-folders", async (req, res): Promise<void> => {
   const folders = await db.select().from(smartFoldersTable).orderBy(smartFoldersTable.sortOrder);
   res.json(GetSmartFoldersResponse.parse(folders));
 });
 
 router.post("/smart-folders", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) { res.status(401).json({ error: "Unauthorized" }); return; }
   const parsed = CreateSmartFolderBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
