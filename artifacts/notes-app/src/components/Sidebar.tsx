@@ -1,4 +1,5 @@
 import { useState } from "react";
+import grapheLogo from "@assets/graphe_minimalist_1773640203523.png";
 import {
   Folder, FolderOpen, FileText, Star,
   Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag, Menu, X, ShieldCheck, Lock, Unlock, KeyRound, LogOut
@@ -208,10 +209,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     <div className="flex flex-col h-full">
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-2 text-foreground font-semibold">
-          <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
-            <FileText className="w-3.5 h-3.5 text-white" />
-          </div>
-          <span>Notes App</span>
+          <img src={grapheLogo} alt="Graphe Notes" className="w-6 h-6 rounded-md" />
+          <span>Graphe Notes</span>
         </div>
         <IconButton onClick={() => { setSettingsOpen(true); onNavigate?.(); }}>
           <Settings className="w-4 h-4" />
@@ -223,17 +222,14 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <NavItem icon={<FileText className="w-4 h-4" />} label="All Notes" active={activeFilter === "all"} onClick={() => handleNavClick("all")} />
           <NavItem icon={<Star className="w-4 h-4" />} label="Favorites" active={activeFilter === "favorites"} onClick={() => handleNavClick("favorites")} />
           <NavItem icon={<Paperclip className="w-4 h-4" />} label="Attachments" active={activeFilter === "attachments"} onClick={() => handleNavClick("attachments")} />
-        </div>
-
-        <div className="px-3 mb-4">
           <div className="flex items-center gap-1">
             <button
               onClick={handleVaultClick}
               className={cn(
-                "flex-1 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors min-h-[44px] md:min-h-0",
+                "flex-1 flex items-center gap-3 px-3 py-2.5 md:py-2 rounded-lg text-sm transition-all duration-200",
                 activeFilter === "vault" && isVaultUnlocked
                   ? "bg-primary/10 text-primary font-medium"
-                  : "text-muted-foreground hover:bg-panel hover:text-foreground"
+                  : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
               )}
             >
               <ShieldCheck className={cn("w-4 h-4", isVaultUnlocked && "text-indigo-400")} />
@@ -296,28 +292,6 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           )}
         </div>
 
-        {tags.length > 0 && (
-          <div className="mb-4">
-            <div className="px-3 mb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tags</div>
-            <div className="px-3 flex flex-wrap gap-1.5">
-              {tags.map(tag => (
-                <button
-                  key={tag}
-                  onClick={() => handleNavClick("tag", tag)}
-                  className={cn(
-                    "px-2.5 py-1.5 md:px-2 md:py-1 rounded-md text-xs transition-colors border",
-                    activeFilter === "tag" && activeTag === tag
-                      ? "bg-primary/20 border-primary/30 text-primary"
-                      : "bg-panel border-panel-border text-muted-foreground hover:text-foreground hover:bg-panel-hover"
-                  )}
-                >
-                  <Hash className="w-3 h-3 inline mr-1 opacity-50" />
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="p-4 border-t border-panel-border space-y-2">
@@ -378,7 +352,7 @@ export function Sidebar() {
   if (bp !== "desktop" || !isSidebarOpen) return null;
 
   return (
-    <div className="w-64 border-r border-panel-border bg-panel flex flex-col h-screen shrink-0">
+    <div className="w-64 border-r border-panel-border bg-panel flex flex-col h-full shrink-0">
       <SidebarContent />
     </div>
   );
