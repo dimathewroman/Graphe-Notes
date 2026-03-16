@@ -8,10 +8,12 @@ import { useAppStore } from "@/store";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { Drawer, DrawerPortal, DrawerOverlay } from "@/components/ui/drawer";
 import { DrawerPrimitive } from "@/components/ui/drawer-left";
+import { useDemoMode } from "@/App";
 
 export default function Home() {
   const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId } = useAppStore();
   const bp = useBreakpoint();
+  const isDemo = useDemoMode();
 
   useEffect(() => {
     if (bp === "desktop") {
@@ -62,7 +64,14 @@ export default function Home() {
   const showList = bp === "desktop" ? isNoteListOpen : (bp === "tablet" || (bp === "mobile" && mobileView === "list"));
 
   return (
-    <div className="flex h-screen w-full bg-background overflow-hidden relative">
+    <div className="flex flex-col h-screen w-full bg-background overflow-hidden relative">
+      {isDemo && (
+        <div className="w-full bg-primary/10 border-b border-primary/20 px-4 py-2 flex items-center justify-between text-xs text-primary z-50">
+          <span>👋 You're in demo mode — notes won't be saved.</span>
+          <a href="/" className="font-medium underline underline-offset-2 hover:opacity-80 transition-opacity">Sign up to keep your notes →</a>
+        </div>
+      )}
+      <div className="flex flex-1 w-full overflow-hidden">
       {bp === "desktop" && <Sidebar />}
 
       {isCompact && (
@@ -87,6 +96,7 @@ export default function Home() {
 
       <AIPanel />
       <SettingsModal />
+      </div>
     </div>
   );
 }
