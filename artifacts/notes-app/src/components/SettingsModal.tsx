@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   X, Key, Cloud, Download, Server, Palette, Sun, Moon, Monitor,
-  RefreshCw, AlertCircle, CheckCircle2, ChevronDown, Shield, ShieldCheck, KeyRound
+  RefreshCw, AlertCircle, CheckCircle2, ChevronDown, Shield, ShieldCheck, KeyRound, LogOut
 } from "lucide-react";
 import { useAppStore } from "@/store";
+import { useAuth } from "@workspace/replit-auth-web";
 import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -64,6 +65,7 @@ function applyTheme(mode: ThemeMode, accent: string) {
 
 export function SettingsModal() {
   const { isSettingsOpen, setSettingsOpen } = useAppStore();
+  const { user, logout } = useAuth();
 
   const [provider, setProvider] = useState("openai");
   const [apiKey, setApiKey] = useState("");
@@ -307,7 +309,7 @@ export function SettingsModal() {
     { id: "appearance" as const, label: "Appearance", icon: Palette },
     { id: "ai" as const, label: "AI", icon: Key },
     { id: "data" as const, label: "Data", icon: Cloud },
-    { id: "security" as const, label: "Security", icon: Shield },
+    { id: "security" as const, label: "Security & Sign-In", icon: Shield },
   ];
 
   const statusInfo = {
@@ -567,6 +569,29 @@ export function SettingsModal() {
 
               {activeTab === "security" && (
                 <section className="space-y-4">
+                  {user && (
+                    <div className="p-4 rounded-xl bg-background border border-panel-border flex items-center gap-3">
+                      {user.profileImage ? (
+                        <img src={user.profileImage} alt="" className="w-9 h-9 rounded-full shrink-0" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-medium shrink-0">
+                          {(user.username || "U")[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{user.username}</p>
+                        <p className="text-xs text-muted-foreground truncate">Signed in</p>
+                      </div>
+                      <button
+                        onClick={logout}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        Sign out
+                      </button>
+                    </div>
+                  )}
+
                   {securityMode === "idle" ? (
                     <>
                       <div className="p-4 rounded-xl bg-background border border-panel-border flex items-start gap-4">
