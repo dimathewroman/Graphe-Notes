@@ -14,6 +14,8 @@ import { cn, formatDate } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
+import { useDemoMode } from "@/App";
+import { DEMO_NOTES } from "@/lib/demo-data";
 
 interface ContextMenu {
   noteId: number;
@@ -44,6 +46,7 @@ export function NoteList() {
     isVaultUnlocked,
   } = useAppStore();
   const bp = useBreakpoint();
+  const isDemo = useDemoMode();
 
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const debouncedSearch = useDebounce(localSearch, 300);
@@ -92,7 +95,9 @@ export function NoteList() {
     sortDir
   };
 
-  const { data: rawNotes = [], isLoading } = useGetNotes(queryParams);
+  const { data: apiNotes = [], isLoading: apiLoading } = useGetNotes(queryParams, { query: { enabled: !isDemo } });
+  const rawNotes = isDemo ? DEMO_NOTES : apiNotes;
+  const isLoading = isDemo ? false : apiLoading;
 
   const getFirstImage = (content: string) => {
     const match = content.match(/<img[^>]+src="([^"]+)"/);
