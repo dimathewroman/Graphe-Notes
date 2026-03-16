@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./custom-fetch": "./src/custom-fetch.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "catalog:"

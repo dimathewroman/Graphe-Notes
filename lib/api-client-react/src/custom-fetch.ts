@@ -271,6 +271,9 @@ async function parseSuccessBody(
   }
 }
 
+let _accessToken: string | null = null;
+export function setAccessToken(token: string | null) { _accessToken = token; }
+
 export async function customFetch<T = unknown>(
   input: RequestInfo | URL,
   options: CustomFetchOptions = {},
@@ -284,6 +287,10 @@ export async function customFetch<T = unknown>(
   }
 
   const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
+
+  if (_accessToken && !headers.has("authorization")) {
+    headers.set("authorization", `Bearer ${_accessToken}`);
+  }
 
   if (
     typeof init.body === "string" &&
