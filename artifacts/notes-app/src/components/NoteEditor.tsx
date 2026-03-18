@@ -19,7 +19,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { useAppStore } from "@/store";
 import {
   useGetNote, useUpdateNote, useDeleteNote, useToggleNotePin, useToggleNoteFavorite,
-  useToggleNoteVault,
+  useToggleNoteVault, useGetVaultStatus, useSetupVault,
   getGetNotesQueryKey, getGetNoteQueryKey, getGetTagsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -903,7 +903,10 @@ export function NoteEditor() {
   const pinMut = useToggleNotePin();
   const favMut = useToggleNoteFavorite();
   const vaultMut = useToggleNoteVault();
+  const setupVaultMut = useSetupVault();
+  const { data: vaultStatus } = useGetVaultStatus();
   const { isVaultUnlocked } = useAppStore();
+  const [showVaultSetupModal, setShowVaultSetupModal] = useState(false);
 
   const [title, setTitle] = useState("");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
@@ -1067,7 +1070,21 @@ export function NoteEditor() {
       if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, vaulted: !note.vaulted });
       return;
     }
+    // If moving TO vault and no PIN is set, prompt setup first
+    if (!note.vaulted && !vaultStatus?.isConfigured) {
+      setShowVaultSetupModal(true);
+      return;
+    }
     await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: !note.vaulted } });
+    queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
+    queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+  };
+
+  const handleVaultSetupConfirm = async (hash: string) => {
+    if (!selectedNoteId || !note) return;
+    await setupVaultMut.mutateAsync({ data: { passwordHash: hash } });
+    setShowVaultSetupModal(false);
+    await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: true } });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
   };
@@ -1274,20 +1291,23 @@ export function NoteEditor() {
   if (note?.vaulted && !isVaultUnlocked) {
     return (
       <div className="flex-1 flex flex-col bg-background">
-        {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (
-          <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-background/80 backdrop-blur-md shrink-0">
-            {!isSidebarOpen && (
-              <IconButton onClick={toggleSidebar} title="Show sidebar">
-                <PanelLeft className="w-4 h-4" />
-              </IconButton>
-            )}
-            {!isNoteListOpen && (
-              <IconButton onClick={toggleNoteList} title="Show note list">
-                <PanelLeftClose className="w-4 h-4 scale-x-[-1]" />
-              </IconButton>
-            )}
-          </div>
-        )}
+        <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-background/80 backdrop-blur-md shrink-0">
+          {bp === "mobile" && (
+            <button onClick={handleBack} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors">
+              <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+            </button>
+          )}
+          {bp === "desktop" && !isSidebarOpen && (
+            <IconButton onClick={toggleSidebar} title="Show sidebar">
+              <PanelLeft className="w-4 h-4" />
+            </IconButton>
+          )}
+          {bp === "desktop" && !isNoteListOpen && (
+            <IconButton onClick={toggleNoteList} title="Show note list">
+              <PanelLeftClose className="w-4 h-4 scale-x-[-1]" />
+            </IconButton>
+          )}
+        </div>
         <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-4">
           <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
             <ShieldCheck className="w-8 h-8 text-indigo-500" />
@@ -1517,6 +1537,14 @@ export function NoteEditor() {
           applyLink={applyLink}
           className="fixed left-0 right-0 z-40 border-t border-panel-border bg-background/95 backdrop-blur-md"
           style={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
+        />
+      )}
+
+      {showVaultSetupModal && (
+        <VaultModal
+          mode="setup"
+          onConfirm={handleVaultSetupConfirm}
+          onCancel={() => setShowVaultSetupModal(false)}
         />
       )}
 
