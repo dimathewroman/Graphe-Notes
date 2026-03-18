@@ -3,6 +3,7 @@ import { X, Hash, Plus, Folder, Tag } from "lucide-react";
 import { useUpdateFolder, getGetFoldersQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { useDemoMode } from "@/App";
 
 interface Props {
   folder: { id: number; name: string; tagRules: string[] };
@@ -14,6 +15,7 @@ export function FolderEditModal({ folder, onClose }: Props) {
   const [tagRules, setTagRules] = useState<string[]>(folder.tagRules ?? []);
   const [tagInput, setTagInput] = useState("");
   const queryClient = useQueryClient();
+  const isDemo = useDemoMode();
 
   const updateMut = useUpdateFolder({
     mutation: {
@@ -36,6 +38,15 @@ export function FolderEditModal({ folder, onClose }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+    if (isDemo) {
+      const folders = (queryClient.getQueryData(["/api/folders"]) as typeof folder[] | undefined) ?? [];
+      queryClient.setQueryData(
+        ["/api/folders"],
+        folders.map(f => f.id === folder.id ? { ...f, name: name.trim(), tagRules } : f)
+      );
+      onClose();
+      return;
+    }
     updateMut.mutate({ id: folder.id, data: { name: name.trim(), tagRules } });
   };
 
