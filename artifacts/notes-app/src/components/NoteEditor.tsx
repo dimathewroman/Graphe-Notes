@@ -32,8 +32,9 @@ import {
   Sparkles, Loader2, Check, RotateCcw, Wand2, BookOpen, Scissors,
   Link2, Unlink, ChevronRight, ArrowUp, ArrowDown, MessageSquare, ListChecks,
   Undo2, Redo2, Clock, ArrowLeft, Menu, MoreHorizontal, MoreVertical, PanelLeftClose,
-  Share, Search, Copy, ClipboardPaste, Type
+  Share, Search, Copy, ClipboardPaste, Type, Highlighter, Minus
 } from "lucide-react";
+import { ColorPickerDropdown } from "./editor/ColorPickerDropdown";
 import { IconButton } from "./ui/IconButton";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { cn, formatDate } from "@/lib/utils";
@@ -1469,7 +1470,12 @@ function EditorToolbar({ editor, linkPopover, setLinkPopover, linkInputRef, link
   className?: string;
   style?: React.CSSProperties;
 }) {
+  const [colorPicker, setColorPicker] = useState<"text" | "highlight" | null>(null);
   if (!editor) return null;
+
+  const activeTextColor: string | undefined = editor.getAttributes("textStyle").color;
+  const activeHighlightColor: string | undefined = editor.getAttributes("highlight").color;
+
   return (
     <ScrollableToolbar className={className} style={style}>
       {showUndoRedo && (
@@ -1496,6 +1502,48 @@ function EditorToolbar({ editor, linkPopover, setLinkPopover, linkInputRef, link
       <ToolbarButton command={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} icon={<Italic className="w-4 h-4" />} />
       <ToolbarButton command={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} icon={<UnderlineIcon className="w-4 h-4" />} />
       <ToolbarButton command={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive("strike")} icon={<Strikethrough className="w-4 h-4" />} />
+
+      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+
+      {/* Text color picker */}
+      <div className="relative shrink-0">
+        <button
+          onClick={() => setColorPicker(colorPicker === "text" ? null : "text")}
+          title="Text color"
+          className={cn(
+            "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded text-muted-foreground hover:bg-panel hover:text-foreground transition-colors shrink-0 flex flex-col items-center justify-center gap-0.5 py-1",
+            colorPicker === "text" && "bg-panel text-primary"
+          )}
+        >
+          <span className="text-sm font-bold leading-none">A</span>
+          <div
+            className="w-4 h-[3px] rounded-sm"
+            style={{ backgroundColor: activeTextColor ?? "currentColor" }}
+          />
+        </button>
+        {colorPicker === "text" && (
+          <ColorPickerDropdown type="text" editor={editor} onClose={() => setColorPicker(null)} />
+        )}
+      </div>
+
+      {/* Highlight color picker */}
+      <div className="relative shrink-0">
+        <button
+          onClick={() => setColorPicker(colorPicker === "highlight" ? null : "highlight")}
+          title="Highlight color"
+          className={cn(
+            "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded text-muted-foreground hover:bg-panel hover:text-foreground transition-colors shrink-0 flex items-center justify-center",
+            colorPicker === "highlight" && "bg-panel text-primary",
+            activeHighlightColor && "text-foreground"
+          )}
+          style={activeHighlightColor ? { color: activeHighlightColor } : undefined}
+        >
+          <Highlighter className="w-4 h-4" />
+        </button>
+        {colorPicker === "highlight" && (
+          <ColorPickerDropdown type="highlight" editor={editor} onClose={() => setColorPicker(null)} />
+        )}
+      </div>
 
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
