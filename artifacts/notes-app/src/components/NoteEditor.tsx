@@ -1570,6 +1570,7 @@ function EditorToolbar({ editor, linkPopover, setLinkPopover, linkInputRef, link
       <ToolbarButton command={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive("taskList")} icon={<ListTodo className="w-4 h-4" />} title="Checklist" />
       <ToolbarButton command={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive("blockquote")} icon={<Quote className="w-4 h-4" />} />
       <ToolbarButton command={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive("codeBlock")} icon={<Code className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().setHorizontalRule().run()} active={false} icon={<Minus className="w-4 h-4" />} title="Horizontal divider" />
 
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
