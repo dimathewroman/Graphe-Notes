@@ -35,6 +35,7 @@ import {
   Share, Search, Copy, ClipboardPaste, Type, Highlighter, Minus
 } from "lucide-react";
 import { ColorPickerDropdown } from "./editor/ColorPickerDropdown";
+import { SlashCommandExtension, SlashCommandMenu } from "./editor/SlashCommandMenu";
 import { IconButton } from "./ui/IconButton";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { cn, formatDate } from "@/lib/utils";
@@ -937,6 +938,7 @@ export function NoteEditor() {
       }),
       TaskList,
       SmartTaskItem.configure({ nested: true }),
+      SlashCommandExtension,
     ],
     content: note?.content || "",
     onUpdate: ({ editor }) => {
@@ -1429,6 +1431,9 @@ export function NoteEditor() {
           <EditorContent editor={editor} />
         </div>
       </div>
+
+      {/* Slash command floating menu */}
+      <SlashCommandMenu editor={editor} />
 
       {/* Version History Panel */}
       {showVersionHistory && selectedNoteId && (
