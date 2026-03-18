@@ -113,8 +113,12 @@ export function NoteList() {
       };
     }),
   });
+  // Deduplicate by id to guard against any transient duplicate query results during
+  // HMR or isDemo transition renders.
   const rawNotes = isDemo
-    ? (demoNoteQueries.map(q => q.data).filter(Boolean) as typeof DEMO_NOTES)
+    ? ([...new Map(
+        demoNoteQueries.map(q => q.data).filter(Boolean).map(n => [n!.id, n])
+      ).values()] as typeof DEMO_NOTES)
     : apiNotes;
   const isLoading = isDemo ? false : apiLoading;
 
