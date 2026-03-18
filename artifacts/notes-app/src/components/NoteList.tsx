@@ -44,11 +44,11 @@ export function NoteList() {
     selectedNoteId, selectNote, setMobileView, setSidebarOpen, toggleNoteList,
     isSidebarOpen, toggleSidebar,
     isVaultUnlocked,
+    demoExtraIds, addDemoNoteId,
   } = useAppStore();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
 
-  const [demoExtraIds, setDemoExtraIds] = useState<number[]>([]);
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const debouncedSearch = useDebounce(localSearch, 300);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
@@ -246,7 +246,7 @@ export function NoteList() {
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       };
       queryClient.setQueryData(getGetNoteQueryKey(tempId), tempNote);
-      setDemoExtraIds(prev => [...prev, tempId]);
+      addDemoNoteId(tempId);
       selectNote(tempId);
       if (bp === "mobile") setMobileView("editor");
       return;
