@@ -26,8 +26,10 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
 
-  const { data: folders = [], isLoading: foldersLoading } = useGetFolders();
-  const { data: tags = [] } = useGetTags();
+  const { data: foldersData, isLoading: foldersLoading } = useGetFolders();
+  const folders = Array.isArray(foldersData) ? foldersData : [];
+  const { data: tagsData } = useGetTags();
+  const tags = Array.isArray(tagsData) ? tagsData : [];
 
   const createFolderMut = useCreateFolder({
     mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetFoldersQueryKey() }) }
