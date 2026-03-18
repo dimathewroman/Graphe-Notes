@@ -1402,7 +1402,7 @@ export function NoteEditor() {
 
           {/* Tags Row */}
           <div className="flex items-center flex-wrap gap-1.5 mb-8">
-            {note?.tags.map(tag => (
+            {note?.tags?.map(tag => (
               <span key={tag} className="group flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-primary/10 border border-primary/20 text-primary">
                 <Hash className="w-2.5 h-2.5" />
                 {tag}
