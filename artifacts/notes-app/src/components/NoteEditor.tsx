@@ -1026,7 +1026,13 @@ export function NoteEditor() {
 
   const handleDelete = async () => {
     if (!selectedNoteId) return;
-    if (isDemo) { selectNote(null); if (bp !== "desktop") setMobileView("list"); return; }
+    if (isDemo) {
+      const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
+      if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, _demoDeleted: true });
+      selectNote(null);
+      if (bp !== "desktop") setMobileView("list");
+      return;
+    }
     if (confirm("Are you sure you want to delete this note?")) {
       await deleteNoteMut.mutateAsync({ id: selectedNoteId });
       queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
@@ -1056,7 +1062,11 @@ export function NoteEditor() {
 
   const handleToggleVault = async () => {
     if (!selectedNoteId || !note) return;
-    if (isDemo) return;
+    if (isDemo) {
+      const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
+      if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, vaulted: !note.vaulted });
+      return;
+    }
     await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: !note.vaulted } });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
