@@ -75,7 +75,8 @@ export function NoteList() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const { data: folders = [] } = useGetFolders();
+  const { data: foldersData } = useGetFolders();
+  const folders = Array.isArray(foldersData) ? foldersData : [];
   const queryClient = useQueryClient();
 
   // Find the active folder and check if it has tag rules (smart folder)
