@@ -32,8 +32,11 @@ import {
   Sparkles, Loader2, Check, RotateCcw, Wand2, BookOpen, Scissors,
   Link2, Unlink, ChevronRight, ArrowUp, ArrowDown, MessageSquare, ListChecks,
   Undo2, Redo2, Clock, ArrowLeft, Menu, MoreHorizontal, MoreVertical, PanelLeftClose,
-  Share, Search, Copy, ClipboardPaste, Type, Highlighter, Minus
+  Share, Search, Copy, ClipboardPaste, Type, Highlighter, Minus,
+  Superscript as SuperscriptIcon, Subscript as SubscriptIcon
 } from "lucide-react";
+import SuperscriptExt from "@tiptap/extension-superscript";
+import SubscriptExt from "@tiptap/extension-subscript";
 import { ColorPickerDropdown } from "./editor/ColorPickerDropdown";
 import { SlashCommandExtension, SlashCommandMenu } from "./editor/SlashCommandMenu";
 import { WordCountPopover } from "./editor/WordCountPopover";
@@ -940,6 +943,8 @@ export function NoteEditor() {
       TaskList,
       SmartTaskItem.configure({ nested: true }),
       SlashCommandExtension,
+      SuperscriptExt,
+      SubscriptExt,
     ],
     content: note?.content || "",
     onUpdate: ({ editor }) => {
@@ -1508,6 +1513,8 @@ function EditorToolbar({ editor, linkPopover, setLinkPopover, linkInputRef, link
       <ToolbarButton command={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} icon={<Italic className="w-4 h-4" />} />
       <ToolbarButton command={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} icon={<UnderlineIcon className="w-4 h-4" />} />
       <ToolbarButton command={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive("strike")} icon={<Strikethrough className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().toggleSuperscript().run()} active={editor.isActive("superscript")} icon={<SuperscriptIcon className="w-4 h-4" />} title="Superscript" />
+      <ToolbarButton command={() => editor.chain().focus().toggleSubscript().run()} active={editor.isActive("subscript")} icon={<SubscriptIcon className="w-4 h-4" />} title="Subscript" />
 
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
