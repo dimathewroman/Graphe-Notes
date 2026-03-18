@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { ColorPickerDropdown } from "./editor/ColorPickerDropdown";
 import { SlashCommandExtension, SlashCommandMenu } from "./editor/SlashCommandMenu";
+import { WordCountPopover } from "./editor/WordCountPopover";
 import { IconButton } from "./ui/IconButton";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { cn, formatDate } from "@/lib/utils";
@@ -1644,6 +1645,10 @@ function EditorToolbar({ editor, linkPopover, setLinkPopover, linkInputRef, link
           </div>
         )}
       </div>
+
+      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+
+      <WordCountPopover editor={editor} />
     </ScrollableToolbar>
   );
 }
