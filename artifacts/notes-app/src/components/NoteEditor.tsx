@@ -907,6 +907,7 @@ export function NoteEditor() {
   const { data: vaultStatus } = useGetVaultStatus();
   const { isVaultUnlocked } = useAppStore();
   const [showVaultSetupModal, setShowVaultSetupModal] = useState(false);
+  const [demoVaultConfigured, setDemoVaultConfigured] = useState(false);
 
   const [title, setTitle] = useState("");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
@@ -1065,14 +1066,17 @@ export function NoteEditor() {
 
   const handleToggleVault = async () => {
     if (!selectedNoteId || !note) return;
+    // If moving TO vault and no PIN is set, prompt setup first (both demo and real)
+    if (!note.vaulted) {
+      const pinConfigured = isDemo ? demoVaultConfigured : vaultStatus?.isConfigured;
+      if (!pinConfigured) {
+        setShowVaultSetupModal(true);
+        return;
+      }
+    }
     if (isDemo) {
       const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
       if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, vaulted: !note.vaulted });
-      return;
-    }
-    // If moving TO vault and no PIN is set, prompt setup first
-    if (!note.vaulted && !vaultStatus?.isConfigured) {
-      setShowVaultSetupModal(true);
       return;
     }
     await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: !note.vaulted } });
@@ -1082,8 +1086,14 @@ export function NoteEditor() {
 
   const handleVaultSetupConfirm = async (hash: string) => {
     if (!selectedNoteId || !note) return;
-    await setupVaultMut.mutateAsync({ data: { passwordHash: hash } });
     setShowVaultSetupModal(false);
+    if (isDemo) {
+      setDemoVaultConfigured(true);
+      const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
+      if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, vaulted: true });
+      return;
+    }
+    await setupVaultMut.mutateAsync({ data: { passwordHash: hash } });
     await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: true } });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
