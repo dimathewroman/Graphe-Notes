@@ -46,6 +46,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { VaultModal } from "./VaultModal";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
+import { useDemoMode } from "@/App";
 
 // Custom floating AI menu that appears on text selection (Tiptap v3 compatible)
 
@@ -882,9 +883,20 @@ export function NoteEditor() {
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const queryClient = useQueryClient();
+  const isDemo = useDemoMode();
+  const isDemoRef = useRef(isDemo);
+  isDemoRef.current = isDemo;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: note, isLoading } = useGetNote(selectedNoteId || 0, { query: { enabled: !!selectedNoteId } as any });
+  const { data: note, isLoading } = useGetNote(selectedNoteId || 0, {
+    query: {
+      enabled: !!selectedNoteId,
+      // In demo mode keep the cache alive but never refetch — the cache is pre-populated by
+      // enterDemoMode() and subsequent writes go directly to the cache via setQueryData.
+      staleTime: isDemo ? Infinity : 0,
+      gcTime: isDemo ? Infinity : 5 * 60 * 1000,
+    } as any,
+  });
 
   const updateNoteMut = useUpdateNote();
   const deleteNoteMut = useDeleteNote();
@@ -972,11 +984,23 @@ export function NoteEditor() {
         setSaveStatus("saving");
         clearTimeout(timeout);
         timeout = setTimeout(async () => {
-          await updateNoteMut.mutateAsync({ id, data });
-          queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+          if (isDemoRef.current) {
+            // Demo mode: update the React Query cache directly (ephemeral, resets on refresh)
+            const existing = queryClient.getQueryData(getGetNoteQueryKey(id)) as any;
+            if (existing) {
+              queryClient.setQueryData(getGetNoteQueryKey(id), {
+                ...existing,
+                ...data,
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          } else {
+            await updateNoteMut.mutateAsync({ id, data });
+            queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+            // Fire-and-forget version snapshot (server enforces 5-min interval)
+            authenticatedFetch(`/api/notes/${id}/versions`, { method: "POST" }).catch(() => {});
+          }
           setSaveStatus("saved");
-          // Fire-and-forget version snapshot (server enforces 5-min interval)
-          authenticatedFetch(`/api/notes/${id}/versions`, { method: "POST" }).catch(() => {});
         }, 800);
       };
     })(),
@@ -1002,6 +1026,7 @@ export function NoteEditor() {
 
   const handleDelete = async () => {
     if (!selectedNoteId) return;
+    if (isDemo) { selectNote(null); if (bp !== "desktop") setMobileView("list"); return; }
     if (confirm("Are you sure you want to delete this note?")) {
       await deleteNoteMut.mutateAsync({ id: selectedNoteId });
       queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
@@ -1012,6 +1037,17 @@ export function NoteEditor() {
 
   const handleAction = async (action: "pin" | "fav") => {
     if (!selectedNoteId) return;
+    if (isDemo) {
+      // Update cache directly for ephemeral pin/fav in demo mode
+      const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
+      if (existing) {
+        queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
+          ...existing,
+          ...(action === "pin" ? { pinned: !existing.pinned } : { favorite: !existing.favorite }),
+        });
+      }
+      return;
+    }
     if (action === "pin") await pinMut.mutateAsync({ id: selectedNoteId });
     if (action === "fav") await favMut.mutateAsync({ id: selectedNoteId });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
@@ -1020,6 +1056,7 @@ export function NoteEditor() {
 
   const handleToggleVault = async () => {
     if (!selectedNoteId || !note) return;
+    if (isDemo) return;
     await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: !note.vaulted } });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
@@ -1029,8 +1066,12 @@ export function NoteEditor() {
   const addTag = async () => {
     if (!selectedNoteId || !note) return;
     const tag = tagInput.trim().replace(/^#/, "");
-    if (!tag || note.tags.includes(tag)) { setTagInput(""); setShowTagInput(false); return; }
-    const newTags = [...note.tags, tag];
+    if (!tag || note.tags?.includes(tag)) { setTagInput(""); setShowTagInput(false); return; }
+    const newTags = [...(note.tags ?? []), tag];
+    if (isDemo) {
+      queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...note, tags: newTags });
+      setTagInput(""); setShowTagInput(false); return;
+    }
     await updateNoteMut.mutateAsync({ id: selectedNoteId, data: { tags: newTags } });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
@@ -1041,7 +1082,11 @@ export function NoteEditor() {
 
   const removeTag = async (tag: string) => {
     if (!selectedNoteId || !note) return;
-    const newTags = note.tags.filter(t => t !== tag);
+    const newTags = (note.tags ?? []).filter(t => t !== tag);
+    if (isDemo) {
+      queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...note, tags: newTags });
+      return;
+    }
     await updateNoteMut.mutateAsync({ id: selectedNoteId, data: { tags: newTags } });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
