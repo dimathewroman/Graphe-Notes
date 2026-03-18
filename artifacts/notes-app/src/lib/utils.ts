@@ -8,6 +8,7 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatDate(dateString: string) {
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
   // If it's less than 24 hours ago, show relative time
   if (Date.now() - date.getTime() < 24 * 60 * 60 * 1000) {
     return formatDistanceToNow(date, { addSuffix: true });
