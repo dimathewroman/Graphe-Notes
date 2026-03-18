@@ -22,9 +22,19 @@ export const DemoContext = createContext(false);
 export const useDemoMode = () => useContext(DemoContext);
 
 function enterDemoMode(setIsDemo: (v: boolean) => void) {
-  // Pre-populate folders, tags and each individual note in the cache
+  // Mark all demo cache keys as stale:never so background refetches don't clear them.
+  // setQueryDefaults must run BEFORE setQueryData to take effect immediately.
+  const demoInfinite = { staleTime: Infinity, gcTime: Infinity };
+  queryClient.setQueryDefaults(["/api/folders"], demoInfinite);
+  queryClient.setQueryDefaults(["/api/tags"], demoInfinite);
+  queryClient.setQueryDefaults(["/api/vault/status"], demoInfinite);
+  DEMO_NOTES.forEach((note) => {
+    queryClient.setQueryDefaults([`/api/notes/${note.id}`], demoInfinite);
+  });
+
   queryClient.setQueryData(["/api/folders"], DEMO_FOLDERS);
   queryClient.setQueryData(["/api/tags"], DEMO_TAGS);
+  queryClient.setQueryData(["/api/vault/status"], { isConfigured: false });
   DEMO_NOTES.forEach((note) => {
     queryClient.setQueryData([`/api/notes/${note.id}`], note);
   });

@@ -7,9 +7,9 @@ import { useAppStore } from "@/store";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   useGetNotes, useCreateNote, useToggleNotePin, useToggleNoteFavorite,
-  useDeleteNote, useUpdateNote, useToggleNoteVault, getGetNotesQueryKey, getGetTagsQueryKey, useGetFolders
+  useDeleteNote, useUpdateNote, useToggleNoteVault, getGetNotesQueryKey, getGetNoteQueryKey, getGetTagsQueryKey, useGetFolders
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQueries } from "@tanstack/react-query";
 import { cn, formatDate } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
 import { useBreakpoint } from "@/hooks/use-mobile";
@@ -48,6 +48,7 @@ export function NoteList() {
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
 
+  const [demoExtraIds, setDemoExtraIds] = useState<number[]>([]);
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const debouncedSearch = useDebounce(localSearch, 300);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
@@ -97,7 +98,24 @@ export function NoteList() {
   };
 
   const { data: apiNotes = [], isLoading: apiLoading } = useGetNotes(queryParams, { query: { enabled: !isDemo } });
-  const rawNotes = isDemo ? DEMO_NOTES : apiNotes;
+
+  // Subscribe to each note's individual cache so pin/fav/vault/tag changes are reactive.
+  const demoNoteQueries = useQueries({
+    queries: [...DEMO_NOTES.map(n => n.id), ...demoExtraIds].map(id => {
+      const fallback = DEMO_NOTES.find(n => n.id === id);
+      return {
+        queryKey: getGetNoteQueryKey(id),
+        queryFn: fallback ? () => fallback : async () => queryClient.getQueryData(getGetNoteQueryKey(id)),
+        initialData: fallback,
+        staleTime: Infinity,
+        gcTime: Infinity,
+        enabled: isDemo,
+      };
+    }),
+  });
+  const rawNotes = isDemo
+    ? (demoNoteQueries.map(q => q.data).filter(Boolean) as typeof DEMO_NOTES)
+    : apiNotes;
   const isLoading = isDemo ? false : apiLoading;
 
   const getFirstImage = (content: string) => {
@@ -108,8 +126,22 @@ export function NoteList() {
   const notes = useMemo(() => {
     let list = rawNotes;
 
+    // Demo mode: filter out soft-deleted notes and apply search/tag client-side
+    if (isDemo) {
+      list = list.filter((n: any) => !n._demoDeleted);
+      if (debouncedSearch) {
+        const q = debouncedSearch.toLowerCase();
+        list = list.filter(n =>
+          n.title.toLowerCase().includes(q) || n.contentText?.toLowerCase().includes(q)
+        );
+      }
+      if (activeFilter === "tag" && activeTag) {
+        list = list.filter(n => n.tags?.includes(activeTag));
+      }
+    }
+
     if (activeFilter === "vault" && isVaultUnlocked) {
-      list = rawNotes.filter(n => n.vaulted);
+      list = list.filter(n => n.vaulted);
     } else if (activeFilter === "vault" && !isVaultUnlocked) {
       list = [];
     } else {
@@ -118,7 +150,6 @@ export function NoteList() {
       if (isFolderSmart && activeFolder) {
         list = list.filter(n => n.tags.some(t => activeFolder.tagRules.includes(t)));
       } else if (isDemo && activeFilter === "folder" && activeFolderId != null) {
-        // In demo mode there's no API, so filter by folderId client-side
         list = list.filter(n => n.folderId === activeFolderId);
       }
 
@@ -126,29 +157,42 @@ export function NoteList() {
         list = list.filter(n => !!getFirstImage(n.content));
       }
 
-      // In demo mode the API isn't called, so filter favorites client-side
       if (activeFilter === "favorites" && isDemo) {
         list = list.filter(n => n.favorite);
       }
     }
 
-    // Favorites: only favorited notes, pinned+favorited float to top
+    // Helper: secondary sort key for demo mode (mirrors API sort options)
+    const demoSecondarySort = (a: typeof list[0], b: typeof list[0]) => {
+      if (!isDemo) return 0;
+      if (sortBy === "title") {
+        const cmp = (a.title || "").localeCompare(b.title || "");
+        return sortDir === "asc" ? cmp : -cmp;
+      }
+      const dateA = new Date(sortBy === "updatedAt" ? a.updatedAt : a.createdAt).getTime();
+      const dateB = new Date(sortBy === "updatedAt" ? b.updatedAt : b.createdAt).getTime();
+      const cmp = dateA - dateB;
+      return sortDir === "asc" ? cmp : -cmp;
+    };
+
     if (activeFilter === "favorites") {
       return [...list].sort((a, b) => {
         if (a.pinned && !b.pinned) return -1;
         if (!a.pinned && b.pinned) return 1;
-        return 0;
+        return demoSecondarySort(a, b);
       });
     }
 
-    if (activeFilter === "tag" || activeFilter === "attachments" || activeFilter === "vault") return list;
+    if (activeFilter === "tag" || activeFilter === "attachments" || activeFilter === "vault") {
+      return isDemo ? [...list].sort(demoSecondarySort) : list;
+    }
 
     return [...list].sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;
-      return 0;
+      return demoSecondarySort(a, b);
     });
-  }, [rawNotes, activeFilter, isFolderSmart, activeFolder, isVaultUnlocked]);
+  }, [rawNotes, activeFilter, isFolderSmart, activeFolder, isVaultUnlocked, isDemo, debouncedSearch, activeTag, sortBy, sortDir]);
 
   const createNoteMut = useCreateNote({
     mutation: {
@@ -188,6 +232,21 @@ export function NoteList() {
   };
 
   const handleCreateNew = () => {
+    if (isDemo) {
+      // Create a temporary note in the cache with a negative ID (won't persist)
+      const tempId = -(Date.now());
+      const tempNote = {
+        id: tempId, title: "Untitled Note", content: "<p></p>", contentText: "",
+        tags: [], pinned: false, favorite: false, vaulted: false,
+        folderId: activeFilter === "folder" && !isFolderSmart ? activeFolderId : null,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      };
+      queryClient.setQueryData(getGetNoteQueryKey(tempId), tempNote);
+      setDemoExtraIds(prev => [...prev, tempId]);
+      selectNote(tempId);
+      if (bp === "mobile") setMobileView("editor");
+      return;
+    }
     createNoteMut.mutate({
       data: {
         title: "Untitled Note",
@@ -212,12 +271,22 @@ export function NoteList() {
     setContextMenu(null); setMoveMenuNoteId(null); setShowTagsPanel(false); setTagInput("");
   };
 
+  // Helper: update a single note's cache in demo mode
+  const demoPatchNote = (noteId: number, patch: Record<string, unknown>) => {
+    const existing = queryClient.getQueryData(getGetNoteQueryKey(noteId)) as Record<string, unknown> | undefined;
+    if (existing) queryClient.setQueryData(getGetNoteQueryKey(noteId), { ...existing, ...patch });
+  };
+
   const moveNote = (noteId: number, folderId: number | null) => {
-    authenticatedFetch(`/api/notes/${noteId}/move`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderId })
-    }).then(() => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }));
+    if (isDemo) {
+      demoPatchNote(noteId, { folderId });
+    } else {
+      authenticatedFetch(`/api/notes/${noteId}/move`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId })
+      }).then(() => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }));
+    }
     closeContextMenu();
   };
 
@@ -227,7 +296,11 @@ export function NoteList() {
     if (!tag || contextMenu.tags.includes(tag)) { setTagInput(""); return; }
     const newTags = [...contextMenu.tags, tag];
     setContextMenu(prev => prev ? { ...prev, tags: newTags } : null);
-    updateNoteMut.mutate({ id: contextMenu.noteId, data: { tags: newTags } });
+    if (isDemo) {
+      demoPatchNote(contextMenu.noteId, { tags: newTags });
+    } else {
+      updateNoteMut.mutate({ id: contextMenu.noteId, data: { tags: newTags } });
+    }
     setTagInput("");
   };
 
@@ -235,7 +308,11 @@ export function NoteList() {
     if (!contextMenu) return;
     const newTags = contextMenu.tags.filter(t => t !== tag);
     setContextMenu(prev => prev ? { ...prev, tags: newTags } : null);
-    updateNoteMut.mutate({ id: contextMenu.noteId, data: { tags: newTags } });
+    if (isDemo) {
+      demoPatchNote(contextMenu.noteId, { tags: newTags });
+    } else {
+      updateNoteMut.mutate({ id: contextMenu.noteId, data: { tags: newTags } });
+    }
   };
 
   const listTitle = {
@@ -468,12 +545,20 @@ export function NoteList() {
           <ContextMenuItem
             icon={<Pin className={cn("w-4 h-4", contextMenu.pinned && "fill-current text-primary")} />}
             label={contextMenu.pinned ? "Unpin" : "Pin to top"}
-            onClick={() => { pinMut.mutate({ id: contextMenu.noteId }); closeContextMenu(); }}
+            onClick={() => {
+              if (isDemo) { demoPatchNote(contextMenu.noteId, { pinned: !contextMenu.pinned }); }
+              else { pinMut.mutate({ id: contextMenu.noteId }); }
+              closeContextMenu();
+            }}
           />
           <ContextMenuItem
             icon={<Star className={cn("w-4 h-4", contextMenu.favorite && "fill-current text-yellow-500")} />}
             label={contextMenu.favorite ? "Remove Favorite" : "Add to Favorites"}
-            onClick={() => { favMut.mutate({ id: contextMenu.noteId }); closeContextMenu(); }}
+            onClick={() => {
+              if (isDemo) { demoPatchNote(contextMenu.noteId, { favorite: !contextMenu.favorite }); }
+              else { favMut.mutate({ id: contextMenu.noteId }); }
+              closeContextMenu();
+            }}
           />
 
           <div className="h-px bg-panel-border mx-2 my-1" />
@@ -556,7 +641,11 @@ export function NoteList() {
               <ContextMenuItem
                 icon={<ShieldCheck className={cn("w-4 h-4", contextMenu.vaulted && "text-indigo-400")} />}
                 label={contextMenu.vaulted ? "Remove from Vault" : "Move to Vault"}
-                onClick={() => { vaultMut.mutate({ id: contextMenu.noteId, data: { vaulted: !contextMenu.vaulted } }); closeContextMenu(); }}
+                onClick={() => {
+                  if (isDemo) { demoPatchNote(contextMenu.noteId, { vaulted: !contextMenu.vaulted }); }
+                  else { vaultMut.mutate({ id: contextMenu.noteId, data: { vaulted: !contextMenu.vaulted } }); }
+                  closeContextMenu();
+                }}
               />
             </>
           )}
@@ -567,7 +656,15 @@ export function NoteList() {
             label="Delete"
             danger
             onClick={() => {
-              if (confirm("Delete this note?")) deleteMut.mutate({ id: contextMenu.noteId });
+              if (confirm("Delete this note?")) {
+                if (isDemo) {
+                  // In demo mode, hide the note by marking it deleted in cache
+                  demoPatchNote(contextMenu.noteId, { _demoDeleted: true });
+                  if (selectedNoteId === contextMenu.noteId) { selectNote(null); }
+                } else {
+                  deleteMut.mutate({ id: contextMenu.noteId });
+                }
+              }
               closeContextMenu();
             }}
           />
