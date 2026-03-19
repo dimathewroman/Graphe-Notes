@@ -19,7 +19,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { useAppStore } from "@/store";
 import {
   useGetNote, useUpdateNote, useDeleteNote, useToggleNotePin, useToggleNoteFavorite,
-  useToggleNoteVault, useGetVaultStatus, useSetupVault,
+  useToggleNoteVault, useGetVaultStatus, useSetupVault, useUnlockVault,
   getGetNotesQueryKey, getGetNoteQueryKey, getGetTagsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -904,9 +904,11 @@ export function NoteEditor() {
   const favMut = useToggleNoteFavorite();
   const vaultMut = useToggleNoteVault();
   const setupVaultMut = useSetupVault();
+  const unlockVaultMut = useUnlockVault();
   const { data: vaultStatus } = useGetVaultStatus();
-  const { isVaultUnlocked } = useAppStore();
+  const { isVaultUnlocked, setVaultUnlocked } = useAppStore();
   const [showVaultSetupModal, setShowVaultSetupModal] = useState(false);
+  const [showVaultUnlockModal, setShowVaultUnlockModal] = useState(false);
   const [demoVaultConfigured, setDemoVaultConfigured] = useState(false);
 
   const [title, setTitle] = useState("");
@@ -1097,6 +1099,16 @@ export function NoteEditor() {
     await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: true } });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+  };
+
+  const handleUnlockConfirm = async (hash: string) => {
+    setShowVaultUnlockModal(false);
+    if (isDemo) {
+      setVaultUnlocked(true);
+      return;
+    }
+    await unlockVaultMut.mutateAsync({ data: { passwordHash: hash } });
+    setVaultUnlocked(true);
   };
 
   // Tags
@@ -1323,8 +1335,21 @@ export function NoteEditor() {
             <ShieldCheck className="w-8 h-8 text-indigo-500" />
           </div>
           <h2 className="text-xl font-medium text-foreground/80">This note is in the vault</h2>
-          <p className="text-sm">Unlock the vault from the sidebar to view this note.</p>
+          <p className="text-sm text-center max-w-xs">Unlock the vault to view this note.</p>
+          <button
+            onClick={() => setShowVaultUnlockModal(true)}
+            className="mt-2 px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium transition-colors"
+          >
+            Unlock Vault
+          </button>
         </div>
+        {showVaultUnlockModal && (
+          <VaultModal
+            mode="unlock"
+            onConfirm={handleUnlockConfirm}
+            onCancel={() => setShowVaultUnlockModal(false)}
+          />
+        )}
       </div>
     );
   }
