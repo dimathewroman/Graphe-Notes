@@ -26,6 +26,10 @@ interface AppState {
   isVaultUnlocked: boolean;
   setVaultUnlocked: (isUnlocked: boolean) => void;
 
+  demoExtraIds: number[];
+  addDemoNoteId: (id: number) => void;
+  resetDemoNoteIds: () => void;
+
   setFilter: (filter: FilterType, idOrTag?: number | string | null) => void;
   setSearchQuery: (query: string) => void;
   setSort: (by: GetNotesSortBy, dir: GetNotesSortDir) => void;
@@ -61,6 +65,10 @@ export const useAppStore = create<AppState>((set) => ({
 
   isVaultUnlocked: false,
   setVaultUnlocked: (isUnlocked) => set({ isVaultUnlocked: isUnlocked }),
+
+  demoExtraIds: [],
+  addDemoNoteId: (id) => set((state) => ({ demoExtraIds: [...state.demoExtraIds, id] })),
+  resetDemoNoteIds: () => set({ demoExtraIds: [] }),
 
   setFilter: (filter, idOrTag) => set({
     activeFilter: filter,

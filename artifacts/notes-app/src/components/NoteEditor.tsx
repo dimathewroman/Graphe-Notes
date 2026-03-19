@@ -19,7 +19,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { useAppStore } from "@/store";
 import {
   useGetNote, useUpdateNote, useDeleteNote, useToggleNotePin, useToggleNoteFavorite,
-  useToggleNoteVault,
+  useToggleNoteVault, useGetVaultStatus, useSetupVault, useUnlockVault,
   getGetNotesQueryKey, getGetNoteQueryKey, getGetTagsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -32,14 +32,21 @@ import {
   Sparkles, Loader2, Check, RotateCcw, Wand2, BookOpen, Scissors,
   Link2, Unlink, ChevronRight, ArrowUp, ArrowDown, MessageSquare, ListChecks,
   Undo2, Redo2, Clock, ArrowLeft, Menu, MoreHorizontal, MoreVertical, PanelLeftClose,
-  Share, Search, Copy, ClipboardPaste, Type
+  Share, Search, Copy, ClipboardPaste, Type, Highlighter, Minus,
+  Superscript as SuperscriptIcon, Subscript as SubscriptIcon
 } from "lucide-react";
+import SuperscriptExt from "@tiptap/extension-superscript";
+import SubscriptExt from "@tiptap/extension-subscript";
+import { ColorPickerDropdown } from "./editor/ColorPickerDropdown";
+import { SlashCommandExtension, SlashCommandMenu } from "./editor/SlashCommandMenu";
+import { WordCountPopover } from "./editor/WordCountPopover";
 import { IconButton } from "./ui/IconButton";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { cn, formatDate } from "@/lib/utils";
 import { VaultModal } from "./VaultModal";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
+import { useDemoMode } from "@/App";
 
 // Custom floating AI menu that appears on text selection (Tiptap v3 compatible)
 
@@ -876,16 +883,34 @@ export function NoteEditor() {
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const queryClient = useQueryClient();
+  const isDemo = useDemoMode();
+  const isDemoRef = useRef(isDemo);
+  isDemoRef.current = isDemo;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: note, isLoading } = useGetNote(selectedNoteId || 0, { query: { enabled: !!selectedNoteId } as any });
+  const { data: note, isLoading } = useGetNote(selectedNoteId || 0, {
+    query: {
+      enabled: !!selectedNoteId,
+      // In demo mode keep the cache alive but never refetch — the cache is pre-populated by
+      // enterDemoMode() and subsequent writes go directly to the cache via setQueryData.
+      staleTime: isDemo ? Infinity : 0,
+      gcTime: isDemo ? Infinity : 5 * 60 * 1000,
+    } as any,
+  });
 
   const updateNoteMut = useUpdateNote();
   const deleteNoteMut = useDeleteNote();
   const pinMut = useToggleNotePin();
   const favMut = useToggleNoteFavorite();
   const vaultMut = useToggleNoteVault();
-  const { isVaultUnlocked } = useAppStore();
+  const setupVaultMut = useSetupVault();
+  const unlockVaultMut = useUnlockVault();
+  const { data: vaultStatus } = useGetVaultStatus();
+  const { isVaultUnlocked, setVaultUnlocked } = useAppStore();
+  const [showVaultSetupModal, setShowVaultSetupModal] = useState(false);
+  const [showVaultUnlockModal, setShowVaultUnlockModal] = useState(false);
+  const [vaultUnlockError, setVaultUnlockError] = useState("");
+  const [demoVaultConfigured, setDemoVaultConfigured] = useState(false);
 
   const [title, setTitle] = useState("");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
@@ -936,6 +961,9 @@ export function NoteEditor() {
       }),
       TaskList,
       SmartTaskItem.configure({ nested: true }),
+      SlashCommandExtension,
+      SuperscriptExt,
+      SubscriptExt,
     ],
     content: note?.content || "",
     onUpdate: ({ editor }) => {
@@ -963,11 +991,23 @@ export function NoteEditor() {
         setSaveStatus("saving");
         clearTimeout(timeout);
         timeout = setTimeout(async () => {
-          await updateNoteMut.mutateAsync({ id, data });
-          queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+          if (isDemoRef.current) {
+            // Demo mode: update the React Query cache directly (ephemeral, resets on refresh)
+            const existing = queryClient.getQueryData(getGetNoteQueryKey(id)) as any;
+            if (existing) {
+              queryClient.setQueryData(getGetNoteQueryKey(id), {
+                ...existing,
+                ...data,
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          } else {
+            await updateNoteMut.mutateAsync({ id, data });
+            queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+            // Fire-and-forget version snapshot (server enforces 5-min interval)
+            authenticatedFetch(`/api/notes/${id}/versions`, { method: "POST" }).catch(() => {});
+          }
           setSaveStatus("saved");
-          // Fire-and-forget version snapshot (server enforces 5-min interval)
-          authenticatedFetch(`/api/notes/${id}/versions`, { method: "POST" }).catch(() => {});
         }, 800);
       };
     })(),
@@ -993,6 +1033,13 @@ export function NoteEditor() {
 
   const handleDelete = async () => {
     if (!selectedNoteId) return;
+    if (isDemo) {
+      const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
+      if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, _demoDeleted: true });
+      selectNote(null);
+      if (bp !== "desktop") setMobileView("list");
+      return;
+    }
     if (confirm("Are you sure you want to delete this note?")) {
       await deleteNoteMut.mutateAsync({ id: selectedNoteId });
       queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
@@ -1003,6 +1050,17 @@ export function NoteEditor() {
 
   const handleAction = async (action: "pin" | "fav") => {
     if (!selectedNoteId) return;
+    if (isDemo) {
+      // Update cache directly for ephemeral pin/fav in demo mode
+      const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
+      if (existing) {
+        queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
+          ...existing,
+          ...(action === "pin" ? { pinned: !existing.pinned } : { favorite: !existing.favorite }),
+        });
+      }
+      return;
+    }
     if (action === "pin") await pinMut.mutateAsync({ id: selectedNoteId });
     if (action === "fav") await favMut.mutateAsync({ id: selectedNoteId });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
@@ -1011,17 +1069,68 @@ export function NoteEditor() {
 
   const handleToggleVault = async () => {
     if (!selectedNoteId || !note) return;
+    // If moving TO vault and no PIN is set, prompt setup first (both demo and real)
+    if (!note.vaulted) {
+      const pinConfigured = isDemo ? demoVaultConfigured : vaultStatus?.isConfigured;
+      if (!pinConfigured) {
+        setShowVaultSetupModal(true);
+        return;
+      }
+    }
+    if (isDemo) {
+      const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
+      if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, vaulted: !note.vaulted });
+      return;
+    }
     await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: !note.vaulted } });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+  };
+
+  const handleVaultSetupConfirm = async (hash: string) => {
+    if (!selectedNoteId || !note) return;
+    setShowVaultSetupModal(false);
+    if (isDemo) {
+      setDemoVaultConfigured(true);
+      sessionStorage.setItem("demo_vault_hash", hash);
+      queryClient.setQueryData(["/api/vault/status"], { isConfigured: true });
+      const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
+      if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, vaulted: true });
+      return;
+    }
+    await setupVaultMut.mutateAsync({ data: { passwordHash: hash } });
+    await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: true } });
+    queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
+    queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+  };
+
+  const handleUnlockConfirm = async (hash: string) => {
+    setVaultUnlockError("");
+    if (isDemo) {
+      const stored = sessionStorage.getItem("demo_vault_hash");
+      if (!stored || stored === hash) {
+        setShowVaultUnlockModal(false);
+        setVaultUnlocked(true);
+      } else {
+        setVaultUnlockError("Wrong PIN.");
+      }
+      return;
+    }
+    setShowVaultUnlockModal(false);
+    await unlockVaultMut.mutateAsync({ data: { passwordHash: hash } });
+    setVaultUnlocked(true);
   };
 
   // Tags
   const addTag = async () => {
     if (!selectedNoteId || !note) return;
     const tag = tagInput.trim().replace(/^#/, "");
-    if (!tag || note.tags.includes(tag)) { setTagInput(""); setShowTagInput(false); return; }
-    const newTags = [...note.tags, tag];
+    if (!tag || note.tags?.includes(tag)) { setTagInput(""); setShowTagInput(false); return; }
+    const newTags = [...(note.tags ?? []), tag];
+    if (isDemo) {
+      queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...note, tags: newTags });
+      setTagInput(""); setShowTagInput(false); return;
+    }
     await updateNoteMut.mutateAsync({ id: selectedNoteId, data: { tags: newTags } });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
@@ -1032,7 +1141,11 @@ export function NoteEditor() {
 
   const removeTag = async (tag: string) => {
     if (!selectedNoteId || !note) return;
-    const newTags = note.tags.filter(t => t !== tag);
+    const newTags = (note.tags ?? []).filter(t => t !== tag);
+    if (isDemo) {
+      queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...note, tags: newTags });
+      return;
+    }
     await updateNoteMut.mutateAsync({ id: selectedNoteId, data: { tags: newTags } });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
@@ -1210,27 +1323,44 @@ export function NoteEditor() {
   if (note?.vaulted && !isVaultUnlocked) {
     return (
       <div className="flex-1 flex flex-col bg-background">
-        {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (
-          <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-background/80 backdrop-blur-md shrink-0">
-            {!isSidebarOpen && (
-              <IconButton onClick={toggleSidebar} title="Show sidebar">
-                <PanelLeft className="w-4 h-4" />
-              </IconButton>
-            )}
-            {!isNoteListOpen && (
-              <IconButton onClick={toggleNoteList} title="Show note list">
-                <PanelLeftClose className="w-4 h-4 scale-x-[-1]" />
-              </IconButton>
-            )}
-          </div>
-        )}
+        <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-background/80 backdrop-blur-md shrink-0">
+          {bp === "mobile" && (
+            <button onClick={handleBack} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors">
+              <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+            </button>
+          )}
+          {bp === "desktop" && !isSidebarOpen && (
+            <IconButton onClick={toggleSidebar} title="Show sidebar">
+              <PanelLeft className="w-4 h-4" />
+            </IconButton>
+          )}
+          {bp === "desktop" && !isNoteListOpen && (
+            <IconButton onClick={toggleNoteList} title="Show note list">
+              <PanelLeftClose className="w-4 h-4 scale-x-[-1]" />
+            </IconButton>
+          )}
+        </div>
         <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-4">
           <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
             <ShieldCheck className="w-8 h-8 text-indigo-500" />
           </div>
           <h2 className="text-xl font-medium text-foreground/80">This note is in the vault</h2>
-          <p className="text-sm">Unlock the vault from the sidebar to view this note.</p>
+          <p className="text-sm text-center max-w-xs">Unlock the vault to view this note.</p>
+          <button
+            onClick={() => setShowVaultUnlockModal(true)}
+            className="mt-2 px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium transition-colors"
+          >
+            Unlock Vault
+          </button>
         </div>
+        {showVaultUnlockModal && (
+          <VaultModal
+            mode="unlock"
+            onConfirm={handleUnlockConfirm}
+            onCancel={() => { setShowVaultUnlockModal(false); setVaultUnlockError(""); }}
+            error={vaultUnlockError}
+          />
+        )}
       </div>
     );
   }
@@ -1393,7 +1523,7 @@ export function NoteEditor() {
 
           {/* Tags Row */}
           <div className="flex items-center flex-wrap gap-1.5 mb-8">
-            {note?.tags.map(tag => (
+            {note?.tags?.map(tag => (
               <span key={tag} className="group flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-primary/10 border border-primary/20 text-primary">
                 <Hash className="w-2.5 h-2.5" />
                 {tag}
@@ -1429,6 +1559,9 @@ export function NoteEditor() {
         </div>
       </div>
 
+      {/* Slash command floating menu */}
+      <SlashCommandMenu editor={editor} />
+
       {/* Version History Panel */}
       {showVersionHistory && selectedNoteId && (
         <VersionHistoryPanel
@@ -1453,6 +1586,14 @@ export function NoteEditor() {
         />
       )}
 
+      {showVaultSetupModal && (
+        <VaultModal
+          mode="setup"
+          onConfirm={handleVaultSetupConfirm}
+          onCancel={() => setShowVaultSetupModal(false)}
+        />
+      )}
+
     </div>
   );
 }
@@ -1469,7 +1610,12 @@ function EditorToolbar({ editor, linkPopover, setLinkPopover, linkInputRef, link
   className?: string;
   style?: React.CSSProperties;
 }) {
+  const [colorPicker, setColorPicker] = useState<"text" | "highlight" | null>(null);
   if (!editor) return null;
+
+  const activeTextColor: string | undefined = editor.getAttributes("textStyle").color;
+  const activeHighlightColor: string | undefined = editor.getAttributes("highlight").color;
+
   return (
     <ScrollableToolbar className={className} style={style}>
       {showUndoRedo && (
@@ -1496,6 +1642,50 @@ function EditorToolbar({ editor, linkPopover, setLinkPopover, linkInputRef, link
       <ToolbarButton command={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} icon={<Italic className="w-4 h-4" />} />
       <ToolbarButton command={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} icon={<UnderlineIcon className="w-4 h-4" />} />
       <ToolbarButton command={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive("strike")} icon={<Strikethrough className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().toggleSuperscript().run()} active={editor.isActive("superscript")} icon={<SuperscriptIcon className="w-4 h-4" />} title="Superscript" />
+      <ToolbarButton command={() => editor.chain().focus().toggleSubscript().run()} active={editor.isActive("subscript")} icon={<SubscriptIcon className="w-4 h-4" />} title="Subscript" />
+
+      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+
+      {/* Text color picker */}
+      <div className="relative shrink-0">
+        <button
+          onClick={() => setColorPicker(colorPicker === "text" ? null : "text")}
+          title="Text color"
+          className={cn(
+            "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded text-muted-foreground hover:bg-panel hover:text-foreground transition-colors shrink-0 flex flex-col items-center justify-center gap-0.5 py-1",
+            colorPicker === "text" && "bg-panel text-primary"
+          )}
+        >
+          <span className="text-sm font-bold leading-none">A</span>
+          <div
+            className="w-4 h-[3px] rounded-sm"
+            style={{ backgroundColor: activeTextColor ?? "currentColor" }}
+          />
+        </button>
+        {colorPicker === "text" && (
+          <ColorPickerDropdown type="text" editor={editor} onClose={() => setColorPicker(null)} />
+        )}
+      </div>
+
+      {/* Highlight color picker */}
+      <div className="relative shrink-0">
+        <button
+          onClick={() => setColorPicker(colorPicker === "highlight" ? null : "highlight")}
+          title="Highlight color"
+          className={cn(
+            "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded text-muted-foreground hover:bg-panel hover:text-foreground transition-colors shrink-0 flex items-center justify-center",
+            colorPicker === "highlight" && "bg-panel text-primary",
+            activeHighlightColor && "text-foreground"
+          )}
+          style={activeHighlightColor ? { color: activeHighlightColor } : undefined}
+        >
+          <Highlighter className="w-4 h-4" />
+        </button>
+        {colorPicker === "highlight" && (
+          <ColorPickerDropdown type="highlight" editor={editor} onClose={() => setColorPicker(null)} />
+        )}
+      </div>
 
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
@@ -1516,6 +1706,7 @@ function EditorToolbar({ editor, linkPopover, setLinkPopover, linkInputRef, link
       <ToolbarButton command={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive("taskList")} icon={<ListTodo className="w-4 h-4" />} title="Checklist" />
       <ToolbarButton command={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive("blockquote")} icon={<Quote className="w-4 h-4" />} />
       <ToolbarButton command={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive("codeBlock")} icon={<Code className="w-4 h-4" />} />
+      <ToolbarButton command={() => editor.chain().focus().setHorizontalRule().run()} active={false} icon={<Minus className="w-4 h-4" />} title="Horizontal divider" />
 
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
@@ -1591,6 +1782,10 @@ function EditorToolbar({ editor, linkPopover, setLinkPopover, linkInputRef, link
           </div>
         )}
       </div>
+
+      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+
+      <WordCountPopover editor={editor} />
     </ScrollableToolbar>
   );
 }

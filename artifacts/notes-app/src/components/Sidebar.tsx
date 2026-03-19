@@ -14,6 +14,7 @@ import {
 import { VaultModal } from "./VaultModal";
 import { useQueryClient } from "@tanstack/react-query";
 import { IconButton } from "./ui/IconButton";
+import { useDemoMode } from "@/App";
 import { FolderEditModal } from "./FolderEditModal";
 import { useBreakpoint } from "@/hooks/use-mobile";
 
@@ -25,9 +26,12 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   } = useAppStore();
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
+  const isDemo = useDemoMode();
 
-  const { data: folders = [], isLoading: foldersLoading } = useGetFolders();
-  const { data: tags = [] } = useGetTags();
+  const { data: foldersData, isLoading: foldersLoading } = useGetFolders();
+  const folders = Array.isArray(foldersData) ? foldersData : [];
+  const { data: tagsData } = useGetTags();
+  const tags = Array.isArray(tagsData) ? tagsData : [];
 
   const createFolderMut = useCreateFolder({
     mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetFoldersQueryKey() }) }
@@ -59,6 +63,17 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     e.preventDefault();
     if (!newFolderName.trim()) return;
     (document.activeElement as HTMLElement)?.blur();
+    if (isDemo) {
+      // In demo mode, add folder directly to the cache (ephemeral)
+      const tempId = -(Date.now());
+      const newFolder = {
+        id: tempId, name: newFolderName.trim(), sortOrder: folders.length,
+        parentId: newFolderParentId, tagRules: [], createdAt: new Date().toISOString(),
+      };
+      queryClient.setQueryData(["/api/folders"], [...folders, newFolder]);
+      setNewFolderName(""); setIsCreatingFolder(false); setNewFolderParentId(null);
+      return;
+    }
     await createFolderMut.mutateAsync({ data: { name: newFolderName, sortOrder: folders.length, parentId: newFolderParentId } });
     setNewFolderName(""); setIsCreatingFolder(false); setNewFolderParentId(null);
   };
@@ -68,8 +83,13 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     onNavigate?.();
   };
 
+  const DEMO_VAULT_KEY = "demo_vault_hash";
+
   const handleVaultClick = () => {
-    if (!vaultStatus?.isConfigured) {
+    const isConfigured = isDemo
+      ? !!sessionStorage.getItem(DEMO_VAULT_KEY)
+      : vaultStatus?.isConfigured;
+    if (!isConfigured) {
       setVaultModal("setup");
     } else if (!isVaultUnlocked) {
       setVaultModal("unlock");
@@ -80,6 +100,31 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   const handleVaultConfirm = async (hash: string, newHash?: string) => {
     setVaultError("");
+    if (isDemo) {
+      if (vaultModal === "setup") {
+        sessionStorage.setItem(DEMO_VAULT_KEY, hash);
+        queryClient.setQueryData(["/api/vault/status"], { isConfigured: true });
+        setVaultUnlocked(true);
+        setVaultModal(null);
+      } else if (vaultModal === "unlock") {
+        const stored = sessionStorage.getItem(DEMO_VAULT_KEY);
+        if (stored && stored === hash) {
+          setVaultUnlocked(true);
+          setVaultModal(null);
+        } else {
+          setVaultError("Wrong PIN.");
+        }
+      } else if (vaultModal === "change-password" && newHash) {
+        const stored = sessionStorage.getItem(DEMO_VAULT_KEY);
+        if (stored && stored === hash) {
+          sessionStorage.setItem(DEMO_VAULT_KEY, newHash);
+          setVaultModal(null);
+        } else {
+          setVaultError("Wrong current PIN.");
+        }
+      }
+      return;
+    }
     try {
       if (vaultModal === "setup") {
         await setupVaultMut.mutateAsync({ data: { passwordHash: hash } });
@@ -172,7 +217,11 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               onClick={e => {
                 e.stopPropagation();
                 if (confirm(`Delete folder "${folder.name}"?`)) {
-                  deleteFolderMut.mutate({ id: folder.id });
+                  if (isDemo) {
+                    queryClient.setQueryData(["/api/folders"], folders.filter(f => f.id !== folder.id));
+                  } else {
+                    deleteFolderMut.mutate({ id: folder.id });
+                  }
                   if (isActive) handleNavClick("all");
                 }
               }}
