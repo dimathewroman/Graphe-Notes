@@ -83,8 +83,13 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     onNavigate?.();
   };
 
+  const DEMO_VAULT_KEY = "demo_vault_hash";
+
   const handleVaultClick = () => {
-    if (!vaultStatus?.isConfigured) {
+    const isConfigured = isDemo
+      ? !!sessionStorage.getItem(DEMO_VAULT_KEY)
+      : vaultStatus?.isConfigured;
+    if (!isConfigured) {
       setVaultModal("setup");
     } else if (!isVaultUnlocked) {
       setVaultModal("unlock");
@@ -92,8 +97,6 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       handleNavClick("vault");
     }
   };
-
-  const DEMO_VAULT_KEY = "demo_vault_hash";
 
   const handleVaultConfirm = async (hash: string, newHash?: string) => {
     setVaultError("");

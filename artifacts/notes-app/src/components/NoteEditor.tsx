@@ -909,6 +909,7 @@ export function NoteEditor() {
   const { isVaultUnlocked, setVaultUnlocked } = useAppStore();
   const [showVaultSetupModal, setShowVaultSetupModal] = useState(false);
   const [showVaultUnlockModal, setShowVaultUnlockModal] = useState(false);
+  const [vaultUnlockError, setVaultUnlockError] = useState("");
   const [demoVaultConfigured, setDemoVaultConfigured] = useState(false);
 
   const [title, setTitle] = useState("");
@@ -1091,6 +1092,8 @@ export function NoteEditor() {
     setShowVaultSetupModal(false);
     if (isDemo) {
       setDemoVaultConfigured(true);
+      sessionStorage.setItem("demo_vault_hash", hash);
+      queryClient.setQueryData(["/api/vault/status"], { isConfigured: true });
       const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
       if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, vaulted: true });
       return;
@@ -1102,11 +1105,18 @@ export function NoteEditor() {
   };
 
   const handleUnlockConfirm = async (hash: string) => {
-    setShowVaultUnlockModal(false);
+    setVaultUnlockError("");
     if (isDemo) {
-      setVaultUnlocked(true);
+      const stored = sessionStorage.getItem("demo_vault_hash");
+      if (!stored || stored === hash) {
+        setShowVaultUnlockModal(false);
+        setVaultUnlocked(true);
+      } else {
+        setVaultUnlockError("Wrong PIN.");
+      }
       return;
     }
+    setShowVaultUnlockModal(false);
     await unlockVaultMut.mutateAsync({ data: { passwordHash: hash } });
     setVaultUnlocked(true);
   };
@@ -1347,7 +1357,8 @@ export function NoteEditor() {
           <VaultModal
             mode="unlock"
             onConfirm={handleUnlockConfirm}
-            onCancel={() => setShowVaultUnlockModal(false)}
+            onCancel={() => { setShowVaultUnlockModal(false); setVaultUnlockError(""); }}
+            error={vaultUnlockError}
           />
         )}
       </div>
