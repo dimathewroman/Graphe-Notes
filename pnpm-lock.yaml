@@ -127,6 +127,9 @@ importers:
       express:
         specifier: ^5
         version: 5.2.1
+      zod:
+        specifier: 'catalog:'
+        version: 3.25.76
     devDependencies:
       '@types/cors':
         specifier: ^2.8.19
@@ -330,6 +333,18 @@ importers:
 
   artifacts/next-app:
     dependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.99.1
+        version: 2.99.1
+      '@workspace/api-zod':
+        specifier: workspace:*
+        version: link:../../lib/api-zod
+      '@workspace/db':
+        specifier: workspace:*
+        version: link:../../lib/db
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.1(@types/pg@8.18.0)(pg@8.20.0)
       next:
         specifier: ^15.3.3
         version: 15.5.14(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -346,6 +361,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 25.3.5
+      '@types/pg':
+        specifier: ^8.18.0
+        version: 8.18.0
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.14
@@ -682,6 +700,9 @@ importers:
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.14
+      vite:
+        specifier: 'catalog:'
+        version: 7.3.1(@types/node@25.3.5)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.2)
 
   scripts:
     devDependencies:

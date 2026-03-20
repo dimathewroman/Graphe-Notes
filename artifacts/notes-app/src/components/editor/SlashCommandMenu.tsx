@@ -210,8 +210,9 @@ export function SlashCommandMenu({ editor }: SlashCommandMenuProps) {
       );
     }
     // Also clear extension storage directly
-    if (editor.storage.slashCommand) {
-      editor.storage.slashCommand.active = false;
+    const storage = editor.storage as unknown as Record<string, { active: boolean } | undefined>;
+    if (storage.slashCommand) {
+      storage.slashCommand.active = false;
     }
     setState({ active: false, query: "", from: 0 });
   }, [editor]);
