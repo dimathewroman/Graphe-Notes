@@ -76,13 +76,56 @@ pnpm --filter @workspace/api-spec run codegen
 
 ---
 
+## Path Alias
+
+- The frontend uses `@/` as an alias for `src/`. Use `@/components/...`, `@/hooks/...`, `@/lib/...`, etc. in all imports within `artifacts/notes-app`.
+
+---
+
+## Environment Variables
+
+All env vars are injected at build/runtime — no `.env` files are committed.
+
+| Variable | Required by | Notes |
+|---|---|---|
+| `SUPABASE_URL` | frontend + backend | Supabase project URL |
+| `SUPABASE_ANON_KEY` | frontend + backend | Public anon key, safe for client |
+| `SUPABASE_SERVICE_ROLE_KEY` | backend only | Admin operations — **never expose to frontend** |
+| `SUPABASE_DB_URL` | `lib/db` (Drizzle) | Session-mode pooler connection string |
+| `PORT` | frontend (Vite) | Dev server port |
+| `BASE_PATH` | frontend (Vite) | URL base path |
+
+---
+
+## Codebase Caveats
+
+**No tests exist.** There is no test runner configured (no Vitest, Jest, or testing library). Do not suggest or scaffold tests unless explicitly asked.
+
+**`NoteEditor.tsx` is large (~73KB).** It is the biggest file in the repo. Be surgical — read only the relevant section before editing.
+
+**AI provider keys** (OpenAI, Anthropic, Gemini) are stored in **plaintext `localStorage`**. This is intentional for the current phase where users supply their own keys. Future sprint item: migrate to Supabase per-user storage once auth is fully stabilized.
+
+**Vault PIN hashing** — The PIN is stored as a hash in the `vault_settings` table. The current implementation is not bcrypt/Argon2. Do not assume cryptographic strength or add crypto libraries without explicit instruction.
+
+---
+
+## Working Convention
+
+- Before running any terminal command, explain in plain English what it does, why it's necessary, what it affects, and whether it's reversible. Wait for confirmation.
+- Only modify code files within the Graphe-Notes repository. Installing packages and running dev tools is fine. Never modify unrelated projects or system configuration files.
+- Never delete files without explicitly telling me what you're deleting and why. Wait for confirmation.
+- Never commit directly to master. Always use a feature branch.
+- When something goes wrong, stop immediately and explain what happened before attempting a fix.
+
+---
+
 ## Worktree Architecture (Claude Code)
 
-This repo uses a Claude Code git worktree for the preview server:
+This repo uses a Claude Code git worktree to power the local preview server. The worktree branch name is **randomized each session** (e.g. `claude/modest-albattani`) — do not rely on it by name.
 
 | Branch | Purpose |
 |---|---|
 | `feature/editor-enhancements` | Main development branch, pushed to GitHub |
-| `claude/happy-lamport` (worktree) | Powers the local preview server |
+| `claude/<random-name>` (worktree) | Powers the local preview server |
 
 When editing shared files (`NoteEditor.tsx`, `Sidebar.tsx`, `store.ts`, etc.), **apply changes to both** the main repo file and the worktree file, then commit each separately.
