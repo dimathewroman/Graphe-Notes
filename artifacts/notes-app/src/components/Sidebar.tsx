@@ -2,7 +2,7 @@ import { useState } from "react";
 import grapheLogo from "@assets/graphe_minimalist_1773640203523.png";
 import {
   Folder, FolderOpen, FileText, Star,
-  Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag, Menu, X, ShieldCheck, Lock, Unlock, KeyRound, LogOut
+  Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag, Menu, X, ShieldCheck, Lock, Unlock, KeyRound, LogOut, Wand2
 } from "lucide-react";
 import { useAuth } from "@workspace/replit-auth-web";
 import { cn } from "@/lib/utils";
@@ -301,7 +301,15 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               </div>
             )}
           </div>
+
+          {/* Quick Bits — placeholder, move above All Notes when ready */}
+          <div className="flex items-center gap-3 py-2.5 md:py-2 px-3 rounded-lg text-sm text-muted-foreground opacity-40 cursor-default select-none">
+            <Zap className="w-4 h-4" />
+            <span>Quick Bits</span>
+          </div>
         </div>
+
+        <div className="mx-3 border-t border-panel-border mb-3" />
 
         <div className="px-3 mb-1.5 flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           <span>Folders</span>
@@ -341,6 +349,16 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           )}
         </div>
 
+        <div className="mx-3 border-t border-panel-border mt-3 mb-4" />
+
+        <div className="px-3 space-y-0.5">
+          {/* Recently Deleted — placeholder, not yet active */}
+          <div className="flex items-center gap-3 py-2.5 md:py-2 px-3 rounded-lg text-sm text-muted-foreground opacity-40 cursor-default select-none">
+            <Trash2 className="w-4 h-4" />
+            <span>Recently Deleted</span>
+          </div>
+        </div>
+
       </div>
 
       <div className="p-4 border-t border-panel-border space-y-2">
@@ -348,7 +366,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           onClick={() => { setAIPanelOpen(true); onNavigate?.(); }}
           className="w-full flex items-center justify-center gap-2 py-3 md:py-2.5 rounded-xl bg-gradient-to-r from-indigo-500/10 to-purple-500/10 hover:from-indigo-500/20 hover:to-purple-500/20 border border-indigo-500/20 text-indigo-400 hover:text-indigo-300 font-medium transition-all"
         >
-          <Zap className="w-4 h-4" />
+          <Wand2 className="w-4 h-4" />
           <span>AI Assistant</span>
         </button>
 

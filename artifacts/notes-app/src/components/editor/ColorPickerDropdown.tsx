@@ -1,4 +1,5 @@
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useLayoutEffect, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
@@ -238,12 +239,35 @@ interface ColorPickerDropdownProps {
   type: "text" | "highlight";
   editor: Editor;
   onClose: () => void;
+  triggerRef: React.RefObject<HTMLElement | null>;
 }
 
-export function ColorPickerDropdown({ type, editor, onClose }: ColorPickerDropdownProps) {
+export function ColorPickerDropdown({ type, editor, onClose, triggerRef }: ColorPickerDropdownProps) {
   const [showCustom, setShowCustom] = useState(false);
   const [customColor, setCustomColor] = useState("#3B82F6");
   const containerRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number }>({ top: -9999, left: -9999 });
+
+  useLayoutEffect(() => {
+    const trigger = triggerRef.current;
+    const menu = containerRef.current;
+    if (!trigger || !menu) return;
+    const triggerRect = trigger.getBoundingClientRect();
+    const menuW = menu.offsetWidth || 224;
+    const menuH = menu.offsetHeight || 300;
+    const pad = 8;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    let top = triggerRect.bottom + 6;
+    let left = triggerRect.left;
+    if (left + menuW > vw - pad) left = vw - pad - menuW;
+    if (left < pad) left = pad;
+    if (top + menuH > vh - pad) top = triggerRect.top - menuH - 6;
+    if (top < pad) top = pad;
+    setPos({ top, left });
+  // Re-clamp when the custom panel expands (menu grows taller)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCustom]);
 
   // Current active color from editor
   const activeColor = type === "text"
@@ -287,10 +311,11 @@ export function ColorPickerDropdown({ type, editor, onClose }: ColorPickerDropdo
 
   const rainbow = type === "text" ? RAINBOW_TEXT : RAINBOW_HIGHLIGHT;
 
-  return (
+  return createPortal(
     <div
       ref={containerRef}
-      className="absolute top-full left-0 mt-1.5 z-40 bg-popover border border-panel-border rounded-xl shadow-2xl p-3 w-56"
+      className="fixed z-50 bg-popover border border-panel-border rounded-xl shadow-2xl p-3 w-56"
+      style={{ top: pos.top, left: pos.left }}
     >
       {/* None / Remove option */}
       <button
@@ -351,6 +376,7 @@ export function ColorPickerDropdown({ type, editor, onClose }: ColorPickerDropdo
           }}
         />
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
