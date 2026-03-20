@@ -11,7 +11,14 @@ import { DEMO_NOTES, DEMO_FOLDERS, DEMO_TAGS } from "@/lib/demo-data";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      // Retry up to 3x on 5xx / network errors (handles API server startup race),
+      // but never retry on 4xx (auth, not-found, etc.).
+      retry: (failureCount, error) => {
+        const status = (error as { status?: number })?.status;
+        if (status !== undefined && status < 500) return false;
+        return failureCount < 3;
+      },
+      retryDelay: (attempt) => Math.min(500 * 2 ** attempt, 5000),
       refetchOnWindowFocus: false,
     },
   },
