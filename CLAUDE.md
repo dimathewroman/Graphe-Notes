@@ -2,10 +2,13 @@
 
 > For full stack/architecture details see `replit.md`. This file covers what Claude Code needs to work effectively in this repo.
 
-## Current Sprint
-Phase: Vault & Demo Polish
-In progress: Superscript/subscript dependency fix for Replit
-Recently completed: Inline vault unlock, demo PIN session persistence
+## Session Startup
+At the start of every new session, before doing anything else:
+1. Pull the latest master from GitHub into the local main repo
+2. Create a new worktree branching from that updated local master
+3. Run pnpm install from the worktree root
+4. Start the preview server targeting @workspace/notes-app
+Do this automatically without being asked.
 
 ---
 
@@ -15,7 +18,7 @@ Recently completed: Inline vault unlock, demo PIN session persistence
 # Dev server (frontend, port 5173)
 pnpm --filter @workspace/notes-app run dev
 
-# Typecheck — always run from repo root (composite project references require it)
+# Typecheck — always run from repo root
 pnpm run typecheck
 
 # Push DB schema changes
@@ -90,7 +93,7 @@ All env vars are injected at build/runtime — no `.env` files are committed.
 |---|---|---|
 | `SUPABASE_URL` | frontend + backend | Supabase project URL |
 | `SUPABASE_ANON_KEY` | frontend + backend | Public anon key, safe for client |
-| `SUPABASE_SERVICE_ROLE_KEY` | backend only | Admin operations — **never expose to frontend** |
+| `SUPABASE_SERVICE_ROLE_KEY` | backend only | Admin operations — never expose to frontend |
 | `SUPABASE_DB_URL` | `lib/db` (Drizzle) | Session-mode pooler connection string |
 | `PORT` | frontend (Vite) | Dev server port |
 | `BASE_PATH` | frontend (Vite) | URL base path |
@@ -111,9 +114,9 @@ All env vars are injected at build/runtime — no `.env` files are committed.
 
 ## Working Convention
 
-- Before running any terminal command, explain in plain English what it does, why it's necessary, what it affects, and whether it's reversible. Wait for confirmation.
+- Before running any terminal command, explain in plain English what it does, why it is necessary, what it affects, and whether it is reversible. Wait for confirmation.
 - Only modify code files within the Graphe-Notes repository. Installing packages and running dev tools is fine. Never modify unrelated projects or system configuration files.
-- Never delete files without explicitly telling me what you're deleting and why. Wait for confirmation.
+- Never delete files without explicitly telling me what you are deleting and why. Wait for confirmation.
 - Never commit directly to master. Always use a feature branch.
 - When something goes wrong, stop immediately and explain what happened before attempting a fix.
 
@@ -121,11 +124,4 @@ All env vars are injected at build/runtime — no `.env` files are committed.
 
 ## Worktree Architecture (Claude Code)
 
-This repo uses a Claude Code git worktree to power the local preview server. The worktree branch name is **randomized each session** (e.g. `claude/modest-albattani`) — do not rely on it by name.
-
-| Branch | Purpose |
-|---|---|
-| `feature/editor-enhancements` | Main development branch, pushed to GitHub |
-| `claude/<random-name>` (worktree) | Powers the local preview server |
-
-When editing shared files (`NoteEditor.tsx`, `Sidebar.tsx`, `store.ts`, etc.), **apply changes to both** the main repo file and the worktree file, then commit each separately.
+The worktree branch name is randomized each session. All edits happen in the worktree only. Never edit main repo files directly during a session. Use a feature branch per sprint, submit a PR when done, never commit to master.
