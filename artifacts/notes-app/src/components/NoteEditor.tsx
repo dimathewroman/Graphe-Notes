@@ -980,9 +980,13 @@ export function NoteEditor() {
       if (editor.getHTML() !== note.content) {
         editor.commands.setContent(note.content, { emitUpdate: false });
       }
+    } else if (editor && !note) {
+      // Note is still loading — clear stale content from previous note
+      editor.commands.setContent("", { emitUpdate: false });
+      setTitle("");
     }
     setShowVersionHistory(false);
-  }, [note?.id, editor]);
+  }, [note?.id, selectedNoteId, editor]);
 
   const debouncedSave = useCallback(
     (() => {

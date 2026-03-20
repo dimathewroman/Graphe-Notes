@@ -573,7 +573,7 @@ export function SettingsModal() {
                   {user && (
                     <div className="p-4 rounded-xl bg-background border border-panel-border flex items-center gap-3">
                       {user.profileImageUrl ? (
-                        <img src={user.profileImageUrl} alt="" className="w-9 h-9 rounded-full shrink-0" />
+                        <img src={user.profileImageUrl} alt="" referrerPolicy="no-referrer" className="w-9 h-9 rounded-full shrink-0" />
                       ) : (
                         <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-medium shrink-0">
                           {(user.firstName || user.email || "U")[0].toUpperCase()}

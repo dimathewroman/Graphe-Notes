@@ -1,36 +1,22 @@
+import { config as loadEnv } from "dotenv";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-const rawPort = process.env.PORT;
+// Load .env from repo root (2 levels up from artifacts/notes-app/).
+// Silently no-ops if the file doesn't exist or vars are already set.
+loadEnv({ path: path.resolve(import.meta.dirname, "../../.env"), override: false });
 
-if (!rawPort) {
-  throw new Error(
-    "PORT environment variable is required but was not provided.",
-  );
-}
-
-const port = Number(rawPort);
-
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
-
-const basePath = process.env.BASE_PATH;
-
-if (!basePath) {
-  throw new Error(
-    "BASE_PATH environment variable is required but was not provided.",
-  );
-}
+const port = Number(process.env.PORT ?? "5173");
+const basePath = process.env.BASE_PATH ?? "/";
 
 export default defineConfig({
   base: basePath,
   define: {
-    "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(process.env.SUPABASE_URL),
-    "import.meta.env.VITE_SUPABASE_ANON_KEY": JSON.stringify(process.env.SUPABASE_ANON_KEY),
+    "import.meta.env.VITE_SUPABASE_URL": JSON.stringify(process.env.SUPABASE_URL ?? "https://placeholder.supabase.co"),
+    "import.meta.env.VITE_SUPABASE_ANON_KEY": JSON.stringify(process.env.SUPABASE_ANON_KEY ?? "placeholder"),
   },
   plugins: [
     react(),
@@ -70,6 +56,9 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    proxy: process.env.API_PORT
+      ? { "/api": { target: `http://localhost:${process.env.API_PORT}`, changeOrigin: true } }
+      : undefined,
   },
   preview: {
     port,
