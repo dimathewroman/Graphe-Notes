@@ -355,7 +355,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         {user && (
           <div className="flex items-center gap-2 px-1 pt-1">
             {user.profileImageUrl ? (
-              <img src={user.profileImageUrl} alt="" className="w-7 h-7 rounded-full object-cover shrink-0" />
+              <img src={user.profileImageUrl} alt="" referrerPolicy="no-referrer" className="w-7 h-7 rounded-full object-cover shrink-0" />
             ) : (
               <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0 text-xs font-medium text-primary">
                 {(user.firstName?.[0] ?? user.email?.[0] ?? "?").toUpperCase()}

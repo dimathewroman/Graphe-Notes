@@ -6,8 +6,9 @@
 At the start of every new session, before doing anything else:
 1. Pull the latest master from GitHub into the local main repo
 2. Create a new worktree branching from that updated local master
-3. Run pnpm install from the worktree root
-4. Start the preview server targeting @workspace/notes-app
+3. Check that `.env` exists in the main repo root — if not, copy `.env.example` to `.env` and inform the user that placeholder values are in place (demo mode will work, but real credentials from 1Password are needed for full login/DB access)
+4. Run `pnpm install` from the worktree root
+5. Start both preview servers: `notes-app` (port 5173) and `api-server` (port 3001)
 Do this automatically without being asked.
 
 ---
