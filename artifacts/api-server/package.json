@@ -15,7 +15,8 @@
     "cors": "^2",
     "dotenv": "catalog:",
     "drizzle-orm": "catalog:",
-    "express": "^5"
+    "express": "^5",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

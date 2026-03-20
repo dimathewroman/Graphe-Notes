@@ -9,6 +9,7 @@ import {
   useGetNotes, useCreateNote, useToggleNotePin, useToggleNoteFavorite,
   useDeleteNote, useUpdateNote, useToggleNoteVault, getGetNotesQueryKey, getGetNoteQueryKey, getGetTagsQueryKey, useGetFolders
 } from "@workspace/api-client-react";
+import type { Note } from "@workspace/api-client-react";
 import { useQueryClient, useQueries } from "@tanstack/react-query";
 import { cn, formatDate } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
@@ -97,7 +98,7 @@ export function NoteList() {
     sortDir
   };
 
-  const { data: apiNotes = [], isLoading: apiLoading } = useGetNotes(queryParams, { query: { enabled: !isDemo } });
+  const { data: apiNotes = [], isLoading: apiLoading } = useGetNotes(queryParams, { query: { enabled: !isDemo, queryKey: getGetNotesQueryKey(queryParams) } });
 
   // Subscribe to each note's individual cache so pin/fav/vault/tag changes are reactive.
   const demoNoteQueries = useQueries({
@@ -105,7 +106,7 @@ export function NoteList() {
       const fallback = DEMO_NOTES.find(n => n.id === id);
       return {
         queryKey: getGetNoteQueryKey(id),
-        queryFn: fallback ? () => fallback : async () => queryClient.getQueryData(getGetNoteQueryKey(id)),
+        queryFn: fallback ? () => fallback : async () => queryClient.getQueryData<Note>(getGetNoteQueryKey(id)),
         initialData: fallback,
         staleTime: Infinity,
         gcTime: Infinity,
