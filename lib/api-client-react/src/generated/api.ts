@@ -23,11 +23,14 @@ import type {
   BeginBrowserLoginParams,
   CreateFolderBody,
   CreateNoteBody,
+  CreateQuickBitBody,
   CreateSmartFolderBody,
   ErrorEnvelope,
   ErrorResponse,
   Folder,
   GetNotesParams,
+  GetQuickBitsParams,
+  GetQuickBitsResponse,
   HandleBrowserLoginCallbackParams,
   HealthStatus,
   LogoutSuccess,
@@ -35,10 +38,14 @@ import type {
   MobileTokenExchangeSuccess,
   MoveNoteBody,
   Note,
+  QuickBit,
+  QuickBitSettings,
   SmartFolder,
   ToggleNoteVaultBody,
   UpdateFolderBody,
   UpdateNoteBody,
+  UpdateQuickBitBody,
+  UpdateQuickBitSettingsBody,
   UpdateSmartFolderBody,
   VaultChangePasswordBody,
   VaultSetupBody,
@@ -1895,6 +1902,606 @@ export const useDeleteSmartFolder = <
   TContext
 > => {
   return useMutation(getDeleteSmartFolderMutationOptions(options));
+};
+
+/**
+ * @summary List all Quick Bits for the current user
+ */
+export const getGetQuickBitsUrl = (params?: GetQuickBitsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/quick-bits?${stringifiedParams}`
+    : `/api/quick-bits`;
+};
+
+export const getQuickBits = async (
+  params?: GetQuickBitsParams,
+  options?: RequestInit,
+): Promise<GetQuickBitsResponse> => {
+  return customFetch<GetQuickBitsResponse>(getGetQuickBitsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetQuickBitsQueryKey = (params?: GetQuickBitsParams) => {
+  return [`/api/quick-bits`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetQuickBitsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getQuickBits>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetQuickBitsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getQuickBits>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetQuickBitsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getQuickBits>>> = ({
+    signal,
+  }) => getQuickBits(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getQuickBits>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetQuickBitsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getQuickBits>>
+>;
+export type GetQuickBitsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all Quick Bits for the current user
+ */
+
+export function useGetQuickBits<
+  TData = Awaited<ReturnType<typeof getQuickBits>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetQuickBitsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getQuickBits>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetQuickBitsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a Quick Bit
+ */
+export const getCreateQuickBitUrl = () => {
+  return `/api/quick-bits`;
+};
+
+export const createQuickBit = async (
+  createQuickBitBody: CreateQuickBitBody,
+  options?: RequestInit,
+): Promise<QuickBit> => {
+  return customFetch<QuickBit>(getCreateQuickBitUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createQuickBitBody),
+  });
+};
+
+export const getCreateQuickBitMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createQuickBit>>,
+    TError,
+    { data: BodyType<CreateQuickBitBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createQuickBit>>,
+  TError,
+  { data: BodyType<CreateQuickBitBody> },
+  TContext
+> => {
+  const mutationKey = ["createQuickBit"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createQuickBit>>,
+    { data: BodyType<CreateQuickBitBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createQuickBit(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateQuickBitMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createQuickBit>>
+>;
+export type CreateQuickBitMutationBody = BodyType<CreateQuickBitBody>;
+export type CreateQuickBitMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Create a Quick Bit
+ */
+export const useCreateQuickBit = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createQuickBit>>,
+    TError,
+    { data: BodyType<CreateQuickBitBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createQuickBit>>,
+  TError,
+  { data: BodyType<CreateQuickBitBody> },
+  TContext
+> => {
+  return useMutation(getCreateQuickBitMutationOptions(options));
+};
+
+/**
+ * @summary Get the current user's Quick Bit settings
+ */
+export const getGetQuickBitSettingsUrl = () => {
+  return `/api/quick-bits/settings`;
+};
+
+export const getQuickBitSettings = async (
+  options?: RequestInit,
+): Promise<QuickBitSettings> => {
+  return customFetch<QuickBitSettings>(getGetQuickBitSettingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetQuickBitSettingsQueryKey = () => {
+  return [`/api/quick-bits/settings`] as const;
+};
+
+export const getGetQuickBitSettingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getQuickBitSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getQuickBitSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetQuickBitSettingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getQuickBitSettings>>
+  > = ({ signal }) => getQuickBitSettings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getQuickBitSettings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetQuickBitSettingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getQuickBitSettings>>
+>;
+export type GetQuickBitSettingsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the current user's Quick Bit settings
+ */
+
+export function useGetQuickBitSettings<
+  TData = Awaited<ReturnType<typeof getQuickBitSettings>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getQuickBitSettings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetQuickBitSettingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update Quick Bit settings
+ */
+export const getUpdateQuickBitSettingsUrl = () => {
+  return `/api/quick-bits/settings`;
+};
+
+export const updateQuickBitSettings = async (
+  updateQuickBitSettingsBody: UpdateQuickBitSettingsBody,
+  options?: RequestInit,
+): Promise<QuickBitSettings> => {
+  return customFetch<QuickBitSettings>(getUpdateQuickBitSettingsUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateQuickBitSettingsBody),
+  });
+};
+
+export const getUpdateQuickBitSettingsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateQuickBitSettings>>,
+    TError,
+    { data: BodyType<UpdateQuickBitSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateQuickBitSettings>>,
+  TError,
+  { data: BodyType<UpdateQuickBitSettingsBody> },
+  TContext
+> => {
+  const mutationKey = ["updateQuickBitSettings"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateQuickBitSettings>>,
+    { data: BodyType<UpdateQuickBitSettingsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateQuickBitSettings(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateQuickBitSettingsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateQuickBitSettings>>
+>;
+export type UpdateQuickBitSettingsMutationBody =
+  BodyType<UpdateQuickBitSettingsBody>;
+export type UpdateQuickBitSettingsMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update Quick Bit settings
+ */
+export const useUpdateQuickBitSettings = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateQuickBitSettings>>,
+    TError,
+    { data: BodyType<UpdateQuickBitSettingsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateQuickBitSettings>>,
+  TError,
+  { data: BodyType<UpdateQuickBitSettingsBody> },
+  TContext
+> => {
+  return useMutation(getUpdateQuickBitSettingsMutationOptions(options));
+};
+
+/**
+ * @summary Get a single Quick Bit
+ */
+export const getGetQuickBitUrl = (id: number) => {
+  return `/api/quick-bits/${id}`;
+};
+
+export const getQuickBit = async (
+  id: number,
+  options?: RequestInit,
+): Promise<QuickBit> => {
+  return customFetch<QuickBit>(getGetQuickBitUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetQuickBitQueryKey = (id: number) => {
+  return [`/api/quick-bits/${id}`] as const;
+};
+
+export const getGetQuickBitQueryOptions = <
+  TData = Awaited<ReturnType<typeof getQuickBit>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getQuickBit>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetQuickBitQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getQuickBit>>> = ({
+    signal,
+  }) => getQuickBit(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getQuickBit>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetQuickBitQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getQuickBit>>
+>;
+export type GetQuickBitQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get a single Quick Bit
+ */
+
+export function useGetQuickBit<
+  TData = Awaited<ReturnType<typeof getQuickBit>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getQuickBit>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetQuickBitQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a Quick Bit
+ */
+export const getUpdateQuickBitUrl = (id: number) => {
+  return `/api/quick-bits/${id}`;
+};
+
+export const updateQuickBit = async (
+  id: number,
+  updateQuickBitBody: UpdateQuickBitBody,
+  options?: RequestInit,
+): Promise<QuickBit> => {
+  return customFetch<QuickBit>(getUpdateQuickBitUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateQuickBitBody),
+  });
+};
+
+export const getUpdateQuickBitMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateQuickBit>>,
+    TError,
+    { id: number; data: BodyType<UpdateQuickBitBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateQuickBit>>,
+  TError,
+  { id: number; data: BodyType<UpdateQuickBitBody> },
+  TContext
+> => {
+  const mutationKey = ["updateQuickBit"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateQuickBit>>,
+    { id: number; data: BodyType<UpdateQuickBitBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return updateQuickBit(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateQuickBitMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateQuickBit>>
+>;
+export type UpdateQuickBitMutationBody = BodyType<UpdateQuickBitBody>;
+export type UpdateQuickBitMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Update a Quick Bit
+ */
+export const useUpdateQuickBit = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateQuickBit>>,
+    TError,
+    { id: number; data: BodyType<UpdateQuickBitBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateQuickBit>>,
+  TError,
+  { id: number; data: BodyType<UpdateQuickBitBody> },
+  TContext
+> => {
+  return useMutation(getUpdateQuickBitMutationOptions(options));
+};
+
+/**
+ * @summary Delete a Quick Bit
+ */
+export const getDeleteQuickBitUrl = (id: number) => {
+  return `/api/quick-bits/${id}`;
+};
+
+export const deleteQuickBit = async (
+  id: number,
+  options?: RequestInit,
+): Promise<QuickBit> => {
+  return customFetch<QuickBit>(getDeleteQuickBitUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteQuickBitMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteQuickBit>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteQuickBit>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteQuickBit"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteQuickBit>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteQuickBit(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteQuickBitMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteQuickBit>>
+>;
+
+export type DeleteQuickBitMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a Quick Bit
+ */
+export const useDeleteQuickBit = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteQuickBit>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteQuickBit>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteQuickBitMutationOptions(options));
 };
 
 /**
