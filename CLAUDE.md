@@ -59,11 +59,10 @@ All endpoints live in artifacts/next-app/src/app/api/ and are prefixed with /api
 ## Session Startup
 
 At the start of every new session, before doing anything else:
-1. Pull the latest master from GitHub into the local main repo
-2. Create a new worktree branching from that updated local master
-3. Check that .env exists in the repo root -- if not, copy .env.example to .env and inform the user that real credentials from 1Password are needed for full login and DB access
-4. Run pnpm install from the worktree root
-5. Start the Next.js dev server on port 3000
+1. Pull the latest master from GitHub
+2. Check that .env exists in the repo root -- if not, copy .env.example to .env and inform the user that real credentials from 1Password are needed for full login and DB access
+3. Run pnpm install from the repo root
+4. Start the Next.js dev server on port 3000
 
 Do this automatically without being asked.
 
@@ -210,19 +209,17 @@ Branch strategy: master is production. feature/* and fix/* branches get Vercel p
 
 ---
 
-## Worktree Architecture
-
-The worktree branch name is randomized each session (e.g. claude/modest-albattani) -- do not rely on it by name. The worktree is always created from master.
+## Branch Strategy
 
 | Branch | Purpose |
 |---|---|
+| master | Production -- Vercel deploys from here |
 | feature/<n> | New feature work, branched from master, pushed to GitHub |
 | fix/<description> | Bug fixes, branched from master, pushed to GitHub |
-| claude/<random-name> (worktree) | Powers the local preview server only -- never pushed |
 
 PR workflow:
 1. Create feature/<n> or fix/<n> from master
-2. Make all commits on that branch, never on the claude/* worktree branch
+2. Commit all work on that branch
 3. Push and open PR targeting master
 
 ---
