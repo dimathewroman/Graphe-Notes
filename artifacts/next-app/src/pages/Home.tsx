@@ -61,7 +61,7 @@ export default function Home() {
   }, [setSettingsOpen]);
 
   const isCompact = bp === "mobile" || bp === "tablet";
-  const showEditor = bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor");
+  const showEditor = activeFilter !== "quickbits" && (bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor"));
   const showList = bp === "desktop" ? isNoteListOpen : (bp === "tablet" || (bp === "mobile" && mobileView === "list"));
 
   return (
