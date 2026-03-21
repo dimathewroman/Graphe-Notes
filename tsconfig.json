@@ -12,8 +12,5 @@
     {
       "path": "./lib/api-zod"
     },
-    {
-      "path": "./lib/replit-auth-web"
-    }
   ]
 }
