@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import Home from "@/pages/Home";
@@ -191,6 +191,16 @@ function AuthGate({ children, isDemo, onDemo }: { children: React.ReactNode; isD
 export default function AppPage() {
   const [isDemo, setIsDemo] = useState(false);
   const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuth();
+
+  // If the user logs in during a demo session, wipe all demo cache data and
+  // reset the demo flag so real notes are fetched fresh from the API.
+  useEffect(() => {
+    if (isAuthenticated && isDemo) {
+      queryClient.clear();
+      setIsDemo(false);
+    }
+  }, [isAuthenticated, isDemo, queryClient]);
 
   const handleEnterDemo = () => enterDemoMode(queryClient, setIsDemo);
 
