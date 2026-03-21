@@ -8,9 +8,11 @@ const DrawerPrimitive = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <VaulDrawer.Content
     ref={ref}
+    aria-describedby={undefined}
     className={cn(className)}
     {...props}
   >
+    <VaulDrawer.Title className="sr-only">Navigation</VaulDrawer.Title>
     {children}
   </VaulDrawer.Content>
 ))

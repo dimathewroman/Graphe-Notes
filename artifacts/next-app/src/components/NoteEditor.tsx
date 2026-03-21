@@ -1246,7 +1246,7 @@ export function NoteEditor() {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] }, underline: false }),
+      StarterKit.configure({ heading: { levels: [1, 2, 3] }, underline: false, link: false }),
       UnderlineExt,
       TextStyle,
       FontSize,
