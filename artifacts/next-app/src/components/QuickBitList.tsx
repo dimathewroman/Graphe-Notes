@@ -33,7 +33,7 @@ function formatExpiry(expiresAt: string): { label: string; className: string } {
 }
 
 export function QuickBitList() {
-  const { selectedNoteId, selectNote, setSidebarOpen, isSidebarOpen, toggleSidebar, setMobileView } = useAppStore();
+  const { setSidebarOpen, isSidebarOpen, toggleSidebar } = useAppStore();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
   const queryClient = useQueryClient();
@@ -47,10 +47,8 @@ export function QuickBitList() {
 
   const createMut = useCreateQuickBit({
     mutation: {
-      onSuccess: (newQb) => {
+      onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
-        selectNote(newQb.id);
-        if (bp === "mobile") setMobileView("editor");
       },
     },
   });
@@ -58,11 +56,6 @@ export function QuickBitList() {
   const handleCreateNew = () => {
     if (isDemo) return;
     createMut.mutate({ data: { title: "", content: "" } });
-  };
-
-  const handleSelect = (id: number) => {
-    selectNote(id);
-    if (bp === "mobile") setMobileView("editor");
   };
 
   const containerClass =
@@ -141,20 +134,9 @@ export function QuickBitList() {
             return (
               <div
                 key={qb.id}
-                onClick={() => handleSelect(qb.id)}
-                className={cn(
-                  "p-3 rounded-xl cursor-pointer border transition-all duration-200 group relative",
-                  selectedNoteId === qb.id
-                    ? "bg-panel border-primary/50 shadow-md shadow-primary/5"
-                    : "bg-transparent border-transparent hover:bg-panel hover:border-panel-border",
-                )}
+                className="p-3 rounded-xl border border-transparent bg-transparent hover:bg-panel hover:border-panel-border transition-all duration-200"
               >
-                <h3
-                  className={cn(
-                    "font-medium truncate text-sm mb-1",
-                    selectedNoteId === qb.id ? "text-foreground" : "text-foreground/90",
-                  )}
-                >
+                <h3 className="font-medium truncate text-sm mb-1 text-foreground/90">
                   {qb.title || "Untitled Quick Bit"}
                 </h3>
                 <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed mb-2">
