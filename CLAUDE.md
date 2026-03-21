@@ -1,22 +1,19 @@
 # Graphe Notes — Claude Code Guide
 
-> For full stack/architecture details see `replit.md`. This file covers what Claude Code needs to work effectively in this repo.
-
-## Current Sprint
-NOW: Next.js 15 migration — rebuilding Graphe Notes on the App Router.
-Active branch: `migration/next.js` · App location: `artifacts/next-app`
+## Deployment Status
+Migration to Next.js 15 App Router is complete. The app lives in `artifacts/next-app`
+and is deployed on Vercel from the `migration/next.js` branch.
 
 ---
 
 ## Session Startup
 At the start of every new session, before doing anything else:
 1. Pull the latest `migration/next.js` from GitHub into the local main repo
-2. Create a new worktree branching from that updated `migration/next.js`
-3. Check that `.env` exists in the main repo root — if not, copy `.env.example` to `.env`
+2. Check that `.env` exists in the main repo root — if not, copy `.env.example` to `.env`
    and inform the user that placeholder values are in place (real credentials from
    1Password are needed for full login/DB access)
-4. Run `pnpm install` from the worktree root
-5. Start the `next-app` preview server (port 3000)
+3. Run `pnpm install` from the repo root
+4. Start the `next-app` preview server (port 3000)
 Do this automatically without being asked.
 
 **Do not start the old `notes-app` (port 5173) or `api-server` (port 3001) servers.**
@@ -85,10 +82,44 @@ All env vars are injected at build/runtime — no `.env` files are committed.
 
 | Variable | Required by | Notes |
 |---|---|---|
-| `SUPABASE_URL` | frontend + backend | Supabase project URL |
-| `SUPABASE_ANON_KEY` | frontend + backend | Public anon key, safe for client |
+| `NEXT_PUBLIC_SUPABASE_URL` | frontend | Client-safe Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | frontend | Client-safe public anon key |
+| `SUPABASE_URL` | backend | Supabase project URL (server routes) |
+| `SUPABASE_ANON_KEY` | backend | Fallback — used by next.config.ts to populate NEXT_PUBLIC_ |
 | `SUPABASE_SERVICE_ROLE_KEY` | backend only | Admin operations — **never expose to frontend** |
 | `SUPABASE_DB_URL` | `lib/db` (Drizzle) | Session-mode pooler connection string |
+
+For local dev, the repo-root `.env` is loaded automatically by `next.config.ts`.
+See `artifacts/next-app/.env.example` for the full list of variables to set.
+
+---
+
+## Vercel Deployment
+
+`vercel.json` at the repo root configures Vercel to build from the monorepo subdirectory:
+
+```json
+{
+  "framework": "nextjs",
+  "buildCommand": "pnpm --filter @workspace/next-app run build",
+  "outputDirectory": "artifacts/next-app/.next",
+  "installCommand": "pnpm install"
+}
+```
+
+**Required environment variables** — set these in Vercel → Project Settings → Environment Variables:
+
+| Variable | Scope |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | All (client + server) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | All (client + server) |
+| `SUPABASE_URL` | Server only |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server only |
+| `SUPABASE_DB_URL` | Build only (DB migrations) |
+
+**Branch strategy:**
+- `migration/next.js` → production deployment
+- `feature/*` and `fix/*` branches → Vercel preview deployments
 
 ---
 
@@ -96,9 +127,6 @@ All env vars are injected at build/runtime — no `.env` files are committed.
 
 **No tests exist.** There is no test runner configured. Do not suggest or scaffold tests
 unless explicitly asked.
-
-**Auth is not yet wired up.** `@workspace/replit-auth-web` is not used in `next-app`.
-Auth will be rebuilt separately. Do not reference or import it.
 
 **AI provider keys** (OpenAI, Anthropic, Gemini) are stored in **plaintext
 `localStorage`**. This is intentional for the current phase where users supply their own
@@ -129,7 +157,7 @@ do not rely on it by name. The worktree is always created from `migration/next.j
 
 | Branch | Purpose |
 |---|---|
-| `migration/next.js` | Active migration work — base for all new branches |
+| `migration/next.js` | Active branch — base for all new work |
 | `feature/<name>` | New feature work, branched from `migration/next.js`, pushed to GitHub |
 | `fix/<description>` | Bug fixes, branched from `migration/next.js`, pushed to GitHub |
 | `claude/<random-name>` (worktree) | Powers the local preview server only |
