@@ -101,18 +101,25 @@ export function NoteList() {
   const { data: apiNotes = [], isLoading: apiLoading } = useGetNotes(queryParams, { query: { enabled: !isDemo, queryKey: getGetNotesQueryKey(queryParams) } });
 
   // Subscribe to each note's individual cache so pin/fav/vault/tag changes are reactive.
+  // Only register these queries when in demo mode — if the array is always mounted,
+  // initialData would write demo content into the cache even for authenticated users,
+  // causing demo note content to flash when a real note shares an ID (1–14).
   const demoNoteQueries = useQueries({
-    queries: [...DEMO_NOTES.map(n => n.id), ...demoExtraIds].map(id => {
-      const fallback = DEMO_NOTES.find(n => n.id === id);
-      return {
-        queryKey: getGetNoteQueryKey(id),
-        queryFn: fallback ? () => fallback : async () => queryClient.getQueryData<Note>(getGetNoteQueryKey(id)),
-        initialData: fallback,
-        staleTime: Infinity,
-        gcTime: Infinity,
-        enabled: isDemo,
-      };
-    }),
+    queries: isDemo
+      ? [...DEMO_NOTES.map(n => n.id), ...demoExtraIds].map(id => {
+          const fallback = DEMO_NOTES.find(n => n.id === id);
+          return {
+            queryKey: getGetNoteQueryKey(id),
+            queryFn: fallback
+              ? () => fallback
+              : async () => queryClient.getQueryData<Note>(getGetNoteQueryKey(id)),
+            initialData: fallback,
+            staleTime: Infinity,
+            gcTime: Infinity,
+            enabled: true,
+          };
+        })
+      : [],
   });
   // Deduplicate by id to guard against any transient duplicate query results during
   // HMR or isDemo transition renders.
