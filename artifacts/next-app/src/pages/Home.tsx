@@ -1,0 +1,102 @@
+import { useEffect } from "react";
+import { Sidebar, SidebarContent } from "@/components/Sidebar";
+import { NoteList } from "@/components/NoteList";
+import { NoteEditor } from "@/components/NoteEditor";
+import { AIPanel } from "@/components/AIPanel";
+import { SettingsModal } from "@/components/SettingsModal";
+import { useAppStore } from "@/store";
+import { useBreakpoint } from "@/hooks/use-mobile";
+import { Drawer, DrawerPortal, DrawerOverlay } from "@/components/ui/drawer";
+import { DrawerPrimitive } from "@/components/ui/drawer-left";
+import { useDemoMode } from "@/App";
+
+export default function Home() {
+  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId } = useAppStore();
+  const bp = useBreakpoint();
+  const isDemo = useDemoMode();
+
+  useEffect(() => {
+    if (bp === "desktop") {
+      setSidebarOpen(true);
+    } else {
+      setSidebarOpen(false);
+    }
+  }, [bp]);
+
+  // Prevent iOS Safari from scrolling the page when the keyboard opens inside
+  // the fixed sidebar drawer — which shifts the drawer position and doesn't
+  // restore it after the keyboard dismisses.
+  useEffect(() => {
+    if (!isSidebarOpen || bp === "desktop") return;
+    const scrollY = window.scrollY;
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = "100%";
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.width = "";
+      document.body.style.overflow = "";
+      window.scrollTo(0, scrollY);
+    };
+  }, [isSidebarOpen, bp]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
+        if (searchInput) searchInput.focus();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault();
+        setSettingsOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [setSettingsOpen]);
+
+  const isCompact = bp === "mobile" || bp === "tablet";
+  const showEditor = bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor");
+  const showList = bp === "desktop" ? isNoteListOpen : (bp === "tablet" || (bp === "mobile" && mobileView === "list"));
+
+  return (
+    <div className="flex flex-col h-screen w-full bg-background overflow-hidden relative">
+      {isDemo && (
+        <div className="w-full bg-primary/10 border-b border-primary/20 px-4 py-2 flex items-center justify-between text-xs text-primary z-50">
+          <span>👋 You're in demo mode — notes won't be saved.</span>
+          <a href="/" className="font-medium underline underline-offset-2 hover:opacity-80 transition-opacity">Sign up to keep your notes →</a>
+        </div>
+      )}
+      <div className="flex flex-1 w-full overflow-hidden">
+      {bp === "desktop" && <Sidebar />}
+
+      {isCompact && (
+        <Drawer
+          open={isSidebarOpen}
+          onOpenChange={setSidebarOpen}
+          direction="left"
+        >
+          <DrawerPortal>
+            <DrawerOverlay />
+            <DrawerPrimitive
+              className="fixed inset-y-0 left-0 z-50 w-[280px] bg-panel border-r border-panel-border shadow-2xl"
+            >
+              <SidebarContent onNavigate={() => setSidebarOpen(false)} />
+            </DrawerPrimitive>
+          </DrawerPortal>
+        </Drawer>
+      )}
+
+      {showList && <NoteList />}
+      {showEditor && <NoteEditor />}
+
+      <AIPanel />
+      <SettingsModal />
+      </div>
+    </div>
+  );
+}
