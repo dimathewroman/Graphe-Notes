@@ -78,7 +78,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     setNewFolderName(""); setIsCreatingFolder(false); setNewFolderParentId(null);
   };
 
-  const handleNavClick = (filter: "all" | "favorites" | "attachments" | "folder" | "tag" | "vault", idOrTag?: number | string | null) => {
+  const handleNavClick = (filter: "all" | "favorites" | "attachments" | "folder" | "tag" | "vault" | "quickbits", idOrTag?: number | string | null) => {
     setFilter(filter, idOrTag);
     onNavigate?.();
   };
@@ -268,6 +268,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       <div className="flex-1 overflow-y-auto py-2">
         <div className="px-3 space-y-0.5 mb-4">
+          <NavItem icon={<Zap className="w-4 h-4" />} label="Quick Bits" active={activeFilter === "quickbits"} onClick={() => handleNavClick("quickbits")} />
           <NavItem icon={<FileText className="w-4 h-4" />} label="All Notes" active={activeFilter === "all"} onClick={() => handleNavClick("all")} />
           <NavItem icon={<Star className="w-4 h-4" />} label="Favorites" active={activeFilter === "favorites"} onClick={() => handleNavClick("favorites")} />
           <NavItem icon={<Paperclip className="w-4 h-4" />} label="Attachments" active={activeFilter === "attachments"} onClick={() => handleNavClick("attachments")} />
@@ -302,11 +303,6 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             )}
           </div>
 
-          {/* Quick Bits — placeholder, move above All Notes when ready */}
-          <div className="flex items-center gap-3 py-2.5 md:py-2 px-3 rounded-lg text-sm text-muted-foreground opacity-40 cursor-default select-none">
-            <Zap className="w-4 h-4" />
-            <span>Quick Bits</span>
-          </div>
         </div>
 
         <div className="mx-3 border-t border-panel-border mb-3" />

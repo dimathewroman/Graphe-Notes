@@ -145,6 +145,58 @@ export interface MoveNoteBody {
   folderId: number | null;
 }
 
+export interface QuickBit {
+  id: number;
+  /** @nullable */
+  userId: string | null;
+  title: string;
+  content: string;
+  /** @nullable */
+  contentText: string | null;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type GetQuickBitsResponse = QuickBit[];
+
+export interface CreateQuickBitBody {
+  title: string;
+  content: string;
+  /** @nullable */
+  contentText?: string | null;
+}
+
+export interface UpdateQuickBitBody {
+  title?: string;
+  content?: string;
+  /** @nullable */
+  contentText?: string | null;
+  /** ISO 8601 datetime string for the new expiration date (must be in the future) */
+  expiresAt?: string;
+}
+
+export interface QuickBitSettings {
+  id: number;
+  /** @nullable */
+  userId: string | null;
+  /**
+   * @minimum 1
+   * @maximum 7
+   */
+  defaultExpirationDays: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateQuickBitSettingsBody {
+  /**
+   * @minimum 1
+   * @maximum 7
+   */
+  defaultExpirationDays: number;
+}
+
 export type AiCompleteBodyProvider =
   (typeof AiCompleteBodyProvider)[keyof typeof AiCompleteBodyProvider];
 
@@ -271,6 +323,41 @@ export type GetNotesSortDir =
   | null;
 
 export const GetNotesSortDir = {
+  asc: "asc",
+  desc: "desc",
+} as const;
+
+export type GetQuickBitsParams = {
+  /**
+   * @nullable
+   */
+  search?: string | null;
+  /**
+   * @nullable
+   */
+  sortBy?: GetQuickBitsSortBy;
+  /**
+   * @nullable
+   */
+  sortDir?: GetQuickBitsSortDir;
+};
+
+export type GetQuickBitsSortBy =
+  | (typeof GetQuickBitsSortBy)[keyof typeof GetQuickBitsSortBy]
+  | null;
+
+export const GetQuickBitsSortBy = {
+  updatedAt: "updatedAt",
+  createdAt: "createdAt",
+  expiresAt: "expiresAt",
+  title: "title",
+} as const;
+
+export type GetQuickBitsSortDir =
+  | (typeof GetQuickBitsSortDir)[keyof typeof GetQuickBitsSortDir]
+  | null;
+
+export const GetQuickBitsSortDir = {
   asc: "asc",
   desc: "desc",
 } as const;

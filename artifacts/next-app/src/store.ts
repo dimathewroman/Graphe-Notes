@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { GetNotesSortBy, GetNotesSortDir } from "@workspace/api-client-react";
 
-type FilterType = "all" | "pinned" | "favorites" | "folder" | "tag" | "attachments" | "vault";
+type FilterType = "all" | "pinned" | "favorites" | "folder" | "tag" | "attachments" | "vault" | "quickbits";
 type ViewMode = "list" | "gallery";
 type MobileView = "list" | "editor";
 
@@ -46,7 +46,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  activeFilter: "all",
+  activeFilter: "quickbits",
   activeFolderId: null,
   activeTag: null,
   searchQuery: "",

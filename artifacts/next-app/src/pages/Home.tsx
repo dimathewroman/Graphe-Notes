@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Sidebar, SidebarContent } from "@/components/Sidebar";
 import { NoteList } from "@/components/NoteList";
+import { QuickBitList } from "@/components/QuickBitList";
 import { NoteEditor } from "@/components/NoteEditor";
 import { AIPanel } from "@/components/AIPanel";
 import { SettingsModal } from "@/components/SettingsModal";
@@ -11,7 +12,7 @@ import { DrawerPrimitive } from "@/components/ui/drawer-left";
 import { useDemoMode } from "@/App";
 
 export default function Home() {
-  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId } = useAppStore();
+  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId, activeFilter } = useAppStore();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
 
@@ -91,7 +92,8 @@ export default function Home() {
         </Drawer>
       )}
 
-      {showList && <NoteList />}
+      {showList && activeFilter === "quickbits" && <QuickBitList />}
+      {showList && activeFilter !== "quickbits" && <NoteList />}
       {showEditor && <NoteEditor />}
 
       <AIPanel />
