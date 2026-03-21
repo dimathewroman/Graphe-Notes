@@ -1,6 +1,6 @@
 # Graphe Notes
 
-A full-stack, self-hostable notes app with rich text editing, nested folders, tags, AI assistant, and a password-protected vault — built with React, Vite, Express, and Supabase.
+A full-stack, self-hostable notes app with rich text editing, nested folders, tags, AI assistant, and a password-protected vault — built with Next.js, Vercel, and Supabase.
 
 ## Features
 
@@ -42,15 +42,13 @@ cp .env.example .env
 
 Open `.env` and fill in your Supabase credentials. See [Environment variables](#environment-variables) below for where to find them.
 
-### 3. Start the dev servers
+### 3. Start the dev server
 
 ```bash
 pnpm dev
 ```
 
-This starts both the frontend (port 5173) and the API server (port 3001) in parallel.
-
-Open [http://localhost:5173](http://localhost:5173).
+Open [http://localhost:3000](http://localhost:3000).
 
 ## Environment variables
 
@@ -58,13 +56,11 @@ All variables live in a single `.env` file at the repo root. The app ships with 
 
 | Variable | Required for | Where to find it |
 |---|---|---|
-| `SUPABASE_URL` | Auth + real data | Supabase dashboard → Project Settings → API |
-| `SUPABASE_ANON_KEY` | Auth + real data | Supabase dashboard → Project Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | API server (admin ops) | Supabase dashboard → Project Settings → API |
+| `NEXT_PUBLIC_SUPABASE_URL` | Auth + real data (frontend) | Supabase dashboard → Project Settings → API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Auth + real data (frontend) | Supabase dashboard → Project Settings → API |
+| `SUPABASE_URL` | API routes | Supabase dashboard → Project Settings → API |
+| `SUPABASE_SERVICE_ROLE_KEY` | API routes (admin ops) | Supabase dashboard → Project Settings → API |
 | `SUPABASE_DB_URL` | Schema migrations | Supabase dashboard → Project Settings → Database → Connection string (Session mode) |
-| `PORT` | Frontend | Defaults to `5173` |
-| `API_PORT` | API server | Defaults to `3001` |
-| `BASE_PATH` | Frontend | Defaults to `/` |
 
 ## Database setup
 
@@ -80,8 +76,8 @@ This applies the Drizzle schema to your Supabase project.
 
 ```
 ├── artifacts/
-│   ├── notes-app/       # React + Vite frontend (port 5173)
-│   └── api-server/      # Express API server (port 3001)
+│   ├── next-app/        # Next.js 15 app — frontend + API routes (port 3000)
+│   └── mockup-sandbox/  # Component preview sandbox
 ├── lib/
 │   ├── api-spec/        # OpenAPI spec + Orval codegen config
 │   ├── api-client-react/# Generated React Query hooks
@@ -92,7 +88,8 @@ This applies the Drizzle schema to your Supabase project.
 
 ## Tech stack
 
-- **Frontend**: React 19, Vite, Tailwind CSS v4, TanStack Query v5, Zustand, Framer Motion, Tiptap
-- **Backend**: Express 5, TypeScript, Drizzle ORM
+- **Frontend + Backend**: Next.js 15 (App Router), React 19, Tailwind CSS v4, TanStack Query v5, Zustand, Framer Motion, Tiptap
 - **Auth + DB**: Supabase (PostgreSQL, Auth)
+- **ORM**: Drizzle ORM
 - **Monorepo**: pnpm workspaces
+- **Deployment**: Vercel

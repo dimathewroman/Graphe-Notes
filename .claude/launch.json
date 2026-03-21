@@ -2,16 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "notes-app",
+      "name": "next-app",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "set -a && [ -f ../../../.env ] && . ../../../.env; set +a && pnpm --filter @workspace/notes-app run dev"],
-      "port": 5173
-    },
-    {
-      "name": "api-server",
-      "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "set -a && [ -f ../../../.env ] && . ../../../.env; set +a && PORT=$API_PORT pnpm --filter @workspace/api-server run dev"],
-      "port": 3001
+      "runtimeArgs": ["-c", "set -a && [ -f ../../../.env ] && . ../../../.env; set +a && cd ../../../ && pnpm --filter @workspace/next-app run dev"],
+      "port": 3000
     }
   ]
 }
