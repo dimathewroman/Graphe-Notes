@@ -7,21 +7,27 @@ import { supabase } from "@/lib/supabase";
 
 export type { AuthUser };
 
-function mapUser(u: SupabaseUser): AuthUser {
+export type AuthUserWithDisplay = AuthUser & { displayName: string };
+
+function mapUser(u: SupabaseUser): AuthUserWithDisplay {
+  const firstName = u.user_metadata?.full_name?.split(" ")[0] ?? u.user_metadata?.first_name ?? null;
+  const lastName =
+    u.user_metadata?.full_name?.split(" ").slice(1).join(" ") ??
+    u.user_metadata?.last_name ??
+    null;
+  const displayName = [firstName, lastName].filter(Boolean).join(" ") || u.email || "User";
   return {
     id: u.id,
     email: u.email ?? null,
-    firstName: u.user_metadata?.full_name?.split(" ")[0] ?? u.user_metadata?.first_name ?? null,
-    lastName:
-      u.user_metadata?.full_name?.split(" ").slice(1).join(" ") ??
-      u.user_metadata?.last_name ??
-      null,
+    firstName,
+    lastName,
     profileImageUrl: u.user_metadata?.avatar_url ?? u.user_metadata?.picture ?? null,
+    displayName,
   };
 }
 
 interface AuthState {
-  user: AuthUser | null;
+  user: AuthUserWithDisplay | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   loginWithOAuth: (provider: "google" | "apple") => void;
@@ -32,7 +38,7 @@ interface AuthState {
 }
 
 export function useAuth(): AuthState {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUserWithDisplay | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
