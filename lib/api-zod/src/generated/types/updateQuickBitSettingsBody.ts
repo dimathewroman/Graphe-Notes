@@ -11,5 +11,6 @@ export interface UpdateQuickBitSettingsBody {
    * @minimum 1
    * @maximum 7
    */
-  defaultExpirationDays: number;
+  defaultExpirationDays?: number;
+  defaultNotificationHours?: number[];
 }

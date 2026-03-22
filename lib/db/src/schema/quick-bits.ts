@@ -1,4 +1,5 @@
 import { pgTable, text, serial, integer, timestamp, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -9,6 +10,7 @@ export const quickBitsTable = pgTable("quick_bits", {
   content: text("content").notNull().default(""),
   contentText: text("content_text"),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  notificationHours: integer("notification_hours").array(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -17,6 +19,7 @@ export const quickBitSettingsTable = pgTable("quick_bit_settings", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").unique(),
   defaultExpirationDays: integer("default_expiration_days").notNull().default(3),
+  defaultNotificationHours: integer("default_notification_hours").array().notNull().default(sql`'{24}'::integer[]`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

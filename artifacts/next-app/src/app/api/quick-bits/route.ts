@@ -67,12 +67,13 @@ export async function POST(request: NextRequest) {
     .limit(1);
 
   const expirationDays = settings?.defaultExpirationDays ?? 3;
+  const notificationHours = settings?.defaultNotificationHours ?? [24];
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + expirationDays);
 
   const [quickBit] = await db
     .insert(quickBitsTable)
-    .values({ ...parsed.data, userId: user.id, expiresAt })
+    .values({ ...parsed.data, userId: user.id, expiresAt, notificationHours })
     .returning();
 
   return NextResponse.json(GetQuickBitResponse.parse(quickBit), { status: 201 });
