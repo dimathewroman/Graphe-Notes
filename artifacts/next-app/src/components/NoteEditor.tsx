@@ -135,7 +135,7 @@ const actionGroups: ActionGroup[] = [
   },
 ];
 
-function AiSelectionMenu({
+export function AiSelectionMenu({
   editor,
   visible,
   onAction,
@@ -397,7 +397,7 @@ function AiSelectionMenu({
   );
 }
 
-function MobileSelectionMenu({
+export function MobileSelectionMenu({
   editor,
   visible,
   onAction,
@@ -1907,7 +1907,7 @@ export function NoteEditor() {
   );
 }
 
-function EditorToolbar({ editor, linkPopover, setLinkPopover, linkInputRef, linkPopoverRef, openLinkPopover, applyLink, showUndoRedo, className, style }: {
+export function EditorToolbar({ editor, linkPopover, setLinkPopover, linkInputRef, linkPopoverRef, openLinkPopover, applyLink, showUndoRedo, className, style }: {
   editor: ReturnType<typeof useEditor>;
   linkPopover: { visible: boolean; url: string };
   setLinkPopover: React.Dispatch<React.SetStateAction<{ visible: boolean; url: string }>>;

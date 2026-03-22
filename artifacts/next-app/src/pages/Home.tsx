@@ -1,9 +1,12 @@
 import { useEffect } from "react";
 import { Sidebar, SidebarContent } from "@/components/Sidebar";
 import { NoteList } from "@/components/NoteList";
+import { QuickBitList } from "@/components/QuickBitList";
 import { NoteEditor } from "@/components/NoteEditor";
+import { QuickBitEditor } from "@/components/QuickBitEditor";
 import { AIPanel } from "@/components/AIPanel";
 import { SettingsModal } from "@/components/SettingsModal";
+import { QuickBitNotifications } from "@/components/QuickBitNotifications";
 import { useAppStore } from "@/store";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { Drawer, DrawerPortal, DrawerOverlay } from "@/components/ui/drawer";
@@ -11,7 +14,7 @@ import { DrawerPrimitive } from "@/components/ui/drawer-left";
 import { useDemoMode } from "@/App";
 
 export default function Home() {
-  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId } = useAppStore();
+  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId, selectedQuickBitId, activeFilter } = useAppStore();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
 
@@ -60,7 +63,8 @@ export default function Home() {
   }, [setSettingsOpen]);
 
   const isCompact = bp === "mobile" || bp === "tablet";
-  const showEditor = bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor");
+  const showEditor = activeFilter !== "quickbits" && (bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor"));
+  const showQuickBitEditor = activeFilter === "quickbits" && (bp === "desktop" || (bp === "tablet" && !!selectedQuickBitId) || (bp === "mobile" && mobileView === "editor"));
   const showList = bp === "desktop" ? isNoteListOpen : (bp === "tablet" || (bp === "mobile" && mobileView === "list"));
 
   return (
@@ -91,11 +95,14 @@ export default function Home() {
         </Drawer>
       )}
 
-      {showList && <NoteList />}
+      {showList && activeFilter === "quickbits" && <QuickBitList />}
+      {showList && activeFilter !== "quickbits" && <NoteList />}
       {showEditor && <NoteEditor />}
+      {showQuickBitEditor && <QuickBitEditor />}
 
       <AIPanel />
       <SettingsModal />
+      <QuickBitNotifications />
       </div>
     </div>
   );

@@ -1,8 +1,10 @@
-import type { Note, Folder } from "@workspace/api-client-react";
+import type { Note, Folder, QuickBit } from "@workspace/api-client-react";
 
 const now = new Date();
 const ago = (d: number, h = 0) =>
   new Date(now.getTime() - d * 86400000 - h * 3600000).toISOString();
+const inHours = (h: number) => new Date(now.getTime() + h * 3_600_000).toISOString();
+const inDays = (d: number) => new Date(now.getTime() + d * 86_400_000).toISOString();
 
 export const DEMO_FOLDERS: Folder[] = [
   {
@@ -269,6 +271,65 @@ h2 + p { ... }
     coverImage: null,
     createdAt: ago(1),
     updatedAt: ago(0, 1),
+  },
+];
+
+// IDs start at 101 so they don't collide with real QB IDs in any shared query cache
+export const DEMO_QUICK_BITS: QuickBit[] = [
+  {
+    id: 101,
+    userId: null,
+    title: "Grab dry cleaning 🧺",
+    content: "<p>Ready for pickup — they close at <strong>6:30pm tonight</strong>. Already paid, just show the ticket in the app.</p>",
+    contentText: "Ready for pickup — they close at 6:30pm tonight. Already paid, just show the ticket.",
+    expiresAt: inHours(3),
+    notificationHours: [1],
+    createdAt: ago(0),
+    updatedAt: ago(0),
+  },
+  {
+    id: 102,
+    userId: null,
+    title: "Hotel wifi — Edinburgh",
+    content: "<p><strong>Network:</strong> Marriott_Guests</p><p><strong>Password:</strong> edinburgh2026</p><p>Room 614 · Check out Sunday</p>",
+    contentText: "Network: Marriott_Guests / Password: edinburgh2026. Room 614. Check out Sunday.",
+    expiresAt: inHours(18),
+    notificationHours: [2],
+    createdAt: ago(1),
+    updatedAt: ago(1),
+  },
+  {
+    id: 103,
+    userId: null,
+    title: "Sprint review talking points",
+    content: "<ul><li>Lead with the onboarding redesign — it's the strongest change</li><li>Show the 40% drop in support tickets after the fix</li><li>Be upfront about the auth delay — propose pushing to next sprint</li><li>Use mobile screenshots, not desktop</li></ul>",
+    contentText: "Lead with onboarding redesign. Highlight 40% drop in support tickets. Be upfront about auth delay.",
+    expiresAt: inDays(2),
+    notificationHours: [4, 24],
+    createdAt: ago(0),
+    updatedAt: ago(0),
+  },
+  {
+    id: 104,
+    userId: null,
+    title: "Book Lisbon flights ✈️",
+    content: "<p>Sale ends <strong>Friday midnight</strong> — prices jump after that.</p><p>Dates: 14–21 June · Budget: under £180 return · Check Skyscanner and Google Flights.</p>",
+    contentText: "Sale ends Friday midnight. Dates: 14–21 June. Budget: under £180 return.",
+    expiresAt: inDays(4),
+    notificationHours: [24, 48],
+    createdAt: ago(2),
+    updatedAt: ago(2),
+  },
+  {
+    id: 105,
+    userId: null,
+    title: "Flatmate door code",
+    content: "<p>Main entrance: <strong>#1847</strong></p><p>Resets Sunday — ask Jamie for the new one before then.</p>",
+    contentText: "Main entrance: #1847. Resets Sunday — ask Jamie for the new one before then.",
+    expiresAt: inDays(6),
+    notificationHours: [24],
+    createdAt: ago(1),
+    updatedAt: ago(1),
   },
 ];
 

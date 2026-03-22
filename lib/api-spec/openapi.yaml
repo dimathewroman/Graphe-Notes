@@ -23,6 +23,8 @@ tags:
     description: AI assistant operations
   - name: smart-folders
     description: Smart folder operations
+  - name: quick-bits
+    description: Quick Bit operations
 paths:
   /healthz:
     get:
@@ -562,6 +564,170 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /quick-bits:
+    get:
+      operationId: getQuickBits
+      tags: [quick-bits]
+      summary: List all Quick Bits for the current user
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: ["string", "null"]
+        - name: sortBy
+          in: query
+          schema:
+            type: ["string", "null"]
+            enum: ["updatedAt", "createdAt", "expiresAt", "title", null]
+        - name: sortDir
+          in: query
+          schema:
+            type: ["string", "null"]
+            enum: ["asc", "desc", null]
+      responses:
+        "200":
+          description: List of Quick Bits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetQuickBitsResponse"
+    post:
+      operationId: createQuickBit
+      tags: [quick-bits]
+      summary: Create a Quick Bit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuickBitBody"
+      responses:
+        "201":
+          description: Created Quick Bit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickBit"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /quick-bits/settings:
+    get:
+      operationId: getQuickBitSettings
+      tags: [quick-bits]
+      summary: Get the current user's Quick Bit settings
+      responses:
+        "200":
+          description: Quick Bit settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickBitSettings"
+    patch:
+      operationId: updateQuickBitSettings
+      tags: [quick-bits]
+      summary: Update Quick Bit settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateQuickBitSettingsBody"
+      responses:
+        "200":
+          description: Updated Quick Bit settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickBitSettings"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /quick-bits/{id}:
+    get:
+      operationId: getQuickBit
+      tags: [quick-bits]
+      summary: Get a single Quick Bit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Quick Bit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickBit"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateQuickBit
+      tags: [quick-bits]
+      summary: Update a Quick Bit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateQuickBitBody"
+      responses:
+        "200":
+          description: Updated Quick Bit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickBit"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteQuickBit
+      tags: [quick-bits]
+      summary: Delete a Quick Bit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted Quick Bit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuickBit"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /tags:
     get:
       operationId: getTags
@@ -988,6 +1154,120 @@ components:
           type: ["integer", "null"]
       required:
         - folderId
+
+    QuickBit:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: ["string", "null"]
+        title:
+          type: string
+        content:
+          type: string
+        contentText:
+          type: ["string", "null"]
+        expiresAt:
+          type: string
+          format: date-time
+        notificationHours:
+          type: array
+          items:
+            type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - title
+        - content
+        - contentText
+        - expiresAt
+        - notificationHours
+        - createdAt
+        - updatedAt
+
+    GetQuickBitsResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/QuickBit"
+
+    CreateQuickBitBody:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        contentText:
+          type: ["string", "null"]
+      required:
+        - title
+        - content
+
+    UpdateQuickBitBody:
+      type: object
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+        contentText:
+          type: ["string", "null"]
+        expiresAt:
+          type: string
+          description: ISO 8601 datetime string for the new expiration date (must be in the future)
+        notificationHours:
+          type: array
+          items:
+            type: integer
+
+    QuickBitSettings:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: ["string", "null"]
+        defaultExpirationDays:
+          type: integer
+          minimum: 1
+          maximum: 7
+        defaultNotificationHours:
+          type: array
+          items:
+            type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - userId
+        - defaultExpirationDays
+        - defaultNotificationHours
+        - createdAt
+        - updatedAt
+
+    UpdateQuickBitSettingsBody:
+      type: object
+      properties:
+        defaultExpirationDays:
+          type: integer
+          minimum: 1
+          maximum: 7
+        defaultNotificationHours:
+          type: array
+          items:
+            type: integer
 
     AiCompleteBody:
       type: object

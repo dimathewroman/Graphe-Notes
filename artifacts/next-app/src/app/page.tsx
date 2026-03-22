@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import Home from "@/pages/Home";
 import { Mail, Loader2 } from "lucide-react";
-import { DEMO_NOTES, DEMO_FOLDERS, DEMO_TAGS } from "@/lib/demo-data";
+import { DEMO_NOTES, DEMO_FOLDERS, DEMO_TAGS, DEMO_QUICK_BITS } from "@/lib/demo-data";
 import { DemoContext } from "@/App";
 
 const grapheLogo = "/graphe_minimalist_1773640203523.png";
@@ -18,15 +18,23 @@ function enterDemoMode(
   queryClient.setQueryDefaults(["/api/folders"], demoInfinite);
   queryClient.setQueryDefaults(["/api/tags"], demoInfinite);
   queryClient.setQueryDefaults(["/api/vault/status"], demoInfinite);
+  queryClient.setQueryDefaults(["/api/quick-bits"], demoInfinite);
   DEMO_NOTES.forEach((note) => {
     queryClient.setQueryDefaults([`/api/notes/${note.id}`], demoInfinite);
+  });
+  DEMO_QUICK_BITS.forEach((qb) => {
+    queryClient.setQueryDefaults([`/api/quick-bits/${qb.id}`], demoInfinite);
   });
 
   queryClient.setQueryData(["/api/folders"], DEMO_FOLDERS);
   queryClient.setQueryData(["/api/tags"], DEMO_TAGS);
   queryClient.setQueryData(["/api/vault/status"], { isConfigured: false });
+  queryClient.setQueryData(["/api/quick-bits"], DEMO_QUICK_BITS);
   DEMO_NOTES.forEach((note) => {
     queryClient.setQueryData([`/api/notes/${note.id}`], note);
+  });
+  DEMO_QUICK_BITS.forEach((qb) => {
+    queryClient.setQueryData([`/api/quick-bits/${qb.id}`], qb);
   });
   setIsDemo(true);
 }
