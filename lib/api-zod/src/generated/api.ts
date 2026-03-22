@@ -410,6 +410,7 @@ export const GetQuickBitsResponseItem = zod.object({
   content: zod.string(),
   contentText: zod.string().nullable(),
   expiresAt: zod.date(),
+  notificationHours: zod.array(zod.number()).nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -436,6 +437,7 @@ export const GetQuickBitSettingsResponse = zod.object({
     .number()
     .min(1)
     .max(getQuickBitSettingsResponseDefaultExpirationDaysMax),
+  defaultNotificationHours: zod.array(zod.number()),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -449,7 +451,9 @@ export const UpdateQuickBitSettingsBody = zod.object({
   defaultExpirationDays: zod
     .number()
     .min(1)
-    .max(updateQuickBitSettingsBodyDefaultExpirationDaysMax),
+    .max(updateQuickBitSettingsBodyDefaultExpirationDaysMax)
+    .optional(),
+  defaultNotificationHours: zod.array(zod.number()).optional(),
 });
 
 export const updateQuickBitSettingsResponseDefaultExpirationDaysMax = 7;
@@ -461,6 +465,7 @@ export const UpdateQuickBitSettingsResponse = zod.object({
     .number()
     .min(1)
     .max(updateQuickBitSettingsResponseDefaultExpirationDaysMax),
+  defaultNotificationHours: zod.array(zod.number()),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -479,6 +484,7 @@ export const GetQuickBitResponse = zod.object({
   content: zod.string(),
   contentText: zod.string().nullable(),
   expiresAt: zod.date(),
+  notificationHours: zod.array(zod.number()).nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -500,6 +506,7 @@ export const UpdateQuickBitBody = zod.object({
     .describe(
       "ISO 8601 datetime string for the new expiration date (must be in the future)",
     ),
+  notificationHours: zod.array(zod.number()).optional(),
 });
 
 export const UpdateQuickBitResponse = zod.object({
@@ -509,6 +516,7 @@ export const UpdateQuickBitResponse = zod.object({
   content: zod.string(),
   contentText: zod.string().nullable(),
   expiresAt: zod.date(),
+  notificationHours: zod.array(zod.number()).nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -527,6 +535,7 @@ export const DeleteQuickBitResponse = zod.object({
   content: zod.string(),
   contentText: zod.string().nullable(),
   expiresAt: zod.date(),
+  notificationHours: zod.array(zod.number()).nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });

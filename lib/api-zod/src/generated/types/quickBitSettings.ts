@@ -15,6 +15,7 @@ export interface QuickBitSettings {
    * @maximum 7
    */
   defaultExpirationDays: number;
+  defaultNotificationHours: number[];
   createdAt: Date;
   updatedAt: Date;
 }

@@ -13,4 +13,5 @@ export interface UpdateQuickBitBody {
   contentText?: string | null;
   /** ISO 8601 datetime string for the new expiration date (must be in the future) */
   expiresAt?: string;
+  notificationHours?: number[];
 }

@@ -15,6 +15,7 @@ interface AppState {
   viewMode: ViewMode;
 
   selectedNoteId: number | null;
+  selectedQuickBitId: number | null;
   mobileView: MobileView;
 
   isSidebarOpen: boolean;
@@ -35,6 +36,7 @@ interface AppState {
   setSort: (by: GetNotesSortBy, dir: GetNotesSortDir) => void;
   setViewMode: (mode: ViewMode) => void;
   selectNote: (id: number | null) => void;
+  selectQuickBit: (id: number | null) => void;
   setMobileView: (view: MobileView) => void;
   toggleSidebar: () => void;
   setSidebarOpen: (isOpen: boolean) => void;
@@ -55,6 +57,7 @@ export const useAppStore = create<AppState>((set) => ({
   viewMode: "list",
 
   selectedNoteId: null,
+  selectedQuickBitId: null,
   mobileView: "list",
 
   isSidebarOpen: true,
@@ -81,6 +84,7 @@ export const useAppStore = create<AppState>((set) => ({
   setSort: (by, dir) => set({ sortBy: by, sortDir: dir }),
   setViewMode: (mode) => set({ viewMode: mode }),
   selectNote: (id) => set({ selectedNoteId: id }),
+  selectQuickBit: (id) => set({ selectedQuickBitId: id }),
   setMobileView: (view) => set({ mobileView: view }),
   toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
   setSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),

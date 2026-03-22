@@ -15,6 +15,7 @@ export interface QuickBit {
   /** @nullable */
   contentText: string | null;
   expiresAt: Date;
+  notificationHours: number[] | null;
   createdAt: Date;
   updatedAt: Date;
 }

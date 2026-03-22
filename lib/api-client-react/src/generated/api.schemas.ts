@@ -154,6 +154,7 @@ export interface QuickBit {
   /** @nullable */
   contentText: string | null;
   expiresAt: string;
+  notificationHours: number[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -174,6 +175,7 @@ export interface UpdateQuickBitBody {
   contentText?: string | null;
   /** ISO 8601 datetime string for the new expiration date (must be in the future) */
   expiresAt?: string;
+  notificationHours?: number[];
 }
 
 export interface QuickBitSettings {
@@ -185,6 +187,7 @@ export interface QuickBitSettings {
    * @maximum 7
    */
   defaultExpirationDays: number;
+  defaultNotificationHours: number[];
   createdAt: string;
   updatedAt: string;
 }
@@ -194,7 +197,8 @@ export interface UpdateQuickBitSettingsBody {
    * @minimum 1
    * @maximum 7
    */
-  defaultExpirationDays: number;
+  defaultExpirationDays?: number;
+  defaultNotificationHours?: number[];
 }
 
 export type AiCompleteBodyProvider =
