@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   X, Key, Cloud, Download, Server, Palette, Sun, Moon, Monitor,
-  RefreshCw, AlertCircle, CheckCircle2, ChevronDown, Shield, ShieldCheck, KeyRound, LogOut
+  RefreshCw, AlertCircle, CheckCircle2, ChevronDown, Shield, ShieldCheck, KeyRound, LogOut, Zap
 } from "lucide-react";
+import { NotificationCadenceEditor } from "./NotificationCadenceEditor";
 import { useAppStore } from "@/store";
 import { useAuth } from "@/hooks/use-auth";
 import { IconButton } from "./ui/IconButton";
@@ -73,7 +74,12 @@ export function SettingsModal() {
   const [model, setModel] = useState("gpt-4o");
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [accentColor, setAccentColor] = useState(ACCENT_PRESETS[0].value);
-  const [activeTab, setActiveTab] = useState<"appearance" | "ai" | "data" | "security">("appearance");
+  const [activeTab, setActiveTab] = useState<"appearance" | "ai" | "data" | "security" | "quickbits">("appearance");
+
+  // Quick Bits settings state
+  const [qbExpirationDays, setQbExpirationDays] = useState(3);
+  const [qbNotificationHours, setQbNotificationHours] = useState<number[]>([24]);
+  const [qbSaving, setQbSaving] = useState(false);
 
   // Model list state
   const [models, setModels] = useState<string[]>([]);
@@ -172,6 +178,18 @@ export function SettingsModal() {
       setSecurityFirstPin("");
       setSecurityCurrentPin("");
       setSecurityError("");
+    }
+  }, [activeTab, isSettingsOpen]);
+
+  useEffect(() => {
+    if (activeTab === "quickbits" && isSettingsOpen) {
+      authenticatedFetch("/api/quick-bits/settings")
+        .then(r => r.json())
+        .then((data: { defaultExpirationDays: number; defaultNotificationHours: number[] }) => {
+          setQbExpirationDays(data.defaultExpirationDays ?? 3);
+          setQbNotificationHours(data.defaultNotificationHours ?? [24]);
+        })
+        .catch(() => {});
     }
   }, [activeTab, isSettingsOpen]);
 
@@ -311,7 +329,24 @@ export function SettingsModal() {
     { id: "ai" as const, label: "AI", icon: Key },
     { id: "data" as const, label: "Data", icon: Cloud },
     { id: "security" as const, label: "Security & Sign-In", icon: Shield },
+    { id: "quickbits" as const, label: "Quick Bits", icon: Zap },
   ];
+
+  const handleQbSave = async () => {
+    setQbSaving(true);
+    try {
+      await authenticatedFetch("/api/quick-bits/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ defaultExpirationDays: qbExpirationDays, defaultNotificationHours: qbNotificationHours }),
+      });
+      setSettingsOpen(false);
+    } catch {
+      // silently fail for now
+    } finally {
+      setQbSaving(false);
+    }
+  };
 
   const statusInfo = {
     idle:     { icon: null,            text: "" },
@@ -642,14 +677,45 @@ export function SettingsModal() {
                 </section>
               )}
 
+              {/* ── QUICK BITS TAB ─────────────────────────── */}
+              {activeTab === "quickbits" && (
+                <>
+                  <section className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Default Expiration</h3>
+                    <div className="flex gap-2 flex-wrap">
+                      {[1, 2, 3, 5, 7].map((days) => (
+                        <button
+                          key={days}
+                          onClick={() => setQbExpirationDays(days)}
+                          className={cn(
+                            "flex-1 min-w-[52px] py-2 rounded-xl border text-sm font-medium transition-all",
+                            qbExpirationDays === days
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-panel-border bg-background hover:border-primary/40 text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          {days === 1 ? "1 day" : `${days} days`}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Default Notifications</h3>
+                    <NotificationCadenceEditor value={qbNotificationHours} onChange={setQbNotificationHours} />
+                  </section>
+                </>
+              )}
+
             </div>
 
             <div className="p-4 border-t border-panel-border bg-background/50 flex justify-end">
               <button
-                onClick={handleSave}
-                className="px-6 py-2 bg-primary hover:bg-primary-hover text-primary-foreground rounded-xl text-sm font-medium transition-colors shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95"
+                onClick={activeTab === "quickbits" ? handleQbSave : handleSave}
+                disabled={activeTab === "quickbits" && qbSaving}
+                className="px-6 py-2 bg-primary hover:bg-primary-hover text-primary-foreground rounded-xl text-sm font-medium transition-colors shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 disabled:opacity-60"
               >
-                Save Settings
+                {activeTab === "quickbits" && qbSaving ? "Saving…" : "Save Settings"}
               </button>
             </div>
           </motion.div>

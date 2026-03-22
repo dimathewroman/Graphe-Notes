@@ -335,6 +335,7 @@ export function NoteList() {
     tag: `#${activeTag}`,
     attachments: "Attachments",
     vault: "Vault",
+    quickbits: "Quick Bits",
   }[activeFilter] || "Notes";
 
   const currentSort = SORT_OPTIONS.find(o => o.sortBy === sortBy && o.sortDir === sortDir);

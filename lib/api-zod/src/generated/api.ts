@@ -385,6 +385,162 @@ export const DeleteSmartFolderParams = zod.object({
 });
 
 /**
+ * @summary List all Quick Bits for the current user
+ */
+export const GetQuickBitsQueryParams = zod.object({
+  search: zod.coerce.string().nullish(),
+  sortBy: zod
+    .union([
+      zod.literal("updatedAt"),
+      zod.literal("createdAt"),
+      zod.literal("expiresAt"),
+      zod.literal("title"),
+      zod.literal(null),
+    ])
+    .nullish(),
+  sortDir: zod
+    .union([zod.literal("asc"), zod.literal("desc"), zod.literal(null)])
+    .nullish(),
+});
+
+export const GetQuickBitsResponseItem = zod.object({
+  id: zod.number(),
+  userId: zod.string().nullable(),
+  title: zod.string(),
+  content: zod.string(),
+  contentText: zod.string().nullable(),
+  expiresAt: zod.date(),
+  notificationHours: zod.array(zod.number()).nullable(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const GetQuickBitsResponse = zod.array(GetQuickBitsResponseItem);
+
+/**
+ * @summary Create a Quick Bit
+ */
+export const CreateQuickBitBody = zod.object({
+  title: zod.string(),
+  content: zod.string(),
+  contentText: zod.string().nullish(),
+});
+
+/**
+ * @summary Get the current user's Quick Bit settings
+ */
+export const getQuickBitSettingsResponseDefaultExpirationDaysMax = 7;
+
+export const GetQuickBitSettingsResponse = zod.object({
+  id: zod.number(),
+  userId: zod.string().nullable(),
+  defaultExpirationDays: zod
+    .number()
+    .min(1)
+    .max(getQuickBitSettingsResponseDefaultExpirationDaysMax),
+  defaultNotificationHours: zod.array(zod.number()),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Update Quick Bit settings
+ */
+export const updateQuickBitSettingsBodyDefaultExpirationDaysMax = 7;
+
+export const UpdateQuickBitSettingsBody = zod.object({
+  defaultExpirationDays: zod
+    .number()
+    .min(1)
+    .max(updateQuickBitSettingsBodyDefaultExpirationDaysMax)
+    .optional(),
+  defaultNotificationHours: zod.array(zod.number()).optional(),
+});
+
+export const updateQuickBitSettingsResponseDefaultExpirationDaysMax = 7;
+
+export const UpdateQuickBitSettingsResponse = zod.object({
+  id: zod.number(),
+  userId: zod.string().nullable(),
+  defaultExpirationDays: zod
+    .number()
+    .min(1)
+    .max(updateQuickBitSettingsResponseDefaultExpirationDaysMax),
+  defaultNotificationHours: zod.array(zod.number()),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Get a single Quick Bit
+ */
+export const GetQuickBitParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetQuickBitResponse = zod.object({
+  id: zod.number(),
+  userId: zod.string().nullable(),
+  title: zod.string(),
+  content: zod.string(),
+  contentText: zod.string().nullable(),
+  expiresAt: zod.date(),
+  notificationHours: zod.array(zod.number()).nullable(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Update a Quick Bit
+ */
+export const UpdateQuickBitParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateQuickBitBody = zod.object({
+  title: zod.string().optional(),
+  content: zod.string().optional(),
+  contentText: zod.string().nullish(),
+  expiresAt: zod
+    .string()
+    .optional()
+    .describe(
+      "ISO 8601 datetime string for the new expiration date (must be in the future)",
+    ),
+  notificationHours: zod.array(zod.number()).optional(),
+});
+
+export const UpdateQuickBitResponse = zod.object({
+  id: zod.number(),
+  userId: zod.string().nullable(),
+  title: zod.string(),
+  content: zod.string(),
+  contentText: zod.string().nullable(),
+  expiresAt: zod.date(),
+  notificationHours: zod.array(zod.number()).nullable(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Delete a Quick Bit
+ */
+export const DeleteQuickBitParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const DeleteQuickBitResponse = zod.object({
+  id: zod.number(),
+  userId: zod.string().nullable(),
+  title: zod.string(),
+  content: zod.string(),
+  contentText: zod.string().nullable(),
+  expiresAt: zod.date(),
+  notificationHours: zod.array(zod.number()).nullable(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
  * @summary Get all unique tags used across notes
  */
 export const GetTagsResponseItem = zod.string();
