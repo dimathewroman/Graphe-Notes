@@ -17,8 +17,6 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
-  AiCompleteBody,
-  AiCompleteResponse,
   AuthUserEnvelope,
   BeginBrowserLoginParams,
   CreateFolderBody,
@@ -2825,92 +2823,6 @@ export function useGetTags<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
-
-/**
- * @summary Send a prompt to an AI model and get a completion
- */
-export const getAiCompleteUrl = () => {
-  return `/api/ai/complete`;
-};
-
-export const aiComplete = async (
-  aiCompleteBody: AiCompleteBody,
-  options?: RequestInit,
-): Promise<AiCompleteResponse> => {
-  return customFetch<AiCompleteResponse>(getAiCompleteUrl(), {
-    ...options,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify(aiCompleteBody),
-  });
-};
-
-export const getAiCompleteMutationOptions = <
-  TError = ErrorType<ErrorResponse>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof aiComplete>>,
-    TError,
-    { data: BodyType<AiCompleteBody> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationOptions<
-  Awaited<ReturnType<typeof aiComplete>>,
-  TError,
-  { data: BodyType<AiCompleteBody> },
-  TContext
-> => {
-  const mutationKey = ["aiComplete"];
-  const { mutation: mutationOptions, request: requestOptions } = options
-    ? options.mutation &&
-      "mutationKey" in options.mutation &&
-      options.mutation.mutationKey
-      ? options
-      : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, request: undefined };
-
-  const mutationFn: MutationFunction<
-    Awaited<ReturnType<typeof aiComplete>>,
-    { data: BodyType<AiCompleteBody> }
-  > = (props) => {
-    const { data } = props ?? {};
-
-    return aiComplete(data, requestOptions);
-  };
-
-  return { mutationFn, ...mutationOptions };
-};
-
-export type AiCompleteMutationResult = NonNullable<
-  Awaited<ReturnType<typeof aiComplete>>
->;
-export type AiCompleteMutationBody = BodyType<AiCompleteBody>;
-export type AiCompleteMutationError = ErrorType<ErrorResponse>;
-
-/**
- * @summary Send a prompt to an AI model and get a completion
- */
-export const useAiComplete = <
-  TError = ErrorType<ErrorResponse>,
-  TContext = unknown,
->(options?: {
-  mutation?: UseMutationOptions<
-    Awaited<ReturnType<typeof aiComplete>>,
-    TError,
-    { data: BodyType<AiCompleteBody> },
-    TContext
-  >;
-  request?: SecondParameter<typeof customFetch>;
-}): UseMutationResult<
-  Awaited<ReturnType<typeof aiComplete>>,
-  TError,
-  { data: BodyType<AiCompleteBody> },
-  TContext
-> => {
-  return useMutation(getAiCompleteMutationOptions(options));
-};
 
 /**
  * @summary Get the currently authenticated user

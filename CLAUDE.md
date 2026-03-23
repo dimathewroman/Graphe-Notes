@@ -51,7 +51,6 @@ All endpoints live in artifacts/next-app/src/app/api/ and are prefixed with /api
 - POST /vault/setup
 - POST /vault/unlock
 - POST /vault/change-password
-- POST /ai/complete (provider: openai|anthropic|google, apiKey, model, prompt)
 - GET/POST /models
 
 ---
@@ -59,10 +58,13 @@ All endpoints live in artifacts/next-app/src/app/api/ and are prefixed with /api
 ## Session Startup
 
 At the start of every new session, before doing anything else:
-1. Pull the latest master from GitHub
-2. Check that .env exists in the repo root -- if not, copy .env.example to .env and inform the user that real credentials from 1Password are needed for full login and DB access
-3. Run pnpm install from the repo root
-4. Start the Next.js dev server on port 3000
+1. Pull the latest master from GitHub: `git checkout master && git pull origin master`
+2. Check the active branch. Run `git log origin/master..HEAD --oneline`.
+   - If the output is empty, the current branch has no unique commits — it is either master itself or a branch that was already merged. Ask the user what feature or fix they are working on, then create and checkout a new branch: `git checkout -b feature/<name>` (or `fix/<name>` for bug fixes). Never reuse a branch that has no commits ahead of master.
+   - If the output has commits, the branch has active work — continue on it.
+3. Check that .env exists in the repo root -- if not, copy .env.example to .env and inform the user that real credentials from 1Password are needed for full login and DB access
+4. Run pnpm install from the repo root
+5. Start the Next.js dev server on port 3000
 
 Do this automatically without being asked.
 
@@ -234,7 +236,7 @@ Toolbar menus are portaled. See Toolbar Popover Pattern above.
 
 FontSize is a named export from @tiptap/extension-text-style. Do not install @tiptap/extension-font-size -- it is deprecated.
 
-AI provider keys (OpenAI, Anthropic, Gemini) are stored in plaintext localStorage. This is intentional for the current phase where users supply their own keys.
+AI provider keys are stored encrypted in the `user_api_keys` DB table. The encryption utility is in `lib/encryption.ts` (AES-256-GCM). The active provider setting is in `user_settings`. Do not use localStorage for AI keys.
 
 ---
 

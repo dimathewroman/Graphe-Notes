@@ -6,7 +6,7 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": ["-c", "set -a && [ -f ../../../.env ] && . ../../../.env; set +a && cd ../../../ && pnpm --filter @workspace/next-app run dev"],
       "port": 3000,
-      "autoPort": true
+      "autoPort": false
     }
   ]
 }

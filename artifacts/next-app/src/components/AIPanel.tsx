@@ -1,54 +1,84 @@
 import { useState } from "react";
 import { X, Sparkles, Send, Loader2, Bot, CheckCheck } from "lucide-react";
 import { useAppStore } from "@/store";
-import { useAiComplete, useGetNote, useUpdateNote, getGetNotesQueryKey } from "@workspace/api-client-react";
+import { useGetNote, useUpdateNote, getGetNotesQueryKey } from "@workspace/api-client-react";
+import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { useQueryClient } from "@tanstack/react-query";
-import { cn } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBreakpoint } from "@/hooks/use-mobile";
+import { useDemoMode } from "@/App";
 
 export function AIPanel() {
-  const { isAIPanelOpen, setAIPanelOpen, selectedNoteId } = useAppStore();
+  const { isAIPanelOpen, setAIPanelOpen, selectedNoteId, setAiSetupModalOpen, setPendingAiAction } = useAppStore();
   const queryClient = useQueryClient();
   const bp = useBreakpoint();
-  
+  const isDemo = useDemoMode();
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: note } = useGetNote(selectedNoteId || 0, { query: { enabled: !!selectedNoteId && isAIPanelOpen } as any });
   const updateNoteMut = useUpdateNote();
-  const aiMut = useAiComplete();
 
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState("");
+  const [isPending, setIsPending] = useState(false);
+
+  const runGenerate = async (provider: string, capturedPrompt: string, capturedNote: typeof note) => {
+    const noteContext = capturedNote
+      ? `Title: ${capturedNote.title}\nContent:\n${capturedNote.contentText}`
+      : undefined;
+    const fullPrompt = noteContext ? `${capturedPrompt}\n\nNote context:\n${noteContext}` : capturedPrompt;
+
+    setIsPending(true);
+    setResult("");
+    try {
+      const res = await authenticatedFetch("/api/ai/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, taskType: "manual", prompt: fullPrompt }),
+      });
+      const data = await res.json() as { result?: string; error?: string };
+      if (data.error) throw new Error(data.error);
+      setResult(data.result ?? "");
+    } catch (e) {
+      console.error(e);
+      setResult("Error generating response. Please check your AI settings.");
+    } finally {
+      setIsPending(false);
+    }
+  };
 
   const handleComplete = async () => {
     if (!prompt.trim()) return;
-    
-    const apiKey = localStorage.getItem("ai_api_key") || "";
-    const provider = (localStorage.getItem("ai_provider") || "openai") as any;
-    const model = localStorage.getItem("ai_model") || "gpt-3.5-turbo";
 
-    if (!apiKey) {
-      alert("Please configure your AI API key in Settings first.");
-      return;
-    }
+    let provider = "graphe_free";
 
-    try {
-      setResult("");
-      const res = await aiMut.mutateAsync({
-        data: {
-          provider,
-          apiKey,
-          model,
-          prompt,
-          noteContext: note ? `Title: ${note.title}\nContent:\n${note.contentText}` : null
+    if (!isDemo) {
+      try {
+        const settingsRes = await authenticatedFetch("/api/ai/settings");
+        if (settingsRes.ok) {
+          const settingsData = await settingsRes.json() as {
+            activeAiProvider?: string | null;
+            hasCompletedAiSetup?: boolean;
+          };
+
+          if (!settingsData.hasCompletedAiSetup) {
+            const capturedPrompt = prompt;
+            const capturedNote = note;
+            setPendingAiAction(async (resolvedProvider: string) => {
+              await runGenerate(resolvedProvider, capturedPrompt, capturedNote);
+            });
+            setAiSetupModalOpen(true);
+            return;
+          }
+
+          if (!settingsData.activeAiProvider) return; // No AI mode
+          provider = settingsData.activeAiProvider;
         }
-      });
-      setResult(res.result);
-    } catch (e) {
-      console.error(e);
-      setResult("Error generating response. Please check your API key and provider settings.");
+      } catch { /* use default */ }
     }
+
+    await runGenerate(provider, prompt, note);
   };
 
   const insertIntoNote = async () => {
@@ -80,7 +110,7 @@ export function AIPanel() {
   return (
     <AnimatePresence>
       {isAIPanelOpen && (
-        <motion.div 
+        <motion.div
           {...animationProps}
           transition={{ type: "spring", bounce: 0, duration: 0.4 }}
           className={panelClass}
@@ -96,7 +126,7 @@ export function AIPanel() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
-            {!result && !aiMut.isPending && (
+            {!result && !isPending && (
               <div className="space-y-2 mb-4">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">Quick Actions</p>
                 {presetPrompts.map(p => (
@@ -111,14 +141,14 @@ export function AIPanel() {
               </div>
             )}
 
-            {aiMut.isPending && (
+            {isPending && (
               <div className="flex flex-col items-center justify-center py-12 text-indigo-400 gap-3">
                 <Loader2 className="w-8 h-8 animate-spin" />
                 <p className="text-sm font-medium animate-pulse">Thinking...</p>
               </div>
             )}
 
-            {result && !aiMut.isPending && (
+            {result && !isPending && (
               <div className="flex flex-col gap-3">
                 <div className="bg-background rounded-xl p-4 border border-indigo-500/20 shadow-inner">
                   <div className="flex items-center gap-2 mb-2 text-indigo-400 font-medium text-sm">
@@ -129,7 +159,7 @@ export function AIPanel() {
                     {result}
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={insertIntoNote}
                   className="w-full flex items-center justify-center gap-2 py-3 md:py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
                 >
@@ -157,7 +187,7 @@ export function AIPanel() {
               />
               <button
                 onClick={handleComplete}
-                disabled={aiMut.isPending || !prompt.trim()}
+                disabled={isPending || !prompt.trim()}
                 className="absolute right-2 bottom-2 p-2 md:p-1.5 rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Send className="w-4 h-4 md:w-3.5 md:h-3.5" />
