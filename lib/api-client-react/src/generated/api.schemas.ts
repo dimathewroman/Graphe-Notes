@@ -223,32 +223,6 @@ export interface UpdateQuickBitSettingsBody {
   defaultNotificationHours?: number[];
 }
 
-export type AiCompleteBodyProvider =
-  (typeof AiCompleteBodyProvider)[keyof typeof AiCompleteBodyProvider];
-
-export const AiCompleteBodyProvider = {
-  openai: "openai",
-  anthropic: "anthropic",
-  google: "google",
-} as const;
-
-export interface AiCompleteBody {
-  provider: AiCompleteBodyProvider;
-  apiKey: string;
-  model: string;
-  prompt: string;
-  /** @nullable */
-  systemPrompt?: string | null;
-  /** @nullable */
-  noteContext?: string | null;
-}
-
-export interface AiCompleteResponse {
-  result: string;
-  /** @nullable */
-  tokensUsed: number | null;
-}
-
 export interface ToggleNoteVaultBody {
   vaulted: boolean;
 }

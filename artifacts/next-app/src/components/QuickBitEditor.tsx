@@ -557,19 +557,17 @@ export function QuickBitEditor() {
     })();
     if (!sel.text) return;
 
-    const provider = (localStorage.getItem("ai_provider") || "openai") as string;
-    const apiKey = localStorage.getItem(`ai_key_${provider}`) || "";
-    if (!apiKey) {
-      setAiError("No AI API key configured. Open Settings → AI to add one.");
-      setTimeout(() => setAiError(null), 4000);
-      return;
-    }
-    const model = localStorage.getItem("ai_model") || "";
-    if (!model) {
-      setAiError("No AI model configured. Open Settings → AI to select one.");
-      setTimeout(() => setAiError(null), 4000);
-      return;
-    }
+    // Fetch active provider from server; default to graphe_free on any failure
+    let provider = "graphe_free";
+    try {
+      const settingsRes = await authenticatedFetch("/api/ai/settings");
+      if (settingsRes.ok) {
+        const settingsData = await settingsRes.json() as { activeAiProvider?: string };
+        if (settingsData.activeAiProvider) provider = settingsData.activeAiProvider;
+      }
+    } catch { /* use default */ }
+
+    const taskType = "manual";
 
     const prompts: Record<string, string> = {
       shorter_25: `Make the following text approximately 25% shorter while preserving key meaning. Return only the shortened text, no explanations:\n\n${sel.text}`,
@@ -599,13 +597,63 @@ export function QuickBitEditor() {
 
     setAiLoading(true);
     setAiError(null);
-    try {
-      const res = await authenticatedFetch("/api/ai/complete", {
+
+    const doRequest = async (): Promise<Response> => {
+      return authenticatedFetch("/api/ai/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey, model, prompt }),
+        body: JSON.stringify({ provider, taskType, prompt }),
       });
-      const data = await res.json();
+    };
+
+    try {
+      let res = await doRequest();
+
+      if (res.status === 429) {
+        const data = await res.json() as { reason?: string; resetInMs?: number };
+        if (data.reason === "rpm_limit") {
+          setAiError("AI is busy, retrying...");
+          await new Promise((resolve) => setTimeout(resolve, 65000));
+          res = await doRequest();
+          if (res.status === 429) {
+            setAiError("AI is still busy. Please try again in a moment.");
+            setTimeout(() => setAiError(null), 5000);
+            return;
+          }
+        } else if (data.reason === "hourly_limit_reached") {
+          const resetMins = Math.ceil((data.resetInMs ?? 0) / 60000);
+          setAiError(`You've reached your hourly AI limit. Resets in ${resetMins} minutes.`);
+          setTimeout(() => setAiError(null), 5000);
+          return;
+        } else if (data.reason === "monthly_limit_reached") {
+          setAiError("Monthly AI limit reached. Add your own API key in Settings for unlimited use.");
+          setTimeout(() => setAiError(null), 6000);
+          return;
+        }
+      }
+
+      if (res.status === 400) {
+        const data = await res.json() as { error?: string };
+        if (data.error === "no_key_configured") {
+          setAiError("No API key configured. Please add one in Settings.");
+          setTimeout(() => setAiError(null), 5000);
+          return;
+        }
+      }
+
+      if (res.status === 401) {
+        setAiError("AI key invalid or missing. Check Settings.");
+        setTimeout(() => setAiError(null), 5000);
+        return;
+      }
+
+      if (res.status === 502) {
+        setAiError("AI request failed. Please try again.");
+        setTimeout(() => setAiError(null), 5000);
+        return;
+      }
+
+      const data = await res.json() as { error?: string; result?: string };
       if (data.error) throw new Error(data.error);
       const result: string = data.result || "";
       if (result) {

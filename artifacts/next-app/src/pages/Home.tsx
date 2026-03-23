@@ -6,6 +6,7 @@ import { NoteEditor } from "@/components/NoteEditor";
 import { QuickBitEditor } from "@/components/QuickBitEditor";
 import { AIPanel } from "@/components/AIPanel";
 import { SettingsModal } from "@/components/SettingsModal";
+import { AISetupModal } from "@/components/AISetupModal";
 import { QuickBitNotifications } from "@/components/QuickBitNotifications";
 import { useAppStore } from "@/store";
 import { useBreakpoint } from "@/hooks/use-mobile";
@@ -101,6 +102,7 @@ export default function Home() {
       {showQuickBitEditor && <QuickBitEditor />}
 
       <AIPanel />
+      <AISetupModal />
       <SettingsModal />
       <QuickBitNotifications />
       </div>

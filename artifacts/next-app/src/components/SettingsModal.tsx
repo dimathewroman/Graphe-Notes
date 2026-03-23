@@ -51,7 +51,7 @@ function applyTheme(mode: ThemeMode, accent: string) {
 }
 
 export function SettingsModal() {
-  const { isSettingsOpen, setSettingsOpen } = useAppStore();
+  const { isSettingsOpen, setSettingsOpen, settingsInitialTab } = useAppStore();
   const { user, logout } = useAuth();
 
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
@@ -109,8 +109,9 @@ export function SettingsModal() {
     if (isSettingsOpen) {
       setThemeMode((localStorage.getItem("theme_mode") as ThemeMode) || "dark");
       setAccentColor(localStorage.getItem("theme_accent") || ACCENT_PRESETS[0].value);
+      if (settingsInitialTab) setActiveTab(settingsInitialTab);
     }
-  }, [isSettingsOpen]);
+  }, [isSettingsOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Load AI settings when AI tab is active ──────────────────────
   useEffect(() => {
