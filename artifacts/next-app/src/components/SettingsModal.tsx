@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   X, Key, Cloud, Download, Server, Palette, Sun, Moon, Monitor,
-  RefreshCw, AlertCircle, CheckCircle2, ChevronDown, Shield, ShieldCheck, KeyRound, LogOut, Zap
+  AlertCircle, CheckCircle2, Shield, ShieldCheck, KeyRound, LogOut, Zap, Eye, EyeOff,
 } from "lucide-react";
 import { NotificationCadenceEditor } from "./NotificationCadenceEditor";
 import { useAppStore } from "@/store";
@@ -29,26 +29,11 @@ const ACCENT_PRESETS = [
   { name: "Slate",   value: "215 25% 57%",  hex: "#64748b" },
 ];
 
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-function getCachedModels(provider: string): { models: string[]; cachedAt: number } | null {
-  try {
-    const raw = localStorage.getItem(`ai_models_${provider}`);
-    const ts = localStorage.getItem(`ai_models_${provider}_at`);
-    if (!raw || !ts) return null;
-    return { models: JSON.parse(raw) as string[], cachedAt: Number(ts) };
-  } catch {
-    return null;
-  }
-}
-
-function setCachedModels(provider: string, models: string[]) {
-  localStorage.setItem(`ai_models_${provider}`, JSON.stringify(models));
-  localStorage.setItem(`ai_models_${provider}_at`, String(Date.now()));
-}
-
 type ThemeMode = "dark" | "light";
-type FetchStatus = "idle" | "loading" | "live" | "fallback" | "error";
+type AiProvider = "graphe_free" | "google_ai_studio" | "openai" | "anthropic" | "local_llm";
+type ByokSubProvider = "openai" | "anthropic";
+type KeyInfo = { hasKey: boolean; endpointUrl: string | null; modelOverride: string | null };
+type UsageData = { hourlyUsed: number; hourlyLimit: number; resetInMs: number };
 
 function applyTheme(mode: ThemeMode, accent: string) {
   if (mode === "light") {
@@ -66,12 +51,9 @@ function applyTheme(mode: ThemeMode, accent: string) {
 }
 
 export function SettingsModal() {
-  const { isSettingsOpen, setSettingsOpen } = useAppStore();
+  const { isSettingsOpen, setSettingsOpen, settingsInitialTab } = useAppStore();
   const { user, logout } = useAuth();
 
-  const [provider, setProvider] = useState("openai");
-  const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("gpt-4o");
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [accentColor, setAccentColor] = useState(ACCENT_PRESETS[0].value);
   const [activeTab, setActiveTab] = useState<"appearance" | "ai" | "data" | "security" | "quickbits">("appearance");
@@ -80,11 +62,6 @@ export function SettingsModal() {
   const [qbExpirationDays, setQbExpirationDays] = useState(3);
   const [qbNotificationHours, setQbNotificationHours] = useState<number[]>([24]);
   const [qbSaving, setQbSaving] = useState(false);
-
-  // Model list state
-  const [models, setModels] = useState<string[]>([]);
-  const [fetchStatus, setFetchStatus] = useState<FetchStatus>("idle");
-  const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
 
   // Security / vault state
   const [vaultConfigured, setVaultConfigured] = useState(false);
@@ -95,77 +72,91 @@ export function SettingsModal() {
   const [securityError, setSecurityError] = useState("");
   const [securityLoading, setSecurityLoading] = useState(false);
 
+  // ── AI Provider state ────────────────────────────────────────────
+  const [aiProvider, setAiProvider] = useState<AiProvider | null>(null);
+  const [savedKeys, setSavedKeys] = useState<Record<string, KeyInfo>>({});
+  const [byokSubProvider, setByokSubProvider] = useState<ByokSubProvider>("openai");
+
+  // Google AI Studio
+  const [googleKey, setGoogleKey] = useState("");
+  const [googleKeyVisible, setGoogleKeyVisible] = useState(false);
+  const [googleModelOverride, setGoogleModelOverride] = useState("");
+  const [googleSaving, setGoogleSaving] = useState(false);
+
+  // BYOK — OpenAI
+  const [byokOpenaiKey, setByokOpenaiKey] = useState("");
+  const [byokOpenaiKeyVisible, setByokOpenaiKeyVisible] = useState(false);
+  const [byokOpenaiModel, setByokOpenaiModel] = useState("");
+  const [byokOpenaiSaving, setByokOpenaiSaving] = useState(false);
+
+  // BYOK — Anthropic
+  const [byokAnthropicKey, setByokAnthropicKey] = useState("");
+  const [byokAnthropicKeyVisible, setByokAnthropicKeyVisible] = useState(false);
+  const [byokAnthropicModel, setByokAnthropicModel] = useState("");
+  const [byokAnthropicSaving, setByokAnthropicSaving] = useState(false);
+
+  // Local / Hosted LLM
+  const [localEndpoint, setLocalEndpoint] = useState("");
+  const [localModel, setLocalModel] = useState("");
+  const [localSaving, setLocalSaving] = useState(false);
+
+  // Usage (Graphe Free)
+  const [usageData, setUsageData] = useState<UsageData | null>(null);
+  const [usageCountdown, setUsageCountdown] = useState(0);
+
   // ── Load saved prefs on open ────────────────────────────────────
   useEffect(() => {
     if (isSettingsOpen) {
-      const savedProvider = localStorage.getItem("ai_provider") || "openai";
-      const savedKey = localStorage.getItem("ai_api_key") || "";
-      const savedModel = localStorage.getItem("ai_model") || "gpt-4o";
-      setProvider(savedProvider);
-      setApiKey(savedKey);
-      setModel(savedModel);
       setThemeMode((localStorage.getItem("theme_mode") as ThemeMode) || "dark");
       setAccentColor(localStorage.getItem("theme_accent") || ACCENT_PRESETS[0].value);
-
-      // Pre-populate from cache immediately
-      const cached = getCachedModels(savedProvider);
-      if (cached) {
-        setModels(cached.models);
-        setLastFetchedAt(cached.cachedAt);
-        const stale = Date.now() - cached.cachedAt > CACHE_TTL_MS;
-        setFetchStatus(stale ? "idle" : "live");
-      } else {
-        setModels([]);
-        setFetchStatus("idle");
-      }
+      if (settingsInitialTab) setActiveTab(settingsInitialTab);
     }
-  }, [isSettingsOpen]);
+  }, [isSettingsOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Fetch models from API proxy ─────────────────────────────────
-  const fetchModels = useCallback(
-    async (prov: string, key: string, force = false) => {
-      if (!isSettingsOpen) return;
-
-      // Check cache first (unless forced)
-      if (!force) {
-        const cached = getCachedModels(prov);
-        if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
-          setModels(cached.models);
-          setLastFetchedAt(cached.cachedAt);
-          setFetchStatus("live");
-          return;
-        }
-      }
-
-      setFetchStatus("loading");
-      try {
-        const params = new URLSearchParams({ provider: prov });
-        if (key.trim()) params.set("apiKey", key.trim());
-        const res = await authenticatedFetch(`/api/models?${params}`);
-        if (!res.ok) throw new Error(`${res.status}`);
-        const data = (await res.json()) as { models: string[]; source: "live" | "fallback" };
-        setModels(data.models);
-        // Only cache live responses — fallback lists may contain wrong model IDs
-        if (data.source === "live") {
-          setCachedModels(prov, data.models);
-        }
-        setLastFetchedAt(Date.now());
-        setFetchStatus(data.source === "live" ? "live" : "fallback");
-        // If the currently stored model isn't in the new list, auto-select the first valid one
-        setModel((prev) => (data.models.includes(prev) ? prev : data.models[0] ?? prev));
-      } catch {
-        setFetchStatus("error");
-      }
-    },
-    [isSettingsOpen]
-  );
-
-  // Auto-fetch when AI tab is active and models are stale/empty
+  // ── Load AI settings when AI tab is active ──────────────────────
   useEffect(() => {
-    if (activeTab === "ai" && isSettingsOpen) {
-      fetchModels(provider, apiKey);
-    }
-  }, [activeTab, isSettingsOpen, provider]); // intentionally excludes apiKey to avoid re-fetching on every keystroke
+    if (activeTab !== "ai" || !isSettingsOpen) return;
+
+    authenticatedFetch("/api/ai/settings")
+      .then(r => r.json())
+      .then((data: { activeAiProvider: string | null }) => {
+        const p = data.activeAiProvider as AiProvider | null;
+        setAiProvider(p);
+        if (p === "openai" || p === "anthropic") setByokSubProvider(p);
+      })
+      .catch(() => {});
+
+    authenticatedFetch("/api/ai/keys")
+      .then(r => r.json())
+      .then((rows: Array<{ provider: string; hasKey: boolean; endpointUrl: string | null; modelOverride: string | null }>) => {
+        const map: Record<string, KeyInfo> = {};
+        for (const row of rows) {
+          map[row.provider] = { hasKey: row.hasKey, endpointUrl: row.endpointUrl, modelOverride: row.modelOverride };
+        }
+        setSavedKeys(map);
+        if (map["google_ai_studio"]?.modelOverride) setGoogleModelOverride(map["google_ai_studio"].modelOverride!);
+        if (map["openai"]?.modelOverride) setByokOpenaiModel(map["openai"].modelOverride!);
+        if (map["anthropic"]?.modelOverride) setByokAnthropicModel(map["anthropic"].modelOverride!);
+        if (map["local_llm"]?.endpointUrl) setLocalEndpoint(map["local_llm"].endpointUrl!);
+        if (map["local_llm"]?.modelOverride) setLocalModel(map["local_llm"].modelOverride!);
+      })
+      .catch(() => {});
+
+    authenticatedFetch("/api/ai/usage")
+      .then(r => r.json())
+      .then((data: UsageData) => {
+        setUsageData(data);
+        setUsageCountdown(Math.ceil(data.resetInMs / 1000));
+      })
+      .catch(() => {});
+  }, [activeTab, isSettingsOpen]);
+
+  // ── Usage countdown timer ────────────────────────────────────────
+  useEffect(() => {
+    if (usageCountdown <= 0) return;
+    const timer = setInterval(() => setUsageCountdown(prev => Math.max(0, prev - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [usageCountdown]);
 
   useEffect(() => {
     if (activeTab === "security" && isSettingsOpen) {
@@ -193,6 +184,81 @@ export function SettingsModal() {
     }
   }, [activeTab, isSettingsOpen]);
 
+  // ── AI handlers ─────────────────────────────────────────────────
+  const handleAiProviderChange = async (newProvider: AiProvider) => {
+    setAiProvider(newProvider);
+    if (newProvider === "openai" || newProvider === "anthropic") setByokSubProvider(newProvider);
+    await authenticatedFetch("/api/ai/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activeAiProvider: newProvider }),
+    }).catch(() => {});
+  };
+
+  const handleSaveGoogleKey = async () => {
+    if (!googleKey.trim()) return;
+    setGoogleSaving(true);
+    try {
+      await authenticatedFetch("/api/ai/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "google_ai_studio", apiKey: googleKey.trim(), modelOverride: googleModelOverride.trim() || null }),
+      });
+      setSavedKeys(prev => ({ ...prev, google_ai_studio: { hasKey: true, endpointUrl: null, modelOverride: googleModelOverride.trim() || null } }));
+      setGoogleKey("");
+    } finally {
+      setGoogleSaving(false);
+    }
+  };
+
+  const handleSaveByokKey = async (sub: ByokSubProvider) => {
+    const isOpenai = sub === "openai";
+    const key = isOpenai ? byokOpenaiKey : byokAnthropicKey;
+    const modelOverride = isOpenai ? byokOpenaiModel : byokAnthropicModel;
+    if (!key.trim()) return;
+    if (isOpenai) setByokOpenaiSaving(true); else setByokAnthropicSaving(true);
+    try {
+      await authenticatedFetch("/api/ai/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: sub, apiKey: key.trim(), modelOverride: modelOverride.trim() || null }),
+      });
+      setSavedKeys(prev => ({ ...prev, [sub]: { hasKey: true, endpointUrl: null, modelOverride: modelOverride.trim() || null } }));
+      if (isOpenai) setByokOpenaiKey(""); else setByokAnthropicKey("");
+    } finally {
+      if (isOpenai) setByokOpenaiSaving(false); else setByokAnthropicSaving(false);
+    }
+  };
+
+  const handleSaveLocalLlm = async () => {
+    if (!localEndpoint.trim()) return;
+    setLocalSaving(true);
+    try {
+      await authenticatedFetch("/api/ai/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "local_llm", endpointUrl: localEndpoint.trim(), modelOverride: localModel.trim() || null }),
+      });
+      setSavedKeys(prev => ({ ...prev, local_llm: { hasKey: false, endpointUrl: localEndpoint.trim(), modelOverride: localModel.trim() || null } }));
+    } finally {
+      setLocalSaving(false);
+    }
+  };
+
+  const handleRemoveKey = async (provider: string) => {
+    await authenticatedFetch("/api/ai/keys", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider }),
+    }).catch(() => {});
+    setSavedKeys(prev => {
+      const updated = { ...prev };
+      delete updated[provider];
+      return updated;
+    });
+  };
+
+  // ── Security handlers ────────────────────────────────────────────
   const handleSecurityPinSubmit = useCallback(async (pin: string) => {
     setSecurityError("");
     setSecurityLoading(true);
@@ -255,7 +321,7 @@ export function SettingsModal() {
           });
           if (!res.ok) {
             const data = await res.json().catch(() => ({}));
-            throw new Error(data.error || "Failed to change PIN");
+            throw new Error((data as { error?: string }).error || "Failed to change PIN");
           }
           setSecurityMode("idle");
         }
@@ -280,33 +346,7 @@ export function SettingsModal() {
     return { title: "", subtitle: "" };
   };
 
-  // When provider changes, reset model to first of new list
-  const handleProviderChange = (newProvider: string) => {
-    setProvider(newProvider);
-    const cached = getCachedModels(newProvider);
-    if (cached) {
-      setModels(cached.models);
-      setLastFetchedAt(cached.cachedAt);
-      setFetchStatus(Date.now() - cached.cachedAt < CACHE_TTL_MS ? "live" : "idle");
-      setModel(cached.models[0] || "");
-    } else {
-      setModels([]);
-      setFetchStatus("idle");
-      setModel("");
-    }
-    // Fetch fresh for new provider
-    fetchModels(newProvider, apiKey);
-  };
-
-  // When API key is saved (on blur), refetch with the new key
-  const handleApiKeyBlur = () => {
-    if (apiKey.trim()) fetchModels(provider, apiKey, true);
-  };
-
   const handleSave = () => {
-    localStorage.setItem("ai_provider", provider);
-    localStorage.setItem("ai_api_key", apiKey.trim());
-    localStorage.setItem("ai_model", model);
     localStorage.setItem("theme_mode", themeMode);
     localStorage.setItem("theme_accent", accentColor);
     applyTheme(themeMode, accentColor);
@@ -348,13 +388,8 @@ export function SettingsModal() {
     }
   };
 
-  const statusInfo = {
-    idle:     { icon: null,            text: "" },
-    loading:  { icon: <RefreshCw className="w-3 h-3 animate-spin text-muted-foreground" />, text: "Fetching models…" },
-    live:     { icon: <CheckCircle2 className="w-3 h-3 text-emerald-500" />,              text: lastFetchedAt ? `Updated ${new Date(lastFetchedAt).toLocaleDateString()}` : "" },
-    fallback: { icon: <AlertCircle className="w-3 h-3 text-amber-500" />,                text: "Showing defaults — add API key to see all models" },
-    error:    { icon: <AlertCircle className="w-3 h-3 text-destructive" />,               text: "Could not fetch models" },
-  }[fetchStatus];
+  // Derived: which provider card is highlighted
+  const activeCard = aiProvider === "openai" || aiProvider === "anthropic" ? "byok" : aiProvider;
 
   return (
     <AnimatePresence>
@@ -478,101 +513,337 @@ export function SettingsModal() {
               {/* ── AI TAB ─────────────────────────────────── */}
               {activeTab === "ai" && (
                 <section className="space-y-4">
-                  {/* Provider */}
+                  {/* Provider selection cards */}
                   <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">Provider</label>
-                    <select
-                      value={provider}
-                      onChange={(e) => handleProviderChange(e.target.value)}
-                      className="w-full bg-background border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none appearance-none cursor-pointer"
-                    >
-                      <option value="openai">OpenAI</option>
-                      <option value="anthropic">Anthropic</option>
-                      <option value="google">Google Gemini</option>
-                    </select>
-                  </div>
-
-                  {/* API Key */}
-                  <div>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">API Key</label>
-                    <input
-                      type="password"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      onBlur={handleApiKeyBlur}
-                      placeholder={provider === "openai" ? "sk-..." : provider === "anthropic" ? "sk-ant-..." : "AIza..."}
-                      className="w-full bg-background border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                    />
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      Enter your key and click elsewhere to load your available models.
-                    </p>
-                  </div>
-
-                  {/* Model dropdown */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-medium text-muted-foreground">Model</label>
+                    <label className="block text-xs font-medium text-muted-foreground mb-2">AI Provider</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* Graphe Free */}
                       <button
-                        onClick={() => fetchModels(provider, apiKey, true)}
-                        disabled={fetchStatus === "loading"}
-                        className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-                        title="Refresh model list"
+                        onClick={() => handleAiProviderChange("graphe_free")}
+                        className={cn(
+                          "flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all",
+                          activeCard === "graphe_free"
+                            ? "border-primary bg-primary/10"
+                            : "border-panel-border bg-background hover:border-primary/40"
+                        )}
                       >
-                        <RefreshCw className={cn("w-2.5 h-2.5", fetchStatus === "loading" && "animate-spin")} />
-                        Refresh
+                        <div className="flex items-center gap-1.5">
+                          <Zap className={cn("w-3.5 h-3.5", activeCard === "graphe_free" ? "text-primary" : "text-muted-foreground")} />
+                          <span className={cn("text-sm font-medium", activeCard === "graphe_free" ? "text-primary" : "text-foreground")}>Graphe Free</span>
+                        </div>
+                        <span className="text-[11px] text-muted-foreground">Built-in, no key needed</span>
+                      </button>
+
+                      {/* Google AI Studio */}
+                      <button
+                        onClick={() => handleAiProviderChange("google_ai_studio")}
+                        className={cn(
+                          "flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all",
+                          activeCard === "google_ai_studio"
+                            ? "border-primary bg-primary/10"
+                            : "border-panel-border bg-background hover:border-primary/40"
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Key className={cn("w-3.5 h-3.5", activeCard === "google_ai_studio" ? "text-primary" : "text-muted-foreground")} />
+                          <span className={cn("text-sm font-medium", activeCard === "google_ai_studio" ? "text-primary" : "text-foreground")}>Google AI Studio</span>
+                        </div>
+                        <span className="text-[11px] text-muted-foreground">Your own Gemini key</span>
+                      </button>
+
+                      {/* Custom BYOK */}
+                      <button
+                        onClick={() => handleAiProviderChange(byokSubProvider)}
+                        className={cn(
+                          "flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all",
+                          activeCard === "byok"
+                            ? "border-primary bg-primary/10"
+                            : "border-panel-border bg-background hover:border-primary/40"
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Key className={cn("w-3.5 h-3.5", activeCard === "byok" ? "text-primary" : "text-muted-foreground")} />
+                          <span className={cn("text-sm font-medium", activeCard === "byok" ? "text-primary" : "text-foreground")}>OpenAI / Anthropic</span>
+                        </div>
+                        <span className="text-[11px] text-muted-foreground">Your own API key</span>
+                      </button>
+
+                      {/* Local / Hosted LLM */}
+                      <button
+                        onClick={() => handleAiProviderChange("local_llm")}
+                        className={cn(
+                          "flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all",
+                          activeCard === "local_llm"
+                            ? "border-primary bg-primary/10"
+                            : "border-panel-border bg-background hover:border-primary/40"
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Server className={cn("w-3.5 h-3.5", activeCard === "local_llm" ? "text-primary" : "text-muted-foreground")} />
+                          <span className={cn("text-sm font-medium", activeCard === "local_llm" ? "text-primary" : "text-foreground")}>Local / Hosted LLM</span>
+                        </div>
+                        <span className="text-[11px] text-muted-foreground">Ollama, LM Studio, etc.</span>
                       </button>
                     </div>
+                  </div>
 
-                    {/* Status badge */}
-                    {statusInfo.text && (
-                      <div className="flex items-center gap-1.5 mb-1.5 text-[11px] text-muted-foreground">
-                        {statusInfo.icon}
-                        {statusInfo.text}
+                  {/* Graphe Free detail */}
+                  {activeCard === "graphe_free" && (
+                    <div className="p-4 rounded-xl bg-background border border-panel-border space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Usage this hour</span>
+                        {usageData && (
+                          <span className="text-xs text-muted-foreground">
+                            {usageData.hourlyUsed} / {usageData.hourlyLimit} requests
+                          </span>
+                        )}
                       </div>
-                    )}
-
-                    <div className="relative">
-                      {models.length > 0 ? (
-                        <>
-                          <select
-                            value={model}
-                            onChange={(e) => setModel(e.target.value)}
-                            className="w-full bg-background border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none appearance-none cursor-pointer pr-8"
-                          >
-                            {models.map((m) => (
-                              <option key={m} value={m}>{m}</option>
-                            ))}
-                          </select>
-                          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                        </>
-                      ) : (
-                        <div className="w-full bg-background border border-panel-border rounded-lg px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
-                          {fetchStatus === "loading" ? (
-                            <>
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
-                              Loading models…
-                            </>
-                          ) : (
-                            "No models found — check your API key"
-                          )}
+                      {usageData && (
+                        <div className="w-full bg-panel-border rounded-full h-1.5">
+                          <div
+                            className="bg-primary rounded-full h-1.5 transition-all"
+                            style={{ width: `${Math.min(100, (usageData.hourlyUsed / usageData.hourlyLimit) * 100)}%` }}
+                          />
                         </div>
                       )}
+                      {usageCountdown > 0 && usageData && usageData.hourlyUsed >= usageData.hourlyLimit && (
+                        <p className="text-[11px] text-amber-500">
+                          Limit reached — resets in {Math.floor(usageCountdown / 60)}m {usageCountdown % 60}s
+                        </p>
+                      )}
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        Uses Gemini Flash Lite. Switch to a paid provider for higher limits and model choice.
+                      </p>
                     </div>
+                  )}
 
-                    {/* Custom model override */}
-                    <details className="mt-2">
-                      <summary className="text-[11px] text-muted-foreground cursor-pointer hover:text-foreground transition-colors select-none">
-                        Use a custom model ID instead
-                      </summary>
-                      <input
-                        type="text"
-                        value={model}
-                        onChange={(e) => setModel(e.target.value)}
-                        placeholder="e.g. gpt-4o-2024-11-20"
-                        className="mt-1.5 w-full bg-background border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                      />
-                    </details>
-                  </div>
+                  {/* Google AI Studio detail */}
+                  {activeCard === "google_ai_studio" && (
+                    <div className="p-4 rounded-xl bg-background border border-panel-border space-y-3">
+                      {savedKeys["google_ai_studio"]?.hasKey ? (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                            <span className="text-sm text-foreground">API key saved</span>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveKey("google_ai_studio")}
+                            className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">Google AI Studio API Key</label>
+                            <div className="relative">
+                              <input
+                                type={googleKeyVisible ? "text" : "password"}
+                                value={googleKey}
+                                onChange={(e) => setGoogleKey(e.target.value)}
+                                placeholder="AIza..."
+                                className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none pr-9"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setGoogleKeyVisible(v => !v)}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                {googleKeyVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">
+                              Model override <span className="font-normal">(optional)</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={googleModelOverride}
+                              onChange={(e) => setGoogleModelOverride(e.target.value)}
+                              placeholder="e.g. gemini-2.0-flash"
+                              className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                            />
+                          </div>
+                          <button
+                            onClick={handleSaveGoogleKey}
+                            disabled={!googleKey.trim() || googleSaving}
+                            className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 hover:bg-primary-hover transition-colors"
+                          >
+                            {googleSaving ? "Saving…" : "Save Key"}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* BYOK — OpenAI / Anthropic detail */}
+                  {activeCard === "byok" && (
+                    <div className="p-4 rounded-xl bg-background border border-panel-border space-y-3">
+                      {/* Sub-provider toggle */}
+                      <div className="flex gap-2">
+                        {(["openai", "anthropic"] as ByokSubProvider[]).map((sp) => (
+                          <button
+                            key={sp}
+                            onClick={() => {
+                              setByokSubProvider(sp);
+                              handleAiProviderChange(sp);
+                            }}
+                            className={cn(
+                              "flex-1 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                              byokSubProvider === sp
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-panel-border text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            {sp === "openai" ? "OpenAI" : "Anthropic"}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* OpenAI */}
+                      {byokSubProvider === "openai" && (
+                        savedKeys["openai"]?.hasKey ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                              <span className="text-sm text-foreground">OpenAI key saved</span>
+                            </div>
+                            <button onClick={() => handleRemoveKey("openai")} className="text-xs text-red-400 hover:text-red-300 transition-colors">Remove</button>
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">OpenAI API Key</label>
+                            <div className="relative">
+                              <input
+                                type={byokOpenaiKeyVisible ? "text" : "password"}
+                                value={byokOpenaiKey}
+                                onChange={(e) => setByokOpenaiKey(e.target.value)}
+                                placeholder="sk-..."
+                                className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none pr-9"
+                              />
+                              <button type="button" onClick={() => setByokOpenaiKeyVisible(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                                {byokOpenaiKeyVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      )}
+
+                      {/* Anthropic */}
+                      {byokSubProvider === "anthropic" && (
+                        savedKeys["anthropic"]?.hasKey ? (
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                              <span className="text-sm text-foreground">Anthropic key saved</span>
+                            </div>
+                            <button onClick={() => handleRemoveKey("anthropic")} className="text-xs text-red-400 hover:text-red-300 transition-colors">Remove</button>
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">Anthropic API Key</label>
+                            <div className="relative">
+                              <input
+                                type={byokAnthropicKeyVisible ? "text" : "password"}
+                                value={byokAnthropicKey}
+                                onChange={(e) => setByokAnthropicKey(e.target.value)}
+                                placeholder="sk-ant-..."
+                                className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none pr-9"
+                              />
+                              <button type="button" onClick={() => setByokAnthropicKeyVisible(v => !v)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+                                {byokAnthropicKeyVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      )}
+
+                      {/* Model (required for BYOK) */}
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">
+                          Model <span className="font-normal">(required)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={byokSubProvider === "openai" ? byokOpenaiModel : byokAnthropicModel}
+                          onChange={(e) => byokSubProvider === "openai" ? setByokOpenaiModel(e.target.value) : setByokAnthropicModel(e.target.value)}
+                          placeholder={byokSubProvider === "openai" ? "e.g. gpt-4o" : "e.g. claude-opus-4-6"}
+                          className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                        />
+                      </div>
+
+                      {/* Save button — only show when key not yet saved */}
+                      {!(byokSubProvider === "openai" ? savedKeys["openai"]?.hasKey : savedKeys["anthropic"]?.hasKey) && (
+                        <button
+                          onClick={() => handleSaveByokKey(byokSubProvider)}
+                          disabled={!(byokSubProvider === "openai" ? byokOpenaiKey.trim() : byokAnthropicKey.trim()) || (byokSubProvider === "openai" ? byokOpenaiSaving : byokAnthropicSaving)}
+                          className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 hover:bg-primary-hover transition-colors"
+                        >
+                          {(byokSubProvider === "openai" ? byokOpenaiSaving : byokAnthropicSaving) ? "Saving…" : "Save Key"}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Local / Hosted LLM detail */}
+                  {activeCard === "local_llm" && (
+                    <div className="p-4 rounded-xl bg-background border border-panel-border space-y-3">
+                      {savedKeys["local_llm"]?.endpointUrl ? (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                            <span className="text-sm text-foreground truncate">{savedKeys["local_llm"].endpointUrl}</span>
+                          </div>
+                          <button onClick={() => handleRemoveKey("local_llm")} className="text-xs text-red-400 hover:text-red-300 transition-colors shrink-0 ml-3">Remove</button>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">Endpoint URL</label>
+                            <input
+                              type="text"
+                              value={localEndpoint}
+                              onChange={(e) => setLocalEndpoint(e.target.value)}
+                              placeholder="http://localhost:11434"
+                              className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">
+                              Model name <span className="font-normal">(optional)</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={localModel}
+                              onChange={(e) => setLocalModel(e.target.value)}
+                              placeholder="e.g. llama3.2"
+                              className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                            />
+                          </div>
+                          <button
+                            onClick={handleSaveLocalLlm}
+                            disabled={!localEndpoint.trim() || localSaving}
+                            className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 hover:bg-primary-hover transition-colors"
+                          >
+                            {localSaving ? "Saving…" : "Save Endpoint"}
+                          </button>
+                        </>
+                      )}
+                      <p className="text-[11px] text-muted-foreground">
+                        Endpoint must expose an OpenAI-compatible <code className="text-[10px] bg-panel px-1 py-0.5 rounded">/v1/chat/completions</code> API.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* No provider selected yet */}
+                  {!aiProvider && (
+                    <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      Select a provider above to get started.
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -711,11 +982,15 @@ export function SettingsModal() {
 
             <div className="p-4 border-t border-panel-border bg-background/50 flex justify-end">
               <button
-                onClick={activeTab === "quickbits" ? handleQbSave : handleSave}
+                onClick={
+                  activeTab === "quickbits" ? handleQbSave
+                  : activeTab === "ai" ? () => setSettingsOpen(false)
+                  : handleSave
+                }
                 disabled={activeTab === "quickbits" && qbSaving}
                 className="px-6 py-2 bg-primary hover:bg-primary-hover text-primary-foreground rounded-xl text-sm font-medium transition-colors shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 disabled:opacity-60"
               >
-                {activeTab === "quickbits" && qbSaving ? "Saving…" : "Save Settings"}
+                {activeTab === "quickbits" && qbSaving ? "Saving…" : activeTab === "ai" ? "Done" : "Save Settings"}
               </button>
             </div>
           </motion.div>
