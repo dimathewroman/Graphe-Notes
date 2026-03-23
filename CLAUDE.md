@@ -51,7 +51,6 @@ All endpoints live in artifacts/next-app/src/app/api/ and are prefixed with /api
 - POST /vault/setup
 - POST /vault/unlock
 - POST /vault/change-password
-- POST /ai/complete (provider: openai|anthropic|google, apiKey, model, prompt)
 - GET/POST /models
 
 ---

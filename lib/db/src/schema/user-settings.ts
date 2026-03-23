@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgSchema, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, pgSchema, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 // Reference to Supabase's built-in auth.users table (auth schema, not public)
 const authSchema = pgSchema("auth");
@@ -11,6 +11,7 @@ export const userSettingsTable = pgTable("user_settings", {
     .default(sql`gen_random_uuid()`)
     .references(() => authUsers.id, { onDelete: "cascade" }),
   activeAiProvider: text("active_ai_provider"),
+  hasCompletedAiSetup: boolean("has_completed_ai_setup").notNull().default(false),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
