@@ -38,6 +38,8 @@ import type {
   MobileTokenExchangeSuccess,
   MoveNoteBody,
   Note,
+  PermanentDeleteNote200,
+  PermanentDeleteNoteBody,
   QuickBit,
   QuickBitSettings,
   SmartFolder,
@@ -895,6 +897,261 @@ export const useDeleteNote = <
   TContext
 > => {
   return useMutation(getDeleteNoteMutationOptions(options));
+};
+
+/**
+ * @summary Soft-delete a note (moves to Recently Deleted)
+ */
+export const getSoftDeleteNoteUrl = (id: number) => {
+  return `/api/notes/${id}/delete`;
+};
+
+export const softDeleteNote = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Note> => {
+  return customFetch<Note>(getSoftDeleteNoteUrl(id), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getSoftDeleteNoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof softDeleteNote>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof softDeleteNote>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["softDeleteNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof softDeleteNote>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return softDeleteNote(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SoftDeleteNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof softDeleteNote>>
+>;
+
+export type SoftDeleteNoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Soft-delete a note (moves to Recently Deleted)
+ */
+export const useSoftDeleteNote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof softDeleteNote>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof softDeleteNote>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getSoftDeleteNoteMutationOptions(options));
+};
+
+/**
+ * @summary Restore a soft-deleted note
+ */
+export const getRestoreNoteUrl = (id: number) => {
+  return `/api/notes/${id}/restore`;
+};
+
+export const restoreNote = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Note> => {
+  return customFetch<Note>(getRestoreNoteUrl(id), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getRestoreNoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restoreNote>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof restoreNote>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["restoreNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof restoreNote>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return restoreNote(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RestoreNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof restoreNote>>
+>;
+
+export type RestoreNoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Restore a soft-deleted note
+ */
+export const useRestoreNote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof restoreNote>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof restoreNote>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getRestoreNoteMutationOptions(options));
+};
+
+/**
+ * @summary Permanently delete a note — irreversible
+ */
+export const getPermanentDeleteNoteUrl = (id: number) => {
+  return `/api/notes/${id}/permanent`;
+};
+
+export const permanentDeleteNote = async (
+  id: number,
+  permanentDeleteNoteBody: PermanentDeleteNoteBody,
+  options?: RequestInit,
+): Promise<PermanentDeleteNote200> => {
+  return customFetch<PermanentDeleteNote200>(getPermanentDeleteNoteUrl(id), {
+    ...options,
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(permanentDeleteNoteBody),
+  });
+};
+
+export const getPermanentDeleteNoteMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof permanentDeleteNote>>,
+    TError,
+    { id: number; data: BodyType<PermanentDeleteNoteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof permanentDeleteNote>>,
+  TError,
+  { id: number; data: BodyType<PermanentDeleteNoteBody> },
+  TContext
+> => {
+  const mutationKey = ["permanentDeleteNote"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof permanentDeleteNote>>,
+    { id: number; data: BodyType<PermanentDeleteNoteBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return permanentDeleteNote(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type PermanentDeleteNoteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof permanentDeleteNote>>
+>;
+export type PermanentDeleteNoteMutationBody = BodyType<PermanentDeleteNoteBody>;
+export type PermanentDeleteNoteMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Permanently delete a note — irreversible
+ */
+export const usePermanentDeleteNote = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof permanentDeleteNote>>,
+    TError,
+    { id: number; data: BodyType<PermanentDeleteNoteBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof permanentDeleteNote>>,
+  TError,
+  { id: number; data: BodyType<PermanentDeleteNoteBody> },
+  TContext
+> => {
+  return useMutation(getPermanentDeleteNoteMutationOptions(options));
 };
 
 /**

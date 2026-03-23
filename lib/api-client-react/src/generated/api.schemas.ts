@@ -94,6 +94,18 @@ export interface UpdateFolderBody {
   sortOrder?: number;
 }
 
+/**
+ * @nullable
+ */
+export type NoteDeletedReason =
+  | (typeof NoteDeletedReason)[keyof typeof NoteDeletedReason]
+  | null;
+
+export const NoteDeletedReason = {
+  deleted: "deleted",
+  expired: "expired",
+} as const;
+
 export interface Note {
   id: number;
   title: string;
@@ -108,8 +120,18 @@ export interface Note {
   /** @nullable */
   coverImage: string | null;
   vaulted: boolean;
+  /** @nullable */
+  deletedAt: string | null;
+  /** @nullable */
+  autoDeleteAt: string | null;
+  /** @nullable */
+  deletedReason: NoteDeletedReason;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PermanentDeleteNoteBody {
+  confirm: boolean;
 }
 
 export interface CreateNoteBody {
@@ -310,6 +332,10 @@ export type GetNotesParams = {
    * @nullable
    */
   sortDir?: GetNotesSortDir;
+  /**
+   * @nullable
+   */
+  deleted?: boolean | null;
 };
 
 export type GetNotesSortBy =
@@ -330,6 +356,10 @@ export const GetNotesSortDir = {
   asc: "asc",
   desc: "desc",
 } as const;
+
+export type PermanentDeleteNote200 = {
+  success: boolean;
+};
 
 export type GetQuickBitsParams = {
   /**

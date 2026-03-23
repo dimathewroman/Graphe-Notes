@@ -5,6 +5,7 @@
  * Notes App API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { NoteDeletedReason } from "./noteDeletedReason";
 
 export interface Note {
   id: number;
@@ -20,6 +21,12 @@ export interface Note {
   /** @nullable */
   coverImage: string | null;
   vaulted: boolean;
+  /** @nullable */
+  deletedAt: Date | null;
+  /** @nullable */
+  autoDeleteAt: Date | null;
+  /** @nullable */
+  deletedReason: NoteDeletedReason;
   createdAt: Date;
   updatedAt: Date;
 }
