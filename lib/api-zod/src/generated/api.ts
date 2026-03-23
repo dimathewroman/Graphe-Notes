@@ -98,6 +98,7 @@ export const GetNotesQueryParams = zod.object({
   sortDir: zod
     .union([zod.literal("asc"), zod.literal("desc"), zod.literal(null)])
     .nullish(),
+  deleted: zod.coerce.boolean().nullish(),
 });
 
 export const GetNotesResponseItem = zod.object({
@@ -111,6 +112,11 @@ export const GetNotesResponseItem = zod.object({
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
   vaulted: zod.boolean(),
+  deletedAt: zod.date().nullable(),
+  autoDeleteAt: zod.date().nullable(),
+  deletedReason: zod
+    .union([zod.literal("deleted"), zod.literal("expired"), zod.literal(null)])
+    .nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -148,6 +154,11 @@ export const GetNoteResponse = zod.object({
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
   vaulted: zod.boolean(),
+  deletedAt: zod.date().nullable(),
+  autoDeleteAt: zod.date().nullable(),
+  deletedReason: zod
+    .union([zod.literal("deleted"), zod.literal("expired"), zod.literal(null)])
+    .nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -181,6 +192,11 @@ export const UpdateNoteResponse = zod.object({
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
   vaulted: zod.boolean(),
+  deletedAt: zod.date().nullable(),
+  autoDeleteAt: zod.date().nullable(),
+  deletedReason: zod
+    .union([zod.literal("deleted"), zod.literal("expired"), zod.literal(null)])
+    .nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -190,6 +206,75 @@ export const UpdateNoteResponse = zod.object({
  */
 export const DeleteNoteParams = zod.object({
   id: zod.coerce.number(),
+});
+
+/**
+ * @summary Soft-delete a note (moves to Recently Deleted)
+ */
+export const SoftDeleteNoteParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SoftDeleteNoteResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  content: zod.string(),
+  contentText: zod.string().nullable(),
+  folderId: zod.number().nullable(),
+  tags: zod.array(zod.string()),
+  pinned: zod.boolean(),
+  favorite: zod.boolean(),
+  coverImage: zod.string().nullable(),
+  vaulted: zod.boolean(),
+  deletedAt: zod.date().nullable(),
+  autoDeleteAt: zod.date().nullable(),
+  deletedReason: zod
+    .union([zod.literal("deleted"), zod.literal("expired"), zod.literal(null)])
+    .nullable(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Restore a soft-deleted note
+ */
+export const RestoreNoteParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const RestoreNoteResponse = zod.object({
+  id: zod.number(),
+  title: zod.string(),
+  content: zod.string(),
+  contentText: zod.string().nullable(),
+  folderId: zod.number().nullable(),
+  tags: zod.array(zod.string()),
+  pinned: zod.boolean(),
+  favorite: zod.boolean(),
+  coverImage: zod.string().nullable(),
+  vaulted: zod.boolean(),
+  deletedAt: zod.date().nullable(),
+  autoDeleteAt: zod.date().nullable(),
+  deletedReason: zod
+    .union([zod.literal("deleted"), zod.literal("expired"), zod.literal(null)])
+    .nullable(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+
+/**
+ * @summary Permanently delete a note — irreversible
+ */
+export const PermanentDeleteNoteParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const PermanentDeleteNoteBody = zod.object({
+  confirm: zod.boolean(),
+});
+
+export const PermanentDeleteNoteResponse = zod.object({
+  success: zod.boolean(),
 });
 
 /**
@@ -210,6 +295,11 @@ export const ToggleNotePinResponse = zod.object({
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
   vaulted: zod.boolean(),
+  deletedAt: zod.date().nullable(),
+  autoDeleteAt: zod.date().nullable(),
+  deletedReason: zod
+    .union([zod.literal("deleted"), zod.literal("expired"), zod.literal(null)])
+    .nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -232,6 +322,11 @@ export const ToggleNoteFavoriteResponse = zod.object({
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
   vaulted: zod.boolean(),
+  deletedAt: zod.date().nullable(),
+  autoDeleteAt: zod.date().nullable(),
+  deletedReason: zod
+    .union([zod.literal("deleted"), zod.literal("expired"), zod.literal(null)])
+    .nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -258,6 +353,11 @@ export const MoveNoteResponse = zod.object({
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
   vaulted: zod.boolean(),
+  deletedAt: zod.date().nullable(),
+  autoDeleteAt: zod.date().nullable(),
+  deletedReason: zod
+    .union([zod.literal("deleted"), zod.literal("expired"), zod.literal(null)])
+    .nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
@@ -284,6 +384,11 @@ export const ToggleNoteVaultResponse = zod.object({
   favorite: zod.boolean(),
   coverImage: zod.string().nullable(),
   vaulted: zod.boolean(),
+  deletedAt: zod.date().nullable(),
+  autoDeleteAt: zod.date().nullable(),
+  deletedReason: zod
+    .union([zod.literal("deleted"), zod.literal("expired"), zod.literal(null)])
+    .nullable(),
   createdAt: zod.date(),
   updatedAt: zod.date(),
 });
