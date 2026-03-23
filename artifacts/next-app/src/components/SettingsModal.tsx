@@ -95,6 +95,13 @@ export function SettingsModal() {
   const [byokAnthropicModel, setByokAnthropicModel] = useState("");
   const [byokAnthropicSaving, setByokAnthropicSaving] = useState(false);
 
+  // BYOK — model dropdowns
+  const [byokOpenaiModels, setByokOpenaiModels] = useState<string[]>([]);
+  const [byokAnthropicModels, setByokAnthropicModels] = useState<string[]>([]);
+  const [byokOpenaiModelsLoading, setByokOpenaiModelsLoading] = useState(false);
+  const [byokAnthropicModelsLoading, setByokAnthropicModelsLoading] = useState(false);
+  const [byokModelSaving, setByokModelSaving] = useState(false);
+
   // Local / Hosted LLM
   const [localEndpoint, setLocalEndpoint] = useState("");
   const [localModel, setLocalModel] = useState("");
@@ -112,6 +119,47 @@ export function SettingsModal() {
       if (settingsInitialTab) setActiveTab(settingsInitialTab);
     }
   }, [isSettingsOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Fetch available models from provider ────────────────────────
+  const fetchByokModels = useCallback(async (sub: ByokSubProvider, apiKey?: string) => {
+    const setModels = sub === "openai" ? setByokOpenaiModels : setByokAnthropicModels;
+    const setLoading = sub === "openai" ? setByokOpenaiModelsLoading : setByokAnthropicModelsLoading;
+    setLoading(true);
+    try {
+      const res = await authenticatedFetch("/api/ai/models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: sub, ...(apiKey ? { apiKey } : {}) }),
+      });
+      if (!res.ok) { setModels([]); return; }
+      const data = await res.json() as { models?: string[] };
+      setModels(data.models ?? []);
+    } catch {
+      setModels([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounce: fetch models as user types their OpenAI key
+  useEffect(() => {
+    if (!byokOpenaiKey.trim() || byokOpenaiKey.length < 10) {
+      setByokOpenaiModels([]);
+      return;
+    }
+    const timer = setTimeout(() => { void fetchByokModels("openai", byokOpenaiKey); }, 600);
+    return () => clearTimeout(timer);
+  }, [byokOpenaiKey, fetchByokModels]);
+
+  // Debounce: fetch models as user types their Anthropic key
+  useEffect(() => {
+    if (!byokAnthropicKey.trim() || byokAnthropicKey.length < 10) {
+      setByokAnthropicModels([]);
+      return;
+    }
+    const timer = setTimeout(() => { void fetchByokModels("anthropic", byokAnthropicKey); }, 600);
+    return () => clearTimeout(timer);
+  }, [byokAnthropicKey, fetchByokModels]);
 
   // ── Load AI settings when AI tab is active ──────────────────────
   useEffect(() => {
@@ -139,6 +187,9 @@ export function SettingsModal() {
         if (map["anthropic"]?.modelOverride) setByokAnthropicModel(map["anthropic"].modelOverride!);
         if (map["local_llm"]?.endpointUrl) setLocalEndpoint(map["local_llm"].endpointUrl!);
         if (map["local_llm"]?.modelOverride) setLocalModel(map["local_llm"].modelOverride!);
+        // Populate model dropdowns for already-saved keys
+        if (map["openai"]?.hasKey) void fetchByokModels("openai");
+        if (map["anthropic"]?.hasKey) void fetchByokModels("anthropic");
       })
       .catch(() => {});
 
@@ -256,6 +307,26 @@ export function SettingsModal() {
       delete updated[provider];
       return updated;
     });
+    if (provider === "openai") { setByokOpenaiModels([]); setByokOpenaiModel(""); }
+    if (provider === "anthropic") { setByokAnthropicModels([]); setByokAnthropicModel(""); }
+  };
+
+  const handleUpdateByokModel = async (sub: ByokSubProvider) => {
+    const model = sub === "openai" ? byokOpenaiModel : byokAnthropicModel;
+    setByokModelSaving(true);
+    try {
+      await authenticatedFetch("/api/ai/keys", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: sub, modelOverride: model.trim() || null }),
+      });
+      setSavedKeys(prev => ({
+        ...prev,
+        [sub]: { ...prev[sub], modelOverride: model.trim() || null },
+      }));
+    } finally {
+      setByokModelSaving(false);
+    }
   };
 
   // ── Security handlers ────────────────────────────────────────────
@@ -761,18 +832,61 @@ export function SettingsModal() {
                       )}
 
                       {/* Model (required for BYOK) */}
-                      <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">
-                          Model <span className="font-normal">(required)</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={byokSubProvider === "openai" ? byokOpenaiModel : byokAnthropicModel}
-                          onChange={(e) => byokSubProvider === "openai" ? setByokOpenaiModel(e.target.value) : setByokAnthropicModel(e.target.value)}
-                          placeholder={byokSubProvider === "openai" ? "e.g. gpt-4o" : "e.g. claude-opus-4-6"}
-                          className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                        />
-                      </div>
+                      {(() => {
+                        const sub = byokSubProvider;
+                        const models = sub === "openai" ? byokOpenaiModels : byokAnthropicModels;
+                        const modelsLoading = sub === "openai" ? byokOpenaiModelsLoading : byokAnthropicModelsLoading;
+                        const model = sub === "openai" ? byokOpenaiModel : byokAnthropicModel;
+                        const setModel = sub === "openai" ? setByokOpenaiModel : setByokAnthropicModel;
+                        const placeholder = sub === "openai" ? "e.g. gpt-4o" : "e.g. claude-opus-4-6";
+                        const keySaved = !!(sub === "openai" ? savedKeys["openai"]?.hasKey : savedKeys["anthropic"]?.hasKey);
+                        const savedModel = (sub === "openai" ? savedKeys["openai"]?.modelOverride : savedKeys["anthropic"]?.modelOverride) ?? "";
+                        const modelChanged = keySaved && model !== savedModel;
+                        return (
+                          <>
+                            <div>
+                              <label className="block text-xs font-medium text-muted-foreground mb-1">
+                                Model <span className="font-normal">(required)</span>
+                              </label>
+                              {modelsLoading ? (
+                                <div className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm text-muted-foreground">
+                                  Loading models…
+                                </div>
+                              ) : models.length > 0 ? (
+                                <select
+                                  value={model}
+                                  onChange={(e) => setModel(e.target.value)}
+                                  className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                                >
+                                  <option value="">Select a model…</option>
+                                  {models.map((m) => (
+                                    <option key={m} value={m}>{m}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <input
+                                  type="text"
+                                  value={model}
+                                  onChange={(e) => setModel(e.target.value)}
+                                  placeholder={placeholder}
+                                  className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                                />
+                              )}
+                            </div>
+
+                            {/* Update model — only when key is saved and model changed */}
+                            {keySaved && modelChanged && (
+                              <button
+                                onClick={() => handleUpdateByokModel(sub)}
+                                disabled={!model.trim() || byokModelSaving}
+                                className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 hover:bg-primary-hover transition-colors"
+                              >
+                                {byokModelSaving ? "Saving…" : "Update Model"}
+                              </button>
+                            )}
+                          </>
+                        );
+                      })()}
 
                       {/* Save button — only show when key not yet saved */}
                       {!(byokSubProvider === "openai" ? savedKeys["openai"]?.hasKey : savedKeys["anthropic"]?.hasKey) && (
@@ -990,7 +1104,7 @@ export function SettingsModal() {
                 disabled={activeTab === "quickbits" && qbSaving}
                 className="px-6 py-2 bg-primary hover:bg-primary-hover text-primary-foreground rounded-xl text-sm font-medium transition-colors shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 disabled:opacity-60"
               >
-                {activeTab === "quickbits" && qbSaving ? "Saving…" : activeTab === "ai" ? "Done" : "Save Settings"}
+                {activeTab === "quickbits" && qbSaving ? "Saving…" : "Save Settings"}
               </button>
             </div>
           </motion.div>
