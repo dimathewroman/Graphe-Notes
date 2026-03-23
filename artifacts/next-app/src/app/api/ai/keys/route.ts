@@ -105,6 +105,43 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PATCH /api/ai/keys — update modelOverride for an existing key without re-encrypting
+export async function PATCH(request: NextRequest) {
+  const { user } = await getAuthUser(request);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const body = (await request.json()) as Record<string, unknown>;
+    const { provider, modelOverride } = body;
+
+    if (!isValidProvider(provider)) {
+      return NextResponse.json(
+        { error: `Invalid provider. Must be one of: ${VALID_PROVIDERS.join(", ")}` },
+        { status: 400 },
+      );
+    }
+
+    const now = new Date();
+    await db
+      .update(userApiKeysTable)
+      .set({
+        modelOverride: typeof modelOverride === "string" ? modelOverride.trim() || null : null,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(userApiKeysTable.userId, user.id),
+          eq(userApiKeysTable.provider, provider),
+        ),
+      );
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
 // DELETE /api/ai/keys — remove a provider's key row
 export async function DELETE(request: NextRequest) {
   const { user } = await getAuthUser(request);
