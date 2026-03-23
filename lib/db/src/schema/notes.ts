@@ -14,6 +14,9 @@ export const notesTable = pgTable("notes", {
   favorite: boolean("favorite").notNull().default(false),
   coverImage: text("cover_image"),
   vaulted: boolean("vaulted").notNull().default(false),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  autoDeleteAt: timestamp("auto_delete_at", { withTimezone: true }),
+  deletedReason: text("deleted_reason"), // 'deleted' | 'expired'
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

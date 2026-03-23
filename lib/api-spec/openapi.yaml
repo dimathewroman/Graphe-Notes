@@ -164,6 +164,10 @@ paths:
           schema:
             type: ["string", "null"]
             enum: ["asc", "desc", null]
+        - name: deleted
+          in: query
+          schema:
+            type: ["boolean", "null"]
       responses:
         "200":
           description: List of notes
@@ -263,6 +267,97 @@ paths:
       responses:
         "204":
           description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notes/{id}/delete:
+    patch:
+      operationId: softDeleteNote
+      tags: [notes]
+      summary: Soft-delete a note (moves to Recently Deleted)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Soft-deleted note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notes/{id}/restore:
+    patch:
+      operationId: restoreNote
+      tags: [notes]
+      summary: Restore a soft-deleted note
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Restored note
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Note"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notes/{id}/permanent:
+    delete:
+      operationId: permanentDeleteNote
+      tags: [notes]
+      summary: Permanently delete a note — irreversible
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PermanentDeleteNoteBody"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                required: [success]
+        "400":
+          description: Missing confirm flag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Not found
           content:
@@ -1081,6 +1176,15 @@ components:
           type: ["string", "null"]
         vaulted:
           type: boolean
+        deletedAt:
+          type: ["string", "null"]
+          format: date-time
+        autoDeleteAt:
+          type: ["string", "null"]
+          format: date-time
+        deletedReason:
+          type: ["string", "null"]
+          enum: ["deleted", "expired", null]
         createdAt:
           type: string
           format: date-time
@@ -1098,8 +1202,19 @@ components:
         - favorite
         - coverImage
         - vaulted
+        - deletedAt
+        - autoDeleteAt
+        - deletedReason
         - createdAt
         - updatedAt
+
+    PermanentDeleteNoteBody:
+      type: object
+      properties:
+        confirm:
+          type: boolean
+      required:
+        - confirm
 
     CreateNoteBody:
       type: object

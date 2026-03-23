@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { eq, ilike, and, or, sql, desc, asc } from "drizzle-orm";
+import { eq, ilike, and, or, sql, desc, asc, isNull, isNotNull } from "drizzle-orm";
 import { db, notesTable } from "@workspace/db";
 import {
   CreateNoteBody,
@@ -20,9 +20,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: query.error.message }, { status: 400 });
   }
 
-  const { folderId, search, pinned, favorite, tag, sortBy, sortDir } = query.data;
+  const { folderId, search, pinned, favorite, tag, sortBy, sortDir, deleted } = query.data;
 
   const conditions = [eq(notesTable.userId, user.id)];
+
+  // Soft-delete visibility gate — deleted=true returns only the bin; otherwise exclude deleted notes
+  if (deleted === true) {
+    conditions.push(isNotNull(notesTable.deletedAt));
+  } else {
+    conditions.push(isNull(notesTable.deletedAt));
+  }
 
   if (folderId !== undefined && folderId !== null) {
     conditions.push(eq(notesTable.folderId, folderId));

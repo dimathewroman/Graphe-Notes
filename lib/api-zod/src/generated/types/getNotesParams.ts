@@ -37,4 +37,8 @@ export type GetNotesParams = {
    * @nullable
    */
   sortDir?: GetNotesSortDir;
+  /**
+   * @nullable
+   */
+  deleted?: boolean | null;
 };
