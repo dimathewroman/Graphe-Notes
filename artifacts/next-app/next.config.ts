@@ -6,6 +6,7 @@ import { config as loadEnv } from "dotenv";
 loadEnv({ path: path.resolve(__dirname, "../../.env"), override: false });
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["@workspace/api-client-react", "@workspace/api-zod"],
   env: {
     // Expose SUPABASE_URL / ANON_KEY under the NEXT_PUBLIC_ prefix
     // so they're available on the client side. Falls back to root .env vars.
