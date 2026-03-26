@@ -8,6 +8,7 @@ import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { useDemoMode } from "@/App";
+import posthog from "posthog-js";
 
 export function AIPanel() {
   const { isAIPanelOpen, setAIPanelOpen, selectedNoteId, setAiSetupModalOpen, setPendingAiAction } = useAppStore();
@@ -78,6 +79,7 @@ export function AIPanel() {
       } catch { /* use default */ }
     }
 
+    posthog.capture("ai_prompt_submitted", { provider });
     await runGenerate(provider, prompt, note);
   };
 
@@ -86,6 +88,7 @@ export function AIPanel() {
     const newContent = note.content + `<br><p><strong>AI Suggestion:</strong></p><p>${result.replace(/\n/g, '<br>')}</p>`;
     await updateNoteMut.mutateAsync({ id: selectedNoteId, data: { content: newContent } });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+    posthog.capture("ai_result_inserted", { note_id: selectedNoteId });
     setResult("");
     setPrompt("");
   };

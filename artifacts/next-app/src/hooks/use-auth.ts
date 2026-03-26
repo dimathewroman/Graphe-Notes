@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import type { AuthUser } from "@workspace/api-zod";
 import { supabase } from "@/lib/supabase";
+import posthog from "posthog-js";
 
 export type { AuthUser };
 
@@ -97,8 +98,12 @@ export function useAuth(): AuthState {
   const loginWithEmail = useCallback(
     async (email: string, password: string): Promise<{ error: string | null }> => {
       try {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) return { error: error.message };
+        if (data.user) {
+          posthog.identify(data.user.id, { email: data.user.email });
+          posthog.capture("user_logged_in", { method: "email" });
+        }
         return { error: null };
       } catch (err) {
         return { error: err instanceof Error ? err.message : "Sign-in failed" };
@@ -110,8 +115,12 @@ export function useAuth(): AuthState {
   const signUpWithEmail = useCallback(
     async (email: string, password: string): Promise<{ error: string | null }> => {
       try {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) return { error: error.message };
+        if (data.user) {
+          posthog.identify(data.user.id, { email: data.user.email });
+          posthog.capture("user_signed_up", { method: "email" });
+        }
         return { error: null };
       } catch (err) {
         return { error: err instanceof Error ? err.message : "Sign-up failed" };
@@ -122,6 +131,8 @@ export function useAuth(): AuthState {
 
   const logout = useCallback(async () => {
     try {
+      posthog.capture("user_logged_out");
+      posthog.reset();
       await supabase.auth.signOut();
     } catch (err) {
       console.error("Sign-out failed:", err);

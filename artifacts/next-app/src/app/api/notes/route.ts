@@ -8,6 +8,7 @@ import {
   GetNoteResponse,
 } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export async function GET(request: NextRequest) {
   const { user } = await getAuthUser(request);
@@ -81,5 +82,6 @@ export async function POST(request: NextRequest) {
     .values({ ...parsed.data, userId: user.id })
     .returning();
 
+  getPostHogClient().capture({ distinctId: user.id, event: "note_created", properties: { note_id: note.id } });
   return NextResponse.json(GetNoteResponse.parse(note), { status: 201 });
 }
