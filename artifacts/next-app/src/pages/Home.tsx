@@ -4,6 +4,8 @@ import { NoteList } from "@/components/NoteList";
 import { QuickBitList } from "@/components/QuickBitList";
 import { NoteEditor } from "@/components/NoteEditor";
 import { QuickBitEditor } from "@/components/QuickBitEditor";
+import { RecentlyDeleted } from "@/components/RecentlyDeleted";
+import { RecentlyDeletedDetail } from "@/components/RecentlyDeletedDetail";
 import { AIPanel } from "@/components/AIPanel";
 import { SettingsModal } from "@/components/SettingsModal";
 import { QuickBitNotifications } from "@/components/QuickBitNotifications";
@@ -63,9 +65,11 @@ export default function Home() {
   }, [setSettingsOpen]);
 
   const isCompact = bp === "mobile" || bp === "tablet";
-  const showEditor = activeFilter !== "quickbits" && (bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor"));
+  const isRecentlyDeleted = activeFilter === "recently-deleted";
+  const showEditor = !isRecentlyDeleted && activeFilter !== "quickbits" && (bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor"));
   const showQuickBitEditor = activeFilter === "quickbits" && (bp === "desktop" || (bp === "tablet" && !!selectedQuickBitId) || (bp === "mobile" && mobileView === "editor"));
   const showList = bp === "desktop" ? isNoteListOpen : (bp === "tablet" || (bp === "mobile" && mobileView === "list"));
+  const showDeletedDetail = isRecentlyDeleted && !!selectedNoteId && (bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor"));
 
   return (
     <div className="flex flex-col h-screen w-full bg-background overflow-hidden relative">
@@ -96,9 +100,11 @@ export default function Home() {
       )}
 
       {showList && activeFilter === "quickbits" && <QuickBitList />}
-      {showList && activeFilter !== "quickbits" && <NoteList />}
+      {showList && isRecentlyDeleted && <RecentlyDeleted />}
+      {showList && !isRecentlyDeleted && activeFilter !== "quickbits" && <NoteList />}
       {showEditor && <NoteEditor />}
       {showQuickBitEditor && <QuickBitEditor />}
+      {showDeletedDetail && <RecentlyDeletedDetail />}
 
       <AIPanel />
       <SettingsModal />

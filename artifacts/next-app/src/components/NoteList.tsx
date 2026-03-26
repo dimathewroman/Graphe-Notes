@@ -7,7 +7,7 @@ import { useAppStore } from "@/store";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   useGetNotes, useCreateNote, useToggleNotePin, useToggleNoteFavorite,
-  useDeleteNote, useUpdateNote, useToggleNoteVault, getGetNotesQueryKey, getGetNoteQueryKey, getGetTagsQueryKey, useGetFolders
+  useSoftDeleteNote, useUpdateNote, useToggleNoteVault, getGetNotesQueryKey, getGetNoteQueryKey, getGetTagsQueryKey, useGetFolders
 } from "@workspace/api-client-react";
 import type { Note } from "@workspace/api-client-react";
 import { useQueryClient, useQueries } from "@tanstack/react-query";
@@ -218,7 +218,7 @@ export function NoteList() {
   const pinMut = useToggleNotePin({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }) } });
   const favMut = useToggleNoteFavorite({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }) } });
   const vaultMut = useToggleNoteVault({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }) } });
-  const deleteMut = useDeleteNote({
+  const softDeleteMut = useSoftDeleteNote({
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
@@ -336,6 +336,7 @@ export function NoteList() {
     attachments: "Attachments",
     vault: "Vault",
     quickbits: "Quick Bits",
+    "recently-deleted": "Recently Deleted",
   }[activeFilter] || "Notes";
 
   const currentSort = SORT_OPTIONS.find(o => o.sortBy === sortBy && o.sortDir === sortDir);
@@ -669,14 +670,18 @@ export function NoteList() {
             label="Delete"
             danger
             onClick={() => {
-              if (confirm("Delete this note?")) {
-                if (isDemo) {
-                  // In demo mode, hide the note by marking it deleted in cache
-                  demoPatchNote(contextMenu.noteId, { _demoDeleted: true });
-                  if (selectedNoteId === contextMenu.noteId) { selectNote(null); }
-                } else {
-                  deleteMut.mutate({ id: contextMenu.noteId });
-                }
+              if (isDemo) {
+                const now = new Date().toISOString();
+                const autoDeleteAt = new Date(Date.now() + 30 * 86400000).toISOString();
+                demoPatchNote(contextMenu.noteId, {
+                  _demoDeleted: true,
+                  deletedAt: now,
+                  autoDeleteAt,
+                  deletedReason: "deleted",
+                });
+                if (selectedNoteId === contextMenu.noteId) { selectNote(null); }
+              } else {
+                softDeleteMut.mutate({ id: contextMenu.noteId });
               }
               closeContextMenu();
             }}
