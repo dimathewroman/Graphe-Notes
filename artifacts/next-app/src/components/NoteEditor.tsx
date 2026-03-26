@@ -19,7 +19,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 
 import { useAppStore } from "@/store";
 import {
-  useGetNote, useUpdateNote, useDeleteNote, useToggleNotePin, useToggleNoteFavorite,
+  useGetNote, useUpdateNote, useSoftDeleteNote, useToggleNotePin, useToggleNoteFavorite,
   useToggleNoteVault, useGetVaultStatus, useSetupVault, useUnlockVault,
   getGetNotesQueryKey, getGetNoteQueryKey, getGetTagsQueryKey
 } from "@workspace/api-client-react";
@@ -1202,7 +1202,7 @@ export function NoteEditor() {
   });
 
   const updateNoteMut = useUpdateNote();
-  const deleteNoteMut = useDeleteNote();
+  const softDeleteMut = useSoftDeleteNote();
   const pinMut = useToggleNotePin();
   const favMut = useToggleNoteFavorite();
   const vaultMut = useToggleNoteVault();
@@ -1344,17 +1344,25 @@ export function NoteEditor() {
     if (!selectedNoteId) return;
     if (isDemo) {
       const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
-      if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, _demoDeleted: true });
+      if (existing) {
+        const now = new Date().toISOString();
+        const autoDeleteAt = new Date(Date.now() + 30 * 86400000).toISOString();
+        queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
+          ...existing,
+          _demoDeleted: true,
+          deletedAt: now,
+          autoDeleteAt,
+          deletedReason: "deleted",
+        });
+      }
       selectNote(null);
       if (bp !== "desktop") setMobileView("list");
       return;
     }
-    if (confirm("Are you sure you want to delete this note?")) {
-      await deleteNoteMut.mutateAsync({ id: selectedNoteId });
-      queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
-      selectNote(null);
-      if (bp !== "desktop") setMobileView("list");
-    }
+    await softDeleteMut.mutateAsync({ id: selectedNoteId });
+    queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+    selectNote(null);
+    if (bp !== "desktop") setMobileView("list");
   };
 
   const handleAction = async (action: "pin" | "fav") => {

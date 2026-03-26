@@ -348,11 +348,12 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <div className="mx-3 border-t border-panel-border mt-3 mb-4" />
 
         <div className="px-3 space-y-0.5">
-          {/* Recently Deleted — placeholder, not yet active */}
-          <div className="flex items-center gap-3 py-2.5 md:py-2 px-3 rounded-lg text-sm text-muted-foreground opacity-40 cursor-default select-none">
-            <Trash2 className="w-4 h-4" />
-            <span>Recently Deleted</span>
-          </div>
+            <NavItem
+            icon={<Trash2 className="w-4 h-4" />}
+            label="Recently Deleted"
+            active={activeFilter === "recently-deleted"}
+            onClick={() => { setFilter("recently-deleted"); onNavigate?.(); }}
+          />
         </div>
 
       </div>
