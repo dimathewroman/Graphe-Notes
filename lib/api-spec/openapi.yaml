@@ -840,11 +840,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  noteId:
-                    type: integer
-                required: [noteId]
+                $ref: "#/components/schemas/SoftDeleteQuickBitResponse"
         "404":
           description: Not found
           content:
@@ -1432,6 +1428,13 @@ components:
           type: boolean
       required:
         - success
+
+    SoftDeleteQuickBitResponse:
+      type: object
+      properties:
+        noteId:
+          type: integer
+      required: [noteId]
 
     SmartFolder:
       type: object
