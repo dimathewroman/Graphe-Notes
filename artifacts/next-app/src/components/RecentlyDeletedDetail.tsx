@@ -201,8 +201,8 @@ export function RecentlyDeletedDetail() {
         </div>
 
         <div className="flex items-center gap-0.5 md:gap-1">
-          {/* Desktop: Restore + separator + Permanent Delete */}
-          {bp === "desktop" && (
+          {/* Desktop + tablet: Restore + separator + Permanent Delete icons */}
+          {bp !== "mobile" && (
             <>
               <IconButton
                 onClick={handleRestore}
@@ -224,8 +224,8 @@ export function RecentlyDeletedDetail() {
             </>
           )}
 
-          {/* Mobile/tablet: overflow menu */}
-          {bp !== "desktop" && (
+          {/* Mobile only: overflow menu */}
+          {bp === "mobile" && (
             <div className="relative">
               <IconButton onClick={() => setShowOverflow(!showOverflow)} active={showOverflow}>
                 <MoreVertical className="w-4 h-4" />
@@ -291,7 +291,7 @@ export function RecentlyDeletedDetail() {
       )}
 
       {/* Content */}
-      <div className={cn("flex-1 overflow-y-auto", bp === "mobile" && "pb-24")}>
+      <div className={cn("flex-1 overflow-y-auto", bp === "mobile" && "pb-28")}>
         <div className="max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12">
           <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-4 tracking-tight">
             {note.title || "Untitled Note"}
@@ -316,7 +316,7 @@ export function RecentlyDeletedDetail() {
       </div>
 
       {/* Mobile bottom action bar */}
-      {bp !== "desktop" && (
+      {bp === "mobile" && (
         <div className="absolute bottom-0 left-0 right-0 border-t border-panel-border bg-background/90 backdrop-blur-md px-4 py-3 flex gap-3 z-20">
           <button
             onClick={handleRestore}

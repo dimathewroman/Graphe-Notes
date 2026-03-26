@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, vaultSettingsTable } from "@workspace/db";
 import { SetupVaultBody, SetupVaultResponse } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export async function POST(request: NextRequest) {
   const { user } = await getAuthUser(request);
@@ -28,5 +29,6 @@ export async function POST(request: NextRequest) {
     .insert(vaultSettingsTable)
     .values({ userId: user.id, passwordHash: parsed.data.passwordHash });
 
+  getPostHogClient().capture({ distinctId: user.id, event: "vault_setup_completed" });
   return NextResponse.json(SetupVaultResponse.parse({ isConfigured: true }));
 }

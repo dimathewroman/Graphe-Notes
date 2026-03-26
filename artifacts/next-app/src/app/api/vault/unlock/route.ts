@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, vaultSettingsTable } from "@workspace/db";
 import { UnlockVaultBody, UnlockVaultResponse } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export async function POST(request: NextRequest) {
   const { user } = await getAuthUser(request);
@@ -28,5 +29,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Wrong password" }, { status: 401 });
   }
 
+  getPostHogClient().capture({ distinctId: user.id, event: "vault_unlocked" });
   return NextResponse.json(UnlockVaultResponse.parse({ success: true }));
 }
