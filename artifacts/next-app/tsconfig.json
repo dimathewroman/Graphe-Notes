@@ -20,6 +20,18 @@
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@lib/*": [
+        "../../lib/*"
+      ],
+      "@workspace/db": [
+        "../../lib/db/src/index.ts"
+      ],
+      "@workspace/db/schema": [
+        "../../lib/db/src/schema/index.ts"
+      ],
+      "drizzle-orm": [
+        "./node_modules/drizzle-orm"
       ]
     },
     "strict": false

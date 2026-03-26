@@ -1182,7 +1182,7 @@ function ScrollableToolbar({ children, className, style }: { children: React.Rea
 }
 
 export function NoteEditor() {
-  const { selectedNoteId, selectNote, isSidebarOpen, toggleSidebar, isNoteListOpen, toggleNoteList, setMobileView, setSidebarOpen } = useAppStore();
+  const { selectedNoteId, selectNote, isSidebarOpen, toggleSidebar, isNoteListOpen, toggleNoteList, setMobileView, setSidebarOpen, setAiSetupModalOpen, setPendingAiAction } = useAppStore();
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const queryClient = useQueryClient();
@@ -1503,53 +1503,7 @@ export function NoteEditor() {
 
     if (!sel.text.trim()) return;
 
-    const apiKey = (localStorage.getItem("ai_api_key") || "").trim();
-    const provider = (localStorage.getItem("ai_provider") || "openai") as "openai" | "anthropic" | "google";
-    const PROVIDER_ID_PREFIX: Record<string, string> = {
-      openai: "gpt-|o1|o3|chatgpt",
-      anthropic: "claude-",
-      google: "gemini-",
-    };
-    const storedModel = localStorage.getItem("ai_model") || "";
-    const prefixPattern = PROVIDER_ID_PREFIX[provider] ?? "";
-    const modelLooksValid = prefixPattern
-      ? prefixPattern.split("|").some((p) => storedModel.startsWith(p))
-      : !!storedModel;
-
-    // If stored model looks invalid, fetch the real list from the user's account
-    let model = storedModel;
-    if (!modelLooksValid && apiKey) {
-      try {
-        const params = new URLSearchParams({ provider, apiKey });
-        const r = await authenticatedFetch(`/api/models?${params}`);
-        if (r.ok) {
-          const d = await r.json() as { models: string[]; source: string };
-          if (d.source === "live" && d.models?.length) {
-            // Cache the live result and heal the saved model
-            localStorage.setItem(`ai_models_${provider}`, JSON.stringify(d.models));
-            localStorage.setItem(`ai_models_${provider}_at`, String(Date.now()));
-            model = d.models[0];
-            localStorage.setItem("ai_model", model);
-          }
-        }
-      } catch { /* ignore */ }
-
-      if (!model || model === storedModel) {
-        setAiError("Your model setting is invalid. Open Settings → AI, let the model list load, select a model, and save.");
-        setTimeout(() => setAiError(null), 7000);
-        setAiLoading(false);
-        return;
-      }
-    }
-
-    if (!apiKey) {
-      setAiError("No AI API key configured. Open Settings → AI to add one.");
-      setTimeout(() => setAiError(null), 4000);
-      return;
-    }
-
-    setAiLoading(true);
-    setAiError(null);
+    const taskType = "manual";
 
     const selected = sel.text;
     const prompts: Record<string, string> = {
@@ -1578,13 +1532,121 @@ export function NoteEditor() {
     const prompt = prompts[action];
     if (!prompt) { setAiLoading(false); return; }
 
-    try {
-      const res = await authenticatedFetch("/api/ai/complete", {
+    // Fetch active provider from server; default to graphe_free on any failure
+    let provider = "graphe_free";
+    if (!isDemo) {
+      try {
+        const settingsRes = await authenticatedFetch("/api/ai/settings");
+        if (settingsRes.ok) {
+          const settingsData = await settingsRes.json() as {
+            activeAiProvider?: string | null;
+            hasCompletedAiSetup?: boolean;
+          };
+
+          if (!settingsData.hasCompletedAiSetup) {
+            // First AI action — show setup modal and queue this action to run after
+            const capturedPrompt = prompt;
+            const capturedFrom = sel.from;
+            const capturedTo = sel.to;
+            const capturedTaskType = taskType;
+            setPendingAiAction(async (resolvedProvider: string) => {
+              setAiLoading(true);
+              setAiError(null);
+              try {
+                const res = await authenticatedFetch("/api/ai/generate", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ provider: resolvedProvider, taskType: capturedTaskType, prompt: capturedPrompt }),
+                });
+                if (!res.ok) {
+                  setAiError("AI request failed. Please try again.");
+                  setTimeout(() => setAiError(null), 5000);
+                  return;
+                }
+                const data = await res.json() as { result?: string; error?: string };
+                if (data.error) throw new Error(data.error);
+                const result = data.result || "";
+                if (result && editor) {
+                  editor.chain().focus().insertContentAt({ from: capturedFrom, to: capturedTo }, result).run();
+                }
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : "AI request failed";
+                setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
+                setTimeout(() => setAiError(null), 5000);
+              } finally {
+                setAiLoading(false);
+                savedAiSelection.current = null;
+              }
+            });
+            setAiSetupModalOpen(true);
+            return;
+          }
+
+          if (!settingsData.activeAiProvider) return; // No AI mode — silently cancel
+          provider = settingsData.activeAiProvider;
+        }
+      } catch { /* use default */ }
+    }
+
+    setAiLoading(true);
+    setAiError(null);
+
+    const doRequest = async (): Promise<Response> => {
+      return authenticatedFetch("/api/ai/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey, model, prompt }),
+        body: JSON.stringify({ provider, taskType, prompt }),
       });
-      const data = await res.json();
+    };
+
+    try {
+      let res = await doRequest();
+
+      if (res.status === 429) {
+        const data = await res.json() as { reason?: string; resetInMs?: number };
+        if (data.reason === "rpm_limit") {
+          setAiError("AI is busy, retrying...");
+          await new Promise((resolve) => setTimeout(resolve, 65000));
+          res = await doRequest();
+          if (res.status === 429) {
+            setAiError("AI is still busy. Please try again in a moment.");
+            setTimeout(() => setAiError(null), 5000);
+            return;
+          }
+        } else if (data.reason === "hourly_limit_reached") {
+          const resetMins = Math.ceil((data.resetInMs ?? 0) / 60000);
+          setAiError(`You've reached your hourly AI limit. Resets in ${resetMins} minutes.`);
+          setTimeout(() => setAiError(null), 5000);
+          return;
+        } else if (data.reason === "monthly_limit_reached") {
+          setAiError("Monthly AI limit reached. Add your own API key in Settings for unlimited use.");
+          setTimeout(() => setAiError(null), 6000);
+          return;
+        }
+      }
+
+      if (res.status === 400) {
+        const data = await res.json() as { error?: string };
+        if (data.error === "no_key_configured") {
+          setAiError("No API key configured. Please add one in Settings.");
+          setTimeout(() => setAiError(null), 5000);
+          return;
+        }
+      }
+
+      if (res.status === 401) {
+        setAiError("AI key invalid or missing. Check Settings.");
+        setTimeout(() => setAiError(null), 5000);
+        return;
+      }
+
+      if (res.status === 502) {
+        setAiError("AI request failed. Please try again.");
+        setTimeout(() => setAiError(null), 5000);
+        return;
+      }
+
+      const data = await res.json() as { error?: string; result?: string };
       if (data.error) throw new Error(data.error);
       const result: string = data.result || "";
       if (result) {

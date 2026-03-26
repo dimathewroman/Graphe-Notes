@@ -4,6 +4,7 @@ import type { GetNotesSortBy, GetNotesSortDir } from "@workspace/api-client-reac
 type FilterType = "all" | "pinned" | "favorites" | "folder" | "tag" | "attachments" | "vault" | "quickbits" | "recently-deleted";
 type ViewMode = "list" | "gallery";
 type MobileView = "list" | "editor";
+type SettingsTab = "appearance" | "ai" | "data" | "security" | "quickbits";
 
 interface AppState {
   activeFilter: FilterType;
@@ -23,9 +24,15 @@ interface AppState {
   isAIPanelOpen: boolean;
   isSettingsOpen: boolean;
   isAttachmentsOpen: boolean;
+  settingsInitialTab: SettingsTab | null;
 
   isVaultUnlocked: boolean;
   setVaultUnlocked: (isUnlocked: boolean) => void;
+
+  isAiSetupModalOpen: boolean;
+  pendingAiAction: ((provider: string) => Promise<void>) | null;
+  setAiSetupModalOpen: (isOpen: boolean) => void;
+  setPendingAiAction: (action: ((provider: string) => Promise<void>) | null) => void;
 
   demoExtraIds: number[];
   addDemoNoteId: (id: number) => void;
@@ -43,7 +50,7 @@ interface AppState {
   toggleNoteList: () => void;
   setNoteListOpen: (isOpen: boolean) => void;
   setAIPanelOpen: (isOpen: boolean) => void;
-  setSettingsOpen: (isOpen: boolean) => void;
+  setSettingsOpen: (isOpen: boolean, tab?: SettingsTab) => void;
   setAttachmentsOpen: (isOpen: boolean) => void;
 }
 
@@ -65,9 +72,15 @@ export const useAppStore = create<AppState>((set) => ({
   isAIPanelOpen: false,
   isSettingsOpen: false,
   isAttachmentsOpen: false,
+  settingsInitialTab: null,
 
   isVaultUnlocked: false,
   setVaultUnlocked: (isUnlocked) => set({ isVaultUnlocked: isUnlocked }),
+
+  isAiSetupModalOpen: false,
+  pendingAiAction: null,
+  setAiSetupModalOpen: (isOpen) => set({ isAiSetupModalOpen: isOpen }),
+  setPendingAiAction: (action) => set({ pendingAiAction: action }),
 
   demoExtraIds: [],
   addDemoNoteId: (id) => set((state) => ({ demoExtraIds: [...state.demoExtraIds, id] })),
@@ -91,6 +104,6 @@ export const useAppStore = create<AppState>((set) => ({
   toggleNoteList: () => set((state) => ({ isNoteListOpen: !state.isNoteListOpen })),
   setNoteListOpen: (isOpen) => set({ isNoteListOpen: isOpen }),
   setAIPanelOpen: (isOpen) => set({ isAIPanelOpen: isOpen }),
-  setSettingsOpen: (isOpen) => set({ isSettingsOpen: isOpen }),
+  setSettingsOpen: (isOpen, tab) => set({ isSettingsOpen: isOpen, settingsInitialTab: tab ?? null }),
   setAttachmentsOpen: (isOpen) => set({ isAttachmentsOpen: isOpen }),
 }));

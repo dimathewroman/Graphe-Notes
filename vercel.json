@@ -1,7 +1,7 @@
 {
   "framework": "nextjs",
   "buildCommand": "pnpm --filter @workspace/next-app run build",
-  "outputDirectory": "artifacts/next-app/.next",
+  "outputDirectory": ".next",
   "installCommand": "pnpm install",
   "crons": [
     {
