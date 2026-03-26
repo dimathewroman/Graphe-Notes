@@ -248,6 +248,10 @@ export interface VaultUnlockResponse {
   success: boolean;
 }
 
+export interface SoftDeleteQuickBitResponse {
+  noteId: number;
+}
+
 export interface SmartFolder {
   id: number;
   name: string;

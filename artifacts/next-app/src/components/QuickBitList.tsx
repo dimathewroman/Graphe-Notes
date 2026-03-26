@@ -62,8 +62,8 @@ export function QuickBitList() {
 
   const quickBits: QuickBit[] = isDemo
     ? ([...new Map(
-        demoQbQueries.map((q) => q.data).filter(Boolean).map((qb) => [(qb as QuickBit).id, qb])
-      ).values()] as QuickBit[]).sort(
+        demoQbQueries.map((q) => q.data).filter((d): d is QuickBit => !!d).map((qb) => [qb.id, qb])
+      ).values()]).sort(
         (a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime()
       )
     : (quickBitsData as QuickBit[]);

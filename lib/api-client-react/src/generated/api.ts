@@ -41,6 +41,7 @@ import type {
   QuickBit,
   QuickBitSettings,
   SmartFolder,
+  SoftDeleteQuickBitResponse,
   ToggleNoteVaultBody,
   UpdateFolderBody,
   UpdateNoteBody,
@@ -2757,6 +2758,90 @@ export const useDeleteQuickBit = <
   TContext
 > => {
   return useMutation(getDeleteQuickBitMutationOptions(options));
+};
+
+/**
+ * @summary Soft-delete a Quick Bit (converts it to a soft-deleted note in Recently Deleted)
+ */
+export const getSoftDeleteQuickBitUrl = (id: number) => {
+  return `/api/quick-bits/${id}/soft-delete`;
+};
+
+export const softDeleteQuickBit = async (
+  id: number,
+  options?: RequestInit,
+): Promise<SoftDeleteQuickBitResponse> => {
+  return customFetch<SoftDeleteQuickBitResponse>(getSoftDeleteQuickBitUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getSoftDeleteQuickBitMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof softDeleteQuickBit>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof softDeleteQuickBit>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["softDeleteQuickBit"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof softDeleteQuickBit>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return softDeleteQuickBit(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SoftDeleteQuickBitMutationResult = NonNullable<
+  Awaited<ReturnType<typeof softDeleteQuickBit>>
+>;
+
+export type SoftDeleteQuickBitMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Soft-delete a Quick Bit (converts it to a soft-deleted note in Recently Deleted)
+ */
+export const useSoftDeleteQuickBit = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof softDeleteQuickBit>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof softDeleteQuickBit>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getSoftDeleteQuickBitMutationOptions(options));
 };
 
 /**

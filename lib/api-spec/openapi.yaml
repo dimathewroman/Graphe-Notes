@@ -823,6 +823,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /quick-bits/{id}/soft-delete:
+    delete:
+      operationId: softDeleteQuickBit
+      tags: [quick-bits]
+      summary: Soft-delete a Quick Bit (converts it to a soft-deleted note in Recently Deleted)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Converted note ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoftDeleteQuickBitResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /tags:
     get:
       operationId: getTags
@@ -1403,6 +1428,13 @@ components:
           type: boolean
       required:
         - success
+
+    SoftDeleteQuickBitResponse:
+      type: object
+      properties:
+        noteId:
+          type: integer
+      required: [noteId]
 
     SmartFolder:
       type: object

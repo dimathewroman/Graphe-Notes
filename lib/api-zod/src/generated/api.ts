@@ -646,6 +646,17 @@ export const DeleteQuickBitResponse = zod.object({
 });
 
 /**
+ * @summary Soft-delete a Quick Bit (converts it to a soft-deleted note in Recently Deleted)
+ */
+export const SoftDeleteQuickBitParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const SoftDeleteQuickBitResponse = zod.object({
+  noteId: zod.number(),
+});
+
+/**
  * @summary Get all unique tags used across notes
  */
 export const GetTagsResponseItem = zod.string();
