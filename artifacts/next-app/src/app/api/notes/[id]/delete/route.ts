@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { db, notesTable } from "@workspace/db";
 import { SoftDeleteNoteParams, SoftDeleteNoteResponse } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
+import { getPostHogClient } from "@/lib/posthog-server";
 
 export async function PATCH(
   request: NextRequest,
@@ -30,5 +31,6 @@ export async function PATCH(
     return NextResponse.json({ error: "Note not found" }, { status: 404 });
   }
 
+  getPostHogClient().capture({ distinctId: user.id, event: "note_deleted", properties: { note_id: note.id } });
   return NextResponse.json(SoftDeleteNoteResponse.parse(note));
 }

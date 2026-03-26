@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth-server";
+import { getPostHogClient } from "@/lib/posthog-server";
 import { checkAndIncrementUsage } from "@lib/ai-rate-limit";
 import { resolveModel, type TaskType, type Provider } from "@lib/ai-model-router";
 import { parseGeminiError } from "@lib/ai-error-handler";
@@ -147,6 +148,7 @@ export async function POST(request: NextRequest) {
       const inputTokens = data.usageMetadata?.promptTokenCount ?? null;
       const outputTokens = data.usageMetadata?.candidatesTokenCount ?? null;
 
+      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, model: routing.model, input_tokens: inputTokens, output_tokens: outputTokens } });
       return NextResponse.json({
         result,
         model: routing.model,
@@ -240,6 +242,7 @@ export async function POST(request: NextRequest) {
       const inputTokens = data.usageMetadata?.promptTokenCount ?? null;
       const outputTokens = data.usageMetadata?.candidatesTokenCount ?? null;
 
+      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, model: routing.model, input_tokens: inputTokens, output_tokens: outputTokens } });
       return NextResponse.json({
         result,
         model: routing.model,
@@ -280,6 +283,7 @@ export async function POST(request: NextRequest) {
         outputTokens: data.usage?.completion_tokens ?? null,
       };
 
+      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, model: routing.model, input_tokens: tokensUsed.inputTokens, output_tokens: tokensUsed.outputTokens } });
       return NextResponse.json({ result, model: routing.model, tokensUsed });
     }
 
@@ -317,6 +321,7 @@ export async function POST(request: NextRequest) {
         outputTokens: data.usage?.output_tokens ?? null,
       };
 
+      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, model: routing.model, input_tokens: tokensUsed.inputTokens, output_tokens: tokensUsed.outputTokens } });
       return NextResponse.json({ result, model: routing.model, tokensUsed });
     }
 
@@ -356,6 +361,7 @@ export async function POST(request: NextRequest) {
         outputTokens: data.usage?.completion_tokens ?? null,
       };
 
+      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, model: routing.model, input_tokens: tokensUsed.inputTokens, output_tokens: tokensUsed.outputTokens } });
       return NextResponse.json({ result, model: routing.model, tokensUsed });
     }
 

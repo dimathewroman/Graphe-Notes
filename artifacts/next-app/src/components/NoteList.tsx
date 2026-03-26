@@ -17,6 +17,7 @@ import { useBreakpoint } from "@/hooks/use-mobile";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { useDemoMode } from "@/App";
 import { DEMO_NOTES } from "@/lib/demo-data";
+import posthog from "posthog-js";
 
 interface ContextMenu {
   noteId: number;
@@ -212,6 +213,7 @@ export function NoteList() {
         queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
         selectNote(newNote.id);
         if (bp === "mobile") setMobileView("editor");
+        posthog.capture("note_created", { note_id: newNote.id });
       }
     }
   });
@@ -224,6 +226,7 @@ export function NoteList() {
         queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
         selectNote(null);
         if (bp === "mobile") setMobileView("list");
+        posthog.capture("note_deleted");
       }
     }
   });

@@ -37,6 +37,7 @@ export * from "./permanentDeleteNoteBody";
 export * from "./quickBit";
 export * from "./quickBitSettings";
 export * from "./smartFolder";
+export * from "./softDeleteQuickBitResponse";
 export * from "./toggleNoteVaultBody";
 export * from "./updateFolderBody";
 export * from "./updateNoteBody";
