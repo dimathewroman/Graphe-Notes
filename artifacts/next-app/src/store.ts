@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { GetNotesSortBy, GetNotesSortDir } from "@workspace/api-client-react";
 
-type FilterType = "all" | "pinned" | "favorites" | "folder" | "tag" | "attachments" | "vault" | "quickbits";
+type FilterType = "all" | "pinned" | "favorites" | "folder" | "tag" | "attachments" | "vault" | "quickbits" | "recently-deleted";
 type ViewMode = "list" | "gallery";
 type MobileView = "list" | "editor";
 type SettingsTab = "appearance" | "ai" | "data" | "security" | "quickbits";

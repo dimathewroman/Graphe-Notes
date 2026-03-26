@@ -3,11 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { Bell, X, Zap } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getGetQuickBitsQueryKey } from "@workspace/api-client-react";
+import { getGetQuickBitsQueryKey, getGetQuickBitQueryKey, getGetNotesQueryKey } from "@workspace/api-client-react";
 import type { QuickBit } from "@workspace/api-client-react";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { useAppStore } from "@/store";
 import { useDemoMode } from "@/App";
+import { DEMO_QUICK_BITS } from "@/lib/demo-data";
 
 // ─── Expiry label (same logic as QuickBitList / QuickBitEditor) ───────────────
 
@@ -101,12 +102,62 @@ function findNewNotifications(quickBits: QuickBit[]): QBNotification[] {
 export function QuickBitNotifications() {
   const isDemo = useDemoMode();
   const queryClient = useQueryClient();
-  const { selectQuickBit, setFilter } = useAppStore();
+  const { selectQuickBit, setFilter, addDemoNoteId } = useAppStore();
 
   const [expiredCount, setExpiredCount] = useState<number | null>(null);
   const [notifications, setNotifications] = useState<QBNotification[]>([]);
 
+  // In demo mode: detect expired QBs from cache, convert them to soft-deleted note cache entries
+  const runDemoExpiry = useCallback(() => {
+    const now = new Date();
+    const autoDeleteAt = new Date(now.getTime() + 30 * 86_400_000);
+    let count = 0;
+    const allQbs: QuickBit[] = DEMO_QUICK_BITS.map((qb) => {
+      const cached = queryClient.getQueryData<QuickBit>(getGetQuickBitQueryKey(qb.id));
+      return cached ?? qb;
+    });
+    for (const qb of allQbs) {
+      if (new Date(qb.expiresAt) > now) continue;
+      // Already converted? Check if QB cache entry still exists
+      const existing = queryClient.getQueryData<QuickBit>(getGetQuickBitQueryKey(qb.id));
+      if (!existing) continue;
+      // Create a soft-deleted note entry for this expired QB
+      const tempId = -(Date.now() + Math.random() * 1000 | 0);
+      queryClient.setQueryData(["getNote", tempId], {
+        id: tempId,
+        title: qb.title,
+        content: qb.content,
+        contentText: qb.contentText,
+        folderId: null,
+        tags: [],
+        pinned: false,
+        favorite: false,
+        coverImage: null,
+        vaulted: false,
+        deletedAt: now.toISOString(),
+        autoDeleteAt: autoDeleteAt.toISOString(),
+        deletedReason: "expired",
+        _demoDeleted: true,
+        _isQuickBit: true,
+        createdAt: qb.createdAt,
+        updatedAt: qb.updatedAt,
+      });
+      addDemoNoteId(tempId);
+      // Remove the QB from cache so it disappears from QuickBitList
+      queryClient.removeQueries({ queryKey: getGetQuickBitQueryKey(qb.id) });
+      count++;
+    }
+    if (count > 0) {
+      setExpiredCount(count);
+      queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+    }
+  }, [queryClient, addDemoNoteId]);
+
   const runCheck = useCallback(async () => {
+    if (isDemo) {
+      runDemoExpiry();
+      return;
+    }
     try {
       const res = await authenticatedFetch("/api/quick-bits");
       if (!res.ok) return;
@@ -121,12 +172,29 @@ export function QuickBitNotifications() {
     } catch {
       // Silent failure — notifications are non-critical
     }
-  }, [queryClient]);
+  }, [isDemo, runDemoExpiry, queryClient]);
 
   useEffect(() => {
-    if (isDemo) return;
+    if (isDemo) {
+      // Demo: check for expired QBs immediately and then hourly
+      runDemoExpiry();
+      const now = new Date();
+      const msUntilNextHour =
+        (60 - now.getMinutes()) * 60_000 -
+        now.getSeconds() * 1000 -
+        now.getMilliseconds();
+      let intervalId: ReturnType<typeof setInterval>;
+      const timeoutId = setTimeout(() => {
+        runDemoExpiry();
+        intervalId = setInterval(runDemoExpiry, 3_600_000);
+      }, msUntilNextHour);
+      return () => {
+        clearTimeout(timeoutId);
+        clearInterval(intervalId);
+      };
+    }
 
-    // 1. Delete expired Quick Bits
+    // 1. Delete expired Quick Bits (backend converts them to soft-deleted notes)
     authenticatedFetch("/api/quick-bits/expired", { method: "DELETE" })
       .then((r) => r.json())
       .then(({ count }: { count: number }) => {
@@ -155,7 +223,7 @@ export function QuickBitNotifications() {
       clearTimeout(timeoutId);
       clearInterval(intervalId);
     };
-  }, [isDemo, runCheck, queryClient]);
+  }, [isDemo, runCheck, runDemoExpiry, queryClient]);
 
   const dismissNotification = (key: string) => {
     setNotifications((prev) => prev.filter((n) => n.key !== key));
