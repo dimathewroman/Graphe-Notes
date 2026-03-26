@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Bell, X, Zap } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getGetQuickBitsQueryKey, getGetQuickBitQueryKey, getGetNotesQueryKey } from "@workspace/api-client-react";
+import { getGetQuickBitsQueryKey, getGetQuickBitQueryKey, getGetNoteQueryKey, getGetNotesQueryKey } from "@workspace/api-client-react";
 import type { QuickBit } from "@workspace/api-client-react";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { useAppStore } from "@/store";
@@ -123,7 +123,7 @@ export function QuickBitNotifications() {
       if (!existing) continue;
       // Create a soft-deleted note entry for this expired QB
       const tempId = -(Date.now() + Math.random() * 1000 | 0);
-      queryClient.setQueryData(["getNote", tempId], {
+      queryClient.setQueryData(getGetNoteQueryKey(tempId), {
         id: tempId,
         title: qb.title,
         content: qb.content,
@@ -143,8 +143,8 @@ export function QuickBitNotifications() {
         updatedAt: qb.updatedAt,
       });
       addDemoNoteId(tempId);
-      // Remove the QB from cache so it disappears from QuickBitList
-      queryClient.removeQueries({ queryKey: getGetQuickBitQueryKey(qb.id) });
+      // Null out the QB cache entry so it disappears from QuickBitList
+      queryClient.setQueryData(getGetQuickBitQueryKey(qb.id), null);
       count++;
     }
     if (count > 0) {

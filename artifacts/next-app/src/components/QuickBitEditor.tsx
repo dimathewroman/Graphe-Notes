@@ -23,9 +23,11 @@ import {
   useGetQuickBit,
   useUpdateQuickBit,
   useDeleteQuickBit,
+  useSoftDeleteQuickBit,
   useCreateNote,
   getGetQuickBitsQueryKey,
   getGetQuickBitQueryKey,
+  getGetNoteQueryKey,
   getGetNotesQueryKey,
 } from "@workspace/api-client-react";
 import type { QuickBit } from "@workspace/api-client-react";
@@ -309,6 +311,7 @@ export function QuickBitEditor() {
     setMobileView,
     setFilter,
     selectNote,
+    addDemoNoteId,
   } = useAppStore();
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
@@ -326,6 +329,7 @@ export function QuickBitEditor() {
 
   const updateMut = useUpdateQuickBit();
   const deleteMut = useDeleteQuickBit();
+  const softDeleteMut = useSoftDeleteQuickBit();
   const createNoteMut = useCreateNote();
 
   const [title, setTitle] = useState("");
@@ -511,16 +515,43 @@ export function QuickBitEditor() {
 
   const handleDelete = async () => {
     if (!selectedQuickBitId) return;
-    if (confirm("Are you sure you want to delete this Quick Bit?")) {
-      if (!isDemo) {
-        try {
-          await deleteMut.mutateAsync({ id: selectedQuickBitId });
-          queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
-        } catch {}
+    if (isDemo) {
+      const existing = queryClient.getQueryData<any>(getGetQuickBitQueryKey(selectedQuickBitId));
+      if (existing) {
+        const now = new Date();
+        const tempId = -(Date.now() + (Math.random() * 1000 | 0));
+        queryClient.setQueryData(getGetNoteQueryKey(tempId), {
+          id: tempId,
+          title: existing.title,
+          content: existing.content,
+          contentText: existing.contentText,
+          folderId: null,
+          tags: [],
+          pinned: false,
+          favorite: false,
+          coverImage: null,
+          vaulted: false,
+          deletedAt: now.toISOString(),
+          autoDeleteAt: new Date(now.getTime() + 30 * 86_400_000).toISOString(),
+          deletedReason: "deleted",
+          _demoDeleted: true,
+          _isQuickBit: true,
+          createdAt: existing.createdAt,
+          updatedAt: existing.updatedAt,
+        });
+        addDemoNoteId(tempId);
+        queryClient.setQueryData(getGetQuickBitQueryKey(selectedQuickBitId), null);
+        queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
       }
-      selectQuickBit(null);
-      if (bp !== "desktop") setMobileView("list");
+    } else {
+      try {
+        await softDeleteMut.mutateAsync({ id: selectedQuickBitId });
+        queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+      } catch {}
     }
+    selectQuickBit(null);
+    if (bp !== "desktop") setMobileView("list");
   };
 
   const handlePromote = async () => {
@@ -763,18 +794,14 @@ export function QuickBitEditor() {
               </IconButton>
             </>
           )}
-          {bp === "desktop" && (
-            <>
-              <div className="w-px h-4 bg-panel-border mx-1" />
-              <IconButton
-                onClick={handleDelete}
-                className="hover:text-destructive hover:bg-destructive/10"
-                title="Delete Quick Bit"
-              >
-                <Trash2 className="w-4 h-4" />
-              </IconButton>
-            </>
-          )}
+          <div className="w-px h-4 bg-panel-border mx-1" />
+          <IconButton
+            onClick={handleDelete}
+            className="hover:text-destructive hover:bg-destructive/10"
+            title="Delete Quick Bit"
+          >
+            <Trash2 className="w-4 h-4" />
+          </IconButton>
         </div>
       </header>
 
@@ -947,15 +974,7 @@ export function QuickBitEditor() {
           onPromote={async () => { setShowExpiredModal(false); await handlePromote(); }}
           onDelete={async () => {
             setShowExpiredModal(false);
-            if (!selectedQuickBitId) return;
-            if (!isDemo) {
-              try {
-                await deleteMut.mutateAsync({ id: selectedQuickBitId });
-                queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
-              } catch {}
-            }
-            selectQuickBit(null);
-            setMobileView("list");
+            await handleDelete();
           }}
         />
       )}
