@@ -41,7 +41,7 @@ import type {
   QuickBit,
   QuickBitSettings,
   SmartFolder,
-  SoftDeleteQuickBit200,
+  SoftDeleteQuickBitResponse,
   ToggleNoteVaultBody,
   UpdateFolderBody,
   UpdateNoteBody,
@@ -2770,8 +2770,8 @@ export const getSoftDeleteQuickBitUrl = (id: number) => {
 export const softDeleteQuickBit = async (
   id: number,
   options?: RequestInit,
-): Promise<SoftDeleteQuickBit200> => {
-  return customFetch<SoftDeleteQuickBit200>(getSoftDeleteQuickBitUrl(id), {
+): Promise<SoftDeleteQuickBitResponse> => {
+  return customFetch<SoftDeleteQuickBitResponse>(getSoftDeleteQuickBitUrl(id), {
     ...options,
     method: "DELETE",
   });
