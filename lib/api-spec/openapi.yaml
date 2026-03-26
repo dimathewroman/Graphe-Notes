@@ -838,37 +838,6 @@ paths:
                 items:
                   type: string
 
-  /ai/complete:
-    post:
-      operationId: aiComplete
-      tags: [ai]
-      summary: Send a prompt to an AI model and get a completion
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AiCompleteBody"
-      responses:
-        "200":
-          description: AI completion result
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AiCompleteResponse"
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: AI error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
   /auth/user:
     get:
       tags: [Auth]
@@ -1383,39 +1352,6 @@ components:
           type: array
           items:
             type: integer
-
-    AiCompleteBody:
-      type: object
-      properties:
-        provider:
-          type: string
-          enum: ["openai", "anthropic", "google"]
-        apiKey:
-          type: string
-        model:
-          type: string
-        prompt:
-          type: string
-        systemPrompt:
-          type: ["string", "null"]
-        noteContext:
-          type: ["string", "null"]
-      required:
-        - provider
-        - apiKey
-        - model
-        - prompt
-
-    AiCompleteResponse:
-      type: object
-      properties:
-        result:
-          type: string
-        tokensUsed:
-          type: ["integer", "null"]
-      required:
-        - result
-        - tokensUsed
 
     ToggleNoteVaultBody:
       type: object

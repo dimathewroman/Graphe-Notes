@@ -8,6 +8,7 @@ import { RecentlyDeleted } from "@/components/RecentlyDeleted";
 import { RecentlyDeletedDetail } from "@/components/RecentlyDeletedDetail";
 import { AIPanel } from "@/components/AIPanel";
 import { SettingsModal } from "@/components/SettingsModal";
+import { AISetupModal } from "@/components/AISetupModal";
 import { QuickBitNotifications } from "@/components/QuickBitNotifications";
 import { useAppStore } from "@/store";
 import { useBreakpoint } from "@/hooks/use-mobile";
@@ -107,6 +108,7 @@ export default function Home() {
       {showDeletedDetail && <RecentlyDeletedDetail />}
 
       <AIPanel />
+      <AISetupModal />
       <SettingsModal />
       <QuickBitNotifications />
       </div>

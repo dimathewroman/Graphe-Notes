@@ -652,23 +652,6 @@ export const GetTagsResponseItem = zod.string();
 export const GetTagsResponse = zod.array(GetTagsResponseItem);
 
 /**
- * @summary Send a prompt to an AI model and get a completion
- */
-export const AiCompleteBody = zod.object({
-  provider: zod.enum(["openai", "anthropic", "google"]),
-  apiKey: zod.string(),
-  model: zod.string(),
-  prompt: zod.string(),
-  systemPrompt: zod.string().nullish(),
-  noteContext: zod.string().nullish(),
-});
-
-export const AiCompleteResponse = zod.object({
-  result: zod.string(),
-  tokensUsed: zod.number().nullable(),
-});
-
-/**
  * @summary Get the currently authenticated user
  */
 export const GetCurrentAuthUserHeader = zod.object({
