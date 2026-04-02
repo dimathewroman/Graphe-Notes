@@ -10,6 +10,12 @@ Sentry.init({
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
   tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1,
 
+  // Disable automatic OpenTelemetry setup to prevent @opentelemetry/instrumentation-pg from
+  // wrapping the pg Pool. In Vercel serverless, the OTel pg instrumentation holds connections
+  // open inside spans, exhausting the pool and causing all queries to fail with
+  // "Error: Failed query". Error monitoring and onRequestError still work without OTel.
+  skipOpenTelemetrySetup: true,
+
   // Enable logs to be sent to Sentry
   enableLogs: true,
 
