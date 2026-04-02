@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { db, smartFoldersTable } from "@workspace/db";
 import {
   GetSmartFoldersResponse,
@@ -6,11 +7,16 @@ import {
 } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const { user } = await getAuthUser(request);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const folders = await db
     .select()
     .from(smartFoldersTable)
+    .where(eq(smartFoldersTable.userId, user.id))
     .orderBy(smartFoldersTable.sortOrder);
+
   return NextResponse.json(GetSmartFoldersResponse.parse(folders));
 }
 
@@ -26,7 +32,7 @@ export async function POST(request: NextRequest) {
 
   const [folder] = await db
     .insert(smartFoldersTable)
-    .values({ ...parsed.data, tagRules: parsed.data.tagRules ?? [] })
+    .values({ ...parsed.data, userId: user.id, tagRules: parsed.data.tagRules ?? [] })
     .returning();
 
   return NextResponse.json(folder, { status: 201 });

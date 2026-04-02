@@ -1,9 +1,10 @@
-import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const smartFoldersTable = pgTable("smart_folders", {
   id: serial("id").primaryKey(),
+  userId: varchar("user_id"),
   name: text("name").notNull(),
   tagRules: text("tag_rules").array().notNull().default([]),
   color: text("color"),
@@ -12,6 +13,6 @@ export const smartFoldersTable = pgTable("smart_folders", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
-export const insertSmartFolderSchema = createInsertSchema(smartFoldersTable).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertSmartFolderSchema = createInsertSchema(smartFoldersTable).omit({ id: true, createdAt: true, updatedAt: true, userId: true });
 export type InsertSmartFolder = z.infer<typeof insertSmartFolderSchema>;
 export type SmartFolder = typeof smartFoldersTable.$inferSelect;
