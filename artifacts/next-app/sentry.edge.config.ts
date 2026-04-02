@@ -11,6 +11,9 @@ Sentry.init({
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
   tracesSampleRate: process.env.NODE_ENV === "production" ? 0.1 : 1,
 
+  // Disable OTel auto-setup (mirrors sentry.server.config.ts — see comment there).
+  skipOpenTelemetrySetup: true,
+
   // Enable logs to be sent to Sentry
   enableLogs: true,
 
