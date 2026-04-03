@@ -48,6 +48,7 @@ import { VaultModal } from "./VaultModal";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { useDemoMode } from "@/App";
+import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindReplace";
 
 // Custom floating AI menu that appears on text selection (Tiptap v3 compatible)
 
@@ -1224,6 +1225,7 @@ export function NoteEditor() {
   const [linkPopover, setLinkPopover] = useState<{ visible: boolean; url: string }>({ visible: false, url: "" });
   const linkInputRef = useRef<HTMLInputElement>(null);
   const linkPopoverRef = useRef<HTMLDivElement>(null);
+  const [showFindReplace, setShowFindReplace] = useState(false);
 
   useEffect(() => {
     if (!linkPopover.visible) return;
@@ -1269,6 +1271,7 @@ export function NoteEditor() {
       SlashCommandExtension,
       SuperscriptExt,
       SubscriptExt,
+      FindReplaceExtension,
     ],
     content: note?.content || "",
     onUpdate: ({ editor }) => {
@@ -1292,6 +1295,22 @@ export function NoteEditor() {
     }
     setShowVersionHistory(false);
   }, [note?.id, selectedNoteId, editor]);
+
+  // Find/replace keyboard shortcut — only intercept when editor has focus
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!editor?.isFocused) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === "f" || key === "h") {
+        e.preventDefault();
+        setShowFindReplace(true);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [editor]);
 
   const debouncedSave = useCallback(
     (() => {
@@ -1962,6 +1981,16 @@ export function NoteEditor() {
           applyLink={applyLink}
           className="fixed left-0 right-0 z-40 border-t border-panel-border bg-background/95 backdrop-blur-md"
           style={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
+        />
+      )}
+
+      {showFindReplace && editor && (
+        <FindReplacePanel
+          editor={editor}
+          onClose={() => {
+            setShowFindReplace(false);
+            frClear(editor);
+          }}
         />
       )}
 
