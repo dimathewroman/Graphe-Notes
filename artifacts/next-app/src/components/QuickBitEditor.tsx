@@ -45,6 +45,7 @@ import { EditorToolbar, AiSelectionMenu, MobileSelectionMenu } from "./NoteEdito
 import { NotificationCadenceEditor } from "./NotificationCadenceEditor";
 import { useDemoMode } from "@/App";
 import { DEMO_QUICK_BITS } from "@/lib/demo-data";
+import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindReplace";
 
 // ─── Expiry helpers ───────────────────────────────────────────────────────────
 
@@ -357,6 +358,7 @@ export function QuickBitEditor() {
   const [linkPopover, setLinkPopover] = useState<{ visible: boolean; url: string }>({ visible: false, url: "" });
   const linkInputRef = useRef<HTMLInputElement>(null);
   const linkPopoverRef = useRef<HTMLDivElement>(null);
+  const [showFindReplace, setShowFindReplace] = useState(false);
 
   useEffect(() => {
     if (!linkPopover.visible) return;
@@ -440,6 +442,7 @@ export function QuickBitEditor() {
       SlashCommandExtension,
       SuperscriptExt,
       SubscriptExt,
+      FindReplaceExtension,
     ],
     content: (quickBit as QuickBit | undefined)?.content || "",
     onUpdate: ({ editor }) => {
@@ -462,6 +465,22 @@ export function QuickBitEditor() {
       setTitle("");
     }
   }, [(quickBit as QuickBit | undefined)?.id, selectedQuickBitId, editor]);
+
+  // Find/replace keyboard shortcut — only intercept when editor has focus
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!editor?.isFocused) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === "f" || key === "h") {
+        e.preventDefault();
+        setShowFindReplace(true);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, [editor]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = e.target.value;
@@ -975,6 +994,16 @@ export function QuickBitEditor() {
           onDelete={async () => {
             setShowExpiredModal(false);
             await handleDelete();
+          }}
+        />
+      )}
+
+      {showFindReplace && editor && (
+        <FindReplacePanel
+          editor={editor}
+          onClose={() => {
+            setShowFindReplace(false);
+            frClear(editor);
           }}
         />
       )}

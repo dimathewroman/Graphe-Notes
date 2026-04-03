@@ -109,6 +109,22 @@
   scrollbar-width: none;
 }
 
+/* Find/Replace highlight decorations */
+.find-highlight {
+  background-color: rgba(253, 224, 71, 0.35);
+  border-radius: 2px;
+}
+.find-highlight-active {
+  background-color: rgba(249, 115, 22, 0.55);
+  border-radius: 2px;
+}
+.light .find-highlight {
+  background-color: rgba(234, 179, 8, 0.4);
+}
+.light .find-highlight-active {
+  background-color: rgba(234, 88, 12, 0.5);
+}
+
 /* Tiptap Editor Styles */
 .ProseMirror {
   @apply outline-none min-h-[300px] md:min-h-[500px] pb-32;
