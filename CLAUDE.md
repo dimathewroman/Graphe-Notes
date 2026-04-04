@@ -29,8 +29,15 @@ scripts/                   -- Utility scripts
 ## Database Schema
 
 - folders: id, name, parentId, color, icon, sortOrder, createdAt, updatedAt
-- notes: id, title, content (HTML), contentText (plain), folderId, tags (text[]), pinned, favorite, vaulted, coverImage, createdAt, updatedAt
-- vault_settings: id, passwordHash, createdAt, updatedAt
+- notes: id, title, content (HTML), contentText (plain), folderId, tags (text[]), pinned, favorite, vaulted, coverImage, deletedAt, autoDeleteAt, deletedReason, createdAt, updatedAt
+- note_versions: id, noteId, title, content, contentText, createdAt
+- vault_settings: id, userId, passwordHash, createdAt, updatedAt
+- user_api_keys: id, userId, provider, encryptedKey, endpointUrl, modelOverride, createdAt, updatedAt
+- user_settings: userId, activeAiProvider, createdAt, updatedAt
+- quick_bits: id, userId, content, type, sortOrder, createdAt, updatedAt
+- smart_folders: id, name, filterJson, sortOrder, createdAt, updatedAt
+
+Note: `notes.deletedAt` is set on soft-delete. Notes with `deletedAt` are not hard-deleted immediately — use the `/notes/:id/delete`, `/notes/:id/restore`, and `/notes/:id/permanent` endpoints, not a plain DELETE on the note.
 
 ---
 
@@ -41,17 +48,32 @@ All endpoints live in artifacts/next-app/src/app/api/ and are prefixed with /api
 - GET/POST /folders
 - PATCH/DELETE /folders/:id
 - GET/POST /notes (filters: folderId, search, pinned, favorite, tag, sortBy, sortDir)
-- GET/PATCH/DELETE /notes/:id
+- GET/PATCH /notes/:id
 - PATCH /notes/:id/pin
 - PATCH /notes/:id/favorite
 - PATCH /notes/:id/move
 - PATCH /notes/:id/vault (body: { vaulted: boolean })
+- POST /notes/:id/delete (soft-delete — sets deletedAt)
+- POST /notes/:id/restore (undelete)
+- DELETE /notes/:id/permanent (hard-delete)
+- GET /notes/:id/versions
+- GET/DELETE /notes/:id/versions/:versionId
 - GET /tags
 - GET /vault/status
 - POST /vault/setup
 - POST /vault/unlock
 - POST /vault/change-password
-- GET/POST /models
+- GET/POST /quick-bits
+- GET/PATCH/DELETE /quick-bits/:id
+- GET/PATCH /quick-bits/settings
+- DELETE /quick-bits/:id/soft-delete
+- GET/POST /smart-folders
+- PATCH/DELETE /smart-folders/:id
+- POST /ai/generate
+- GET/POST/PATCH/DELETE /ai/keys
+- GET/PATCH /ai/settings
+- GET /ai/usage
+- POST /ai/models
 
 ---
 
@@ -59,9 +81,10 @@ All endpoints live in artifacts/next-app/src/app/api/ and are prefixed with /api
 
 At the start of every new session, before doing anything else:
 1. Pull the latest master from GitHub: `git checkout master && git pull origin master`
-2. Check the active branch. Run `git log origin/master..HEAD --oneline`.
-   - If the output is empty, the current branch has no unique commits — it is either master itself or a branch that was already merged. Ask the user what feature or fix they are working on, then create and checkout a new branch: `git checkout -b feature/<name>` (or `fix/<name>` for bug fixes). Never reuse a branch that has no commits ahead of master.
-   - If the output has commits, the branch has active work — continue on it.
+2. Ask the user what feature or fix they are working on in this session.
+   - Always create a new branch from master for the work: `git checkout -b feature/<name>` (or `fix/<name>` for bug fixes).
+   - Exception: if the user explicitly says they are continuing an in-progress branch that has unmerged work (e.g. "keep working on feature/X"), switch to that branch instead.
+   - Never silently continue on whatever branch happens to already have commits. Each feature/fix must have its own dedicated branch and PR. Never put two features on the same branch.
 3. Check that .env exists in the repo root -- if not, copy .env.example to .env and inform the user that real credentials from 1Password are needed for full login and DB access
 4. Run pnpm install from the repo root
 5. Start the Next.js dev server on port 3000
@@ -129,7 +152,7 @@ Auth lives in artifacts/next-app/src/hooks/use-auth.ts and artifacts/next-app/sr
 
 ## Demo Mode Pattern
 
-useDemoMode() returns isDemo: boolean. Import from @/app/providers.
+useDemoMode() returns isDemo: boolean. Import from @/App.
 
 In demo mode, patch the React Query cache directly instead of calling API mutations:
 ```tsx
@@ -224,6 +247,8 @@ PR workflow:
 2. Commit all work on that branch
 3. Push and open PR targeting master
 
+One feature = one branch = one PR. Never put two features on the same branch.
+
 ---
 
 ## Codebase Caveats
@@ -245,5 +270,5 @@ AI provider keys are stored encrypted in the `user_api_keys` DB table. The encry
 - Before running any terminal command, explain what it does, why it is necessary, what it affects, and whether it is reversible. Wait for confirmation.
 - Only modify code files within the Graphe-Notes repository. Installing packages and running dev tools is fine. Never modify unrelated projects or system configuration files.
 - Never delete files without explaining what and why. Wait for confirmation.
-- Never commit directly to master. Always use a feature branch.
+- Never commit directly to master. Always use a feature branch. One feature = one branch = one PR.
 - When something goes wrong, stop immediately and explain before attempting a fix.
