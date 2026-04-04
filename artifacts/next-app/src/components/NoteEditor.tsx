@@ -35,7 +35,7 @@ import {
   Undo2, Redo2, Clock, ArrowLeft, Menu, MoreHorizontal, MoreVertical, PanelLeftClose,
   Share, Search, Copy, ClipboardPaste, Type, Highlighter, Minus,
   Superscript as SuperscriptIcon, Subscript as SubscriptIcon,
-  Download
+  Download, LayoutList
 } from "lucide-react";
 import SuperscriptExt from "@tiptap/extension-superscript";
 import SubscriptExt from "@tiptap/extension-subscript";
@@ -52,6 +52,7 @@ import { useDemoMode } from "@/App";
 import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindReplace";
 import { VideoEmbedExtension } from "./editor/VideoEmbed";
 import { exportAsPdf, exportAsMarkdown } from "@/hooks/use-note-export";
+import { TableOfContents } from "./editor/TableOfContents";
 
 // Custom floating AI menu that appears on text selection (Tiptap v3 compatible)
 
@@ -1229,6 +1230,7 @@ export function NoteEditor() {
   const linkInputRef = useRef<HTMLInputElement>(null);
   const linkPopoverRef = useRef<HTMLDivElement>(null);
   const [showFindReplace, setShowFindReplace] = useState(false);
+  const [showToc, setShowToc] = useState(false);
 
   useEffect(() => {
     if (!linkPopover.visible) return;
@@ -1818,6 +1820,13 @@ export function NoteEditor() {
               >
                 <Redo2 className="w-4 h-4" />
               </IconButton>
+              <IconButton
+                onClick={() => setShowToc(v => !v)}
+                active={showToc}
+                title="Table of contents"
+              >
+                <LayoutList className="w-4 h-4" />
+              </IconButton>
             </>
           )}
           {bp !== "mobile" && (
@@ -1846,6 +1855,13 @@ export function NoteEditor() {
                 title="Version history"
               >
                 <Clock className="w-4 h-4" />
+              </IconButton>
+              <IconButton
+                onClick={() => setShowToc(v => !v)}
+                active={showToc}
+                title="Table of contents"
+              >
+                <LayoutList className="w-4 h-4" />
               </IconButton>
             </>
           )}
@@ -1978,6 +1994,13 @@ export function NoteEditor() {
           onClose={() => setShowVersionHistory(false)}
         />
       )}
+
+      {/* Table of Contents Panel */}
+      <TableOfContents
+        editor={editor}
+        isOpen={showToc}
+        onClose={() => setShowToc(false)}
+      />
 
       {/* Mobile bottom toolbar — keyboard-aware */}
       {bp === "mobile" && (
