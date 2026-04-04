@@ -49,6 +49,7 @@ import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { useDemoMode } from "@/App";
 import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindReplace";
+import { VideoEmbedExtension } from "./editor/VideoEmbed";
 
 // Custom floating AI menu that appears on text selection (Tiptap v3 compatible)
 
@@ -1272,6 +1273,7 @@ export function NoteEditor() {
       SuperscriptExt,
       SubscriptExt,
       FindReplaceExtension,
+      VideoEmbedExtension,
     ],
     content: note?.content || "",
     onUpdate: ({ editor }) => {

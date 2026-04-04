@@ -5,9 +5,10 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import {
   Heading1, Heading2, Heading3, Bold, Italic,
   List, ListOrdered, ListTodo, Minus, Table,
-  Code, Quote,
+  Code, Quote, Video,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { parseVideoUrl } from "./VideoEmbed";
 
 // ─── Slash command definitions ────────────────────────────────────────────────
 
@@ -90,6 +91,23 @@ const SLASH_COMMANDS: SlashCommand[] = [
     description: "Blockquote",
     icon: <Quote className="w-4 h-4" />,
     execute: (e) => e.chain().focus().toggleBlockquote().run(),
+  },
+  {
+    label: "Video",
+    description: "Embed a YouTube or Vimeo video",
+    icon: <Video className="w-4 h-4" />,
+    execute: (e) => {
+      const url = window.prompt("Paste a YouTube or Vimeo URL:");
+      if (!url) return;
+      const parsed = parseVideoUrl(url.trim());
+      if (!parsed) {
+        window.alert("Could not recognise that URL. Please use a YouTube or Vimeo link.");
+        return;
+      }
+      const node = e.schema.nodes.videoEmbed?.create({ embedUrl: parsed.embedUrl });
+      if (!node) return;
+      e.chain().focus().insertContent(node.toJSON()).run();
+    },
   },
 ];
 
