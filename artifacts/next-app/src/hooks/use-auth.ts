@@ -48,6 +48,7 @@ export function useAuth(): AuthState {
       .then(({ data: { session } }) => {
         if (session?.user) {
           setUser(mapUser(session.user));
+          posthog.identify(session.user.id, { email: session.user.email });
         } else {
           setUser(null);
         }
@@ -64,6 +65,7 @@ export function useAuth(): AuthState {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(mapUser(session.user));
+        posthog.identify(session.user.id, { email: session.user.email });
       } else {
         setUser(null);
       }
@@ -76,6 +78,7 @@ export function useAuth(): AuthState {
   }, []);
 
   const loginWithOAuth = useCallback((provider: "google" | "apple") => {
+    posthog.capture("oauth_login_attempted", { provider });
     supabase.auth
       .signInWithOAuth({
         provider,

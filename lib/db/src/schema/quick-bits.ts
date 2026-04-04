@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, varchar, index } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -13,7 +13,9 @@ export const quickBitsTable = pgTable("quick_bits", {
   notificationHours: integer("notification_hours").array(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("quick_bits_user_id_idx").on(table.userId),
+]);
 
 export const quickBitSettingsTable = pgTable("quick_bit_settings", {
   id: serial("id").primaryKey(),

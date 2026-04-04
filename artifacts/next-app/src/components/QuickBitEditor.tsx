@@ -49,6 +49,7 @@ import { useDemoMode } from "@/lib/demo-context";
 import { DEMO_QUICK_BITS } from "@/lib/demo-data";
 import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindReplace";
 import { useAiAction } from "@/hooks/use-ai-action";
+import posthog from "posthog-js";
 
 // ─── Expiry helpers ───────────────────────────────────────────────────────────
 
@@ -549,6 +550,7 @@ export function QuickBitEditor() {
         data: { title: qb.title || "", content: qb.content || "" },
       });
       await deleteMut.mutateAsync({ id: selectedQuickBitId });
+      posthog.capture("quick_bit_promoted_to_note", { quick_bit_id: selectedQuickBitId, note_id: res.id });
       queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
       selectQuickBit(null);
