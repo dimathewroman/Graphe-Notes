@@ -1,6 +1,5 @@
-import { useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo } from "react";
-import { createPortal } from "react-dom";
-import { useEditor, EditorContent } from "@tiptap/react";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import UnderlineExt from "@tiptap/extension-underline";
 import { TextStyle, FontSize } from "@tiptap/extension-text-style";
@@ -14,7 +13,8 @@ import { Table, TableHeader, TableCell } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import Link from "@tiptap/extension-link";
 import TaskList from "@tiptap/extension-task-list";
-import TaskItem from "@tiptap/extension-task-item";
+import SuperscriptExt from "@tiptap/extension-superscript";
+import SubscriptExt from "@tiptap/extension-subscript";
 
 import { useAppStore } from "@/store";
 import {
@@ -23,27 +23,9 @@ import {
   getGetNotesQueryKey, getGetNoteQueryKey, getGetTagsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  Bold, Italic, Underline as UnderlineIcon, Strikethrough,
-  AlignLeft, AlignCenter, AlignRight,
-  List, ListOrdered, ListTodo, Quote, Code, Heading1, Heading2, Heading3,
-  Image as ImageIcon, Trash2, Pin, Star, PanelLeft, FileText,
-  Lock, ShieldCheck, Table as TableIcon, RowsIcon, Plus, X, Hash,
-  Sparkles, Loader2, Check, RotateCcw, Wand2, BookOpen, Scissors,
-  Link2, Unlink, ChevronRight, ArrowUp, ArrowDown, MessageSquare, ListChecks,
-  Undo2, Redo2, Clock, ArrowLeft, Menu, MoreHorizontal, MoreVertical, PanelLeftClose,
-  Share, Search, Copy, ClipboardPaste, Type, Highlighter, Minus,
-  Superscript as SuperscriptIcon, Subscript as SubscriptIcon,
-  Download, LayoutList
-} from "lucide-react";
-import SuperscriptExt from "@tiptap/extension-superscript";
-import SubscriptExt from "@tiptap/extension-subscript";
-import { ColorPickerDropdown } from "./editor/ColorPickerDropdown";
 import { SlashCommandExtension, SlashCommandMenu } from "./editor/SlashCommandMenu";
-import { WordCountPopover } from "./editor/WordCountPopover";
-import { IconButton } from "./ui/IconButton";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
-import { cn, formatDate, sha256 } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { VaultModal } from "./VaultModal";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
@@ -52,13 +34,15 @@ import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindRe
 import { VideoEmbedExtension } from "./editor/VideoEmbed";
 import { exportAsPdf, exportAsMarkdown } from "@/hooks/use-note-export";
 import { TableOfContents } from "./editor/TableOfContents";
-import { actionGroups } from "./editor/ai-action-groups";
-import { ToolbarButton } from "./editor/ToolbarButton";
-import { ScrollableToolbar } from "./editor/ScrollableToolbar";
 import { SmartTaskItem } from "./editor/SmartTaskItem";
 import { EditorToolbar } from "./editor/EditorToolbar";
 import { AiSelectionMenu } from "./editor/AiSelectionMenu";
 import { MobileSelectionMenu } from "./editor/MobileSelectionMenu";
+import { AiStatusIndicator } from "./editor/AiStatusIndicator";
+import { EmptyEditorState } from "./editor/EmptyEditorState";
+import { VaultLockScreen } from "./editor/VaultLockScreen";
+import { NoteHeader } from "./editor/NoteHeader";
+import { NoteBody } from "./editor/NoteBody";
 
 // AiSelectionMenu → extracted to ./editor/AiSelectionMenu.tsx
 // MobileSelectionMenu → extracted to ./editor/MobileSelectionMenu.tsx
@@ -100,10 +84,7 @@ export function NoteEditor() {
 
   const [title, setTitle] = useState("");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
-  const [tagInput, setTagInput] = useState("");
-  const [showTagInput, setShowTagInput] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
-  const tagInputRef = useRef<HTMLInputElement>(null);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showToc, setShowToc] = useState(false)
 
@@ -331,21 +312,17 @@ export function NoteEditor() {
   };
 
   // Tags
-  const addTag = async () => {
+  const addTag = async (tag: string) => {
     if (!selectedNoteId || !note) return;
-    const tag = tagInput.trim().replace(/^#/, "");
-    if (!tag || note.tags?.includes(tag)) { setTagInput(""); setShowTagInput(false); return; }
     const newTags = [...(note.tags ?? []), tag];
     if (isDemo) {
       queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...note, tags: newTags });
-      setTagInput(""); setShowTagInput(false); return;
+      return;
     }
     await updateNoteMut.mutateAsync({ id: selectedNoteId, data: { tags: newTags } });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetTagsQueryKey() });
-    setTagInput("");
-    setShowTagInput(false);
   };
 
   const removeTag = async (tag: string) => {
@@ -543,27 +520,13 @@ export function NoteEditor() {
   if (!selectedNoteId) {
     if (bp === "mobile") return null;
     return (
-      <div className="flex-1 flex flex-col bg-background relative">
-        {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (
-          <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-background/80 backdrop-blur-md shrink-0">
-            {!isSidebarOpen && (
-              <IconButton onClick={toggleSidebar} title="Show sidebar">
-                <PanelLeft className="w-4 h-4" />
-              </IconButton>
-            )}
-            {!isNoteListOpen && (
-              <IconButton onClick={toggleNoteList} title="Show note list">
-                <PanelLeftClose className="w-4 h-4 scale-x-[-1]" />
-              </IconButton>
-            )}
-          </div>
-        )}
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-          <FileText className="w-16 h-16 mb-4 opacity-20" />
-          <h2 className="text-xl font-medium mb-2 text-foreground/80">Select a note</h2>
-          <p className="text-sm">Choose a note from the list or create a new one to start writing.</p>
-        </div>
-      </div>
+      <EmptyEditorState
+        bp={bp}
+        isSidebarOpen={isSidebarOpen}
+        isNoteListOpen={isNoteListOpen}
+        onToggleSidebar={toggleSidebar}
+        onToggleNoteList={toggleNoteList}
+      />
     );
   }
 
@@ -573,174 +536,52 @@ export function NoteEditor() {
 
   if (note?.vaulted && !isVaultUnlocked) {
     return (
-      <div className="flex-1 flex flex-col bg-background">
-        <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-background/80 backdrop-blur-md shrink-0">
-          {bp === "mobile" && (
-            <button onClick={handleBack} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors">
-              <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-            </button>
-          )}
-          {bp === "desktop" && !isSidebarOpen && (
-            <IconButton onClick={toggleSidebar} title="Show sidebar">
-              <PanelLeft className="w-4 h-4" />
-            </IconButton>
-          )}
-          {bp === "desktop" && !isNoteListOpen && (
-            <IconButton onClick={toggleNoteList} title="Show note list">
-              <PanelLeftClose className="w-4 h-4 scale-x-[-1]" />
-            </IconButton>
-          )}
-        </div>
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-            <ShieldCheck className="w-8 h-8 text-indigo-500" />
-          </div>
-          <h2 className="text-xl font-medium text-foreground/80">This note is in the vault</h2>
-          <p className="text-sm text-center max-w-xs">Unlock the vault to view this note.</p>
-          <button
-            onClick={() => setShowVaultUnlockModal(true)}
-            className="mt-2 px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium transition-colors"
-          >
-            Unlock Vault
-          </button>
-        </div>
-        {showVaultUnlockModal && (
-          <VaultModal
-            mode="unlock"
-            onConfirm={handleUnlockConfirm}
-            onCancel={() => { setShowVaultUnlockModal(false); setVaultUnlockError(""); }}
-            error={vaultUnlockError}
-          />
-        )}
-      </div>
+      <VaultLockScreen
+        bp={bp}
+        isSidebarOpen={isSidebarOpen}
+        isNoteListOpen={isNoteListOpen}
+        onToggleSidebar={toggleSidebar}
+        onToggleNoteList={toggleNoteList}
+        onBack={handleBack}
+        showVaultUnlockModal={showVaultUnlockModal}
+        onRequestUnlock={() => setShowVaultUnlockModal(true)}
+        onUnlockConfirm={handleUnlockConfirm}
+        onUnlockCancel={() => { setShowVaultUnlockModal(false); setVaultUnlockError(""); }}
+        vaultUnlockError={vaultUnlockError}
+      />
     );
   }
 
   return (
     <div className="flex-1 flex flex-col bg-background h-screen overflow-hidden relative">
-      {/* Top Header */}
-      <header className="h-14 border-b border-panel-border flex items-center justify-between px-2 md:px-4 shrink-0 bg-background/80 backdrop-blur-md z-10">
-        <div className="flex items-center gap-2">
-          {bp === "mobile" && (
-            <button onClick={handleBack} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors">
-              <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-            </button>
-          )}
-          {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (
-            <div className="flex items-center gap-0.5 mr-2">
-              {!isSidebarOpen && (
-                <IconButton onClick={toggleSidebar} title="Show sidebar">
-                  <PanelLeft className="w-4 h-4" />
-                </IconButton>
-              )}
-              {!isNoteListOpen && (
-                <IconButton onClick={toggleNoteList} title="Show note list">
-                  <PanelLeftClose className="w-4 h-4 scale-x-[-1]" />
-                </IconButton>
-              )}
-            </div>
-          )}
-          <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-            <span className={cn("inline-block w-1.5 h-1.5 rounded-full", saveStatus === "saved" ? "bg-emerald-500" : "bg-amber-500 animate-pulse")} />
-            {saveStatus === "saved" ? "Saved" : "Saving..."}
-            {bp === "desktop" && note && <span className="ml-2 border-l border-panel-border pl-2">Updated {formatDate(note.updatedAt)}</span>}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-0.5 md:gap-1">
-          {bp === "mobile" && editor && (
-            <>
-              <IconButton
-                onClick={() => editor.chain().focus().undo().run()}
-                title="Undo"
-                className={!editor.can().undo() ? "opacity-30 pointer-events-none" : ""}
-              >
-                <Undo2 className="w-4 h-4" />
-              </IconButton>
-              <IconButton
-                onClick={() => editor.chain().focus().redo().run()}
-                title="Redo"
-                className={!editor.can().redo() ? "opacity-30 pointer-events-none" : ""}
-              >
-                <Redo2 className="w-4 h-4" />
-              </IconButton>
-              <IconButton
-                onClick={() => setShowToc(v => !v)}
-                active={showToc}
-                title="Table of contents"
-              >
-                <LayoutList className="w-4 h-4" />
-              </IconButton>
-            </>
-          )}
-          {bp !== "mobile" && (
-            <>
-              <IconButton onClick={() => handleAction("pin")} active={note?.pinned} title="Pin Note">
-                <Pin className={cn("w-4 h-4", note?.pinned && "fill-current")} />
-              </IconButton>
-              <IconButton onClick={() => handleAction("fav")} active={note?.favorite} title="Favorite">
-                <Star className={cn("w-4 h-4", note?.favorite && "fill-current text-yellow-500")} />
-              </IconButton>
-            </>
-          )}
-          {bp === "desktop" && (
-            <>
-              <IconButton
-                onClick={handleToggleVault}
-                active={note?.vaulted}
-                title={note?.vaulted ? "Remove from vault" : "Move to vault"}
-                className={note?.vaulted ? "text-indigo-400" : ""}
-              >
-                <ShieldCheck className={cn("w-4 h-4", note?.vaulted && "fill-current")} />
-              </IconButton>
-              <IconButton
-                onClick={() => setShowVersionHistory(v => !v)}
-                active={showVersionHistory}
-                title="Version history"
-              >
-                <Clock className="w-4 h-4" />
-              </IconButton>
-              <IconButton
-                onClick={() => setShowToc(v => !v)}
-                active={showToc}
-                title="Table of contents"
-              >
-                <LayoutList className="w-4 h-4" />
-              </IconButton>
-            </>
-          )}
-          {bp !== "desktop" && (
-            <OverflowMenu
-              note={note}
-              onPin={() => handleAction("pin")}
-              onFav={() => handleAction("fav")}
-              onVaultToggle={handleToggleVault}
-              onVersionHistory={() => setShowVersionHistory(v => !v)}
-              onExportPdf={handleExportPdf}
-              onExportMarkdown={handleExportMarkdown}
-              onDelete={handleDelete}
-              showVersionHistory={showVersionHistory}
-              isMobile={bp === "mobile"}
-            />
-          )}
-          {bp === "desktop" && (
-            <>
-              <ExportMenu onExportPdf={handleExportPdf} onExportMarkdown={handleExportMarkdown} />
-              <div className="w-px h-4 bg-panel-border mx-1" />
-              <IconButton onClick={handleDelete} className="hover:text-destructive hover:bg-destructive/10" title="Delete">
-                <Trash2 className="w-4 h-4" />
-              </IconButton>
-            </>
-          )}
-        </div>
-      </header>
+      <NoteHeader
+        bp={bp}
+        note={note}
+        saveStatus={saveStatus}
+        isSidebarOpen={isSidebarOpen}
+        isNoteListOpen={isNoteListOpen}
+        editor={editor}
+        showToc={showToc}
+        showVersionHistory={showVersionHistory}
+        onToggleSidebar={toggleSidebar}
+        onToggleNoteList={toggleNoteList}
+        onBack={handleBack}
+        onPin={() => handleAction("pin")}
+        onFav={() => handleAction("fav")}
+        onVaultToggle={handleToggleVault}
+        onVersionHistory={() => setShowVersionHistory(v => !v)}
+        onSetShowToc={setShowToc}
+        onExportPdf={handleExportPdf}
+        onExportMarkdown={handleExportMarkdown}
+        onDelete={handleDelete}
+      />
 
       {/* Toolbar — desktop/tablet: below header; mobile: at bottom */}
       {bp !== "mobile" && (
         <EditorToolbar editor={editor} showUndoRedo />
       )}
 
-      {/* Text selection menus — mobile: native-style popup with Writing Tools; desktop/tablet: AI toolbar */}
+      {/* Text selection menus */}
       {bp === "mobile" ? (
         <MobileSelectionMenu
           editor={editor}
@@ -761,71 +602,17 @@ export function NoteEditor() {
         />
       )}
 
-      {/* AI Loading / Error indicator */}
-      {(aiLoading || aiError) && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
-          {aiLoading ? (
-            <div className="flex items-center gap-2.5 px-4 py-2.5 bg-popover border border-indigo-500/30 rounded-full shadow-xl text-indigo-400">
-              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-              <span className="text-xs font-medium whitespace-nowrap">AI is rewriting…</span>
-            </div>
-          ) : aiError ? (
-            <div className="flex items-center gap-2.5 px-4 py-2.5 bg-popover border border-destructive/30 rounded-full shadow-xl text-destructive pointer-events-auto">
-              <X className="w-3.5 h-3.5 shrink-0" />
-              <span className="text-xs">{aiError}</span>
-            </div>
-          ) : null}
-        </div>
-      )}
+      <AiStatusIndicator aiLoading={aiLoading} aiError={aiError} />
 
-      {/* Editor Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className={cn("max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12", bp === "mobile" && "pb-20")}>
-          <input
-            type="text"
-            value={title}
-            onChange={handleTitleChange}
-            placeholder="Note Title"
-            className="w-full text-2xl md:text-4xl font-bold bg-transparent border-none outline-none mb-4 text-foreground placeholder:text-muted-foreground/30 resize-none tracking-tight"
-          />
-
-          {/* Tags Row */}
-          <div className="flex items-center flex-wrap gap-1.5 mb-8">
-            {note?.tags?.map(tag => (
-              <span key={tag} className="group flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-primary/10 border border-primary/20 text-primary">
-                <Hash className="w-2.5 h-2.5" />
-                {tag}
-                <button onClick={() => removeTag(tag)} className="opacity-0 group-hover:opacity-100 hover:text-destructive transition-all ml-0.5">
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </span>
-            ))}
-            {showTagInput ? (
-              <form onSubmit={(e) => { e.preventDefault(); addTag(); }} className="flex items-center gap-1">
-                <input
-                  ref={tagInputRef}
-                  autoFocus
-                  value={tagInput}
-                  onChange={e => setTagInput(e.target.value)}
-                  onBlur={() => { if (!tagInput) setShowTagInput(false); }}
-                  placeholder="tag name..."
-                  className="text-xs bg-background border border-primary/30 rounded-full px-2.5 py-1 outline-none focus:border-primary text-foreground w-24"
-                />
-              </form>
-            ) : (
-              <button
-                onClick={() => setShowTagInput(true)}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border border-dashed border-panel-border text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors"
-              >
-                <Plus className="w-2.5 h-2.5" />
-                Add tag
-              </button>
-            )}
-          </div>
-
-          <EditorContent editor={editor} />
-        </div>
-      </div>
+      <NoteBody
+        editor={editor}
+        title={title}
+        note={note}
+        bp={bp}
+        onTitleChange={handleTitleChange}
+        onAddTag={addTag}
+        onRemoveTag={removeTag}
+      />
 
       {/* Slash command floating menu */}
       <SlashCommandMenu editor={editor} />
@@ -839,7 +626,6 @@ export function NoteEditor() {
         />
       )}
 
-      {/* Table of Contents Panel */}
       <TableOfContents
         editor={editor}
         isOpen={showToc}
@@ -877,127 +663,5 @@ export function NoteEditor() {
   );
 }
 
-// EditorToolbar → extracted to ./editor/EditorToolbar
-
-function OverflowMenu({ note, onPin, onFav, onVaultToggle, onVersionHistory, onExportPdf, onExportMarkdown, onDelete, showVersionHistory, isMobile }: {
-  note: { vaulted: boolean; pinned: boolean; favorite: boolean } | null | undefined;
-  onPin?: () => void;
-  onFav?: () => void;
-  onVaultToggle: () => void;
-  onVersionHistory: () => void;
-  onExportPdf: () => void;
-  onExportMarkdown: () => void;
-  onDelete: () => void;
-  showVersionHistory: boolean;
-  isMobile?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  return (
-    <div className="relative" ref={ref}>
-      <IconButton onClick={() => setOpen(!open)}>
-        <MoreVertical className="w-4 h-4" />
-      </IconButton>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-[200px] bg-popover border border-panel-border rounded-xl shadow-2xl py-1">
-          {isMobile && onPin && (
-            <button onClick={() => { onPin(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
-              <Pin className={cn("w-4 h-4", note?.pinned && "fill-current text-primary")} />
-              {note?.pinned ? "Unpin" : "Pin"}
-            </button>
-          )}
-          {isMobile && onFav && (
-            <button onClick={() => { onFav(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
-              <Star className={cn("w-4 h-4", note?.favorite && "fill-current text-yellow-500")} />
-              {note?.favorite ? "Unfavorite" : "Favorite"}
-            </button>
-          )}
-          <button onClick={() => { setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-muted-foreground hover:bg-panel transition-colors cursor-default">
-            <Share className="w-4 h-4" />
-            Share
-          </button>
-          <button onClick={() => { onExportPdf(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
-            <Download className="w-4 h-4" />
-            Export as PDF
-          </button>
-          <button onClick={() => { onExportMarkdown(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
-            <FileText className="w-4 h-4" />
-            Export as Markdown
-          </button>
-          {(isMobile && (onPin || onFav)) && <div className="h-px bg-panel-border mx-2 my-1" />}
-          <button onClick={() => { onVaultToggle(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
-            <ShieldCheck className={cn("w-4 h-4", note?.vaulted && "fill-current text-indigo-400")} />
-            {note?.vaulted ? "Remove from Vault" : "Move to Vault"}
-          </button>
-          <button onClick={() => { onVersionHistory(); setOpen(false); }} className={cn("w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-panel transition-colors", showVersionHistory ? "text-primary" : "text-foreground")}>
-            <Clock className="w-4 h-4" />
-            Version History
-          </button>
-          <button onClick={() => { setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-muted-foreground hover:bg-panel transition-colors cursor-default">
-            <Search className="w-4 h-4" />
-            Find in Page
-          </button>
-          <div className="h-px bg-panel-border mx-2 my-1" />
-          <button onClick={() => { onDelete(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors">
-            <Trash2 className="w-4 h-4" />
-            Delete
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ExportMenu({ onExportPdf, onExportMarkdown }: {
-  onExportPdf: () => void;
-  onExportMarkdown: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  return (
-    <div className="relative" ref={ref}>
-      <IconButton onClick={() => setOpen(!open)} active={open} title="Export note">
-        <Download className="w-4 h-4" />
-      </IconButton>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-[190px] bg-popover border border-panel-border rounded-xl shadow-2xl py-1">
-          <button
-            onClick={() => { onExportPdf(); setOpen(false); }}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            Export as PDF
-          </button>
-          <button
-            onClick={() => { onExportMarkdown(); setOpen(false); }}
-            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors"
-          >
-            <FileText className="w-4 h-4" />
-            Export as Markdown
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
+// EditorToolbar, OverflowMenu, ExportMenu → extracted to ./editor/
 
