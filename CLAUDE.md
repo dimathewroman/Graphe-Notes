@@ -273,7 +273,8 @@ AI provider keys are stored encrypted in the `user_api_keys` DB table. The encry
 
 ## Working Convention
 
-- Before running any terminal command, explain what it does, why it is necessary, what it affects, and whether it is reversible. Wait for confirmation.
+- Run routine commands (git status/log/diff/branch/add/commit/push, pnpm install/typecheck/build, chmod, mkdir, rm within the repo) without asking for permission.
+- Only ask for confirmation before destructive or hard-to-reverse operations: force push, git reset --hard, deleting branches, dropping the database, or anything that affects shared/remote state beyond a normal commit+push.
 - Only modify code files within the Graphe-Notes repository. Installing packages and running dev tools is fine. Never modify unrelated projects or system configuration files.
 - Never delete files without explaining what and why. Wait for confirmation.
 - Never commit directly to master. Always use a feature branch. One feature = one branch = one PR.
