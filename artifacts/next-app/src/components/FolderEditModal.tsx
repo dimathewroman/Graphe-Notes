@@ -3,7 +3,7 @@ import { X, Hash, Plus, Folder, Tag } from "lucide-react";
 import { useUpdateFolder, getGetFoldersQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { useDemoMode } from "@/App";
+import { useDemoMode } from "@/lib/demo-context";
 
 interface Props {
   folder: { id: number; name: string; tagRules: string[] };
