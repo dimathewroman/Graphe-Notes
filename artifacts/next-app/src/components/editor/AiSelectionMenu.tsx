@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { useEditor } from "@tiptap/react";
-import { Sparkles, ChevronRight, Check } from "lucide-react";
+import { Sparkles, ChevronRight, Check, PenLine } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { actionGroups } from "./ai-action-groups";
 
@@ -22,7 +22,21 @@ export function AiSelectionMenu({
   const [expandedAction, setExpandedAction] = useState<string | null>(null);
   const [customInputFor, setCustomInputFor] = useState<string | null>(null);
   const [customText, setCustomText] = useState("");
+  const [interactive, setInteractive] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const interactiveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const scheduleClose = () => {
+    if (customInputFor) return;
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => {
+      setExpandedGroup(null);
+      setExpandedAction(null);
+    }, 400);
+  };
+
+  const cancelClose = () => clearTimeout(closeTimer.current);
 
   useEffect(() => {
     if (!visible) {
@@ -32,6 +46,19 @@ export function AiSelectionMenu({
       setCustomText("");
     }
   }, [visible]);
+
+  // 200ms delay before enabling pointer-events prevents a rapid double-click
+  // that opens the menu from immediately firing on a button.
+  useEffect(() => {
+    clearTimeout(interactiveTimer.current);
+    if (rect) {
+      setInteractive(false);
+      interactiveTimer.current = setTimeout(() => setInteractive(true), 200);
+    } else {
+      setInteractive(false);
+    }
+    return () => clearTimeout(interactiveTimer.current);
+  }, [rect]);
 
   useEffect(() => {
     if (!editor) return;
@@ -46,8 +73,7 @@ export function AiSelectionMenu({
       const r = sel.getRangeAt(0).getBoundingClientRect();
       if (r.width === 0) { setRect(null); return; }
       setRect(r);
-      // Capture the selection range NOW — before any menu interaction can
-      // disturb the editor's active selection.
+      // Capture the selection NOW — before any menu interaction disturbs it.
       const text = editor.state.doc.textBetween(from, to);
       onSelectionCapture(from, to, text);
     };
@@ -67,29 +93,45 @@ export function AiSelectionMenu({
 
   const isMobile = window.innerWidth < 768;
 
-  const menuStyle = useMemo(() => {
-    if (!rect) return {};
-    const pad = 8;
+  const { menuStyle, dropdownDir } = useMemo(() => {
+    if (!rect) return { menuStyle: {}, dropdownDir: "down" as "up" | "down" };
+    const pad = 12;
     const vw = window.innerWidth;
-    const menuW = isMobile ? vw - pad * 2 : 420;
+    const vh = window.innerHeight;
+    const menuH = 44;
+    const estimatedDropdownH = 130;
+    // Max width — toolbar shrinks to fit content via transform centering
+    const maxMenuW = Math.min(isMobile ? vw - pad * 2 : 560, vw - pad * 2);
     let left: number;
     let top: number;
 
     if (isMobile) {
       left = pad;
-      top = rect.bottom + 8;
-      if (top + 200 > window.innerHeight) {
-        top = rect.top - 52;
+      top = rect.bottom + 10;
+      if (top + menuH > vh - pad) {
+        top = Math.max(pad, rect.top - menuH - 10);
       }
     } else {
-      left = rect.left + rect.width / 2 - menuW / 2;
-      top = rect.top - 56;
-      if (left + menuW > vw - pad) left = vw - menuW - pad;
-      if (left < pad) left = pad;
-      if (top < pad) top = rect.bottom + 8;
+      // Center over selection using transform; clamp so toolbar stays in viewport
+      const selCenterX = rect.left + rect.width / 2;
+      const halfMaxW = maxMenuW / 2 + pad;
+      left = Math.max(halfMaxW, Math.min(vw - halfMaxW, selCenterX));
+      top = rect.top - menuH - 12;
+      if (top < pad) {
+        top = rect.bottom + 12;
+        if (top + menuH > vh - pad) top = vh - menuH - pad;
+      }
     }
 
-    return { top, left, width: isMobile ? `calc(100vw - ${pad * 2}px)` : undefined };
+    // Open dropdowns upward when there's room above the toolbar
+    const dir: "up" | "down" = top >= estimatedDropdownH + pad ? "up" : "down";
+
+    return {
+      menuStyle: isMobile
+        ? { top, left, width: `calc(100vw - ${pad * 2}px)` }
+        : { top, left, maxWidth: maxMenuW, transform: "translateX(-50%)" },
+      dropdownDir: dir,
+    };
   }, [rect, isMobile]);
 
   if (!rect || !visible) return null;
@@ -121,7 +163,7 @@ export function AiSelectionMenu({
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 pointer-events-auto"
+      className={cn("fixed z-50", interactive ? "pointer-events-auto" : "pointer-events-none")}
       style={menuStyle}
       onMouseDown={(e) => e.preventDefault()}
     >
@@ -146,11 +188,15 @@ export function AiSelectionMenu({
               }}
               onMouseEnter={() => {
                 if (!isMobile) {
+                  cancelClose();
                   setExpandedGroup(group.label);
                   setExpandedAction(null);
                   setCustomInputFor(null);
                   setCustomText("");
                 }
+              }}
+              onMouseLeave={() => {
+                if (!isMobile) scheduleClose();
               }}
               className={cn(
                 "flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs whitespace-nowrap transition-colors min-h-[36px]",
@@ -168,14 +214,18 @@ export function AiSelectionMenu({
               <div
                 className={cn(
                   "bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 min-w-[160px] z-50",
-                  isMobile ? "fixed left-2 right-2 mt-1" : "absolute top-full left-0 mt-1"
+                  isMobile
+                    ? "fixed left-2 right-2"
+                    : dropdownDir === "up"
+                      ? "absolute bottom-full left-0 mb-1"
+                      : "absolute top-full left-0 mt-1"
                 )}
-                style={isMobile ? { top: (menuRef.current?.getBoundingClientRect().bottom ?? 0) + 4 } : undefined}
-                onMouseLeave={() => {
-                  if (!isMobile && !expandedAction && !customInputFor) {
-                    setExpandedGroup(null);
-                  }
-                }}
+                style={isMobile ? (dropdownDir === "up"
+                  ? { bottom: (window.innerHeight - (menuRef.current?.getBoundingClientRect().top ?? 0) + 4) }
+                  : { top: (menuRef.current?.getBoundingClientRect().bottom ?? 0) + 4 }
+                ) : undefined}
+                onMouseEnter={cancelClose}
+                onMouseLeave={scheduleClose}
               >
                 {group.actions.map((action) => (
                   <div key={action.id} className="relative">
@@ -208,10 +258,18 @@ export function AiSelectionMenu({
                           <ChevronRight className="w-3 h-3" />
                         </button>
                         {expandedAction === action.id && (
-                          <div className={cn(
-                            "bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 min-w-[180px] z-50",
-                            isMobile ? "pl-4 border-l border-t-0 border-r-0 border-b-0 rounded-none shadow-none" : "absolute left-full top-0 ml-1"
-                          )}>
+                          <div
+                            className={cn(
+                              "bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 min-w-[180px] z-50",
+                              isMobile
+                                ? "pl-4 border-l border-t-0 border-r-0 border-b-0 rounded-none shadow-none"
+                                : dropdownDir === "up"
+                                  ? "absolute left-full bottom-0 ml-1"
+                                  : "absolute left-full top-0 ml-1"
+                            )}
+                            onMouseEnter={cancelClose}
+                            onMouseLeave={scheduleClose}
+                          >
                             {action.presets.map((preset) => (
                               <div key={preset.id}>
                                 {customInputFor === preset.id ? (
@@ -263,6 +321,14 @@ export function AiSelectionMenu({
             )}
           </div>
         ))}
+        <div className={cn("bg-panel-border", isMobile ? "w-full h-px my-0.5" : "w-px h-4")} />
+        <button
+          onClick={() => { onAction("continue_writing"); resetMenu(); }}
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs whitespace-nowrap transition-colors min-h-[36px] text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400"
+        >
+          <PenLine className="w-3 h-3" />
+          {!isMobile && "Continue"}
+        </button>
       </div>
     </div>
   );
