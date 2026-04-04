@@ -101,6 +101,16 @@ export function NoteList() {
 
   const { data: apiNotes = [], isLoading: apiLoading } = useGetNotes(queryParams, { query: { enabled: !isDemo, queryKey: getGetNotesQueryKey(queryParams) } });
 
+  // PERF: temporary benchmark — fires once when notes list first loads (app load → interactive)
+  const didLogInteractive = useRef(false);
+  useEffect(() => {
+    if (!apiLoading && !isDemo && !didLogInteractive.current) {
+      didLogInteractive.current = true;
+      const measure = performance.measure("app-load-to-interactive", { start: 0 });
+      console.log(`[perf] app-load-to-interactive: ${measure.duration.toFixed(1)}ms`);
+    }
+  }, [apiLoading, isDemo]);
+
   // Subscribe to each note's individual cache so pin/fav/vault/tag changes are reactive.
   // Only register these queries when in demo mode — if the array is always mounted,
   // initialData would write demo content into the cache even for authenticated users,
@@ -240,6 +250,8 @@ export function NoteList() {
   });
 
   const handleSelectNote = (id: number) => {
+    // PERF: temporary benchmark — marks start of note-switch latency
+    performance.mark("note-switch-start");
     selectNote(id);
     if (bp === "mobile") {
       setMobileView("editor");
