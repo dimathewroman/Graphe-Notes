@@ -41,7 +41,9 @@ import { IconButton } from "./ui/IconButton";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { SlashCommandExtension, SlashCommandMenu } from "./editor/SlashCommandMenu";
-import { EditorToolbar, AiSelectionMenu, MobileSelectionMenu } from "./NoteEditor";
+import { AiSelectionMenu } from "./editor/AiSelectionMenu";
+import { MobileSelectionMenu } from "./editor/MobileSelectionMenu";
+import { EditorToolbar } from "./editor/EditorToolbar";
 import { NotificationCadenceEditor } from "./NotificationCadenceEditor";
 import { useDemoMode } from "@/lib/demo-context";
 import { DEMO_QUICK_BITS } from "@/lib/demo-data";
@@ -354,22 +356,7 @@ export function QuickBitEditor() {
   const [aiError, setAiError] = useState<string | null>(null);
   const savedAiSelection = useRef<{ from: number; to: number; text: string } | null>(null);
 
-  // Link popover
-  const [linkPopover, setLinkPopover] = useState<{ visible: boolean; url: string }>({ visible: false, url: "" });
-  const linkInputRef = useRef<HTMLInputElement>(null);
-  const linkPopoverRef = useRef<HTMLDivElement>(null);
   const [showFindReplace, setShowFindReplace] = useState(false);
-
-  useEffect(() => {
-    if (!linkPopover.visible) return;
-    const handle = (e: MouseEvent) => {
-      if (linkPopoverRef.current && !linkPopoverRef.current.contains(e.target as Node)) {
-        setLinkPopover({ visible: false, url: "" });
-      }
-    };
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
-  }, [linkPopover.visible]);
 
   // Sync QB data into local state when it loads / changes
   useEffect(() => {
@@ -486,25 +473,6 @@ export function QuickBitEditor() {
     const newTitle = e.target.value;
     setTitle(newTitle);
     if (selectedQuickBitId) debouncedSave(selectedQuickBitId, { title: newTitle });
-  };
-
-  const openLinkPopover = () => {
-    if (!editor) return;
-    const existing = editor.getAttributes("link").href || "";
-    setLinkPopover({ visible: true, url: existing });
-    setTimeout(() => linkInputRef.current?.focus(), 30);
-  };
-
-  const applyLink = () => {
-    if (!editor) return;
-    const trimmed = linkPopover.url.trim();
-    if (!trimmed) {
-      editor.chain().focus().unsetLink().run();
-    } else {
-      const href = /^https?:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
-      editor.chain().focus().setLink({ href }).run();
-    }
-    setLinkPopover({ visible: false, url: "" });
   };
 
   const handleExpirySelect = async (isoDate: string) => {
@@ -895,12 +863,6 @@ export function QuickBitEditor() {
       {bp !== "mobile" && (
         <EditorToolbar
           editor={editor}
-          linkPopover={linkPopover}
-          setLinkPopover={setLinkPopover}
-          linkInputRef={linkInputRef}
-          linkPopoverRef={linkPopoverRef}
-          openLinkPopover={openLinkPopover}
-          applyLink={applyLink}
           showUndoRedo
         />
       )}
@@ -960,12 +922,6 @@ export function QuickBitEditor() {
       {bp === "mobile" && (
         <EditorToolbar
           editor={editor}
-          linkPopover={linkPopover}
-          setLinkPopover={setLinkPopover}
-          linkInputRef={linkInputRef}
-          linkPopoverRef={linkPopoverRef}
-          openLinkPopover={openLinkPopover}
-          applyLink={applyLink}
           className="fixed left-0 right-0 z-40 border-t border-panel-border bg-background/95 backdrop-blur-md"
           style={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
         />
