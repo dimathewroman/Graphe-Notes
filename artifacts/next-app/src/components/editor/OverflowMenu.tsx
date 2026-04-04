@@ -6,7 +6,7 @@ import { IconButton } from "@/components/ui/IconButton";
 import { cn } from "@/lib/utils";
 
 export function OverflowMenu({ note, onPin, onFav, onVaultToggle, onVersionHistory, onExportPdf, onExportMarkdown, onDelete, showVersionHistory, isMobile }: {
-  note: { vaulted: boolean; pinned: boolean; favorite: boolean } | null | undefined;
+  note: { vaulted?: boolean | null; pinned?: boolean | null; favorite?: boolean | null } | null | undefined;
   onPin?: () => void;
   onFav?: () => void;
   onVaultToggle: () => void;
