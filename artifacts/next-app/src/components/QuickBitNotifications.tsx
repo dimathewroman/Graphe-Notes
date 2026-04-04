@@ -7,7 +7,7 @@ import { getGetQuickBitsQueryKey, getGetQuickBitQueryKey, getGetNoteQueryKey, ge
 import type { QuickBit } from "@workspace/api-client-react";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { useAppStore } from "@/store";
-import { useDemoMode } from "@/App";
+import { useDemoMode } from "@/lib/demo-context";
 import { DEMO_QUICK_BITS } from "@/lib/demo-data";
 
 // ─── Expiry label (same logic as QuickBitList / QuickBitEditor) ───────────────

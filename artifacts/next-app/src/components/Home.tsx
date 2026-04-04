@@ -14,7 +14,7 @@ import { useAppStore } from "@/store";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { Drawer, DrawerPortal, DrawerOverlay } from "@/components/ui/drawer";
 import { DrawerPrimitive } from "@/components/ui/drawer-left";
-import { useDemoMode } from "@/App";
+import { useDemoMode } from "@/lib/demo-context";
 
 export default function Home() {
   const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId, selectedQuickBitId, activeFilter } = useAppStore();

@@ -23,7 +23,6 @@ interface AppState {
   isNoteListOpen: boolean;
   isAIPanelOpen: boolean;
   isSettingsOpen: boolean;
-  isAttachmentsOpen: boolean;
   settingsInitialTab: SettingsTab | null;
 
   isVaultUnlocked: boolean;
@@ -51,7 +50,6 @@ interface AppState {
   setNoteListOpen: (isOpen: boolean) => void;
   setAIPanelOpen: (isOpen: boolean) => void;
   setSettingsOpen: (isOpen: boolean, tab?: SettingsTab) => void;
-  setAttachmentsOpen: (isOpen: boolean) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -71,7 +69,6 @@ export const useAppStore = create<AppState>((set) => ({
   isNoteListOpen: true,
   isAIPanelOpen: false,
   isSettingsOpen: false,
-  isAttachmentsOpen: false,
   settingsInitialTab: null,
 
   isVaultUnlocked: false,
@@ -105,5 +102,4 @@ export const useAppStore = create<AppState>((set) => ({
   setNoteListOpen: (isOpen) => set({ isNoteListOpen: isOpen }),
   setAIPanelOpen: (isOpen) => set({ isAIPanelOpen: isOpen }),
   setSettingsOpen: (isOpen, tab) => set({ isSettingsOpen: isOpen, settingsInitialTab: tab ?? null }),
-  setAttachmentsOpen: (isOpen) => set({ isAttachmentsOpen: isOpen }),
 }));
