@@ -4,6 +4,35 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 
+const AUTH_CACHE_TTL_MS = 60_000;
+const AUTH_CACHE_MAX_SIZE = 100;
+
+interface CacheEntry {
+  user: AuthUser;
+  cachedAt: number;
+}
+
+const authCache = new Map<string, CacheEntry>();
+
+function getCached(token: string): AuthUser | null {
+  const entry = authCache.get(token);
+  if (!entry) return null;
+  if (Date.now() - entry.cachedAt > AUTH_CACHE_TTL_MS) {
+    authCache.delete(token);
+    return null;
+  }
+  return entry.user;
+}
+
+function setCache(token: string, user: AuthUser): void {
+  if (authCache.size >= AUTH_CACHE_MAX_SIZE) {
+    // Evict the oldest entry (Map preserves insertion order)
+    const oldest = authCache.keys().next().value;
+    if (oldest !== undefined) authCache.delete(oldest);
+  }
+  authCache.set(token, { user, cachedAt: Date.now() });
+}
+
 function getTokenFromRequest(request: NextRequest): string | undefined {
   const authHeader = request.headers.get("authorization");
   if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -33,6 +62,9 @@ export async function getAuthUser(
   const token = getTokenFromRequest(request);
   if (!token) return { user: null };
 
+  const cached = getCached(token);
+  if (cached) return { user: cached };
+
   try {
     const {
       data: { user },
@@ -48,8 +80,9 @@ export async function getAuthUser(
     if (!user) return { user: null };
 
     const authUser = mapUser(user);
+    setCache(token, authUser);
 
-    // Upsert user into DB — fire and forget
+    // Upsert user into DB — fire and forget, only on cache miss
     db.insert(usersTable)
       .values({
         id: authUser.id,

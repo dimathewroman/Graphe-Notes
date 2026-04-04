@@ -44,6 +44,7 @@ import { EmptyEditorState } from "./editor/EmptyEditorState";
 import { VaultLockScreen } from "./editor/VaultLockScreen";
 import { NoteHeader } from "./editor/NoteHeader";
 import { NoteBody } from "./editor/NoteBody";
+import posthog from "posthog-js";
 
 // AiSelectionMenu → extracted to ./editor/AiSelectionMenu.tsx
 // MobileSelectionMenu → extracted to ./editor/MobileSelectionMenu.tsx
@@ -64,7 +65,7 @@ export function NoteEditor() {
       enabled: !!selectedNoteId,
       // In demo mode keep the cache alive but never refetch — the cache is pre-populated by
       // enterDemoMode() and subsequent writes go directly to the cache via setQueryData.
-      staleTime: isDemo ? Infinity : 0,
+      staleTime: isDemo ? Infinity : 30_000,
       gcTime: isDemo ? Infinity : 5 * 60 * 1000,
     } as any,
   });
@@ -125,7 +126,9 @@ export function NoteEditor() {
     editorProps: {
       attributes: { class: "prose prose-invert max-w-none focus:outline-none" },
     },
-  }, [selectedNoteId]);
+  });
+
+  const lastVersionTimestamp = useRef<number>(0);
 
   const { callAI, aiLoading, aiError, captureSelection } = useAiAction(editor, { isDemo });
 
@@ -179,8 +182,13 @@ export function NoteEditor() {
           } else {
             await updateNoteMut.mutateAsync({ id, data });
             queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
-            // Fire-and-forget version snapshot (server enforces 5-min interval)
-            authenticatedFetch(`/api/notes/${id}/versions`, { method: "POST" }).catch(() => {});
+            // Fire-and-forget version snapshot — client-side 5-min guard to skip redundant requests
+            const now = Date.now();
+            if (now - lastVersionTimestamp.current >= 5 * 60 * 1000) {
+              authenticatedFetch(`/api/notes/${id}/versions`, { method: "POST" })
+                .then(() => { lastVersionTimestamp.current = Date.now(); })
+                .catch(() => {});
+            }
           }
           setSaveStatus("saved");
         }, 800);
@@ -204,6 +212,7 @@ export function NoteEditor() {
     editor.commands.setContent(content, { emitUpdate: false });
     setTitle(restoredTitle);
     debouncedSave(selectedNoteId, { content, title: restoredTitle, contentText: editor.getText() });
+    posthog.capture("version_history_restored", { note_id: selectedNoteId });
   }, [editor, selectedNoteId, debouncedSave]);
 
   const handleDelete = async () => {
@@ -244,8 +253,14 @@ export function NoteEditor() {
       }
       return;
     }
-    if (action === "pin") await pinMut.mutateAsync({ id: selectedNoteId });
-    if (action === "fav") await favMut.mutateAsync({ id: selectedNoteId });
+    if (action === "pin") {
+      await pinMut.mutateAsync({ id: selectedNoteId });
+      posthog.capture("note_pinned", { note_id: selectedNoteId, pinned: !note?.pinned });
+    }
+    if (action === "fav") {
+      await favMut.mutateAsync({ id: selectedNoteId });
+      posthog.capture("note_favorited", { note_id: selectedNoteId, favorited: !note?.favorite });
+    }
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
   };
@@ -266,12 +281,19 @@ export function NoteEditor() {
       return;
     }
     await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: !note.vaulted } });
+    posthog.capture("note_vaulted", { note_id: selectedNoteId, vaulted: !note.vaulted });
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
   };
 
-  const handleExportPdf = () => exportAsPdf(title, editor?.getHTML() ?? note?.content ?? "");
-  const handleExportMarkdown = () => exportAsMarkdown(title, editor?.getHTML() ?? note?.content ?? "");
+  const handleExportPdf = () => {
+    posthog.capture("note_exported", { format: "pdf" });
+    exportAsPdf(title, editor?.getHTML() ?? note?.content ?? "");
+  };
+  const handleExportMarkdown = () => {
+    posthog.capture("note_exported", { format: "markdown" });
+    exportAsMarkdown(title, editor?.getHTML() ?? note?.content ?? "");
+  };
 
   const handleVaultSetupConfirm = async (hash: string) => {
     if (!selectedNoteId || !note) return;

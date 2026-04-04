@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, varchar, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -19,7 +19,10 @@ export const notesTable = pgTable("notes", {
   deletedReason: text("deleted_reason"), // 'deleted' | 'expired'
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("notes_user_id_deleted_at_idx").on(table.userId, table.deletedAt),
+  index("notes_folder_id_idx").on(table.folderId),
+]);
 
 export const noteVersionsTable = pgTable("note_versions", {
   id: serial("id").primaryKey(),
@@ -28,7 +31,9 @@ export const noteVersionsTable = pgTable("note_versions", {
   content: text("content").notNull(),
   contentText: text("content_text"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  index("note_versions_note_id_created_at_idx").on(table.noteId, table.createdAt),
+]);
 
 export const vaultSettingsTable = pgTable("vault_settings", {
   id: serial("id").primaryKey(),

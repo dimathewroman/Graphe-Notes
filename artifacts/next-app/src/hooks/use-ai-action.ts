@@ -4,6 +4,7 @@ import type { MutableRefObject } from "react";
 import { useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
+import posthog from "posthog-js";
 import { useAppStore } from "@/store";
 import { buildAiPrompt } from "@/lib/ai-prompts";
 
@@ -100,6 +101,7 @@ export function useAiAction(
       } catch { /* use default */ }
     }
 
+    posthog.capture("ai_selection_action_triggered", { action, provider });
     setAiLoading(true);
     setAiError(null);
 
@@ -126,11 +128,13 @@ export function useAiAction(
             return;
           }
         } else if (data.reason === "hourly_limit_reached") {
+          posthog.capture("ai_rate_limit_reached", { reason: "hourly_limit_reached", reset_in_ms: data.resetInMs });
           const resetMins = Math.ceil((data.resetInMs ?? 0) / 60000);
           setAiError(`You've reached your hourly AI limit. Resets in ${resetMins} minutes.`);
           setTimeout(() => setAiError(null), 5000);
           return;
         } else if (data.reason === "monthly_limit_reached") {
+          posthog.capture("ai_rate_limit_reached", { reason: "monthly_limit_reached" });
           setAiError("Monthly AI limit reached. Add your own API key in Settings for unlimited use.");
           setTimeout(() => setAiError(null), 6000);
           return;
