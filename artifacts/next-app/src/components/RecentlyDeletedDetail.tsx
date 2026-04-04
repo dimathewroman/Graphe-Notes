@@ -29,7 +29,7 @@ import { useAppStore } from "@/store";
 import { cn } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
 import { useBreakpoint } from "@/hooks/use-mobile";
-import { useDemoMode } from "@/App";
+import { useDemoMode } from "@/lib/demo-context";
 
 export function RecentlyDeletedDetail() {
   const {

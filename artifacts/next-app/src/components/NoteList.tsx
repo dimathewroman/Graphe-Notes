@@ -15,7 +15,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
-import { useDemoMode } from "@/App";
+import { useDemoMode } from "@/lib/demo-context";
 import { DEMO_NOTES } from "@/lib/demo-data";
 import posthog from "posthog-js";
 

@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import Home from "@/components/Home";
 import { Mail, Loader2 } from "lucide-react";
 import { DEMO_NOTES, DEMO_FOLDERS, DEMO_TAGS, DEMO_QUICK_BITS } from "@/lib/demo-data";
-import { DemoContext } from "@/App";
+import { DemoContext } from "@/lib/demo-context";
 
 const grapheLogo = "/graphe_minimalist_1773640203523.png";
 

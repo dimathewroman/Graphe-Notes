@@ -48,7 +48,7 @@ import { cn, formatDate } from "@/lib/utils";
 import { VaultModal } from "./VaultModal";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
-import { useDemoMode } from "@/App";
+import { useDemoMode } from "@/lib/demo-context";
 import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindReplace";
 import { VideoEmbedExtension } from "./editor/VideoEmbed";
 import { exportAsPdf, exportAsMarkdown } from "@/hooks/use-note-export";

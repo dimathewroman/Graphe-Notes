@@ -43,7 +43,7 @@ import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { SlashCommandExtension, SlashCommandMenu } from "./editor/SlashCommandMenu";
 import { EditorToolbar, AiSelectionMenu, MobileSelectionMenu } from "./NoteEditor";
 import { NotificationCadenceEditor } from "./NotificationCadenceEditor";
-import { useDemoMode } from "@/App";
+import { useDemoMode } from "@/lib/demo-context";
 import { DEMO_QUICK_BITS } from "@/lib/demo-data";
 import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindReplace";
 
