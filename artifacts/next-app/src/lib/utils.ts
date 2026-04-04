@@ -6,6 +6,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export async function sha256(text: string): Promise<string> {
+  const encoded = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest("SHA-256", encoded);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 export function formatDate(dateString: string) {
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return "";
