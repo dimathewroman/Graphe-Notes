@@ -36,6 +36,7 @@ import { exportAsPdf, exportAsMarkdown } from "@/hooks/use-note-export";
 import { TableOfContents } from "./editor/TableOfContents";
 import { SmartTaskItem } from "./editor/SmartTaskItem";
 import { EditorToolbar } from "./editor/EditorToolbar";
+import { useAiAction } from "@/hooks/use-ai-action";
 import { AiSelectionMenu } from "./editor/AiSelectionMenu";
 import { MobileSelectionMenu } from "./editor/MobileSelectionMenu";
 import { AiStatusIndicator } from "./editor/AiStatusIndicator";
@@ -49,7 +50,7 @@ import { NoteBody } from "./editor/NoteBody";
 // FontPickerDropdown and FontSizeWidget → extracted to ./editor/
 
 export function NoteEditor() {
-  const { selectedNoteId, selectNote, isSidebarOpen, toggleSidebar, isNoteListOpen, toggleNoteList, setMobileView, setSidebarOpen, setAiSetupModalOpen, setPendingAiAction } = useAppStore();
+  const { selectedNoteId, selectNote, isSidebarOpen, toggleSidebar, isNoteListOpen, toggleNoteList, setMobileView, setSidebarOpen } = useAppStore();
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const queryClient = useQueryClient();
@@ -88,13 +89,6 @@ export function NoteEditor() {
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showToc, setShowToc] = useState(false)
 
-  // AI bubble menu state
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  // Store the selection range the moment the toolbar appears, before any
-  // menu interaction can disturb the editor's active selection.
-  const savedAiSelection = useRef<{ from: number; to: number; text: string } | null>(null);
-
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -132,6 +126,8 @@ export function NoteEditor() {
       attributes: { class: "prose prose-invert max-w-none focus:outline-none" },
     },
   }, [selectedNoteId]);
+
+  const { callAI, aiLoading, aiError, captureSelection } = useAiAction(editor, { isDemo });
 
   useEffect(() => {
     if (note && editor) {
@@ -338,180 +334,6 @@ export function NoteEditor() {
     queryClient.invalidateQueries({ queryKey: getGetTagsQueryKey() });
   };
 
-  // AI writing tools for selected text
-  const callAI = async (action: string, customInstruction?: string) => {
-    if (!editor) return;
-
-    // Use the selection that was captured when the toolbar first appeared.
-    // Falling back to the current editor state handles edge cases where the
-    // toolbar fires without a prior capture.
-    const sel = savedAiSelection.current ?? (() => {
-      const { from, to } = editor.state.selection;
-      return { from, to, text: editor.state.doc.textBetween(from, to) };
-    })();
-
-    if (!sel.text.trim()) return;
-
-    const taskType = "manual";
-
-    const selected = sel.text;
-    const prompts: Record<string, string> = {
-      shorter_25: `Make the following text approximately 25% shorter while preserving key meaning. Return only the shortened text, no explanations:\n\n${selected}`,
-      shorter_50: `Make the following text approximately 50% shorter while preserving key meaning. Return only the shortened text, no explanations:\n\n${selected}`,
-      shorter_custom: `Make the following text shorter. Additional instruction: ${customInstruction || ""}. Return only the shortened text, no explanations:\n\n${selected}`,
-      longer_25: `Expand the following text by approximately 25% with more detail and context. Return only the expanded text, no explanations:\n\n${selected}`,
-      longer_50: `Expand the following text by approximately 50% with more detail and context. Return only the expanded text, no explanations:\n\n${selected}`,
-      longer_custom: `Expand the following text. Additional instruction: ${customInstruction || ""}. Return only the expanded text, no explanations:\n\n${selected}`,
-      proofread: `Proofread and fix grammar, spelling, and punctuation in the following text. Do not change wording or structure. Return only the corrected text, no explanations:\n\n${selected}`,
-      simplify: `Rewrite the following text using shorter sentences and simpler vocabulary. Keep the same length and meaning. Return only the simplified text, no explanations:\n\n${selected}`,
-      improve: `Enhance the clarity, flow, and word choice of the following text while preserving its original meaning. Return only the improved text, no explanations:\n\n${selected}`,
-      rewrite: `Completely rephrase the following text while preserving its core meaning. Return only the rewritten text, no explanations:\n\n${selected}`,
-      tone_casual: `Rewrite the following text in a casual tone. Return only the rewritten text, no explanations:\n\n${selected}`,
-      tone_professional: `Rewrite the following text in a professional tone. Return only the rewritten text, no explanations:\n\n${selected}`,
-      tone_friendly: `Rewrite the following text in a friendly tone. Return only the rewritten text, no explanations:\n\n${selected}`,
-      tone_direct: `Rewrite the following text in a direct tone. Return only the rewritten text, no explanations:\n\n${selected}`,
-      tone_custom: `Rewrite the following text with the following tone/style: ${customInstruction || ""}. Return only the rewritten text, no explanations:\n\n${selected}`,
-      summarize_short: `Summarize the following text in 1-2 sentences. Return only the summary, no explanations:\n\n${selected}`,
-      summarize_balanced: `Summarize the following text in a short paragraph. Return only the summary, no explanations:\n\n${selected}`,
-      summarize_detailed: `Summarize the following text as detailed bullet points. Return only the bullet-point summary, no explanations:\n\n${selected}`,
-      summarize_custom: `Summarize the following text. Additional instruction: ${customInstruction || ""}. Return only the summary, no explanations:\n\n${selected}`,
-      extract_action_items: `Extract all action items, tasks, and to-dos from the following text. Return them as a bulleted list. If no action items are found, return "No action items found.", no explanations:\n\n${selected}`,
-    };
-
-    const prompt = prompts[action];
-    if (!prompt) { setAiLoading(false); return; }
-
-    // Fetch active provider from server; default to graphe_free on any failure
-    let provider = "graphe_free";
-    if (!isDemo) {
-      try {
-        const settingsRes = await authenticatedFetch("/api/ai/settings");
-        if (settingsRes.ok) {
-          const settingsData = await settingsRes.json() as {
-            activeAiProvider?: string | null;
-            hasCompletedAiSetup?: boolean;
-          };
-
-          if (!settingsData.hasCompletedAiSetup) {
-            // First AI action — show setup modal and queue this action to run after
-            const capturedPrompt = prompt;
-            const capturedFrom = sel.from;
-            const capturedTo = sel.to;
-            const capturedTaskType = taskType;
-            setPendingAiAction(async (resolvedProvider: string) => {
-              setAiLoading(true);
-              setAiError(null);
-              try {
-                const res = await authenticatedFetch("/api/ai/generate", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ provider: resolvedProvider, taskType: capturedTaskType, prompt: capturedPrompt }),
-                });
-                if (!res.ok) {
-                  setAiError("AI request failed. Please try again.");
-                  setTimeout(() => setAiError(null), 5000);
-                  return;
-                }
-                const data = await res.json() as { result?: string; error?: string };
-                if (data.error) throw new Error(data.error);
-                const result = data.result || "";
-                if (result && editor) {
-                  editor.chain().focus().insertContentAt({ from: capturedFrom, to: capturedTo }, result).run();
-                }
-              } catch (err) {
-                const msg = err instanceof Error ? err.message : "AI request failed";
-                setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
-                setTimeout(() => setAiError(null), 5000);
-              } finally {
-                setAiLoading(false);
-                savedAiSelection.current = null;
-              }
-            });
-            setAiSetupModalOpen(true);
-            return;
-          }
-
-          if (!settingsData.activeAiProvider) return; // No AI mode — silently cancel
-          provider = settingsData.activeAiProvider;
-        }
-      } catch { /* use default */ }
-    }
-
-    setAiLoading(true);
-    setAiError(null);
-
-    const doRequest = async (): Promise<Response> => {
-      return authenticatedFetch("/api/ai/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, taskType, prompt }),
-      });
-    };
-
-    try {
-      let res = await doRequest();
-
-      if (res.status === 429) {
-        const data = await res.json() as { reason?: string; resetInMs?: number };
-        if (data.reason === "rpm_limit") {
-          setAiError("AI is busy, retrying...");
-          await new Promise((resolve) => setTimeout(resolve, 65000));
-          res = await doRequest();
-          if (res.status === 429) {
-            setAiError("AI is still busy. Please try again in a moment.");
-            setTimeout(() => setAiError(null), 5000);
-            return;
-          }
-        } else if (data.reason === "hourly_limit_reached") {
-          const resetMins = Math.ceil((data.resetInMs ?? 0) / 60000);
-          setAiError(`You've reached your hourly AI limit. Resets in ${resetMins} minutes.`);
-          setTimeout(() => setAiError(null), 5000);
-          return;
-        } else if (data.reason === "monthly_limit_reached") {
-          setAiError("Monthly AI limit reached. Add your own API key in Settings for unlimited use.");
-          setTimeout(() => setAiError(null), 6000);
-          return;
-        }
-      }
-
-      if (res.status === 400) {
-        const data = await res.json() as { error?: string };
-        if (data.error === "no_key_configured") {
-          setAiError("No API key configured. Please add one in Settings.");
-          setTimeout(() => setAiError(null), 5000);
-          return;
-        }
-      }
-
-      if (res.status === 401) {
-        setAiError("AI key invalid or missing. Check Settings.");
-        setTimeout(() => setAiError(null), 5000);
-        return;
-      }
-
-      if (res.status === 502) {
-        setAiError("AI request failed. Please try again.");
-        setTimeout(() => setAiError(null), 5000);
-        return;
-      }
-
-      const data = await res.json() as { error?: string; result?: string };
-      if (data.error) throw new Error(data.error);
-      const result: string = data.result || "";
-      if (result) {
-        // Replace the saved selection range directly in the document.
-        editor.chain().focus().insertContentAt({ from: sel.from, to: sel.to }, result).run();
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "AI request failed";
-      setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
-      setTimeout(() => setAiError(null), 5000);
-    } finally {
-      setAiLoading(false);
-      savedAiSelection.current = null;
-    }
-  };
-
   const handleBack = () => {
     setMobileView("list");
     selectNote(null);
@@ -587,18 +409,14 @@ export function NoteEditor() {
           editor={editor}
           visible={!aiLoading}
           onAction={callAI}
-          onSelectionCapture={(from, to, text) => {
-            savedAiSelection.current = { from, to, text };
-          }}
+          onSelectionCapture={captureSelection}
         />
       ) : (
         <AiSelectionMenu
           editor={editor}
           visible={!aiLoading}
           onAction={callAI}
-          onSelectionCapture={(from, to, text) => {
-            savedAiSelection.current = { from, to, text };
-          }}
+          onSelectionCapture={captureSelection}
         />
       )}
 
