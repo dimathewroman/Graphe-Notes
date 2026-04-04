@@ -90,6 +90,10 @@ export function NoteEditor() {
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showToc, setShowToc] = useState(false)
 
+  // PERF: temporary benchmark — measures time from component mount to editor ready
+  const editorInitStart = useRef<number>(typeof performance !== "undefined" ? performance.now() : 0);
+  const didLogEditorInit = useRef(false);
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -133,11 +137,27 @@ export function NoteEditor() {
   const { callAI, aiLoading, aiError, captureSelection } = useAiAction(editor, { isDemo });
 
   useEffect(() => {
+    // PERF: temporary benchmark — log editor init time on first mount
+    if (editor && !didLogEditorInit.current) {
+      didLogEditorInit.current = true;
+      const elapsed = performance.now() - editorInitStart.current;
+      console.log(`[perf] editor-init: ${elapsed.toFixed(1)}ms`);
+    }
+
     if (note && editor) {
       setTitle(note.title);
       if (editor.getHTML() !== note.content) {
         editor.commands.setContent(note.content, { emitUpdate: false });
       }
+      // PERF: temporary benchmark — measure note-switch latency end-to-end
+      requestAnimationFrame(() => {
+        try {
+          const measure = performance.measure("note-switch", "note-switch-start");
+          console.log(`[perf] note-switch (note ${note.id}): ${measure.duration.toFixed(1)}ms`);
+        } catch {
+          // mark may not exist if note was loaded without a click (e.g. initial load)
+        }
+      });
     } else if (editor && !note) {
       // Note is still loading — clear stale content from previous note
       editor.commands.setContent("", { emitUpdate: false });
