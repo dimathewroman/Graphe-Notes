@@ -255,7 +255,13 @@ One feature = one branch = one PR. Never put two features on the same branch.
 
 No tests exist. Do not suggest or scaffold tests unless explicitly asked.
 
-NoteEditor.tsx is very large. Be surgical -- read only the relevant section before editing. Never rewrite sections you are not directly changing.
+NoteEditor.tsx is the orchestrator (~485 lines). Editor sub-components live in components/editor/ — do not add new editor UI directly into NoteEditor.tsx. Key files:
+- editor/EditorToolbar.tsx — full toolbar (font, size, formatting, link, etc.)
+- editor/AiSelectionMenu.tsx / MobileSelectionMenu.tsx — floating AI menus
+- editor/NoteHeader.tsx — top bar (save status, actions, overflow/export menus)
+- editor/NoteBody.tsx — title input + tags + editor content
+- hooks/use-ai-action.ts — AI call flow with first-time setup modal; use in both NoteEditor and QuickBitEditor
+- lib/ai-prompts.ts — single source of truth for AI prompt strings
 
 Toolbar menus are portaled. See Toolbar Popover Pattern above.
 
