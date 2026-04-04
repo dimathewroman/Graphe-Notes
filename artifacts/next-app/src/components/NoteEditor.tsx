@@ -34,7 +34,8 @@ import {
   Link2, Unlink, ChevronRight, ArrowUp, ArrowDown, MessageSquare, ListChecks,
   Undo2, Redo2, Clock, ArrowLeft, Menu, MoreHorizontal, MoreVertical, PanelLeftClose,
   Share, Search, Copy, ClipboardPaste, Type, Highlighter, Minus,
-  Superscript as SuperscriptIcon, Subscript as SubscriptIcon
+  Superscript as SuperscriptIcon, Subscript as SubscriptIcon,
+  Download
 } from "lucide-react";
 import SuperscriptExt from "@tiptap/extension-superscript";
 import SubscriptExt from "@tiptap/extension-subscript";
@@ -50,6 +51,7 @@ import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { useDemoMode } from "@/App";
 import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindReplace";
 import { VideoEmbedExtension } from "./editor/VideoEmbed";
+import { exportAsPdf, exportAsMarkdown } from "@/hooks/use-note-export";
 
 // Custom floating AI menu that appears on text selection (Tiptap v3 compatible)
 
@@ -1425,6 +1427,9 @@ export function NoteEditor() {
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
   };
 
+  const handleExportPdf = () => exportAsPdf(title, editor?.getHTML() ?? note?.content ?? "");
+  const handleExportMarkdown = () => exportAsMarkdown(title, editor?.getHTML() ?? note?.content ?? "");
+
   const handleVaultSetupConfirm = async (hash: string) => {
     if (!selectedNoteId || !note) return;
     setShowVaultSetupModal(false);
@@ -1851,6 +1856,8 @@ export function NoteEditor() {
               onFav={() => handleAction("fav")}
               onVaultToggle={handleToggleVault}
               onVersionHistory={() => setShowVersionHistory(v => !v)}
+              onExportPdf={handleExportPdf}
+              onExportMarkdown={handleExportMarkdown}
               onDelete={handleDelete}
               showVersionHistory={showVersionHistory}
               isMobile={bp === "mobile"}
@@ -1858,6 +1865,7 @@ export function NoteEditor() {
           )}
           {bp === "desktop" && (
             <>
+              <ExportMenu onExportPdf={handleExportPdf} onExportMarkdown={handleExportMarkdown} />
               <div className="w-px h-4 bg-panel-border mx-1" />
               <IconButton onClick={handleDelete} className="hover:text-destructive hover:bg-destructive/10" title="Delete">
                 <Trash2 className="w-4 h-4" />
@@ -2250,12 +2258,14 @@ export function EditorToolbar({ editor, linkPopover, setLinkPopover, linkInputRe
   );
 }
 
-function OverflowMenu({ note, onPin, onFav, onVaultToggle, onVersionHistory, onDelete, showVersionHistory, isMobile }: {
+function OverflowMenu({ note, onPin, onFav, onVaultToggle, onVersionHistory, onExportPdf, onExportMarkdown, onDelete, showVersionHistory, isMobile }: {
   note: { vaulted: boolean; pinned: boolean; favorite: boolean } | null | undefined;
   onPin?: () => void;
   onFav?: () => void;
   onVaultToggle: () => void;
   onVersionHistory: () => void;
+  onExportPdf: () => void;
+  onExportMarkdown: () => void;
   onDelete: () => void;
   showVersionHistory: boolean;
   isMobile?: boolean;
@@ -2295,6 +2305,14 @@ function OverflowMenu({ note, onPin, onFav, onVaultToggle, onVersionHistory, onD
             <Share className="w-4 h-4" />
             Share
           </button>
+          <button onClick={() => { onExportPdf(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
+            <Download className="w-4 h-4" />
+            Export as PDF
+          </button>
+          <button onClick={() => { onExportMarkdown(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
+            <FileText className="w-4 h-4" />
+            Export as Markdown
+          </button>
           {(isMobile && (onPin || onFav)) && <div className="h-px bg-panel-border mx-2 my-1" />}
           <button onClick={() => { onVaultToggle(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
             <ShieldCheck className={cn("w-4 h-4", note?.vaulted && "fill-current text-indigo-400")} />
@@ -2312,6 +2330,49 @@ function OverflowMenu({ note, onPin, onFav, onVaultToggle, onVersionHistory, onD
           <button onClick={() => { onDelete(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors">
             <Trash2 className="w-4 h-4" />
             Delete
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExportMenu({ onExportPdf, onExportMarkdown }: {
+  onExportPdf: () => void;
+  onExportMarkdown: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <IconButton onClick={() => setOpen(!open)} active={open} title="Export note">
+        <Download className="w-4 h-4" />
+      </IconButton>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 min-w-[190px] bg-popover border border-panel-border rounded-xl shadow-2xl py-1">
+          <button
+            onClick={() => { onExportPdf(); setOpen(false); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export as PDF
+          </button>
+          <button
+            onClick={() => { onExportMarkdown(); setOpen(false); }}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors"
+          >
+            <FileText className="w-4 h-4" />
+            Export as Markdown
           </button>
         </div>
       )}
