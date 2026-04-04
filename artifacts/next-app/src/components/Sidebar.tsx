@@ -14,7 +14,7 @@ import {
 import { VaultModal } from "./VaultModal";
 import { useQueryClient } from "@tanstack/react-query";
 import { IconButton } from "./ui/IconButton";
-import { useDemoMode } from "@/App";
+import { useDemoMode } from "@/lib/demo-context";
 import { FolderEditModal } from "./FolderEditModal";
 import { useBreakpoint } from "@/hooks/use-mobile";
 

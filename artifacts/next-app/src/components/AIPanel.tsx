@@ -7,7 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBreakpoint } from "@/hooks/use-mobile";
-import { useDemoMode } from "@/App";
+import { useDemoMode } from "@/lib/demo-context";
 import posthog from "posthog-js";
 
 export function AIPanel() {
