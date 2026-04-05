@@ -9,6 +9,7 @@ const QuickBitEditor = dynamic(() => import("@/components/QuickBitEditor").then(
 const SettingsModal = dynamic(() => import("@/components/SettingsModal").then(m => ({ default: m.SettingsModal })), { ssr: false });
 import { RecentlyDeleted } from "@/components/RecentlyDeleted";
 import { RecentlyDeletedDetail } from "@/components/RecentlyDeletedDetail";
+import { AllAttachments } from "@/components/AllAttachments";
 import { AIPanel } from "@/components/AIPanel";
 import { AISetupModal } from "@/components/AISetupModal";
 import { QuickBitNotifications } from "@/components/QuickBitNotifications";
@@ -69,9 +70,10 @@ export default function Home() {
 
   const isCompact = bp === "mobile" || bp === "tablet";
   const isRecentlyDeleted = activeFilter === "recently-deleted";
+  const isAttachments = activeFilter === "attachments";
   // Fix 1: NoteEditor stays mounted on tablet regardless of selection so the editor instance
   // persists across note switches — removing !!selectedNoteId prevents unmount/remount on each click.
-  const showEditor = !isRecentlyDeleted && activeFilter !== "quickbits" && (bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "editor"));
+  const showEditor = !isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && (bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "editor"));
   const showQuickBitEditor = activeFilter === "quickbits" && (bp === "desktop" || (bp === "tablet" && !!selectedQuickBitId) || (bp === "mobile" && mobileView === "editor"));
   const showList = bp === "desktop" ? isNoteListOpen : (bp === "tablet" || (bp === "mobile" && mobileView === "list"));
   const showDeletedDetail = isRecentlyDeleted && !!selectedNoteId && (bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor"));
@@ -106,7 +108,8 @@ export default function Home() {
 
       {showList && activeFilter === "quickbits" && <QuickBitList />}
       {showList && isRecentlyDeleted && <RecentlyDeleted />}
-      {showList && !isRecentlyDeleted && activeFilter !== "quickbits" && <NoteList />}
+      {isAttachments && <AllAttachments />}
+      {showList && !isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && <NoteList />}
       {showEditor && <NoteEditor />}
       {showQuickBitEditor && <QuickBitEditor />}
       {showDeletedDetail && <RecentlyDeletedDetail />}

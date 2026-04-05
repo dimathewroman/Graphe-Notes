@@ -5,7 +5,7 @@ import UnderlineExt from "@tiptap/extension-underline";
 import { TextStyle, FontSize } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import FontFamily from "@tiptap/extension-font-family";
-import Image from "@tiptap/extension-image";
+import { CustomImage } from "./editor/CustomImageExtension";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -33,6 +33,8 @@ import { useDemoMode } from "@/lib/demo-context";
 import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindReplace";
 import { VideoEmbedExtension } from "./editor/VideoEmbed";
 import { exportAsPdf, exportAsMarkdown } from "@/hooks/use-note-export";
+import { useUploadAttachment, isImageType } from "@/hooks/use-attachments";
+import { IMAGE_MIME_TYPES } from "@/lib/attachment-limits";
 import { TableOfContents } from "./editor/TableOfContents";
 import { SmartTaskItem } from "./editor/SmartTaskItem";
 import { EditorToolbar } from "./editor/EditorToolbar";
@@ -116,7 +118,7 @@ export function NoteEditor() {
     FontSize,
     Color,
     FontFamily,
-    Image,
+    CustomImage,
     TextAlign.configure({ types: ["heading", "paragraph"] }),
     Highlight.configure({ multicolor: true }),
     Placeholder.configure({ placeholder: "Start writing..." }),
@@ -168,6 +170,7 @@ export function NoteEditor() {
   }, [isLoading]);
 
   const { callAI, aiLoading, aiError, captureSelection } = useAiAction(editor, { isDemo });
+  const { upload: uploadAttachment } = useUploadAttachment(selectedNoteId);
 
   useEffect(() => {
     // PERF: temporary benchmark — log editor init time on first mount
@@ -180,9 +183,15 @@ export function NoteEditor() {
     if (note && editor) {
       setTitle(note.title);
       if (editor.getHTML() !== note.content) {
+        // Defer setContent outside React's commit phase — TipTap's ReactNodeViewRenderer
+        // calls flushSync when editor.isInitialized, which React 19 forbids inside lifecycle methods.
         // PERF: temporary benchmark — record timestamp immediately before setContent
         perfSwitch.current.setContentTime = performance.now();
-        editor.commands.setContent(note.content, { emitUpdate: false });
+        setTimeout(() => {
+          if (!editor.isDestroyed) {
+            editor.commands.setContent(note.content, { emitUpdate: false });
+          }
+        }, 0);
       }
       // PERF: temporary benchmark — measure note-switch end-to-end and log breakdown
       requestAnimationFrame(() => {
@@ -213,6 +222,25 @@ export function NoteEditor() {
     }
     setShowVersionHistory(false);
   }, [note?.id, selectedNoteId, editor]);
+
+  // Clipboard paste: intercept image blobs and upload them
+  useEffect(() => {
+    const onPaste = async (e: ClipboardEvent) => {
+      if (!editor?.isFocused) return;
+      const items = Array.from(e.clipboardData?.items ?? []);
+      const imageItem = items.find(item => IMAGE_MIME_TYPES.has(item.type));
+      if (!imageItem) return;
+      const file = imageItem.getAsFile();
+      if (!file) return;
+      e.preventDefault();
+      const record = await uploadAttachment(file);
+      if (record?.url) {
+        editor.chain().focus().setImage({ src: record.url, alt: file.name }).run();
+      }
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [editor, uploadAttachment]);
 
   // Find/replace keyboard shortcut — only intercept when editor has focus
   useEffect(() => {
@@ -527,7 +555,16 @@ export function NoteEditor() {
 
       {/* Toolbar — desktop/tablet: below header; mobile: at bottom */}
       {bp !== "mobile" && (
-        <EditorToolbar editor={editor} showUndoRedo />
+        <EditorToolbar
+          editor={editor}
+          showUndoRedo
+          onAttachFile={async (file) => {
+            const record = await uploadAttachment(file);
+            if (record?.url && isImageType(file.type)) {
+              editor.chain().focus().setImage({ src: record.url, alt: file.name }).run();
+            }
+          }}
+        />
       )}
 
       {/* Text selection menus */}
@@ -553,6 +590,7 @@ export function NoteEditor() {
         editor={editor}
         title={title}
         note={note}
+        noteId={selectedNoteId}
         bp={bp}
         onTitleChange={handleTitleChange}
         onAddTag={addTag}
@@ -583,6 +621,12 @@ export function NoteEditor() {
           editor={editor}
           className="fixed left-0 right-0 z-40 border-t border-panel-border bg-background/95 backdrop-blur-md"
           style={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
+          onAttachFile={async (file) => {
+            const record = await uploadAttachment(file);
+            if (record?.url && isImageType(file.type)) {
+              editor.chain().focus().setImage({ src: record.url, alt: file.name }).run();
+            }
+          }}
         />
       )}
 
