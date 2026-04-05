@@ -33,6 +33,8 @@ import { useDemoMode } from "@/lib/demo-context";
 import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindReplace";
 import { VideoEmbedExtension } from "./editor/VideoEmbed";
 import { exportAsPdf, exportAsMarkdown } from "@/hooks/use-note-export";
+import { useUploadAttachment, isImageType } from "@/hooks/use-attachments";
+import { IMAGE_MIME_TYPES } from "@/lib/attachment-limits";
 import { TableOfContents } from "./editor/TableOfContents";
 import { SmartTaskItem } from "./editor/SmartTaskItem";
 import { EditorToolbar } from "./editor/EditorToolbar";
@@ -168,6 +170,7 @@ export function NoteEditor() {
   }, [isLoading]);
 
   const { callAI, aiLoading, aiError, captureSelection } = useAiAction(editor, { isDemo });
+  const { upload: uploadAttachment } = useUploadAttachment(selectedNoteId);
 
   useEffect(() => {
     // PERF: temporary benchmark — log editor init time on first mount
@@ -213,6 +216,25 @@ export function NoteEditor() {
     }
     setShowVersionHistory(false);
   }, [note?.id, selectedNoteId, editor]);
+
+  // Clipboard paste: intercept image blobs and upload them
+  useEffect(() => {
+    const onPaste = async (e: ClipboardEvent) => {
+      if (!editor?.isFocused) return;
+      const items = Array.from(e.clipboardData?.items ?? []);
+      const imageItem = items.find(item => IMAGE_MIME_TYPES.has(item.type));
+      if (!imageItem) return;
+      const file = imageItem.getAsFile();
+      if (!file) return;
+      e.preventDefault();
+      const record = await uploadAttachment(file);
+      if (record?.url) {
+        editor.chain().focus().setImage({ src: record.url, alt: file.name }).run();
+      }
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [editor, uploadAttachment]);
 
   // Find/replace keyboard shortcut — only intercept when editor has focus
   useEffect(() => {
@@ -527,7 +549,16 @@ export function NoteEditor() {
 
       {/* Toolbar — desktop/tablet: below header; mobile: at bottom */}
       {bp !== "mobile" && (
-        <EditorToolbar editor={editor} showUndoRedo />
+        <EditorToolbar
+          editor={editor}
+          showUndoRedo
+          onAttachFile={async (file) => {
+            const record = await uploadAttachment(file);
+            if (record?.url && isImageType(file.type)) {
+              editor.chain().focus().setImage({ src: record.url, alt: file.name }).run();
+            }
+          }}
+        />
       )}
 
       {/* Text selection menus */}
@@ -553,6 +584,7 @@ export function NoteEditor() {
         editor={editor}
         title={title}
         note={note}
+        noteId={selectedNoteId}
         bp={bp}
         onTitleChange={handleTitleChange}
         onAddTag={addTag}
@@ -583,6 +615,12 @@ export function NoteEditor() {
           editor={editor}
           className="fixed left-0 right-0 z-40 border-t border-panel-border bg-background/95 backdrop-blur-md"
           style={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
+          onAttachFile={async (file) => {
+            const record = await uploadAttachment(file);
+            if (record?.url && isImageType(file.type)) {
+              editor.chain().focus().setImage({ src: record.url, alt: file.name }).run();
+            }
+          }}
         />
       )}
 

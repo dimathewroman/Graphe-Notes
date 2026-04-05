@@ -1,4 +1,5 @@
 export * from "./ai-usage";
+export * from "./attachments";
 export * from "./auth";
 export * from "./folders";
 export * from "./notes";

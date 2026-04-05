@@ -7,7 +7,7 @@ import {
   AlignLeft, AlignCenter, AlignRight,
   List, ListOrdered, ListTodo, Quote, Code, Heading1, Heading2, Heading3,
   Image as ImageIcon, Table as TableIcon, RowsIcon, Scissors, X,
-  Undo2, Redo2, Minus, Highlighter,
+  Undo2, Redo2, Minus, Highlighter, Paperclip,
   Superscript as SuperscriptIcon, Subscript as SubscriptIcon,
 } from "lucide-react";
 import { ColorPickerDropdown } from "./ColorPickerDropdown";
@@ -24,17 +24,20 @@ export const EditorToolbar = memo(function EditorToolbar({
   showUndoRedo,
   className,
   style,
+  onAttachFile,
 }: {
   editor: ReturnType<typeof useEditor>;
   showUndoRedo?: boolean;
   className?: string;
   style?: React.CSSProperties;
+  onAttachFile?: (file: File) => void;
 }) {
   const [colorPicker, setColorPicker] = useState<"text" | "highlight" | null>(null);
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
   const textColorBtnRef = useRef<HTMLButtonElement>(null);
   const highlightBtnRef = useRef<HTMLButtonElement>(null);
   const fontPickerBtnRef = useRef<HTMLButtonElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!editor) return null;
 
@@ -186,6 +189,28 @@ export const EditorToolbar = memo(function EditorToolbar({
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
       <WordCountPopover editor={editor} />
+
+      {onAttachFile && (
+        <>
+          <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,text/markdown,application/json,application/zip"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) { onAttachFile(file); e.target.value = ""; }
+            }}
+          />
+          <ToolbarButton
+            command={() => fileInputRef.current?.click()}
+            active={false}
+            icon={<Paperclip className="w-4 h-4" />}
+            title="Attach file"
+          />
+        </>
+      )}
     </ScrollableToolbar>
   );
 });
