@@ -1,4 +1,5 @@
 import { useState } from "react";
+import posthog from "posthog-js";
 const grapheLogo = "/graphe_minimalist_1773640203523.png";
 import {
   Folder, FolderOpen, FileText, Star,
@@ -75,6 +76,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       return;
     }
     await createFolderMut.mutateAsync({ data: { name: newFolderName, sortOrder: folders.length, parentId: newFolderParentId } });
+    posthog.capture("folder_created", { parent_folder_id: newFolderParentId });
     setNewFolderName(""); setIsCreatingFolder(false); setNewFolderParentId(null);
   };
 

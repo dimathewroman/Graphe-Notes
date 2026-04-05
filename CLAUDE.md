@@ -251,6 +251,33 @@ One feature = one branch = one PR. Never put two features on the same branch.
 
 ---
 
+## Git Workflow
+
+### Starting a new session
+1. Always run `git fetch origin && git checkout master && git pull origin master` first to ensure you're working from the latest code.
+2. If the user says to continue work on an existing branch:
+   - Run `git checkout <branch-name>` (and `git pull origin <branch-name>` if it exists on remote)
+3. If starting new work:
+   - Create a new branch from the freshly-pulled master: `git checkout -b feature/<descriptive-name>` or `fix/<descriptive-name>`
+4. If you find yourself on any branch that isn't master or a feature/fix branch, switch to master and pull before proceeding. Ask before continuing.
+
+### During work
+- Commit frequently with clear, descriptive messages
+- All commits are local until explicitly pushed
+- Do NOT push to remote until the work is complete and ready for PR
+
+### Finishing work
+1. Push the branch to GitHub: `git push -u origin <branch-name>`
+2. Create a PR using `gh pr create --title "<title>" --body "<description>"`
+3. Do NOT merge the PR — the user will review and merge manually in GitHub
+
+### Branch naming
+- New features: `feature/<descriptive-name>`
+- Bug fixes: `fix/<descriptive-name>`
+- Never commit directly to master
+
+---
+
 ## Codebase Caveats
 
 No tests exist. Do not suggest or scaffold tests unless explicitly asked.

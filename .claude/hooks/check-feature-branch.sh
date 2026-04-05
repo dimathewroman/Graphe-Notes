@@ -13,7 +13,8 @@ if [[ "$BRANCH" == feature/* || "$BRANCH" == fix/* ]]; then
   exit 0
 fi
 
-echo "BLOCKED: Current branch is '$BRANCH' — not a feature/* or fix/* branch." >&2
-echo "You must start from master before editing any files:" >&2
-echo "  git checkout master && git pull origin master && git checkout -b feature/<name>" >&2
+echo "BLOCKED: You are on branch '$BRANCH' — not a feature/* or fix/* branch." >&2
+echo "Switch to a feature/* or fix/* branch first." >&2
+echo "  To start fresh:    git fetch origin && git checkout master && git pull origin master && git checkout -b feature/<name>" >&2
+echo "  To resume a branch: git checkout feature/<name>" >&2
 exit 2
