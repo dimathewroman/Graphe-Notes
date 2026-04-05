@@ -10,6 +10,7 @@ export const attachmentsTable = pgTable("attachments", {
   storagePath: text("storage_path").notNull(),
   displayMode: text("display_mode"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 }, (table) => [
   index("attachments_user_id_idx").on(table.userId),
   index("attachments_note_id_idx").on(table.noteId),
