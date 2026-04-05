@@ -94,6 +94,9 @@ export function NoteEditor() {
   const editorInitStart = useRef<number>(typeof performance !== "undefined" ? performance.now() : 0);
   const didLogEditorInit = useRef(false);
 
+  // PERF: temporary benchmark — tracks timestamps at each stage of a note switch for breakdown logging
+  const perfSwitch = useRef({ queryStartTime: 0, queryEndTime: 0, setContentTime: 0 });
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -123,7 +126,10 @@ export function NoteEditor() {
       FindReplaceExtension,
       VideoEmbedExtension,
     ],
-    content: note?.content || "",
+    // PERF: content intentionally omitted — TipTap v3 calls setOptions() on every render when
+    // content changes, firing onUpdate (accidental save) and potentially recreating the editor.
+    // Content is set imperatively via editor.commands.setContent() in the useEffect below.
+    content: "",
     onUpdate: ({ editor }) => {
       handleContentChange(editor.getHTML(), editor.getText());
     },
@@ -133,6 +139,18 @@ export function NoteEditor() {
   });
 
   const lastVersionTimestamp = useRef<number>(0);
+
+  // PERF: temporary benchmark — track isLoading transitions to measure query duration
+  const prevIsLoading = useRef(false);
+  useEffect(() => {
+    if (isLoading && !prevIsLoading.current) {
+      perfSwitch.current.queryStartTime = performance.now();
+    }
+    if (!isLoading && prevIsLoading.current) {
+      perfSwitch.current.queryEndTime = performance.now();
+    }
+    prevIsLoading.current = isLoading;
+  }, [isLoading]);
 
   const { callAI, aiLoading, aiError, captureSelection } = useAiAction(editor, { isDemo });
 
@@ -147,13 +165,28 @@ export function NoteEditor() {
     if (note && editor) {
       setTitle(note.title);
       if (editor.getHTML() !== note.content) {
+        // PERF: temporary benchmark — record timestamp immediately before setContent
+        perfSwitch.current.setContentTime = performance.now();
         editor.commands.setContent(note.content, { emitUpdate: false });
       }
-      // PERF: temporary benchmark — measure note-switch latency end-to-end
+      // PERF: temporary benchmark — measure note-switch end-to-end and log breakdown
       requestAnimationFrame(() => {
         try {
           const measure = performance.measure("note-switch", "note-switch-start");
-          console.log(`[perf] note-switch (note ${note.id}): ${measure.duration.toFixed(1)}ms`);
+          const total = measure.duration;
+          const p = perfSwitch.current;
+          const clickEntries = performance.getEntriesByName("note-switch-start");
+          const clickTime = clickEntries.length > 0 ? clickEntries[clickEntries.length - 1].startTime : 0;
+          const clickToQueryStart = clickTime > 0 && p.queryStartTime > 0 ? p.queryStartTime - clickTime : null;
+          const queryDuration = p.queryStartTime > 0 && p.queryEndTime > 0 ? p.queryEndTime - p.queryStartTime : null;
+          const queryToSetContent = p.queryEndTime > 0 && p.setContentTime > 0 ? p.setContentTime - p.queryEndTime : null;
+          const setContentToRendered = p.setContentTime > 0 ? performance.now() - p.setContentTime : null;
+          console.log(`[perf] note-switch (note ${note.id}): ${total.toFixed(1)}ms total`, {
+            clickToQueryStart: clickToQueryStart !== null ? `${clickToQueryStart.toFixed(1)}ms` : "(cache hit — no fetch)",
+            queryDuration: queryDuration !== null ? `${queryDuration.toFixed(1)}ms` : "(cache hit — no fetch)",
+            queryToSetContent: queryToSetContent !== null ? `${queryToSetContent.toFixed(1)}ms` : "n/a",
+            setContentToRendered: setContentToRendered !== null ? `${setContentToRendered.toFixed(1)}ms` : "n/a",
+          });
         } catch {
           // mark may not exist if note was loaded without a click (e.g. initial load)
         }

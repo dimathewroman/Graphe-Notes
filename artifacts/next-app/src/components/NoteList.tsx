@@ -101,13 +101,26 @@ export function NoteList() {
 
   const { data: apiNotes = [], isLoading: apiLoading } = useGetNotes(queryParams, { query: { enabled: !isDemo, queryKey: getGetNotesQueryKey(queryParams) } });
 
-  // PERF: temporary benchmark — fires once when notes list first loads (app load → interactive)
-  const didLogInteractive = useRef(false);
+  // PERF: temporary benchmark — measures time from app start to notes-list data ready
+  const didMarkMount = useRef(false);
+  const didLogAppReady = useRef(false);
   useEffect(() => {
-    if (!apiLoading && !isDemo && !didLogInteractive.current) {
-      didLogInteractive.current = true;
-      const measure = performance.measure("app-load-to-interactive", { start: 0 });
-      console.log(`[perf] app-load-to-interactive: ${measure.duration.toFixed(1)}ms`);
+    // Mark when this component first mounts (post-auth, main app is rendering)
+    if (!didMarkMount.current) {
+      didMarkMount.current = true;
+      performance.mark("app-mount");
+    }
+  }, []);
+  useEffect(() => {
+    if (!apiLoading && !isDemo && !didLogAppReady.current) {
+      didLogAppReady.current = true;
+      performance.mark("app-data-ready");
+      try {
+        const measure = performance.measure("app-ready", "app-mount", "app-data-ready");
+        console.log(`[perf] app-ready (mount → first data): ${measure.duration.toFixed(1)}ms`);
+      } catch {
+        // app-mount mark may not exist if component remounted after hot reload
+      }
     }
   }, [apiLoading, isDemo]);
 
