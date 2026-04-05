@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, isNull } from "drizzle-orm";
 import { db, attachmentsTable, notesTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     })
     .from(attachmentsTable)
     .leftJoin(notesTable, eq(attachmentsTable.noteId, notesTable.id))
-    .where(eq(attachmentsTable.userId, user.id))
+    .where(and(eq(attachmentsTable.userId, user.id), isNull(attachmentsTable.deletedAt)))
     .orderBy(desc(attachmentsTable.createdAt));
 
   const withUrls = await Promise.all(

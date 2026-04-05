@@ -20,6 +20,7 @@ export const NoteBody = memo(function NoteBody({
   onTitleChange,
   onAddTag,
   onRemoveTag,
+  onDeleteImage,
 }: {
   editor: Editor | null;
   title: string;
@@ -29,6 +30,7 @@ export const NoteBody = memo(function NoteBody({
   onTitleChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onAddTag: (tag: string) => Promise<void>;
   onRemoveTag: (tag: string) => Promise<void>;
+  onDeleteImage?: (storagePath: string) => void;
 }) {
   const { upload, uploading } = useUploadAttachment(noteId);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -117,7 +119,7 @@ export const NoteBody = memo(function NoteBody({
         )}
 
         {/* Attachment panel (non-images only) */}
-        {noteId && <AttachmentPanel noteId={noteId} />}
+        {noteId && <AttachmentPanel noteId={noteId} onDeleteImage={onDeleteImage} />}
       </div>
     </div>
   );
