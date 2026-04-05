@@ -1,9 +1,10 @@
 // Tag display row with inline add/remove. tagInput and showTagInput state are local.
 
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import { Hash, Plus, X } from "lucide-react";
 
-export function TagRow({
+// Fix 5: memo — only re-renders when tags or callbacks change
+export const TagRow = memo(function TagRow({
   note,
   onAddTag,
   onRemoveTag,
@@ -58,4 +59,4 @@ export function TagRow({
       )}
     </div>
   );
-}
+});

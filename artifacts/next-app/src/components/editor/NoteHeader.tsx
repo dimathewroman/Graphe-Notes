@@ -1,5 +1,6 @@
 // Top header bar: save status, back button, sidebar toggles, action icons, overflow/export menus.
 
+import { memo } from "react";
 import type { useEditor } from "@tiptap/react";
 import {
   Pin, Star, ShieldCheck, Clock, Trash2,
@@ -10,7 +11,8 @@ import { cn, formatDate } from "@/lib/utils";
 import { OverflowMenu } from "./OverflowMenu";
 import { ExportMenu } from "./ExportMenu";
 
-export function NoteHeader({
+// Fix 5: memo prevents re-renders when NoteEditor re-renders but props haven't changed
+export const NoteHeader = memo(function NoteHeader({
   bp,
   note,
   saveStatus,
@@ -168,4 +170,4 @@ export function NoteHeader({
       </div>
     </header>
   );
-}
+});

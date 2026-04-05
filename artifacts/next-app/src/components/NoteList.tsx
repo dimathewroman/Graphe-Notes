@@ -39,15 +39,27 @@ const SORT_OPTIONS = [
 ];
 
 export function NoteList() {
-  const {
-    activeFilter, activeFolderId, activeTag,
-    searchQuery, setSearchQuery, sortBy, sortDir, setSort,
-    viewMode, setViewMode,
-    selectedNoteId, selectNote, setMobileView, setSidebarOpen, toggleNoteList,
-    isSidebarOpen, toggleSidebar,
-    isVaultUnlocked,
-    demoExtraIds, addDemoNoteId,
-  } = useAppStore();
+  // Fix 5: atomic Zustand selectors — each subscription only re-renders on its own value change
+  const activeFilter = useAppStore(s => s.activeFilter);
+  const activeFolderId = useAppStore(s => s.activeFolderId);
+  const activeTag = useAppStore(s => s.activeTag);
+  const searchQuery = useAppStore(s => s.searchQuery);
+  const setSearchQuery = useAppStore(s => s.setSearchQuery);
+  const sortBy = useAppStore(s => s.sortBy);
+  const sortDir = useAppStore(s => s.sortDir);
+  const setSort = useAppStore(s => s.setSort);
+  const viewMode = useAppStore(s => s.viewMode);
+  const setViewMode = useAppStore(s => s.setViewMode);
+  const selectedNoteId = useAppStore(s => s.selectedNoteId);
+  const selectNote = useAppStore(s => s.selectNote);
+  const setMobileView = useAppStore(s => s.setMobileView);
+  const setSidebarOpen = useAppStore(s => s.setSidebarOpen);
+  const toggleNoteList = useAppStore(s => s.toggleNoteList);
+  const isSidebarOpen = useAppStore(s => s.isSidebarOpen);
+  const toggleSidebar = useAppStore(s => s.toggleSidebar);
+  const isVaultUnlocked = useAppStore(s => s.isVaultUnlocked);
+  const demoExtraIds = useAppStore(s => s.demoExtraIds);
+  const addDemoNoteId = useAppStore(s => s.addDemoNoteId);
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
 
@@ -100,6 +112,29 @@ export function NoteList() {
   };
 
   const { data: apiNotes = [], isLoading: apiLoading } = useGetNotes(queryParams, { query: { enabled: !isDemo, queryKey: getGetNotesQueryKey(queryParams) } });
+
+  // PERF: temporary benchmark — measures time from app start to notes-list data ready
+  const didMarkMount = useRef(false);
+  const didLogAppReady = useRef(false);
+  useEffect(() => {
+    // Mark when this component first mounts (post-auth, main app is rendering)
+    if (!didMarkMount.current) {
+      didMarkMount.current = true;
+      performance.mark("app-mount");
+    }
+  }, []);
+  useEffect(() => {
+    if (!apiLoading && !isDemo && !didLogAppReady.current) {
+      didLogAppReady.current = true;
+      performance.mark("app-data-ready");
+      try {
+        const measure = performance.measure("app-ready", "app-mount", "app-data-ready");
+        console.log(`[perf] app-ready (mount → first data): ${measure.duration.toFixed(1)}ms`);
+      } catch {
+        // app-mount mark may not exist if component remounted after hot reload
+      }
+    }
+  }, [apiLoading, isDemo]);
 
   // Subscribe to each note's individual cache so pin/fav/vault/tag changes are reactive.
   // Only register these queries when in demo mode — if the array is always mounted,
@@ -167,7 +202,8 @@ export function NoteList() {
       }
 
       if (activeFilter === "attachments") {
-        list = list.filter(n => !!getFirstImage(n.content));
+        // Fix 2: content is now "" in list responses — check coverImage first, fall back to parsing content
+        list = list.filter(n => !!n.coverImage || !!getFirstImage(n.content));
       }
 
       if (activeFilter === "favorites" && isDemo) {
@@ -207,6 +243,20 @@ export function NoteList() {
     });
   }, [rawNotes, activeFilter, isFolderSmart, activeFolder, isVaultUnlocked, isDemo, debouncedSearch, activeTag, sortBy, sortDir]);
 
+  // Fix 6: prefetch first note after list loads — eliminates cold-start penalty for first click
+  useEffect(() => {
+    if (apiLoading || isDemo || notes.length === 0) return;
+    const firstNote = notes[0];
+    const cached = queryClient.getQueryData(getGetNoteQueryKey(firstNote.id));
+    if (!cached) {
+      queryClient.prefetchQuery({
+        queryKey: getGetNoteQueryKey(firstNote.id),
+        queryFn: () => authenticatedFetch(`/api/notes/${firstNote.id}`).then(r => r.json()),
+        staleTime: 30_000,
+      });
+    }
+  }, [apiLoading, isDemo, notes, queryClient]);
+
   const createNoteMut = useCreateNote({
     mutation: {
       onSuccess: (newNote) => {
@@ -240,6 +290,8 @@ export function NoteList() {
   });
 
   const handleSelectNote = (id: number) => {
+    // PERF: temporary benchmark — marks start of note-switch latency
+    performance.mark("note-switch-start");
     selectNote(id);
     if (bp === "mobile") {
       setMobileView("editor");
