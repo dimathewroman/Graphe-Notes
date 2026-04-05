@@ -1,13 +1,15 @@
 import { useEffect } from "react";
+import dynamic from "next/dynamic";
 import { Sidebar, SidebarContent } from "@/components/Sidebar";
 import { NoteList } from "@/components/NoteList";
 import { QuickBitList } from "@/components/QuickBitList";
-import { NoteEditor } from "@/components/NoteEditor";
-import { QuickBitEditor } from "@/components/QuickBitEditor";
+// Fix 4: lazy-load heavy editor bundles — TipTap alone is ~100KB+ gzipped
+const NoteEditor = dynamic(() => import("@/components/NoteEditor").then(m => ({ default: m.NoteEditor })), { ssr: false });
+const QuickBitEditor = dynamic(() => import("@/components/QuickBitEditor").then(m => ({ default: m.QuickBitEditor })), { ssr: false });
+const SettingsModal = dynamic(() => import("@/components/SettingsModal").then(m => ({ default: m.SettingsModal })), { ssr: false });
 import { RecentlyDeleted } from "@/components/RecentlyDeleted";
 import { RecentlyDeletedDetail } from "@/components/RecentlyDeletedDetail";
 import { AIPanel } from "@/components/AIPanel";
-import { SettingsModal } from "@/components/SettingsModal";
 import { AISetupModal } from "@/components/AISetupModal";
 import { QuickBitNotifications } from "@/components/QuickBitNotifications";
 import { useAppStore } from "@/store";
@@ -67,7 +69,9 @@ export default function Home() {
 
   const isCompact = bp === "mobile" || bp === "tablet";
   const isRecentlyDeleted = activeFilter === "recently-deleted";
-  const showEditor = !isRecentlyDeleted && activeFilter !== "quickbits" && (bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor"));
+  // Fix 1: NoteEditor stays mounted on tablet regardless of selection so the editor instance
+  // persists across note switches — removing !!selectedNoteId prevents unmount/remount on each click.
+  const showEditor = !isRecentlyDeleted && activeFilter !== "quickbits" && (bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "editor"));
   const showQuickBitEditor = activeFilter === "quickbits" && (bp === "desktop" || (bp === "tablet" && !!selectedQuickBitId) || (bp === "mobile" && mobileView === "editor"));
   const showList = bp === "desktop" ? isNoteListOpen : (bp === "tablet" || (bp === "mobile" && mobileView === "list"));
   const showDeletedDetail = isRecentlyDeleted && !!selectedNoteId && (bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor"));

@@ -39,15 +39,27 @@ const SORT_OPTIONS = [
 ];
 
 export function NoteList() {
-  const {
-    activeFilter, activeFolderId, activeTag,
-    searchQuery, setSearchQuery, sortBy, sortDir, setSort,
-    viewMode, setViewMode,
-    selectedNoteId, selectNote, setMobileView, setSidebarOpen, toggleNoteList,
-    isSidebarOpen, toggleSidebar,
-    isVaultUnlocked,
-    demoExtraIds, addDemoNoteId,
-  } = useAppStore();
+  // Fix 5: atomic Zustand selectors — each subscription only re-renders on its own value change
+  const activeFilter = useAppStore(s => s.activeFilter);
+  const activeFolderId = useAppStore(s => s.activeFolderId);
+  const activeTag = useAppStore(s => s.activeTag);
+  const searchQuery = useAppStore(s => s.searchQuery);
+  const setSearchQuery = useAppStore(s => s.setSearchQuery);
+  const sortBy = useAppStore(s => s.sortBy);
+  const sortDir = useAppStore(s => s.sortDir);
+  const setSort = useAppStore(s => s.setSort);
+  const viewMode = useAppStore(s => s.viewMode);
+  const setViewMode = useAppStore(s => s.setViewMode);
+  const selectedNoteId = useAppStore(s => s.selectedNoteId);
+  const selectNote = useAppStore(s => s.selectNote);
+  const setMobileView = useAppStore(s => s.setMobileView);
+  const setSidebarOpen = useAppStore(s => s.setSidebarOpen);
+  const toggleNoteList = useAppStore(s => s.toggleNoteList);
+  const isSidebarOpen = useAppStore(s => s.isSidebarOpen);
+  const toggleSidebar = useAppStore(s => s.toggleSidebar);
+  const isVaultUnlocked = useAppStore(s => s.isVaultUnlocked);
+  const demoExtraIds = useAppStore(s => s.demoExtraIds);
+  const addDemoNoteId = useAppStore(s => s.addDemoNoteId);
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
 
@@ -190,7 +202,8 @@ export function NoteList() {
       }
 
       if (activeFilter === "attachments") {
-        list = list.filter(n => !!getFirstImage(n.content));
+        // Fix 2: content is now "" in list responses — check coverImage first, fall back to parsing content
+        list = list.filter(n => !!n.coverImage || !!getFirstImage(n.content));
       }
 
       if (activeFilter === "favorites" && isDemo) {
@@ -229,6 +242,20 @@ export function NoteList() {
       return demoSecondarySort(a, b);
     });
   }, [rawNotes, activeFilter, isFolderSmart, activeFolder, isVaultUnlocked, isDemo, debouncedSearch, activeTag, sortBy, sortDir]);
+
+  // Fix 6: prefetch first note after list loads — eliminates cold-start penalty for first click
+  useEffect(() => {
+    if (apiLoading || isDemo || notes.length === 0) return;
+    const firstNote = notes[0];
+    const cached = queryClient.getQueryData(getGetNoteQueryKey(firstNote.id));
+    if (!cached) {
+      queryClient.prefetchQuery({
+        queryKey: getGetNoteQueryKey(firstNote.id),
+        queryFn: () => authenticatedFetch(`/api/notes/${firstNote.id}`).then(r => r.json()),
+        staleTime: 30_000,
+      });
+    }
+  }, [apiLoading, isDemo, notes, queryClient]);
 
   const createNoteMut = useCreateNote({
     mutation: {

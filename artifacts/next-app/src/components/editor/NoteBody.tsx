@@ -1,11 +1,13 @@
 // Scrollable note body: title input, tag row, and editor content.
 
+import { memo } from "react";
 import type { useEditor } from "@tiptap/react";
 import { EditorContent } from "@tiptap/react";
 import { cn } from "@/lib/utils";
 import { TagRow } from "./TagRow";
 
-export function NoteBody({
+// Fix 5: memo prevents re-renders when NoteEditor re-renders but props haven't changed
+export const NoteBody = memo(function NoteBody({
   editor,
   title,
   note,
@@ -37,4 +39,4 @@ export function NoteBody({
       </div>
     </div>
   );
-}
+});
