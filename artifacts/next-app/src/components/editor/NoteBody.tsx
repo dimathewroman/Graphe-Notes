@@ -44,11 +44,18 @@ export const NoteBody = memo(function NoteBody({
     if (isImageType(file.type)) {
       const record = await upload(file);
       if (record?.url && editor) {
-        // Insert image at drop position or at cursor
         if (dropPosition) {
-          editor.commands.focus();
+          // Resolve the document position at the drop coordinates and insert there
+          const resolved = editor.view.posAtCoords({ left: dropPosition.x, top: dropPosition.y });
+          const insertPos = resolved?.pos ?? null;
+          if (insertPos !== null) {
+            editor.chain().focus().setTextSelection(insertPos).setImage({ src: record.url, alt: file.name }).run();
+          } else {
+            editor.chain().focus().setImage({ src: record.url, alt: file.name }).run();
+          }
+        } else {
+          editor.chain().focus().setImage({ src: record.url, alt: file.name }).run();
         }
-        editor.chain().focus().setImage({ src: record.url, alt: file.name }).run();
       }
     } else {
       await upload(file);
