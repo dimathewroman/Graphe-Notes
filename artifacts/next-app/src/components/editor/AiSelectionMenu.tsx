@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { useEditor } from "@tiptap/react";
+import { NodeSelection } from "@tiptap/pm/state";
 import { Sparkles, ChevronRight, Check, PenLine } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { actionGroups } from "./ai-action-groups";
@@ -67,6 +68,8 @@ export function AiSelectionMenu({
       if (!visible) { setRect(null); return; }
       const { from, to } = editor.state.selection;
       if (from === to) { setRect(null); return; }
+      // Suppress on node selections (e.g. image clicks) — no text to act on
+      if (editor.state.selection instanceof NodeSelection) { setRect(null); return; }
 
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0) { setRect(null); return; }
