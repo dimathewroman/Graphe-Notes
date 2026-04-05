@@ -26,15 +26,30 @@ function fileIcon(mimeType: string) {
   return <File className="w-5 h-5 text-muted-foreground shrink-0" />;
 }
 
-function AttachmentCard({ attachment, onDeleted }: { attachment: AttachmentRecord; onDeleted: () => void }) {
+function AttachmentCard({
+  attachment,
+  noteId,
+  onDeleted,
+  onDeleteImage,
+}: {
+  attachment: AttachmentRecord;
+  noteId: number;
+  onDeleted: () => void;
+  onDeleteImage?: (storagePath: string) => void;
+}) {
   const deleteMut = useDeleteAttachment();
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
-    if (!confirm("Delete this attachment?")) return;
+    const isImage = isImageType(attachment.fileType);
+    const message = isImage
+      ? "This image is embedded in your note. Deleting it will remove it from the note content too. Delete?"
+      : "Delete this attachment?";
+    if (!confirm(message)) return;
     setDeleting(true);
     try {
-      await deleteMut.mutateAsync(attachment.id);
+      await deleteMut.mutateAsync({ id: attachment.id, noteId });
+      if (isImage) onDeleteImage?.(attachment.storagePath);
       onDeleted();
     } catch {
       toast.error("Failed to delete attachment");
@@ -83,7 +98,13 @@ function AttachmentCard({ attachment, onDeleted }: { attachment: AttachmentRecor
   );
 }
 
-export function AttachmentPanel({ noteId }: { noteId: number }) {
+export function AttachmentPanel({
+  noteId,
+  onDeleteImage,
+}: {
+  noteId: number;
+  onDeleteImage?: (storagePath: string) => void;
+}) {
   const { data: attachments = [], refetch } = useNoteAttachments(noteId);
   const nonImages = attachments.filter(a => !isImageType(a.fileType));
 
@@ -96,7 +117,13 @@ export function AttachmentPanel({ noteId }: { noteId: number }) {
       </p>
       <div className="flex flex-col gap-1.5">
         {nonImages.map(a => (
-          <AttachmentCard key={a.id} attachment={a} onDeleted={refetch} />
+          <AttachmentCard
+            key={a.id}
+            attachment={a}
+            noteId={noteId}
+            onDeleted={refetch}
+            onDeleteImage={onDeleteImage}
+          />
         ))}
       </div>
     </div>

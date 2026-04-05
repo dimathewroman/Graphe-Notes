@@ -304,6 +304,27 @@ export function NoteEditor() {
     if (selectedNoteId) debouncedSave(selectedNoteId, { content: html, contentText: text });
   };
 
+  // Remove the editor image node whose src contains the given storage path.
+  // Called after an image attachment is deleted so the live editor reflects the change
+  // immediately (in addition to the note query invalidation that follows from the mutation).
+  const handleDeleteImage = useCallback((storagePath: string) => {
+    if (!editor) return;
+    const { state, view } = editor;
+    const positions: Array<{ from: number; to: number }> = [];
+    state.doc.descendants((node, pos) => {
+      if (node.type.name === "image" && (node.attrs.src as string)?.includes(storagePath)) {
+        positions.push({ from: pos, to: pos + node.nodeSize });
+      }
+    });
+    if (!positions.length) return;
+    let tr = state.tr;
+    // Delete in reverse order so positions remain valid
+    for (let i = positions.length - 1; i >= 0; i--) {
+      tr = tr.delete(positions[i].from, positions[i].to);
+    }
+    view.dispatch(tr);
+  }, [editor]);
+
   const handleRestoreVersion = useCallback((content: string, restoredTitle: string) => {
     if (!editor || !selectedNoteId) return;
     editor.commands.setContent(content, { emitUpdate: false });
@@ -595,6 +616,7 @@ export function NoteEditor() {
         onTitleChange={handleTitleChange}
         onAddTag={addTag}
         onRemoveTag={removeTag}
+        onDeleteImage={handleDeleteImage}
       />
 
       {/* Slash command floating menu */}

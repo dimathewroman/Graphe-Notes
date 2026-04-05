@@ -35,10 +35,14 @@ function AttachmentRow({ attachment, onDeleted }: { attachment: AttachmentRecord
   const [deleting, setDeleting] = useState(false);
 
   const handleDelete = async () => {
-    if (!confirm("Delete this attachment?")) return;
+    const isImage = isImageType(attachment.fileType);
+    const message = isImage
+      ? "This image is embedded in your note. Deleting it will remove it from the note content too. Delete?"
+      : "Delete this attachment?";
+    if (!confirm(message)) return;
     setDeleting(true);
     try {
-      await deleteMut.mutateAsync(attachment.id);
+      await deleteMut.mutateAsync({ id: attachment.id, noteId: attachment.noteId });
       onDeleted();
     } catch {
       toast.error("Failed to delete attachment");
