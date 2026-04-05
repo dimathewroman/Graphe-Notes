@@ -8,6 +8,17 @@ import posthog from "posthog-js";
 import { useAppStore } from "@/store";
 import { buildAiPrompt } from "@/lib/ai-prompts";
 
+interface AiSettingsResponse {
+  activeAiProvider?: string | null;
+  hasCompletedAiSetup?: boolean;
+  localLlmEndpoint?: string | null;
+  localLlmModel?: string | null;
+}
+
+interface LocalLlmChatResponse {
+  choices: Array<{ message: { content: string } }>;
+}
+
 export function useAiAction(
   editor: Editor | null,
   options?: { isDemo?: boolean }
@@ -47,14 +58,13 @@ export function useAiAction(
 
     // Fetch active provider from server; default to graphe_free on any failure.
     let provider = "graphe_free";
+    let localLlmEndpoint: string | null = null;
+    let localLlmModel: string | null = null;
     if (!isDemo) {
       try {
         const settingsRes = await authenticatedFetch("/api/ai/settings");
         if (settingsRes.ok) {
-          const settingsData = await settingsRes.json() as {
-            activeAiProvider?: string | null;
-            hasCompletedAiSetup?: boolean;
-          };
+          const settingsData = await settingsRes.json() as AiSettingsResponse;
 
           if (!settingsData.hasCompletedAiSetup) {
             // First AI action — show setup modal and queue this action to run after.
@@ -66,6 +76,36 @@ export function useAiAction(
               setAiLoading(true);
               setAiError(null);
               try {
+                // Re-fetch settings to get endpoint URL at execution time
+                if (resolvedProvider === "local_llm") {
+                  const freshSettings = await authenticatedFetch("/api/ai/settings");
+                  if (!freshSettings.ok) throw new Error("Failed to fetch AI settings");
+                  const freshData = await freshSettings.json() as AiSettingsResponse;
+                  const endpoint = freshData.localLlmEndpoint;
+                  if (!endpoint) {
+                    setAiError("Local LLM endpoint not configured. Please check Settings.");
+                    setTimeout(() => setAiError(null), 5000);
+                    return;
+                  }
+                  const res = await fetch(`${endpoint}/v1/chat/completions`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      model: freshData.localLlmModel ?? "default",
+                      messages: [{ role: "user", content: capturedPrompt }],
+                      max_tokens: 1024,
+                      stream: false,
+                    }),
+                  });
+                  if (!res.ok) throw new Error("Local LLM returned an error");
+                  const data = await res.json() as LocalLlmChatResponse;
+                  const result = data.choices[0]?.message?.content ?? "";
+                  if (result && editor) {
+                    editor.chain().focus().insertContentAt({ from: capturedFrom, to: capturedTo }, result).run();
+                  }
+                  return;
+                }
+
                 const res = await authenticatedFetch("/api/ai/generate", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -97,10 +137,54 @@ export function useAiAction(
 
           if (!settingsData.activeAiProvider) return; // No AI mode — silently cancel
           provider = settingsData.activeAiProvider;
+          localLlmEndpoint = settingsData.localLlmEndpoint ?? null;
+          localLlmModel = settingsData.localLlmModel ?? null;
         }
       } catch { /* use default */ }
     }
 
+    // --- Local LLM: call inference server directly from the client ---
+    if (provider === "local_llm") {
+      if (!localLlmEndpoint) {
+        setAiError("Local LLM endpoint not configured. Please check Settings.");
+        setTimeout(() => setAiError(null), 5000);
+        return;
+      }
+
+      setAiLoading(true);
+      setAiError(null);
+      try {
+        const res = await fetch(`${localLlmEndpoint}/v1/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: localLlmModel ?? "default",
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: 1024,
+            stream: false,
+          }),
+        });
+        if (!res.ok) throw new Error("Local LLM returned an error");
+        const data = await res.json() as LocalLlmChatResponse;
+        const result = data.choices[0]?.message?.content ?? "";
+        if (result) {
+          editor.chain().focus().insertContentAt({ from: sel.from, to: sel.to }, result).run();
+        }
+      } catch (err) {
+        const isNetworkError = err instanceof TypeError;
+        const msg = isNetworkError
+          ? "Could not reach local LLM. Make sure your inference server is running."
+          : err instanceof Error ? err.message : "AI request failed";
+        setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
+        setTimeout(() => setAiError(null), 5000);
+      } finally {
+        setAiLoading(false);
+        savedAiSelection.current = null;
+      }
+      return;
+    }
+
+    // --- Cloud providers: route through /api/ai/generate ---
     posthog.capture("ai_selection_action_triggered", { action, provider });
     setAiLoading(true);
     setAiError(null);
