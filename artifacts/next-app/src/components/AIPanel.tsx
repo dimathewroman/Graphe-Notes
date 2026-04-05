@@ -10,6 +10,17 @@ import { useBreakpoint } from "@/hooks/use-mobile";
 import { useDemoMode } from "@/lib/demo-context";
 import posthog from "posthog-js";
 
+interface LocalLlmChatResponse {
+  choices: Array<{ message: { content: string } }>;
+}
+
+interface AiSettingsResponse {
+  activeAiProvider?: string | null;
+  hasCompletedAiSetup?: boolean;
+  localLlmEndpoint?: string | null;
+  localLlmModel?: string | null;
+}
+
 export function AIPanel() {
   const { isAIPanelOpen, setAIPanelOpen, selectedNoteId, setAiSetupModalOpen, setPendingAiAction } = useAppStore();
   const queryClient = useQueryClient();
@@ -24,7 +35,12 @@ export function AIPanel() {
   const [result, setResult] = useState("");
   const [isPending, setIsPending] = useState(false);
 
-  const runGenerate = async (provider: string, capturedPrompt: string, capturedNote: typeof note) => {
+  const runGenerate = async (
+    provider: string,
+    capturedPrompt: string,
+    capturedNote: typeof note,
+    localLlmConfig?: { endpoint: string; model: string | null },
+  ) => {
     const noteContext = capturedNote
       ? `Title: ${capturedNote.title}\nContent:\n${capturedNote.contentText}`
       : undefined;
@@ -33,6 +49,27 @@ export function AIPanel() {
     setIsPending(true);
     setResult("");
     try {
+      if (provider === "local_llm") {
+        if (!localLlmConfig?.endpoint) {
+          setResult("Local LLM endpoint not configured. Please check Settings.");
+          return;
+        }
+        const res = await fetch(`${localLlmConfig.endpoint}/v1/chat/completions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: localLlmConfig.model ?? "default",
+            messages: [{ role: "user", content: fullPrompt }],
+            max_tokens: 1024,
+            stream: false,
+          }),
+        });
+        if (!res.ok) throw new Error("Local LLM returned an error");
+        const data = await res.json() as LocalLlmChatResponse;
+        setResult(data.choices[0]?.message?.content ?? "");
+        return;
+      }
+
       const res = await authenticatedFetch("/api/ai/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -43,7 +80,11 @@ export function AIPanel() {
       setResult(data.result ?? "");
     } catch (e) {
       console.error(e);
-      setResult("Error generating response. Please check your AI settings.");
+      if (provider === "local_llm" && e instanceof TypeError) {
+        setResult("Could not reach local LLM. Make sure your inference server is running.");
+      } else {
+        setResult("Error generating response. Please check your AI settings.");
+      }
     } finally {
       setIsPending(false);
     }
@@ -53,20 +94,33 @@ export function AIPanel() {
     if (!prompt.trim()) return;
 
     let provider = "graphe_free";
+    let localLlmEndpoint: string | null = null;
+    let localLlmModel: string | null = null;
 
     if (!isDemo) {
       try {
         const settingsRes = await authenticatedFetch("/api/ai/settings");
         if (settingsRes.ok) {
-          const settingsData = await settingsRes.json() as {
-            activeAiProvider?: string | null;
-            hasCompletedAiSetup?: boolean;
-          };
+          const settingsData = await settingsRes.json() as AiSettingsResponse;
 
           if (!settingsData.hasCompletedAiSetup) {
             const capturedPrompt = prompt;
             const capturedNote = note;
             setPendingAiAction(async (resolvedProvider: string) => {
+              if (resolvedProvider === "local_llm") {
+                // Re-fetch settings for endpoint at execution time
+                const freshSettings = await authenticatedFetch("/api/ai/settings");
+                if (!freshSettings.ok) {
+                  setResult("Failed to fetch AI settings.");
+                  return;
+                }
+                const freshData = await freshSettings.json() as AiSettingsResponse;
+                await runGenerate(resolvedProvider, capturedPrompt, capturedNote, {
+                  endpoint: freshData.localLlmEndpoint ?? "",
+                  model: freshData.localLlmModel ?? null,
+                });
+                return;
+              }
               await runGenerate(resolvedProvider, capturedPrompt, capturedNote);
             });
             setAiSetupModalOpen(true);
@@ -75,12 +129,19 @@ export function AIPanel() {
 
           if (!settingsData.activeAiProvider) return; // No AI mode
           provider = settingsData.activeAiProvider;
+          localLlmEndpoint = settingsData.localLlmEndpoint ?? null;
+          localLlmModel = settingsData.localLlmModel ?? null;
         }
       } catch { /* use default */ }
     }
 
-    posthog.capture("ai_prompt_submitted", { provider });
-    await runGenerate(provider, prompt, note);
+    if (provider !== "local_llm") {
+      posthog.capture("ai_prompt_submitted", { provider });
+    }
+    const localConfig = provider === "local_llm" && localLlmEndpoint
+      ? { endpoint: localLlmEndpoint, model: localLlmModel }
+      : undefined;
+    await runGenerate(provider, prompt, note, localConfig);
   };
 
   const insertIntoNote = async () => {

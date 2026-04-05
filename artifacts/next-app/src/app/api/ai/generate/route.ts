@@ -46,6 +46,13 @@ export async function POST(request: NextRequest) {
         ? (rawProvider as Provider)
         : "graphe_free";
 
+    if (provider === "local_llm") {
+      return NextResponse.json(
+        { error: "local_llm_client_only", message: "Local LLM requests must be made directly from the client." },
+        { status: 400 },
+      );
+    }
+
     if (!taskType || !VALID_TASK_TYPES.includes(taskType as TaskType)) {
       return NextResponse.json(
         {
