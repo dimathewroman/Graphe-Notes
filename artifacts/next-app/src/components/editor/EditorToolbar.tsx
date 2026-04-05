@@ -1,13 +1,13 @@
 // Full editor formatting toolbar with font, color, link, and block controls.
 
-import { memo, useLayoutEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { useEditor } from "@tiptap/react";
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight,
   List, ListOrdered, ListTodo, Quote, Code, Heading1, Heading2, Heading3,
   Image as ImageIcon, Table as TableIcon, RowsIcon, Scissors, X,
-  Undo2, Redo2, Minus, Highlighter,
+  Undo2, Redo2, Minus, Highlighter, Paperclip,
   Superscript as SuperscriptIcon, Subscript as SubscriptIcon,
 } from "lucide-react";
 import { ColorPickerDropdown } from "./ColorPickerDropdown";
@@ -17,6 +17,93 @@ import { ScrollableToolbar } from "./ScrollableToolbar";
 import { FontPickerDropdown } from "./FontPickerDropdown";
 import { FontSizeWidget } from "./FontSizeWidget";
 import { LinkPopover } from "./LinkPopover";
+import { createPortal } from "react-dom";
+
+// Inline image-URL popover — no window.prompt
+function ImageUrlButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({});
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const pad = 8;
+    const vw = window.innerWidth;
+    const w = 260;
+    let left = r.left;
+    if (left + w > vw - pad) left = vw - w - pad;
+    setStyle({ position: "fixed", top: r.bottom + 6, left, zIndex: 50, width: w });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (popRef.current && !popRef.current.contains(e.target as Node) &&
+          btnRef.current && !btnRef.current.contains(e.target as Node)) {
+        setOpen(false); setUrl("");
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  const commit = () => {
+    const trimmed = url.trim();
+    if (trimmed) editor?.chain().focus().setImage({ src: trimmed }).run();
+    setOpen(false); setUrl("");
+  };
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        ref={btnRef}
+        onClick={() => { setOpen(v => !v); setUrl(""); }}
+        title="Insert image from URL"
+        className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded text-muted-foreground hover:bg-panel hover:text-foreground transition-colors shrink-0 flex items-center justify-center${open ? " bg-panel text-primary" : ""}`}
+      >
+        <ImageIcon className="w-4 h-4" />
+      </button>
+      {open && typeof document !== "undefined" && createPortal(
+        <div
+          ref={popRef}
+          style={style}
+          className="bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-2 flex flex-col gap-2"
+          onMouseDown={e => e.preventDefault()}
+        >
+          <p className="text-xs text-muted-foreground px-1">Image URL</p>
+          <input
+            autoFocus
+            type="url"
+            value={url}
+            onChange={e => setUrl(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") commit(); if (e.key === "Escape") { setOpen(false); setUrl(""); } }}
+            placeholder="https://…"
+            className="bg-transparent border border-panel-border rounded px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
+          />
+          <div className="flex gap-1.5">
+            <button
+              onClick={commit}
+              disabled={!url.trim()}
+              className="flex-1 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 transition-opacity disabled:opacity-40"
+            >
+              Insert
+            </button>
+            <button
+              onClick={() => { setOpen(false); setUrl(""); }}
+              className="px-3 py-1.5 rounded-lg border border-panel-border text-xs text-muted-foreground hover:bg-panel transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
 
 // Fix 5: memo prevents re-renders when NoteEditor state changes but editor/toolbar props are stable
 export const EditorToolbar = memo(function EditorToolbar({
@@ -24,17 +111,20 @@ export const EditorToolbar = memo(function EditorToolbar({
   showUndoRedo,
   className,
   style,
+  onAttachFile,
 }: {
   editor: ReturnType<typeof useEditor>;
   showUndoRedo?: boolean;
   className?: string;
   style?: React.CSSProperties;
+  onAttachFile?: (file: File) => void;
 }) {
   const [colorPicker, setColorPicker] = useState<"text" | "highlight" | null>(null);
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
   const textColorBtnRef = useRef<HTMLButtonElement>(null);
   const highlightBtnRef = useRef<HTMLButtonElement>(null);
   const fontPickerBtnRef = useRef<HTMLButtonElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!editor) return null;
 
@@ -169,15 +259,7 @@ export const EditorToolbar = memo(function EditorToolbar({
 
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
-      <ToolbarButton
-        command={() => {
-          const url = window.prompt("Image URL");
-          if (url) editor.chain().focus().setImage({ src: url }).run();
-        }}
-        active={false}
-        icon={<ImageIcon className="w-4 h-4" />}
-        title="Insert image"
-      />
+      <ImageUrlButton editor={editor} />
 
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
@@ -186,6 +268,28 @@ export const EditorToolbar = memo(function EditorToolbar({
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
       <WordCountPopover editor={editor} />
+
+      {onAttachFile && (
+        <>
+          <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,text/markdown,application/json,application/zip"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) { onAttachFile(file); e.target.value = ""; }
+            }}
+          />
+          <ToolbarButton
+            command={() => fileInputRef.current?.click()}
+            active={false}
+            icon={<Paperclip className="w-4 h-4" />}
+            title="Attach file"
+          />
+        </>
+      )}
     </ScrollableToolbar>
   );
 });
