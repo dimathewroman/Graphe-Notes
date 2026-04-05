@@ -4,7 +4,7 @@
     {
       "name": "next-app",
       "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "set -a && [ -f ../../../.env ] && . ../../../.env; set +a && cd ../../../ && pnpm --filter @workspace/next-app run dev"],
+      "runtimeArgs": ["-c", "export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH && set -a && [ -f ../../../.env ] && . ../../../.env; set +a && cd ../../../ && /usr/local/bin/pnpm --filter @workspace/next-app run dev"],
       "port": 3000,
       "autoPort": false
     }

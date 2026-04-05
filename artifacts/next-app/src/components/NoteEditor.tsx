@@ -5,7 +5,7 @@ import UnderlineExt from "@tiptap/extension-underline";
 import { TextStyle, FontSize } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import FontFamily from "@tiptap/extension-font-family";
-import Image from "@tiptap/extension-image";
+import { CustomImage } from "./editor/CustomImageExtension";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -118,7 +118,7 @@ export function NoteEditor() {
     FontSize,
     Color,
     FontFamily,
-    Image,
+    CustomImage,
     TextAlign.configure({ types: ["heading", "paragraph"] }),
     Highlight.configure({ multicolor: true }),
     Placeholder.configure({ placeholder: "Start writing..." }),
