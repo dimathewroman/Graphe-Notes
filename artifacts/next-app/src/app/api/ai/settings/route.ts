@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { db, userSettingsTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
+import { db, userSettingsTable, userApiKeysTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 
 // GET /api/ai/settings — returns the user's active AI provider preference
@@ -14,10 +14,33 @@ export async function GET(request: NextRequest) {
       .from(userSettingsTable)
       .where(eq(userSettingsTable.userId, user.id));
 
-    return NextResponse.json({
-      activeAiProvider: rows[0]?.activeAiProvider ?? null,
+    const activeProvider = rows[0]?.activeAiProvider ?? null;
+    const response: {
+      activeAiProvider: string | null;
+      hasCompletedAiSetup: boolean;
+      localLlmEndpoint?: string | null;
+      localLlmModel?: string | null;
+    } = {
+      activeAiProvider: activeProvider,
       hasCompletedAiSetup: rows[0]?.hasCompletedAiSetup ?? false,
-    });
+    };
+
+    if (activeProvider === "local_llm") {
+      const keyRows = await db
+        .select()
+        .from(userApiKeysTable)
+        .where(
+          and(
+            eq(userApiKeysTable.userId, user.id),
+            eq(userApiKeysTable.provider, "local_llm"),
+          ),
+        );
+      const keyRow = keyRows[0];
+      response.localLlmEndpoint = keyRow?.endpointUrl ?? null;
+      response.localLlmModel = keyRow?.modelOverride ?? null;
+    }
+
+    return NextResponse.json(response);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
