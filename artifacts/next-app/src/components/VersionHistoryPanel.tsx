@@ -95,10 +95,31 @@ export function VersionHistoryPanel({ noteId, onRestore, onClose }: Props) {
     }
   };
 
-  const handleRestore = () => {
+  const [restoring, setRestoring] = useState(false);
+
+  const handleRestore = async () => {
     if (!selected) return;
-    onRestore(selected.content, selected.title);
-    onClose();
+    setRestoring(true);
+    try {
+      // Call the restore endpoint to recover soft-deleted attachments and replace
+      // any hard-purged image references with a placeholder before loading the content.
+      const r = await authenticatedFetch(
+        `/api/notes/${noteId}/versions/${selected.id}/restore`,
+        { method: "POST" }
+      );
+      if (r.ok) {
+        const data = await r.json() as { content: string; title: string };
+        onRestore(data.content, data.title);
+      } else {
+        // Fallback: restore with original content if endpoint fails
+        onRestore(selected.content, selected.title);
+      }
+    } catch {
+      onRestore(selected.content, selected.title);
+    } finally {
+      setRestoring(false);
+      onClose();
+    }
   };
 
   return (
@@ -168,9 +189,12 @@ export function VersionHistoryPanel({ noteId, onRestore, onClose }: Props) {
                           <div className="mt-3 flex items-center gap-2">
                             <button
                               onClick={handleRestore}
-                              className="flex items-center gap-1.5 text-xs bg-primary text-primary-foreground rounded-lg px-3 py-1.5 hover:opacity-90 transition-opacity font-medium"
+                              disabled={restoring}
+                              className="flex items-center gap-1.5 text-xs bg-primary text-primary-foreground rounded-lg px-3 py-1.5 hover:opacity-90 transition-opacity font-medium disabled:opacity-60"
                             >
-                              <RotateCcw className="w-3 h-3" />
+                              {restoring
+                                ? <Loader2 className="w-3 h-3 animate-spin" />
+                                : <RotateCcw className="w-3 h-3" />}
                               Restore
                             </button>
                             <button

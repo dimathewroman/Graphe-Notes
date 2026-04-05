@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, isNull } from "drizzle-orm";
 import { db, attachmentsTable, notesTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -28,7 +28,11 @@ export async function GET(
   const attachments = await db
     .select()
     .from(attachmentsTable)
-    .where(and(eq(attachmentsTable.noteId, noteId), eq(attachmentsTable.userId, user.id)))
+    .where(and(
+      eq(attachmentsTable.noteId, noteId),
+      eq(attachmentsTable.userId, user.id),
+      isNull(attachmentsTable.deletedAt)
+    ))
     .orderBy(asc(attachmentsTable.createdAt));
 
   // Generate signed URLs for each attachment
