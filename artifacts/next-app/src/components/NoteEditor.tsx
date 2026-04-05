@@ -183,9 +183,15 @@ export function NoteEditor() {
     if (note && editor) {
       setTitle(note.title);
       if (editor.getHTML() !== note.content) {
+        // Defer setContent outside React's commit phase — TipTap's ReactNodeViewRenderer
+        // calls flushSync when editor.isInitialized, which React 19 forbids inside lifecycle methods.
         // PERF: temporary benchmark — record timestamp immediately before setContent
         perfSwitch.current.setContentTime = performance.now();
-        editor.commands.setContent(note.content, { emitUpdate: false });
+        setTimeout(() => {
+          if (!editor.isDestroyed) {
+            editor.commands.setContent(note.content, { emitUpdate: false });
+          }
+        }, 0);
       }
       // PERF: temporary benchmark — measure note-switch end-to-end and log breakdown
       requestAnimationFrame(() => {
