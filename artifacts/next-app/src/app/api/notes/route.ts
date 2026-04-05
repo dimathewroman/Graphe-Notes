@@ -58,8 +58,26 @@ export async function GET(request: NextRequest) {
         : notesTable.updatedAt;
   const orderDir = sortDir === "asc" ? asc(orderCol) : desc(orderCol);
 
+  // Fix 2: exclude the large HTML content column from list queries — content can be hundreds of KB
+  // per note. Return an empty string to satisfy the Zod schema; full content is fetched by GET /notes/:id.
   const notes = await db
-    .select()
+    .select({
+      id: notesTable.id,
+      title: notesTable.title,
+      content: sql<string>`''`,
+      contentText: notesTable.contentText,
+      folderId: notesTable.folderId,
+      tags: notesTable.tags,
+      pinned: notesTable.pinned,
+      favorite: notesTable.favorite,
+      coverImage: notesTable.coverImage,
+      vaulted: notesTable.vaulted,
+      deletedAt: notesTable.deletedAt,
+      autoDeleteAt: notesTable.autoDeleteAt,
+      deletedReason: notesTable.deletedReason,
+      createdAt: notesTable.createdAt,
+      updatedAt: notesTable.updatedAt,
+    })
     .from(notesTable)
     .where(and(...conditions))
     .orderBy(orderDir);

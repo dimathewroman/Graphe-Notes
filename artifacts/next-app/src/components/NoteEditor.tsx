@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import UnderlineExt from "@tiptap/extension-underline";
@@ -51,7 +51,15 @@ import posthog from "posthog-js";
 // FontPickerDropdown and FontSizeWidget → extracted to ./editor/
 
 export function NoteEditor() {
-  const { selectedNoteId, selectNote, isSidebarOpen, toggleSidebar, isNoteListOpen, toggleNoteList, setMobileView, setSidebarOpen } = useAppStore();
+  // Fix 5: atomic Zustand selectors — each component only re-renders when its own value changes
+  const selectedNoteId = useAppStore(s => s.selectedNoteId);
+  const selectNote = useAppStore(s => s.selectNote);
+  const isSidebarOpen = useAppStore(s => s.isSidebarOpen);
+  const toggleSidebar = useAppStore(s => s.toggleSidebar);
+  const isNoteListOpen = useAppStore(s => s.isNoteListOpen);
+  const toggleNoteList = useAppStore(s => s.toggleNoteList);
+  const setMobileView = useAppStore(s => s.setMobileView);
+  const setSidebarOpen = useAppStore(s => s.setSidebarOpen);
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const queryClient = useQueryClient();
@@ -78,7 +86,8 @@ export function NoteEditor() {
   const setupVaultMut = useSetupVault();
   const unlockVaultMut = useUnlockVault();
   const { data: vaultStatus } = useGetVaultStatus();
-  const { isVaultUnlocked, setVaultUnlocked } = useAppStore();
+  const isVaultUnlocked = useAppStore(s => s.isVaultUnlocked);
+  const setVaultUnlocked = useAppStore(s => s.setVaultUnlocked);
   const [showVaultSetupModal, setShowVaultSetupModal] = useState(false);
   const [showVaultUnlockModal, setShowVaultUnlockModal] = useState(false);
   const [vaultUnlockError, setVaultUnlockError] = useState("");
@@ -97,35 +106,41 @@ export function NoteEditor() {
   // PERF: temporary benchmark — tracks timestamps at each stage of a note switch for breakdown logging
   const perfSwitch = useRef({ queryStartTime: 0, queryEndTime: 0, setContentTime: 0 });
 
+  // Fix 1: stable extensions reference — TipTap v3 compareOptions uses referential equality on
+  // the extensions array. A new array literal on every render causes editor.setOptions() on every
+  // render. useMemo([]) ensures the same array instance is reused for the lifetime of the component.
+  const editorExtensions = useMemo(() => [
+    StarterKit.configure({ heading: { levels: [1, 2, 3] }, underline: false, link: false }),
+    UnderlineExt,
+    TextStyle,
+    FontSize,
+    Color,
+    FontFamily,
+    Image,
+    TextAlign.configure({ types: ["heading", "paragraph"] }),
+    Highlight.configure({ multicolor: true }),
+    Placeholder.configure({ placeholder: "Start writing..." }),
+    Table.configure({ resizable: true }),
+    TableRow,
+    TableHeader,
+    TableCell,
+    Link.configure({
+      openOnClick: false,
+      HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" },
+    }),
+    TaskList,
+    SmartTaskItem.configure({ nested: true }),
+    SlashCommandExtension,
+    SuperscriptExt,
+    SubscriptExt,
+    FindReplaceExtension,
+    VideoEmbedExtension,
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], []);
+
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] }, underline: false, link: false }),
-      UnderlineExt,
-      TextStyle,
-      FontSize,
-      Color,
-      FontFamily,
-      Image,
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
-      Highlight.configure({ multicolor: true }),
-      Placeholder.configure({ placeholder: "Start writing..." }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" },
-      }),
-      TaskList,
-      SmartTaskItem.configure({ nested: true }),
-      SlashCommandExtension,
-      SuperscriptExt,
-      SubscriptExt,
-      FindReplaceExtension,
-      VideoEmbedExtension,
-    ],
+    extensions: editorExtensions,
     // PERF: content intentionally omitted — TipTap v3 calls setOptions() on every render when
     // content changes, firing onUpdate (accidental save) and potentially recreating the editor.
     // Content is set imperatively via editor.commands.setContent() in the useEffect below.
@@ -250,11 +265,12 @@ export function NoteEditor() {
     []
   );
 
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Fix 5: useCallback on handlers passed to memoized children to prevent needless re-renders
+  const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = e.target.value;
     setTitle(newTitle);
     if (selectedNoteId) debouncedSave(selectedNoteId, { title: newTitle });
-  };
+  }, [selectedNoteId, debouncedSave]);
 
   const handleContentChange = (html: string, text: string) => {
     if (selectedNoteId) debouncedSave(selectedNoteId, { content: html, contentText: text });
@@ -293,10 +309,10 @@ export function NoteEditor() {
     if (bp !== "desktop") setMobileView("list");
   };
 
-  const handleAction = async (action: "pin" | "fav") => {
-    if (!selectedNoteId) return;
+  // Fix 3: optimistic update for pin/fav — updates cache immediately so the UI feels instant
+  const handleAction = useCallback((action: "pin" | "fav") => {
+    if (!selectedNoteId || !note) return;
     if (isDemo) {
-      // Update cache directly for ephemeral pin/fav in demo mode
       const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
       if (existing) {
         queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
@@ -306,17 +322,33 @@ export function NoteEditor() {
       }
       return;
     }
-    if (action === "pin") {
-      await pinMut.mutateAsync({ id: selectedNoteId });
-      posthog.capture("note_pinned", { note_id: selectedNoteId, pinned: !note?.pinned });
-    }
-    if (action === "fav") {
-      await favMut.mutateAsync({ id: selectedNoteId });
-      posthog.capture("note_favorited", { note_id: selectedNoteId, favorited: !note?.favorite });
-    }
-    queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
-    queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
-  };
+    const id = selectedNoteId;
+    const field = action === "pin" ? "pinned" : "favorite";
+    const newVal = action === "pin" ? !note.pinned : !note.favorite;
+    if (action === "pin") posthog.capture("note_pinned", { note_id: id, pinned: newVal });
+    if (action === "fav") posthog.capture("note_favorited", { note_id: id, favorited: newVal });
+    const mutOpts = {
+      onMutate: async () => {
+        await queryClient.cancelQueries({ queryKey: getGetNoteQueryKey(id) });
+        const prev = queryClient.getQueryData(getGetNoteQueryKey(id));
+        queryClient.setQueryData(getGetNoteQueryKey(id), (old: any) => old ? { ...old, [field]: newVal } : old);
+        // Also patch every cached notes-list variant so the sidebar icon updates instantly
+        queryClient.setQueriesData({ queryKey: getGetNotesQueryKey() }, (old: any) =>
+          Array.isArray(old) ? old.map((n: any) => n.id === id ? { ...n, [field]: newVal } : n) : old
+        );
+        return { prev };
+      },
+      onError: (_e: unknown, _v: unknown, ctx: any) => {
+        queryClient.setQueryData(getGetNoteQueryKey(id), ctx?.prev);
+      },
+      onSettled: () => {
+        queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(id) });
+        queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+      },
+    };
+    if (action === "pin") pinMut.mutate({ id }, mutOpts);
+    if (action === "fav") favMut.mutate({ id }, mutOpts);
+  }, [selectedNoteId, note, isDemo, queryClient, pinMut, favMut]);
 
   const handleToggleVault = async () => {
     if (!selectedNoteId || !note) return;
@@ -333,20 +365,36 @@ export function NoteEditor() {
       if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, vaulted: !note.vaulted });
       return;
     }
-    await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: !note.vaulted } });
-    posthog.capture("note_vaulted", { note_id: selectedNoteId, vaulted: !note.vaulted });
-    queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
-    queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+    // Fix 3: optimistic vault toggle — assign opts to a variable to bypass TS excess property check
+    const id = selectedNoteId;
+    const newVaulted = !note.vaulted;
+    posthog.capture("note_vaulted", { note_id: id, vaulted: newVaulted });
+    const vaultMutOpts = {
+      onMutate: async () => {
+        await queryClient.cancelQueries({ queryKey: getGetNoteQueryKey(id) });
+        const prev = queryClient.getQueryData(getGetNoteQueryKey(id));
+        queryClient.setQueryData(getGetNoteQueryKey(id), (old: any) => old ? { ...old, vaulted: newVaulted } : old);
+        return { prev };
+      },
+      onError: (_e: unknown, _v: unknown, ctx: any) => {
+        queryClient.setQueryData(getGetNoteQueryKey(id), ctx?.prev);
+      },
+      onSettled: () => {
+        queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(id) });
+        queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+      },
+    };
+    vaultMut.mutate({ id, data: { vaulted: newVaulted } }, vaultMutOpts);
   };
 
-  const handleExportPdf = () => {
+  const handleExportPdf = useCallback(() => {
     posthog.capture("note_exported", { format: "pdf" });
     exportAsPdf(title, editor?.getHTML() ?? note?.content ?? "");
-  };
-  const handleExportMarkdown = () => {
+  }, [title, editor, note?.content]);
+  const handleExportMarkdown = useCallback(() => {
     posthog.capture("note_exported", { format: "markdown" });
     exportAsMarkdown(title, editor?.getHTML() ?? note?.content ?? "");
-  };
+  }, [title, editor, note?.content]);
 
   const handleVaultSetupConfirm = async (hash: string) => {
     if (!selectedNoteId || !note) return;
@@ -383,7 +431,7 @@ export function NoteEditor() {
   };
 
   // Tags
-  const addTag = async (tag: string) => {
+  const addTag = useCallback(async (tag: string) => {
     if (!selectedNoteId || !note) return;
     const newTags = [...(note.tags ?? []), tag];
     if (isDemo) {
@@ -394,9 +442,9 @@ export function NoteEditor() {
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetTagsQueryKey() });
-  };
+  }, [selectedNoteId, note, isDemo, queryClient, updateNoteMut]);
 
-  const removeTag = async (tag: string) => {
+  const removeTag = useCallback(async (tag: string) => {
     if (!selectedNoteId || !note) return;
     const newTags = (note.tags ?? []).filter(t => t !== tag);
     if (isDemo) {
@@ -407,12 +455,16 @@ export function NoteEditor() {
     queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
     queryClient.invalidateQueries({ queryKey: getGetTagsQueryKey() });
-  };
+  }, [selectedNoteId, note, isDemo, queryClient, updateNoteMut]);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     setMobileView("list");
     selectNote(null);
-  };
+  }, [setMobileView, selectNote]);
+
+  // Stable pin/fav wrappers for NoteHeader to avoid inline arrow re-allocation
+  const handlePin = useCallback(() => handleAction("pin"), [handleAction]);
+  const handleFav = useCallback(() => handleAction("fav"), [handleAction]);
 
   if (!selectedNoteId) {
     if (bp === "mobile") return null;
@@ -463,8 +515,8 @@ export function NoteEditor() {
         onToggleSidebar={toggleSidebar}
         onToggleNoteList={toggleNoteList}
         onBack={handleBack}
-        onPin={() => handleAction("pin")}
-        onFav={() => handleAction("fav")}
+        onPin={handlePin}
+        onFav={handleFav}
         onVaultToggle={handleToggleVault}
         onVersionHistory={() => setShowVersionHistory(v => !v)}
         onSetShowToc={setShowToc}

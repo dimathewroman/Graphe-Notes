@@ -1,6 +1,6 @@
 // Full editor formatting toolbar with font, color, link, and block controls.
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { memo, useLayoutEffect, useRef, useState } from "react";
 import type { useEditor } from "@tiptap/react";
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
@@ -18,7 +18,8 @@ import { FontPickerDropdown } from "./FontPickerDropdown";
 import { FontSizeWidget } from "./FontSizeWidget";
 import { LinkPopover } from "./LinkPopover";
 
-export function EditorToolbar({
+// Fix 5: memo prevents re-renders when NoteEditor state changes but editor/toolbar props are stable
+export const EditorToolbar = memo(function EditorToolbar({
   editor,
   showUndoRedo,
   className,
@@ -187,4 +188,4 @@ export function EditorToolbar({
       <WordCountPopover editor={editor} />
     </ScrollableToolbar>
   );
-}
+});
