@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { db, userSettingsTable, userApiKeysTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
+import { decryptApiKey } from "@lib/encryption";
 
 // GET /api/ai/settings — returns the user's active AI provider preference
 export async function GET(request: NextRequest) {
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
       hasCompletedAiSetup: boolean;
       localLlmEndpoint?: string | null;
       localLlmModel?: string | null;
+      localLlmApiKey?: string | null;
     } = {
       activeAiProvider: activeProvider,
       hasCompletedAiSetup: rows[0]?.hasCompletedAiSetup ?? false,
@@ -38,6 +40,11 @@ export async function GET(request: NextRequest) {
       const keyRow = keyRows[0];
       response.localLlmEndpoint = keyRow?.endpointUrl ?? null;
       response.localLlmModel = keyRow?.modelOverride ?? null;
+      // The server can't reach the user's local LLM, so the browser makes the
+      // request directly. The API key (if any) has to travel with it.
+      response.localLlmApiKey = keyRow?.encryptedKey
+        ? decryptApiKey(keyRow.encryptedKey)
+        : null;
     }
 
     return NextResponse.json(response);

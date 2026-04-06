@@ -71,10 +71,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // local_llm: apiKey is optional. If present, encrypt and store it for
+    // servers that require an Authorization header (vLLM, llama.cpp, etc).
+    const hasOptionalLocalKey =
+      provider === "local_llm" && typeof apiKey === "string" && apiKey.trim().length > 0;
+
     const encrypted =
-      provider === "graphe_free" || provider === "local_llm"
+      provider === "graphe_free"
         ? ""
-        : encryptApiKey((apiKey as string).trim());
+        : provider === "local_llm"
+          ? hasOptionalLocalKey
+            ? encryptApiKey((apiKey as string).trim())
+            : ""
+          : encryptApiKey((apiKey as string).trim());
 
     const now = new Date();
     await db
