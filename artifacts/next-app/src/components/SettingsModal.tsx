@@ -242,14 +242,32 @@ export function SettingsModal() {
   }, [activeTab, isSettingsOpen]);
 
   // ── AI handlers ─────────────────────────────────────────────────
-  const handleAiProviderChange = async (newProvider: AiProvider) => {
-    setAiProvider(newProvider);
-    if (newProvider === "openai" || newProvider === "anthropic") setByokSubProvider(newProvider);
+  // Commit the active provider to the server. Also flips hasCompletedAiSetup
+  // so the first-time AI setup modal won't reappear after a direct Settings save.
+  const commitActiveProvider = async (newProvider: AiProvider) => {
     await authenticatedFetch("/api/ai/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ activeAiProvider: newProvider }),
+      body: JSON.stringify({ activeAiProvider: newProvider, hasCompletedAiSetup: true }),
     }).catch(() => {});
+  };
+
+  // Click handler for provider cards. Updates the visible detail panel and
+  // only commits to the server when the provider already has a working
+  // configuration. This prevents leaving the user with a non-working active
+  // provider if they click a card and close the modal without saving credentials.
+  const handleAiProviderChange = async (newProvider: AiProvider) => {
+    setAiProvider(newProvider);
+    if (newProvider === "openai" || newProvider === "anthropic") setByokSubProvider(newProvider);
+
+    const isConfigured =
+      newProvider === "graphe_free" ||
+      (newProvider === "google_ai_studio" && savedKeys["google_ai_studio"]?.hasKey) ||
+      (newProvider === "openai" && savedKeys["openai"]?.hasKey) ||
+      (newProvider === "anthropic" && savedKeys["anthropic"]?.hasKey) ||
+      (newProvider === "local_llm" && Boolean(savedKeys["local_llm"]?.endpointUrl));
+
+    if (isConfigured) await commitActiveProvider(newProvider);
   };
 
   const handleSaveGoogleKey = async () => {
@@ -263,6 +281,7 @@ export function SettingsModal() {
       });
       setSavedKeys(prev => ({ ...prev, google_ai_studio: { hasKey: true, endpointUrl: null, modelOverride: googleModelOverride.trim() || null } }));
       setGoogleKey("");
+      await commitActiveProvider("google_ai_studio");
     } finally {
       setGoogleSaving(false);
     }
@@ -282,6 +301,7 @@ export function SettingsModal() {
       });
       setSavedKeys(prev => ({ ...prev, [sub]: { hasKey: true, endpointUrl: null, modelOverride: modelOverride.trim() || null } }));
       if (isOpenai) setByokOpenaiKey(""); else setByokAnthropicKey("");
+      await commitActiveProvider(sub);
     } finally {
       if (isOpenai) setByokOpenaiSaving(false); else setByokAnthropicSaving(false);
     }
@@ -289,6 +309,9 @@ export function SettingsModal() {
 
   const handleSaveLocalLlm = async () => {
     if (!localEndpoint.trim()) return;
+    // Strip trailing slashes so we never produce double-slash URLs like
+    // http://localhost:8000//v1/chat/completions when concatenating the path.
+    const normalizedEndpoint = localEndpoint.trim().replace(/\/+$/, "");
     setLocalSaving(true);
     try {
       const trimmedKey = localApiKey.trim();
@@ -297,7 +320,7 @@ export function SettingsModal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           provider: "local_llm",
-          endpointUrl: localEndpoint.trim(),
+          endpointUrl: normalizedEndpoint,
           modelOverride: localModel.trim() || null,
           apiKey: trimmedKey || null,
         }),
@@ -306,11 +329,13 @@ export function SettingsModal() {
         ...prev,
         local_llm: {
           hasKey: trimmedKey.length > 0,
-          endpointUrl: localEndpoint.trim(),
+          endpointUrl: normalizedEndpoint,
           modelOverride: localModel.trim() || null,
         },
       }));
+      setLocalEndpoint(normalizedEndpoint);
       setLocalApiKey("");
+      await commitActiveProvider("local_llm");
     } finally {
       setLocalSaving(false);
     }
