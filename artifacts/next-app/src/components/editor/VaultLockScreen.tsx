@@ -30,8 +30,8 @@ export function VaultLockScreen({
   vaultUnlockError: string;
 }) {
   return (
-    <div className="flex-1 flex flex-col bg-background">
-      <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-background/80 backdrop-blur-md shrink-0">
+    <div className="flex-1 flex flex-col bg-editor">
+      <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-editor/80 backdrop-blur-md shrink-0">
         {bp === "mobile" && (
           <button onClick={onBack} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors">
             <ArrowLeft className="w-5 h-5 text-muted-foreground" />

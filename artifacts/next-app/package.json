@@ -49,6 +49,7 @@
     "date-fns": "^3.6.0",
     "drizzle-orm": "catalog:",
     "framer-motion": "catalog:",
+    "geist": "^1.7.0",
     "html2pdf.js": "^0.14.0",
     "lucide-react": "catalog:",
     "next": "^15.3.3",

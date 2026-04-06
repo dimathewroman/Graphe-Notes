@@ -3,10 +3,9 @@
   "configurations": [
     {
       "name": "next-app",
-      "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH && set -a && [ -f ../../../.env ] && . ../../../.env; set +a && cd ../../../ && /usr/local/bin/pnpm --filter @workspace/next-app run dev"],
-      "port": 3000,
-      "autoPort": false
+      "runtimeExecutable": "/bin/sh",
+      "runtimeArgs": ["-c", "export PATH=/usr/local/bin:$PATH && cd /Users/dimathewroman/Repositories/Graphe-Notes && pnpm --filter @workspace/next-app run dev"],
+      "port": 3000
     }
   ]
 }
