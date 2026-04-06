@@ -13,6 +13,7 @@ interface AiSettingsResponse {
   hasCompletedAiSetup?: boolean;
   localLlmEndpoint?: string | null;
   localLlmModel?: string | null;
+  localLlmApiKey?: string | null;
 }
 
 interface LocalLlmChatResponse {
@@ -60,6 +61,7 @@ export function useAiAction(
     let provider = "graphe_free";
     let localLlmEndpoint: string | null = null;
     let localLlmModel: string | null = null;
+    let localLlmApiKey: string | null = null;
     if (!isDemo) {
       try {
         const settingsRes = await authenticatedFetch("/api/ai/settings");
@@ -87,9 +89,11 @@ export function useAiAction(
                     setTimeout(() => setAiError(null), 5000);
                     return;
                   }
+                  const freshHeaders: Record<string, string> = { "Content-Type": "application/json" };
+                  if (freshData.localLlmApiKey) freshHeaders["Authorization"] = `Bearer ${freshData.localLlmApiKey}`;
                   const res = await fetch(`${endpoint}/v1/chat/completions`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: freshHeaders,
                     body: JSON.stringify({
                       model: freshData.localLlmModel ?? "default",
                       messages: [{ role: "user", content: capturedPrompt }],
@@ -139,6 +143,7 @@ export function useAiAction(
           provider = settingsData.activeAiProvider;
           localLlmEndpoint = settingsData.localLlmEndpoint ?? null;
           localLlmModel = settingsData.localLlmModel ?? null;
+          localLlmApiKey = settingsData.localLlmApiKey ?? null;
         }
       } catch { /* use default */ }
     }
@@ -154,9 +159,11 @@ export function useAiAction(
       setAiLoading(true);
       setAiError(null);
       try {
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (localLlmApiKey) headers["Authorization"] = `Bearer ${localLlmApiKey}`;
         const res = await fetch(`${localLlmEndpoint}/v1/chat/completions`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({
             model: localLlmModel ?? "default",
             messages: [{ role: "user", content: prompt }],

@@ -104,6 +104,8 @@ export function SettingsModal() {
   // Local / Hosted LLM
   const [localEndpoint, setLocalEndpoint] = useState("");
   const [localModel, setLocalModel] = useState("");
+  const [localApiKey, setLocalApiKey] = useState("");
+  const [localApiKeyVisible, setLocalApiKeyVisible] = useState(false);
   const [localSaving, setLocalSaving] = useState(false);
 
   // Usage (Graphe Free)
@@ -289,12 +291,26 @@ export function SettingsModal() {
     if (!localEndpoint.trim()) return;
     setLocalSaving(true);
     try {
+      const trimmedKey = localApiKey.trim();
       await authenticatedFetch("/api/ai/keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: "local_llm", endpointUrl: localEndpoint.trim(), modelOverride: localModel.trim() || null }),
+        body: JSON.stringify({
+          provider: "local_llm",
+          endpointUrl: localEndpoint.trim(),
+          modelOverride: localModel.trim() || null,
+          apiKey: trimmedKey || null,
+        }),
       });
-      setSavedKeys(prev => ({ ...prev, local_llm: { hasKey: false, endpointUrl: localEndpoint.trim(), modelOverride: localModel.trim() || null } }));
+      setSavedKeys(prev => ({
+        ...prev,
+        local_llm: {
+          hasKey: trimmedKey.length > 0,
+          endpointUrl: localEndpoint.trim(),
+          modelOverride: localModel.trim() || null,
+        },
+      }));
+      setLocalApiKey("");
     } finally {
       setLocalSaving(false);
     }
@@ -973,6 +989,9 @@ export function SettingsModal() {
                           <div className="flex items-center gap-2 min-w-0">
                             <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                             <span className="text-sm text-foreground truncate">{savedKeys["local_llm"].endpointUrl}</span>
+                            {savedKeys["local_llm"].hasKey && (
+                              <span className="text-[10px] text-emerald-500 font-medium px-1.5 py-0.5 rounded bg-emerald-500/10 shrink-0">key set</span>
+                            )}
                           </div>
                           <button onClick={() => handleRemoveKey("local_llm")} className="text-xs text-red-400 hover:text-red-300 transition-colors shrink-0 ml-3">Remove</button>
                         </div>
@@ -999,6 +1018,28 @@ export function SettingsModal() {
                               placeholder="e.g. llama3.2"
                               className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
                             />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">
+                              API key <span className="font-normal">(optional)</span>
+                            </label>
+                            <div className="relative">
+                              <input
+                                type={localApiKeyVisible ? "text" : "password"}
+                                value={localApiKey}
+                                onChange={(e) => setLocalApiKey(e.target.value)}
+                                placeholder="Only if your server requires auth"
+                                className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 pr-9 text-sm focus:border-primary focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setLocalApiKeyVisible(v => !v)}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
+                                aria-label={localApiKeyVisible ? "Hide API key" : "Show API key"}
+                              >
+                                {localApiKeyVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
                           </div>
                           <button
                             onClick={handleSaveLocalLlm}
