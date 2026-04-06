@@ -408,12 +408,18 @@ export function NoteList() {
     };
   };
 
+  const { noteListWidth } = useAppStore();
   const containerClass = bp === "mobile"
     ? "flex-1 bg-background flex flex-col h-screen"
-    : cn("border-r border-panel-border bg-background flex flex-col h-screen shrink-0 transition-all", viewMode === "gallery" ? "w-96" : bp === "tablet" ? "w-72" : "w-80");
+    : "border-r border-panel-border bg-background flex flex-col h-screen shrink-0";
+
+  const containerWidth = bp === "mobile" ? undefined
+    : viewMode === "gallery" ? 384
+    : bp === "tablet" ? 288
+    : noteListWidth;
 
   return (
-    <div className={containerClass}>
+    <div className={containerClass} style={containerWidth ? { width: containerWidth } : undefined}>
       {/* Header */}
       <div className="p-4 border-b border-panel-border flex flex-col gap-3">
         <div className="flex items-center justify-between">
@@ -437,11 +443,6 @@ export function NoteList() {
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {bp === "desktop" && (
-              <IconButton onClick={toggleNoteList} title="Collapse note list">
-                <PanelLeftClose className="w-4 h-4" />
-              </IconButton>
-            )}
             <IconButton onClick={() => setViewMode(viewMode === "list" ? "gallery" : "list")} title={viewMode === "list" ? "Gallery view" : "List view"}>
               {viewMode === "list" ? <LayoutGrid className="w-4 h-4" /> : <LayoutList className="w-4 h-4" />}
             </IconButton>
@@ -451,14 +452,14 @@ export function NoteList() {
                 <SortAsc className="w-4 h-4" />
               </IconButton>
               {showSortMenu && (
-                <div className="absolute right-0 top-full mt-1 z-40 min-w-[210px] bg-popover border border-panel-border rounded-xl shadow-xl py-1">
+                <div className="absolute right-0 top-full mt-1 z-40 min-w-[210px] bg-popover border border-panel-border rounded-lg shadow-xl py-1">
                   <p className="px-3 py-1.5 text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Sort by</p>
                   {SORT_OPTIONS.map(opt => (
                     <button
                       key={`${opt.sortBy}-${opt.sortDir}`}
                       onClick={() => { setSort(opt.sortBy, opt.sortDir); setShowSortMenu(false); }}
                       className={cn(
-                        "w-full text-left px-3 py-2 text-sm transition-colors",
+                        "w-full text-left px-3 py-2 text-sm transition-colors rounded-md",
                         sortBy === opt.sortBy && sortDir === opt.sortDir
                           ? "text-primary bg-primary/10"
                           : "text-foreground hover:bg-panel"
@@ -470,14 +471,14 @@ export function NoteList() {
                 </div>
               )}
             </div>
-            {/* New note */}
-            <IconButton
+            {/* New note — rounded square, NOT circle */}
+            <button
               onClick={handleCreateNew}
               disabled={createNoteMut.isPending}
-              className="bg-primary text-primary-foreground hover:bg-primary-hover hover:text-primary-foreground shadow-sm"
+              className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center"
             >
               <Plus className="w-4 h-4" />
-            </IconButton>
+            </button>
           </div>
         </div>
 
@@ -514,10 +515,10 @@ export function NoteList() {
                 onClick={() => handleSelectNote(note.id)}
                 onContextMenu={e => handleContextMenu(e, note)}
                 className={cn(
-                  "rounded-xl cursor-pointer border transition-all duration-200 group overflow-hidden",
+                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px] hover:-translate-y-0.5",
                   selectedNoteId === note.id
-                    ? "bg-panel border-primary/50 shadow-md shadow-primary/5"
-                    : "bg-transparent border-transparent hover:bg-panel hover:border-panel-border"
+                    ? "bg-primary/5 border-primary/30 shadow-sm"
+                    : "bg-transparent border-transparent hover:bg-panel-hover hover:border-panel-border"
                 )}
               >
                 {img && (
@@ -532,7 +533,7 @@ export function NoteList() {
                       {note.vaulted && <ShieldCheck className="w-2.5 h-2.5 shrink-0 text-indigo-400" />}
                       {note.title || "Untitled Note"}
                     </h3>
-                    <button onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }} className={cn("rounded hover:bg-panel-border transition-all ml-1 shrink-0", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}>
+                    <button onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }} className={cn("rounded-md hover:bg-panel-border transition-all ml-1 shrink-0", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}>
                       <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
                     </button>
                   </div>
@@ -557,10 +558,10 @@ export function NoteList() {
               onClick={() => handleSelectNote(note.id)}
               onContextMenu={e => handleContextMenu(e, note)}
               className={cn(
-                "p-3 rounded-xl cursor-pointer border transition-all duration-200 group relative",
+                "p-3 rounded-lg cursor-pointer transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
                 selectedNoteId === note.id
-                  ? "bg-panel border-primary/50 shadow-md shadow-primary/5"
-                  : "bg-transparent border-transparent hover:bg-panel hover:border-panel-border"
+                  ? "bg-primary/5 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"
+                  : "border-l-2 border-l-transparent border-y border-y-transparent border-r border-r-transparent hover:bg-panel-hover"
               )}
             >
               <div className="flex items-start justify-between mb-1">
@@ -576,22 +577,22 @@ export function NoteList() {
                   {note.favorite && <Star className="w-3 h-3 fill-current text-yellow-500 opacity-70" />}
                   <button
                     onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }}
-                    className={cn("rounded hover:bg-panel-border transition-all", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}
+                    className={cn("rounded-md hover:bg-panel-border transition-all", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}
                     title="Options"
                   >
                     <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
                   </button>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed mb-2">
+              <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed flex-1">
                 {note.vaulted ? "🔒 Vault note" : (note.contentText || "No content")}
               </p>
-              <div className="flex items-center justify-between mt-2">
+              <div className="flex items-center justify-between mt-auto">
                 <span className="text-[10px] text-muted-foreground/70 font-mono">{formatDate(note.updatedAt)}</span>
                 {note.tags && note.tags.length > 0 && (
                   <div className="flex gap-1 overflow-hidden">
                     {note.tags.slice(0, 2).map(tag => (
-                      <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent text-accent-foreground border border-panel-border truncate max-w-[60px]">
+                      <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/8 text-primary border border-primary/15 truncate max-w-[60px]">
                         #{tag}
                       </span>
                     ))}

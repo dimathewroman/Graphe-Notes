@@ -2,7 +2,7 @@ import { useState } from "react";
 import posthog from "posthog-js";
 const grapheLogo = "/graphe_minimalist_1773640203523.png";
 import {
-  Folder, FolderOpen, FileText, Star,
+  Folder, FolderOpen, FileText, Star, Pin, Search, Sun, Moon,
   Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag, Menu, X, ShieldCheck, Lock, Unlock, KeyRound, LogOut, Wand2
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -45,6 +45,21 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const setupVaultMut = useSetupVault();
   const unlockVaultMut = useUnlockVault();
   const changePasswordMut = useChangeVaultPassword();
+
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return !document.documentElement.classList.contains("light");
+  });
+  const toggleTheme = () => {
+    const next = isDark ? "light" : "dark";
+    if (next === "light") {
+      document.documentElement.classList.add("light");
+    } else {
+      document.documentElement.classList.remove("light");
+    }
+    localStorage.setItem("theme_mode", next);
+    setIsDark(next === "dark");
+  };
 
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
   const [newFolderName, setNewFolderName] = useState("");
@@ -168,20 +183,20 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             "group flex items-center justify-between py-2 md:py-1.5 rounded-lg cursor-pointer transition-colors",
             isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
           )}
-          style={{ paddingLeft: `${(depth + 1) * 12 + 4}px`, paddingRight: "8px" }}
+          style={{ paddingLeft: `${depth * 12 + 22}px`, paddingRight: "12px" }}
           onClick={() => handleNavClick("folder", folder.id)}
         >
           <div className="flex items-center gap-2 min-w-0">
             <button
-              className="p-1 md:p-0.5 hover:bg-panel rounded opacity-60 hover:opacity-100 shrink-0"
+              className="p-1 md:p-0.5 hover:bg-panel rounded-md opacity-60 hover:opacity-100 shrink-0"
               onClick={e => { e.stopPropagation(); toggleFolder(folder.id); }}
             >
               {children.length > 0 ? (
-                isExpanded ? <FolderOpen className="w-4 h-4" /> : <Folder className="w-4 h-4" />
+                isExpanded ? <FolderOpen className="w-4 h-4" style={folder.color ? { color: folder.color } : undefined} /> : <Folder className="w-4 h-4" style={folder.color ? { color: folder.color } : undefined} />
               ) : (
                 isSmart
                   ? <Tag className="w-4 h-4 text-primary/60" />
-                  : <Folder className="w-4 h-4 opacity-50" />
+                  : <Folder className="w-4 h-4 opacity-50" style={folder.color ? { color: folder.color, opacity: 1 } : undefined} />
               )}
             </button>
             <span className="text-sm truncate">{folder.name}</span>
@@ -194,14 +209,14 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
             <button
-              className="p-1.5 md:p-1 hover:bg-panel rounded transition-colors"
+              className="p-1.5 md:p-1 hover:bg-panel rounded-md transition-colors"
               onClick={e => { e.stopPropagation(); setEditingFolder(folder); }}
               title="Edit folder"
             >
               <Edit2 className="w-3.5 h-3.5 md:w-3 md:h-3 text-muted-foreground" />
             </button>
             <button
-              className="p-1.5 md:p-1 hover:bg-panel rounded transition-colors"
+              className="p-1.5 md:p-1 hover:bg-panel rounded-md transition-colors"
               onClick={e => {
                 e.stopPropagation();
                 setNewFolderParentId(folder.id);
@@ -215,7 +230,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               <Plus className="w-3.5 h-3.5 md:w-3 md:h-3 text-muted-foreground" />
             </button>
             <button
-              className="p-1.5 md:p-1 hover:bg-panel rounded transition-colors"
+              className="p-1.5 md:p-1 hover:bg-panel rounded-md transition-colors"
               onClick={e => {
                 e.stopPropagation();
                 if (confirm(`Delete folder "${folder.name}"?`)) {
@@ -237,7 +252,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
         {isExpanded && children.map(child => renderFolder(child, depth + 1))}
         {isExpanded && isCreatingFolder && newFolderParentId === folder.id && (
-          <div style={{ paddingLeft: `${(depth + 2) * 12 + 4}px`, paddingRight: "8px" }} className="mb-1">
+          <div style={{ paddingLeft: `${(depth + 1) * 12 + 22}px`, paddingRight: "12px" }} className="mb-1">
             <form onSubmit={handleCreateFolder} className="flex items-center gap-2 bg-background border border-panel-border rounded-lg px-2 py-1">
               <Folder className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               <input
@@ -258,27 +273,50 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 flex items-center justify-between">
+      {/* Logo + Settings */}
+      <div className="p-4 pb-2 flex items-center justify-between">
         <div className="flex items-center gap-2 text-foreground font-semibold">
           <img src={grapheLogo} alt="Graphe Notes" className="w-6 h-6 rounded-md" />
           <span>Graphe Notes</span>
         </div>
-        <IconButton onClick={() => { setSettingsOpen(true); onNavigate?.(); }}>
-          <Settings className="w-4 h-4" />
-        </IconButton>
+        <div className="flex items-center gap-0.5">
+          <IconButton onClick={toggleTheme} title={isDark ? "Switch to light mode" : "Switch to dark mode"}>
+            {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </IconButton>
+          <IconButton onClick={() => { setSettingsOpen(true); onNavigate?.(); }}>
+            <Settings className="w-4 h-4" />
+          </IconButton>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-2">
-        <div className="px-3 space-y-0.5 mb-4">
-          <NavItem icon={<Zap className="w-4 h-4" />} label="Quick Bits" active={activeFilter === "quickbits"} onClick={() => handleNavClick("quickbits")} />
+      {/* Search */}
+      <div className="px-3 pb-2">
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search..."
+            className="w-full bg-background/60 border border-panel-border rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-foreground placeholder:text-muted-foreground"
+          />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto py-1">
+        {/* Primary nav */}
+        <div className="px-3 space-y-0.5 mb-3">
           <NavItem icon={<FileText className="w-4 h-4" />} label="All Notes" active={activeFilter === "all"} onClick={() => handleNavClick("all")} />
+          <NavItem icon={<Zap className="w-4 h-4" />} label="Quick Bits" active={activeFilter === "quickbits"} onClick={() => handleNavClick("quickbits")} />
           <NavItem icon={<Star className="w-4 h-4" />} label="Favorites" active={activeFilter === "favorites"} onClick={() => handleNavClick("favorites")} />
+          <NavItem icon={<Pin className="w-4 h-4" />} label="Pinned" active={activeFilter === "pinned"} onClick={() => handleNavClick("all")} />
           <NavItem icon={<Paperclip className="w-4 h-4" />} label="Attachments" active={activeFilter === "attachments"} onClick={() => handleNavClick("attachments")} />
+          {/* Vault — in main nav after Attachments */}
           <div className="flex items-center gap-1">
             <button
               onClick={handleVaultClick}
               className={cn(
-                "flex-1 flex items-center gap-3 px-3 py-2.5 md:py-2 rounded-lg text-sm transition-all duration-200",
+                "flex-1 flex items-center gap-3 px-3 py-2.5 md:py-2 rounded-lg text-sm",
+                "transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]",
+                "active:scale-[0.97]",
                 activeFilter === "vault" && isVaultUnlocked
                   ? "bg-primary/10 text-primary font-medium"
                   : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
@@ -304,20 +342,19 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               </div>
             )}
           </div>
-
         </div>
 
         <div className="mx-3 border-t border-panel-border mb-3" />
 
-        <div className="px-3 mb-1.5 flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        {/* Folders */}
+        <div className="pl-6 pr-4 mb-1.5 flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           <span>Folders</span>
-          <button
+          <IconButton
             onClick={() => { setNewFolderParentId(null); setIsCreatingFolder(true); }}
-            className="hover:text-foreground transition-colors p-1.5 md:p-1"
             title="New folder"
           >
             <Plus className="w-3.5 h-3.5" />
-          </button>
+          </IconButton>
         </div>
 
         {isCreatingFolder && newFolderParentId === null && (
@@ -337,7 +374,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         )}
 
-        <div className="space-y-0 pr-2 mb-4">
+        <div className="space-y-0 mb-3">
           {foldersLoading ? (
             <div className="px-6 py-2 text-sm text-muted-foreground">Loading...</div>
           ) : rootFolders.length === 0 ? (
@@ -347,11 +384,12 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           )}
         </div>
 
-        <div className="mx-3 border-t border-panel-border mt-3 mb-4" />
+        <div className="mx-3 border-t border-panel-border mb-3" />
 
-        <div className="px-3 space-y-0.5">
-            <NavItem
-            icon={<Trash2 className="w-4 h-4" />}
+        {/* Recently Deleted — below Folders */}
+        <div className="px-3 space-y-0.5 mb-3">
+          <NavItem
+            icon={<Trash2 className="w-4 h-4 text-muted-foreground" />}
             label="Recently Deleted"
             active={activeFilter === "recently-deleted"}
             onClick={() => { setFilter("recently-deleted"); onNavigate?.(); }}
@@ -360,17 +398,21 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
       </div>
 
-      <div className="p-4 border-t border-panel-border space-y-2">
+      {/* AI Assistant — directly above profile */}
+      <div className="px-3 py-2">
         <button
           onClick={() => { setAIPanelOpen(true); onNavigate?.(); }}
-          className="w-full flex items-center justify-center gap-2 py-3 md:py-2.5 rounded-xl bg-gradient-to-r from-indigo-500/10 to-purple-500/10 hover:from-indigo-500/20 hover:to-purple-500/20 border border-indigo-500/20 text-indigo-400 hover:text-indigo-300 font-medium transition-all"
+          className="w-full flex items-center justify-center gap-2 py-2.5 md:py-2 rounded-xl bg-accent-gradient text-white font-medium hover:opacity-90 transition-opacity shadow-sm"
         >
           <Wand2 className="w-4 h-4" />
           <span>AI Assistant</span>
         </button>
+      </div>
 
+      {/* Bottom section: Profile */}
+      <div className="p-3 border-t border-panel-border">
         {user && (
-          <div className="flex items-center gap-2 px-1 pt-1">
+          <div className="flex items-center gap-2 px-1">
             {user.profileImageUrl ? (
               <img src={user.profileImageUrl} alt="" referrerPolicy="no-referrer" className="w-7 h-7 rounded-full object-cover shrink-0" />
             ) : (
@@ -418,7 +460,7 @@ export function Sidebar() {
   if (bp !== "desktop" || !isSidebarOpen) return null;
 
   return (
-    <div className="w-64 border-r border-panel-border bg-panel flex flex-col h-full shrink-0">
+    <div className="w-60 border-r border-panel-border bg-panel flex flex-col h-full shrink-0">
       <SidebarContent />
     </div>
   );
@@ -429,7 +471,9 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; labe
     <button
       onClick={onClick}
       className={cn(
-        "w-full flex items-center gap-3 py-2.5 md:py-2 px-3 rounded-lg text-sm transition-all duration-200",
+        "w-full flex items-center gap-3 py-2.5 md:py-2 px-3 rounded-lg text-sm",
+        "transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]",
+        "active:scale-[0.97]",
         active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
       )}
     >

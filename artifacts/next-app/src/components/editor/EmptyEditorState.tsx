@@ -17,9 +17,9 @@ export function EmptyEditorState({
   onToggleNoteList: () => void;
 }) {
   return (
-    <div className="flex-1 flex flex-col bg-background relative">
+    <div className="flex-1 flex flex-col bg-editor relative">
       {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (
-        <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-background/80 backdrop-blur-md shrink-0">
+        <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-editor/80 backdrop-blur-md shrink-0">
           {!isSidebarOpen && (
             <IconButton onClick={onToggleSidebar} title="Show sidebar">
               <PanelLeft className="w-4 h-4" />

@@ -105,7 +105,7 @@ export function WordCountPopover({ editor }: WordCountPopoverProps) {
         onClick={() => { refresh(); setOpen((v) => !v); }}
         title="Word count"
         className={cn(
-          "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded text-muted-foreground hover:bg-panel hover:text-foreground transition-colors shrink-0 flex items-center justify-center",
+          "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center",
           open && "bg-panel text-primary"
         )}
       >
