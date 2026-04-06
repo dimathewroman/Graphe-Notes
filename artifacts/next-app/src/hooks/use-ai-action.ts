@@ -87,7 +87,9 @@ export function useAiAction(
                     setTimeout(() => setAiError(null), 5000);
                     return;
                   }
-                  const res = await fetch(`${endpoint}/v1/chat/completions`, {
+                  // Strip trailing slashes defensively for endpoints saved before normalization existed.
+                  const normalizedEndpoint = endpoint.replace(/\/+$/, "");
+                  const res = await fetch(`${normalizedEndpoint}/v1/chat/completions`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -151,10 +153,12 @@ export function useAiAction(
         return;
       }
 
+      // Strip trailing slashes defensively for endpoints saved before normalization existed.
+      const normalizedEndpoint = localLlmEndpoint.replace(/\/+$/, "");
       setAiLoading(true);
       setAiError(null);
       try {
-        const res = await fetch(`${localLlmEndpoint}/v1/chat/completions`, {
+        const res = await fetch(`${normalizedEndpoint}/v1/chat/completions`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
