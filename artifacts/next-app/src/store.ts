@@ -4,7 +4,7 @@ import type { GetNotesSortBy, GetNotesSortDir } from "@workspace/api-client-reac
 type FilterType = "all" | "pinned" | "favorites" | "folder" | "tag" | "attachments" | "vault" | "quickbits" | "recently-deleted";
 type ViewMode = "list" | "gallery";
 type MobileView = "list" | "editor";
-type SettingsTab = "appearance" | "ai" | "data" | "security" | "quickbits";
+type SettingsTab = "appearance" | "ai" | "data" | "security" | "quickbits" | "account";
 
 interface AppState {
   activeFilter: FilterType;
@@ -24,6 +24,11 @@ interface AppState {
   isAIPanelOpen: boolean;
   isSettingsOpen: boolean;
   settingsInitialTab: SettingsTab | null;
+
+  sidebarWidth: number;
+  noteListWidth: number;
+  setSidebarWidth: (w: number) => void;
+  setNoteListWidth: (w: number) => void;
 
   isVaultUnlocked: boolean;
   setVaultUnlocked: (isUnlocked: boolean) => void;
@@ -70,6 +75,11 @@ export const useAppStore = create<AppState>((set) => ({
   isAIPanelOpen: false,
   isSettingsOpen: false,
   settingsInitialTab: null,
+
+  sidebarWidth: 240,
+  noteListWidth: 340,
+  setSidebarWidth: (w) => set({ sidebarWidth: w }),
+  setNoteListWidth: (w) => set({ noteListWidth: w }),
 
   isVaultUnlocked: false,
   setVaultUnlocked: (isUnlocked) => set({ isVaultUnlocked: isUnlocked }),

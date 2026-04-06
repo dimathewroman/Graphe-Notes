@@ -9,11 +9,13 @@ import { useAuth } from "@/hooks/use-auth";
 import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn, sha256 } from "@/lib/utils";
+import { useBreakpoint } from "@/hooks/use-mobile";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import { PinPad } from "./PinPad";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 
 const ACCENT_PRESETS = [
-  { name: "Blue",    value: "217 91% 60%",  hex: "#3b82f6" },
+  { name: "Periwinkle", value: "216 78% 63%",  hex: "#5B93E8" },
   { name: "Indigo",  value: "239 84% 67%",  hex: "#6366f1" },
   { name: "Purple",  value: "270 76% 65%",  hex: "#a855f7" },
   { name: "Rose",    value: "350 89% 62%",  hex: "#f43f5e" },
@@ -47,10 +49,13 @@ function applyTheme(mode: ThemeMode, accent: string) {
 export function SettingsModal() {
   const { isSettingsOpen, setSettingsOpen, settingsInitialTab } = useAppStore();
   const { user, logout } = useAuth();
+  const bp = useBreakpoint();
+  const isMobile = bp === "mobile";
 
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [accentColor, setAccentColor] = useState(ACCENT_PRESETS[0].value);
-  const [activeTab, setActiveTab] = useState<"appearance" | "ai" | "data" | "security" | "quickbits">("appearance");
+  const [activeTab, setActiveTab] = useState<"appearance" | "ai" | "data" | "security" | "quickbits" | "account">("appearance");
+  const [mobileSubPage, setMobileSubPage] = useState<typeof activeTab | null>(null);
 
   // Quick Bits settings state
   const [qbExpirationDays, setQbExpirationDays] = useState(3);
@@ -110,7 +115,12 @@ export function SettingsModal() {
     if (isSettingsOpen) {
       setThemeMode((localStorage.getItem("theme_mode") as ThemeMode) || "dark");
       setAccentColor(localStorage.getItem("theme_accent") || ACCENT_PRESETS[0].value);
-      if (settingsInitialTab) setActiveTab(settingsInitialTab);
+      if (settingsInitialTab) {
+        setActiveTab(settingsInitialTab);
+        if (isMobile) setMobileSubPage(settingsInitialTab);
+      } else {
+        setMobileSubPage(null);
+      }
     }
   }, [isSettingsOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -435,7 +445,8 @@ export function SettingsModal() {
     { id: "data" as const, label: "Data", icon: Cloud },
     { id: "security" as const, label: "Security & Sign-In", icon: Shield },
     { id: "quickbits" as const, label: "Quick Bits", icon: Zap },
-  ];
+    { id: "account" as const, label: "Account", icon: LogOut },
+  ] as const;
 
   const handleQbSave = async () => {
     setQbSaving(true);
@@ -471,36 +482,95 @@ export function SettingsModal() {
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-lg bg-panel border border-panel-border rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col"
+            className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-[720px] md:h-[min(580px,80vh)] bg-panel border border-panel-border rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col md:flex-row"
           >
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-panel-border bg-background/50">
-              <h2 className="text-lg font-semibold tracking-tight">Settings</h2>
-              <IconButton onClick={() => setSettingsOpen(false)}>
-                <X className="w-5 h-5" />
-              </IconButton>
+            {/* Left sidebar nav */}
+            <div className="hidden md:flex flex-col w-[200px] border-r border-panel-border bg-background/40 shrink-0">
+              <div className="p-4 pb-2">
+                <p className="text-sm font-semibold text-foreground">Graphe Notes</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mt-0.5">Settings</p>
+              </div>
+              <nav className="flex-1 px-2 py-2 space-y-0.5">
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={cn(
+                      "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all duration-150",
+                      activeTab === tab.id
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
+                    )}
+                  >
+                    <tab.icon className="w-4 h-4" />
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
+              {user && (
+                <div className="p-3 border-t border-panel-border mt-auto">
+                  <div className="flex items-center gap-2">
+                    {user.profileImageUrl ? (
+                      <img src={user.profileImageUrl} alt="" referrerPolicy="no-referrer" className="w-7 h-7 rounded-full shrink-0" />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-medium shrink-0">
+                        {(user.firstName || user.email || "U")[0].toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate">{[user.firstName, user.lastName].filter(Boolean).join(" ") || "User"}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Tabs */}
-            <div className="flex border-b border-panel-border bg-background/30 px-4">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 transition-colors",
-                    activeTab === tab.id
-                      ? "border-primary text-primary"
-                      : "border-transparent text-muted-foreground hover:text-foreground"
+            {/* Mobile: settings list or sub-page */}
+            {isMobile && !mobileSubPage && (
+              <div className="flex-1 flex flex-col overflow-hidden md:hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-panel-border bg-background/30 shrink-0">
+                  <h2 className="text-lg font-semibold tracking-tight">Settings</h2>
+                  <IconButton onClick={() => setSettingsOpen(false)}>
+                    <X className="w-5 h-5" />
+                  </IconButton>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  {tabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => { setActiveTab(tab.id); setMobileSubPage(tab.id); }}
+                      className="w-full flex items-center gap-3 px-5 py-4 text-sm text-foreground hover:bg-panel-hover transition-colors border-b border-panel-border/50"
+                    >
+                      <tab.icon className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="flex-1 text-left">{tab.label}</span>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground/50" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Right content area (desktop always, mobile only when sub-page selected) */}
+            <div className={cn("flex-1 flex flex-col overflow-hidden", isMobile && !mobileSubPage && "hidden")}>
+              {/* Content header */}
+              <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-panel-border bg-background/30 shrink-0">
+                <div className="flex items-center gap-2">
+                  {isMobile && mobileSubPage && (
+                    <button onClick={() => setMobileSubPage(null)} className="min-w-[44px] min-h-[44px] -ml-2 flex items-center justify-center rounded-lg hover:bg-panel transition-colors">
+                      <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+                    </button>
                   )}
-                >
-                  <tab.icon className="w-3.5 h-3.5" />
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+                  <h2 className="text-lg font-semibold tracking-tight capitalize">
+                    {tabs.find(t => t.id === activeTab)?.label ?? "Settings"}
+                  </h2>
+                </div>
+                <IconButton onClick={() => setSettingsOpen(false)}>
+                  <X className="w-5 h-5" />
+                </IconButton>
+              </div>
 
-            <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+              <div className="p-6 space-y-6 flex-1 overflow-y-auto">
 
               {/* ── APPEARANCE TAB ─────────────────────────── */}
               {activeTab === "appearance" && (
@@ -984,29 +1054,6 @@ export function SettingsModal() {
 
               {activeTab === "security" && (
                 <section className="space-y-4">
-                  {user && (
-                    <div className="p-4 rounded-xl bg-background border border-panel-border flex items-center gap-3">
-                      {user.profileImageUrl ? (
-                        <img src={user.profileImageUrl} alt="" referrerPolicy="no-referrer" className="w-9 h-9 rounded-full shrink-0" />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-medium shrink-0">
-                          {(user.firstName || user.email || "U")[0].toUpperCase()}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{[user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "User"}</p>
-                        <p className="text-xs text-muted-foreground truncate">Signed in</p>
-                      </div>
-                      <button
-                        onClick={logout}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors"
-                      >
-                        <LogOut className="w-3.5 h-3.5" />
-                        Sign out
-                      </button>
-                    </div>
-                  )}
-
                   {securityMode === "idle" ? (
                     <>
                       <div className="p-4 rounded-xl bg-background border border-panel-border flex items-start gap-4">
@@ -1086,20 +1133,56 @@ export function SettingsModal() {
                 </>
               )}
 
+              {/* ── ACCOUNT TAB ───────────────────────────────── */}
+              {activeTab === "account" && (
+                <section className="space-y-4">
+                  {user && (
+                    <div className="p-4 rounded-xl bg-background border border-panel-border flex items-center gap-3">
+                      {user.profileImageUrl ? (
+                        <img src={user.profileImageUrl} alt="" referrerPolicy="no-referrer" className="w-9 h-9 rounded-full shrink-0" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-medium shrink-0">
+                          {(user.firstName || user.email || "U")[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{[user.firstName, user.lastName].filter(Boolean).join(" ") || user.email || "User"}</p>
+                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                      </div>
+                    </div>
+                  )}
+                  <button
+                    onClick={logout}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 text-sm font-medium transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign out
+                  </button>
+                </section>
+              )}
+
             </div>
 
-            <div className="p-4 border-t border-panel-border bg-background/50 flex justify-end">
-              <button
-                onClick={
-                  activeTab === "quickbits" ? handleQbSave
-                  : activeTab === "ai" ? () => setSettingsOpen(false)
-                  : handleSave
-                }
-                disabled={activeTab === "quickbits" && qbSaving}
-                className="px-6 py-2 bg-primary hover:bg-primary-hover text-primary-foreground rounded-xl text-sm font-medium transition-colors shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 disabled:opacity-60"
-              >
-                {activeTab === "quickbits" && qbSaving ? "Saving…" : "Save Settings"}
-              </button>
+              <div className="p-4 border-t border-panel-border bg-background/50 flex justify-end gap-3 shrink-0">
+                <button
+                  onClick={() => setSettingsOpen(false)}
+                  className="px-4 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-panel-hover transition-colors"
+                >
+                  Discard
+                </button>
+                <button
+                  onClick={
+                    activeTab === "quickbits" ? handleQbSave
+                    : activeTab === "ai" ? () => setSettingsOpen(false)
+                    : activeTab === "account" ? () => setSettingsOpen(false)
+                    : handleSave
+                  }
+                  disabled={activeTab === "quickbits" && qbSaving}
+                  className="px-6 py-2 bg-primary hover:bg-primary-hover text-primary-foreground rounded-xl text-sm font-medium transition-colors shadow-lg shadow-primary/20 hover:shadow-primary/30 active:scale-95 disabled:opacity-60"
+                >
+                  {activeTab === "quickbits" && qbSaving ? "Saving…" : "Save Changes"}
+                </button>
+              </div>
             </div>
           </motion.div>
         </>

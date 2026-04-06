@@ -36,7 +36,7 @@ export function ScrollableToolbar({
   return (
     <div className={cn("relative border-b border-panel-border shrink-0", className)} style={style}>
       {canScrollLeft && (
-        <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background/80 to-transparent z-10 pointer-events-none" />
+        <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-editor/80 to-transparent z-10 pointer-events-none" />
       )}
       <div
         ref={scrollRef}
@@ -46,7 +46,7 @@ export function ScrollableToolbar({
         {children}
       </div>
       {canScrollRight && (
-        <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background/80 to-transparent z-10 pointer-events-none" />
+        <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-editor/80 to-transparent z-10 pointer-events-none" />
       )}
     </div>
   );

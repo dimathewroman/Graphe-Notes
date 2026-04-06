@@ -573,9 +573,9 @@ export function QuickBitEditor() {
   if (!selectedQuickBitId) {
     if (bp === "mobile") return null;
     return (
-      <div className="flex-1 flex flex-col bg-background relative">
+      <div className="flex-1 flex flex-col bg-editor relative">
         {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (
-          <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-background/80 backdrop-blur-md shrink-0">
+          <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-editor/80 backdrop-blur-md shrink-0">
             {!isSidebarOpen && (
               <IconButton onClick={toggleSidebar} title="Show sidebar">
                 <PanelLeft className="w-4 h-4" />
@@ -599,7 +599,7 @@ export function QuickBitEditor() {
 
   if (isLoading || !editor) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-background">
+      <div className="flex-1 flex items-center justify-center bg-editor">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -611,134 +611,80 @@ export function QuickBitEditor() {
   const reminderCount = notificationHours.length;
 
   return (
-    <div className="flex-1 flex flex-col bg-background h-screen overflow-hidden relative">
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <header className="h-14 border-b border-panel-border flex items-center justify-between px-2 md:px-4 shrink-0 bg-background/80 backdrop-blur-md z-10">
-        <div className="flex items-center gap-2">
-          {bp === "mobile" && (
-            <button
-              onClick={handleBack}
-              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors"
-            >
-              <ArrowLeft className="w-5 h-5 text-muted-foreground" />
-            </button>
-          )}
-          {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (
-            <div className="flex items-center gap-0.5 mr-2">
-              {!isSidebarOpen && (
-                <IconButton onClick={toggleSidebar} title="Show sidebar">
-                  <PanelLeft className="w-4 h-4" />
-                </IconButton>
-              )}
-              {!isNoteListOpen && (
-                <IconButton onClick={toggleNoteList} title="Show note list">
-                  <PanelLeftClose className="w-4 h-4 scale-x-[-1]" />
-                </IconButton>
-              )}
-            </div>
-          )}
-          <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
-            <span className={cn("inline-block w-1.5 h-1.5 rounded-full", saveStatus === "saved" ? "bg-emerald-500" : "bg-amber-500 animate-pulse")} />
-            {saveStatus === "saved" ? "Saved" : "Saving..."}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-0.5 md:gap-1">
-          {bp === "mobile" && editor && (
-            <>
-              <IconButton
-                onClick={() => editor.chain().focus().undo().run()}
-                title="Undo"
-                className={!editor.can().undo() ? "opacity-30 pointer-events-none" : ""}
-              >
-                <Undo2 className="w-4 h-4" />
-              </IconButton>
-              <IconButton
-                onClick={() => editor.chain().focus().redo().run()}
-                title="Redo"
-                className={!editor.can().redo() ? "opacity-30 pointer-events-none" : ""}
-              >
-                <Redo2 className="w-4 h-4" />
-              </IconButton>
-            </>
-          )}
-          <div className="w-px h-4 bg-panel-border mx-1" />
-          <IconButton
-            onClick={handleDelete}
-            className="hover:text-destructive hover:bg-destructive/10"
-            title="Delete Quick Bit"
+    <div className="flex-1 flex flex-col bg-editor h-screen overflow-hidden relative">
+      {/* ── Header (consolidated: save status + expiry + reminders + actions) ── */}
+      <header className="h-12 border-b border-panel-border flex items-center px-2 md:px-4 shrink-0 bg-editor/80 backdrop-blur-md z-10 gap-2 md:gap-3 overflow-hidden">
+        {bp === "mobile" && (
+          <button
+            onClick={handleBack}
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors shrink-0"
           >
-            <Trash2 className="w-4 h-4" />
-          </IconButton>
-        </div>
-      </header>
+            <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+          </button>
+        )}
+        {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (
+          <div className="flex items-center gap-0.5 shrink-0">
+            {!isSidebarOpen && (
+              <IconButton onClick={toggleSidebar} title="Show sidebar">
+                <PanelLeft className="w-4 h-4" />
+              </IconButton>
+            )}
+            {!isNoteListOpen && (
+              <IconButton onClick={toggleNoteList} title="Show note list">
+                <PanelLeftClose className="w-4 h-4 scale-x-[-1]" />
+              </IconButton>
+            )}
+          </div>
+        )}
 
-      {/* ── QB Info Bar ─────────────────────────────────────────────────────── */}
-      <div className="h-10 border-b border-panel-border bg-background/60 px-4 flex items-center gap-4 shrink-0 overflow-x-auto">
-        {/* Expiration */}
-        <div className="flex items-center gap-1.5 shrink-0">
-          <Clock className="w-3.5 h-3.5 text-muted-foreground/60" />
+        {/* Save status — icon-only on mobile */}
+        <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground shrink-0">
+          <span className={cn("inline-block w-1.5 h-1.5 rounded-full shrink-0", saveStatus === "saved" ? "bg-emerald-500" : "bg-amber-500 animate-pulse")} />
+          <span className="hidden md:inline">{saveStatus === "saved" ? "Saved" : "Saving..."}</span>
+        </div>
+
+        {/* Expiration — always visible, compact on mobile */}
+        <div className="flex items-center gap-1 shrink-0">
+          <Clock className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />
           {isExpiredNow ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-red-500 font-medium">Expired</span>
-              <button
-                onClick={() => setExpiryPickerOpen(true)}
-                ref={expiryBtnRef}
-                className="text-xs text-primary hover:underline"
-              >
-                Extend
-              </button>
-              <button
-                onClick={handlePromote}
-                className="text-xs text-muted-foreground hover:text-foreground hover:underline"
-              >
-                Promote
-              </button>
-              <button
-                onClick={handleDelete}
-                className="text-xs text-destructive hover:underline"
-              >
-                Delete
-              </button>
-            </div>
+            <button onClick={() => setExpiryPickerOpen(true)} ref={expiryBtnRef} className="text-xs text-red-500 font-medium">Expired</button>
           ) : (
-            <button
-              ref={expiryBtnRef}
-              onClick={() => setExpiryPickerOpen(true)}
-              className={cn("text-xs hover:opacity-80 transition-opacity", expiry.className)}
-            >
+            <button ref={expiryBtnRef} onClick={() => setExpiryPickerOpen(true)} className={cn("text-xs hover:opacity-80 transition-opacity whitespace-nowrap", expiry.className)}>
               {expiry.label}
             </button>
           )}
         </div>
 
-        {/* Separator */}
-        <div className="w-px h-4 bg-panel-border shrink-0" />
-
-        {/* Notifications */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        {/* Notifications — hidden on mobile, icon-only tap target */}
+        <div className="hidden md:flex items-center gap-1.5 shrink-0">
+          <div className="w-px h-4 bg-panel-border shrink-0" />
           <Bell className="w-3.5 h-3.5 text-muted-foreground/60" />
-          <button
-            ref={notifBtnRef}
-            onClick={() => setNotifPopoverOpen(true)}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <button ref={notifBtnRef} onClick={() => setNotifPopoverOpen(true)} className="text-xs text-muted-foreground hover:text-foreground transition-colors">
             {reminderCount === 0 ? "No reminders" : `${reminderCount} reminder${reminderCount !== 1 ? "s" : ""}`}
           </button>
         </div>
+        {bp === "mobile" && (
+          <button ref={notifBtnRef} onClick={() => setNotifPopoverOpen(true)} className="shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors relative" title="Reminders">
+            <Bell className="w-4 h-4 text-muted-foreground" />
+            {reminderCount > 0 && <span className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-primary" />}
+          </button>
+        )}
 
-        {/* Separator */}
-        <div className="w-px h-4 bg-panel-border shrink-0 ml-auto" />
-
-        {/* Promote to Note */}
-        <button
-          onClick={handlePromote}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
-        >
-          <FileText className="w-3.5 h-3.5" />
-          Promote to Note
-        </button>
-      </div>
+        {/* Right side actions */}
+        <div className="flex items-center gap-1 ml-auto shrink-0">
+          <IconButton onClick={handleDelete} className="hover:text-destructive hover:bg-destructive/10" title="Delete Quick Bit">
+            <Trash2 className="w-4 h-4" />
+          </IconButton>
+          <button
+            onClick={handlePromote}
+            title="Promote to Note"
+            className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium text-primary bg-primary/10 border border-primary/20 hover:bg-primary/15 transition-colors shrink-0"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">Promote to Note</span>
+          </button>
+        </div>
+      </header>
 
       {/* ── Toolbar (desktop/tablet) ─────────────────────────────────────────── */}
       {bp !== "mobile" && (
@@ -803,7 +749,7 @@ export function QuickBitEditor() {
       {bp === "mobile" && (
         <EditorToolbar
           editor={editor}
-          className="fixed left-0 right-0 z-40 border-t border-panel-border bg-background/95 backdrop-blur-md"
+          className="fixed left-0 right-0 z-40 border-t border-panel-border bg-editor/95 backdrop-blur-md"
           style={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
         />
       )}
