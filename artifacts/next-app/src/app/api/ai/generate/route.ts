@@ -332,47 +332,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ result, model: routing.model, tokensUsed });
     }
 
-    // --- local_llm ---
-    if (provider === "local_llm") {
-      const endpointUrl = row.endpointUrl ?? "";
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (row.encryptedKey.trim()) {
-        headers["Authorization"] = `Bearer ${decryptedKey}`;
-      }
-
-      const response = await fetch(`${endpointUrl}/v1/chat/completions`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model: routing.model,
-          messages: [{ role: "user", content: combinedPrompt }],
-          max_tokens: 1024,
-        }),
-      });
-
-      if (!response.ok) {
-        const rawBody = await response.text();
-        return NextResponse.json(
-          { error: "upstream_error", geminiStatus: response.status, geminiMessage: rawBody },
-          { status: 502 },
-        );
-      }
-
-      const data = (await response.json()) as {
-        choices: Array<{ message: { content: string } }>;
-        usage?: { prompt_tokens?: number; completion_tokens?: number };
-      };
-      const result = data.choices[0]?.message?.content ?? "";
-      const tokensUsed = {
-        inputTokens: data.usage?.prompt_tokens ?? null,
-        outputTokens: data.usage?.completion_tokens ?? null,
-      };
-
-      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, model: routing.model, input_tokens: tokensUsed.inputTokens, output_tokens: tokensUsed.outputTokens } });
-      return NextResponse.json({ result, model: routing.model, tokensUsed });
-    }
-
-    // Should never reach here given VALID_PROVIDERS check above
+    // local_llm is rejected at the top of this handler — requests must be made client-side.
+    // Should never reach here given VALID_PROVIDERS check above.
     return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
