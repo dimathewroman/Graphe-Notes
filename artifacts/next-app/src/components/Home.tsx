@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { Sidebar, SidebarContent } from "@/components/Sidebar";
 import { NoteList } from "@/components/NoteList";
 import { QuickBitList } from "@/components/QuickBitList";
+import { ResizeHandle } from "@/components/ui/ResizeHandle";
 // Fix 4: lazy-load heavy editor bundles — TipTap alone is ~100KB+ gzipped
 const NoteEditor = dynamic(() => import("@/components/NoteEditor").then(m => ({ default: m.NoteEditor })), { ssr: false });
 const QuickBitEditor = dynamic(() => import("@/components/QuickBitEditor").then(m => ({ default: m.QuickBitEditor })), { ssr: false });
@@ -20,9 +21,13 @@ import { DrawerPrimitive } from "@/components/ui/drawer-left";
 import { useDemoMode } from "@/lib/demo-context";
 
 export default function Home() {
-  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId, selectedQuickBitId, activeFilter } = useAppStore();
+  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId, selectedQuickBitId, activeFilter, noteListWidth, setNoteListWidth } = useAppStore();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
+
+  const handleNoteListResize = useCallback((delta: number) => {
+    setNoteListWidth(Math.min(600, Math.max(280, noteListWidth + delta)));
+  }, [noteListWidth, setNoteListWidth]);
 
   useEffect(() => {
     if (bp === "desktop") {
@@ -110,6 +115,7 @@ export default function Home() {
       {showList && isRecentlyDeleted && <RecentlyDeleted />}
       {isAttachments && <AllAttachments />}
       {showList && !isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && <NoteList />}
+      {bp === "desktop" && (showList || isAttachments) && <ResizeHandle onResize={handleNoteListResize} />}
       {showEditor && <NoteEditor />}
       {showQuickBitEditor && <QuickBitEditor />}
       {showDeletedDetail && <RecentlyDeletedDetail />}

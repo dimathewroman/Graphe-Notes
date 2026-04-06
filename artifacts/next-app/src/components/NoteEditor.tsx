@@ -529,7 +529,7 @@ export function NoteEditor() {
   }
 
   if (isLoading || !editor) {
-    return <div className="flex-1 flex items-center justify-center bg-background"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
+    return <div className="flex-1 flex items-center justify-center bg-editor"><div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
   }
 
   if (note?.vaulted && !isVaultUnlocked) {
@@ -551,7 +551,7 @@ export function NoteEditor() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-background h-screen overflow-hidden relative">
+    <div className="flex-1 flex flex-col bg-editor h-screen overflow-hidden relative">
       <NoteHeader
         bp={bp}
         note={note}
@@ -641,7 +641,7 @@ export function NoteEditor() {
       {bp === "mobile" && (
         <EditorToolbar
           editor={editor}
-          className="fixed left-0 right-0 z-40 border-t border-panel-border bg-background/95 backdrop-blur-md"
+          className="fixed left-0 right-0 z-40 border-t border-panel-border bg-editor/95 backdrop-blur-md"
           style={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
           onAttachFile={async (file) => {
             const record = await uploadAttachment(file);
