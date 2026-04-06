@@ -20,6 +20,18 @@ interface LocalLlmChatResponse {
   choices: Array<{ message: { content: string } }>;
 }
 
+// Local LLMs cost no per-token money, so we give reasoning models room to
+// emit their chain-of-thought without truncating mid-thought. Cloud providers
+// keep their tighter caps to keep latency and cost predictable.
+const LOCAL_LLM_MAX_TOKENS = 4096;
+
+// Strip <think>...</think> blocks emitted by reasoning models (DeepSeek R1,
+// Qwen3 thinking variants, etc.) before inserting the result into the editor.
+// Without this the user sees the model's internal monologue in their note.
+function stripThinkTags(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>\s*/gi, "").trimStart();
+}
+
 export function useAiAction(
   editor: Editor | null,
   options?: { isDemo?: boolean }
@@ -99,13 +111,13 @@ export function useAiAction(
                     body: JSON.stringify({
                       model: freshData.localLlmModel ?? "default",
                       messages: [{ role: "user", content: capturedPrompt }],
-                      max_tokens: 1024,
+                      max_tokens: LOCAL_LLM_MAX_TOKENS,
                       stream: false,
                     }),
                   });
                   if (!res.ok) throw new Error("Local LLM returned an error");
                   const data = await res.json() as LocalLlmChatResponse;
-                  const result = data.choices[0]?.message?.content ?? "";
+                  const result = stripThinkTags(data.choices[0]?.message?.content ?? "");
                   if (result && editor) {
                     editor.chain().focus().insertContentAt({ from: capturedFrom, to: capturedTo }, result).run();
                   }
@@ -171,13 +183,13 @@ export function useAiAction(
           body: JSON.stringify({
             model: localLlmModel ?? "default",
             messages: [{ role: "user", content: prompt }],
-            max_tokens: 1024,
+            max_tokens: LOCAL_LLM_MAX_TOKENS,
             stream: false,
           }),
         });
         if (!res.ok) throw new Error("Local LLM returned an error");
         const data = await res.json() as LocalLlmChatResponse;
-        const result = data.choices[0]?.message?.content ?? "";
+        const result = stripThinkTags(data.choices[0]?.message?.content ?? "");
         if (result) {
           editor.chain().focus().insertContentAt({ from: sel.from, to: sel.to }, result).run();
         }
