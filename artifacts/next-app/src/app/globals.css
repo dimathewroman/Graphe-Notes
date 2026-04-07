@@ -285,6 +285,19 @@
   background: linear-gradient(135deg, #5B93E8 0%, #9067EE 100%);
 }
 
+/* ── Details / collapsible toggle blocks ───────────────────────────────────── */
+/* Ensure summary (the toggle header) has a comfortable tap target on mobile */
+.ProseMirror details summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  list-style: none;
+}
+.ProseMirror details summary::-webkit-details-marker {
+  display: none;
+}
+
 /* ── Syntax highlighting — CodeBlockLowlight (github dark / light themes) ─── */
 /* Default: dark mode (github-dark palette) */
 .hljs { color: #c9d1d9; background: transparent; }
