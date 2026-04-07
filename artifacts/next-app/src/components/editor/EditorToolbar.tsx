@@ -126,6 +126,23 @@ export const EditorToolbar = memo(function EditorToolbar({
   const fontPickerBtnRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Track can-undo/can-redo reactively. EditorToolbar is memo'd and editor is the same
+  // object reference on every render, so editor.can().undo() evaluated inline in JSX
+  // produces stale values after history changes. Subscribing to transactions ensures
+  // the buttons re-render whenever the undo/redo stack changes.
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  useEffect(() => {
+    if (!editor) return;
+    const update = () => {
+      setCanUndo(editor.can().undo());
+      setCanRedo(editor.can().redo());
+    };
+    update();
+    editor.on("transaction", update);
+    return () => { editor.off("transaction", update); };
+  }, [editor]);
+
   if (!editor) return null;
 
   const activeTextColor: string | undefined = editor.getAttributes("textStyle").color;
@@ -138,14 +155,14 @@ export const EditorToolbar = memo(function EditorToolbar({
           <ToolbarButton
             command={() => editor.chain().focus().undo().run()}
             active={false}
-            disabled={!editor.can().undo()}
+            disabled={!canUndo}
             icon={<Undo2 className="w-4 h-4" />}
             title="Undo (Ctrl+Z)"
           />
           <ToolbarButton
             command={() => editor.chain().focus().redo().run()}
             active={false}
-            disabled={!editor.can().redo()}
+            disabled={!canRedo}
             icon={<Redo2 className="w-4 h-4" />}
             title="Redo (Ctrl+Shift+Z)"
           />
