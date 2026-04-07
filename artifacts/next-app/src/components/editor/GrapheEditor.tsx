@@ -21,6 +21,10 @@ import TaskList from "@tiptap/extension-task-list";
 import SuperscriptExt from "@tiptap/extension-superscript";
 import SubscriptExt from "@tiptap/extension-subscript";
 import Typography from "@tiptap/extension-typography";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { common, createLowlight } from "lowlight";
+
+const lowlight = createLowlight(common);
 
 import { SlashCommandExtension, SlashCommandMenu } from "./SlashCommandMenu";
 import { FindReplaceExtension, FindReplacePanel, frClear } from "./FindReplace";
@@ -95,7 +99,7 @@ export function GrapheEditor({
   // reused for the lifetime of the component, preventing TipTap from re-calling setOptions()
   // on every render (which would fire onUpdate and trigger accidental saves).
   const editorExtensions = useMemo(() => [
-    StarterKit.configure({ heading: { levels: [1, 2, 3] }, underline: false, link: false }),
+    StarterKit.configure({ heading: { levels: [1, 2, 3] }, underline: false, link: false, codeBlock: false }),
     UnderlineExt,
     TextStyle,
     FontSize,
@@ -125,6 +129,7 @@ export function GrapheEditor({
     SwipeIndentExtension,
     ListExitOnEnterExtension,
     Typography,
+    CodeBlockLowlight.configure({ lowlight }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], []);
 
