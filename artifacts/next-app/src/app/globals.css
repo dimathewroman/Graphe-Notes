@@ -167,8 +167,12 @@
 .ProseMirror h3 {
   @apply text-xl font-medium mt-4 mb-2;
 }
+/* Paragraphs flow with line-height only — no extra margin between
+   consecutive lines so pressing Enter feels like a single line break
+   instead of opening a 16px gap. Other block types (headings, lists,
+   blockquotes, etc.) carry their own margins for separation. */
 .ProseMirror p {
-  @apply leading-relaxed mb-4;
+  @apply leading-relaxed;
 }
 .ProseMirror ul {
   @apply list-disc list-outside mb-4 pl-6 space-y-1;
