@@ -24,6 +24,7 @@ import Typography from "@tiptap/extension-typography";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import { Details, DetailsContent, DetailsSummary } from "@tiptap/extension-details";
+import Emoji from "@tiptap/extension-emoji";
 
 const lowlight = createLowlight(common);
 
@@ -134,6 +135,7 @@ export function GrapheEditor({
     Details,
     DetailsContent,
     DetailsSummary,
+    Emoji,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], []);
 
