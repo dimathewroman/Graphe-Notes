@@ -414,11 +414,16 @@ export function NoteEditor() {
 
   const handleToggleVault = async () => {
     if (!selectedNoteId || !note) return;
-    // If moving TO vault and no PIN is set, prompt setup first (both demo and real)
+    // If moving TO vault: prompt setup if no PIN, prompt unlock if vault is locked.
     if (!note.vaulted) {
       const pinConfigured = isDemo ? demoVaultConfigured : vaultStatus?.isConfigured;
       if (!pinConfigured) {
         setShowVaultSetupModal(true);
+        return;
+      }
+      if (!isVaultUnlocked) {
+        setVaultUnlockError("");
+        setShowVaultUnlockModal(true);
         return;
       }
     }
@@ -681,6 +686,15 @@ export function NoteEditor() {
           mode="setup"
           onConfirm={handleVaultSetupConfirm}
           onCancel={() => setShowVaultSetupModal(false)}
+        />
+      )}
+
+      {showVaultUnlockModal && (
+        <VaultModal
+          mode="unlock"
+          error={vaultUnlockError}
+          onConfirm={handleUnlockConfirm}
+          onCancel={() => { setShowVaultUnlockModal(false); setVaultUnlockError(""); }}
         />
       )}
 
