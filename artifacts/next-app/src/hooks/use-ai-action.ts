@@ -32,6 +32,14 @@ function stripThinkTags(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>\s*/gi, "").trimStart();
 }
 
+// Tester convenience: NEXT_PUBLIC_LOCAL_LLM_DEV_OVERRIDE in .env overrides the
+// saved local LLM endpoint at build time. NEXT_PUBLIC_* vars are inlined into
+// the bundle, so a Vercel build without it set falls through to the saved URL.
+// Lets a tester keep a public tunnel URL stored in their account for prod while
+// still hitting localhost in local dev — without flipping settings each time.
+const LOCAL_LLM_DEV_ENDPOINT_OVERRIDE =
+  process.env.NEXT_PUBLIC_LOCAL_LLM_DEV_OVERRIDE?.replace(/\/+$/, "") || null;
+
 export function useAiAction(
   editor: Editor | null,
   options?: { isDemo?: boolean }
@@ -95,14 +103,15 @@ export function useAiAction(
                   const freshSettings = await authenticatedFetch("/api/ai/settings");
                   if (!freshSettings.ok) throw new Error("Failed to fetch AI settings");
                   const freshData = await freshSettings.json() as AiSettingsResponse;
-                  const endpoint = freshData.localLlmEndpoint;
-                  if (!endpoint) {
+                  // Dev override (from .env) wins; otherwise use the saved endpoint.
+                  // Strip trailing slashes defensively for endpoints saved before normalization existed.
+                  const normalizedEndpoint =
+                    LOCAL_LLM_DEV_ENDPOINT_OVERRIDE ?? freshData.localLlmEndpoint?.replace(/\/+$/, "") ?? null;
+                  if (!normalizedEndpoint) {
                     setAiError("Local LLM endpoint not configured. Please check Settings.");
                     setTimeout(() => setAiError(null), 5000);
                     return;
                   }
-                  // Strip trailing slashes defensively for endpoints saved before normalization existed.
-                  const normalizedEndpoint = endpoint.replace(/\/+$/, "");
                   const freshHeaders: Record<string, string> = { "Content-Type": "application/json" };
                   if (freshData.localLlmApiKey) freshHeaders["Authorization"] = `Bearer ${freshData.localLlmApiKey}`;
                   const res = await fetch(`${normalizedEndpoint}/v1/chat/completions`, {
@@ -164,14 +173,16 @@ export function useAiAction(
 
     // --- Local LLM: call inference server directly from the client ---
     if (provider === "local_llm") {
-      if (!localLlmEndpoint) {
+      // Dev override (from .env) wins; otherwise use the saved endpoint.
+      // Strip trailing slashes defensively for endpoints saved before normalization existed.
+      const normalizedEndpoint =
+        LOCAL_LLM_DEV_ENDPOINT_OVERRIDE ?? localLlmEndpoint?.replace(/\/+$/, "") ?? null;
+      if (!normalizedEndpoint) {
         setAiError("Local LLM endpoint not configured. Please check Settings.");
         setTimeout(() => setAiError(null), 5000);
         return;
       }
 
-      // Strip trailing slashes defensively for endpoints saved before normalization existed.
-      const normalizedEndpoint = localLlmEndpoint.replace(/\/+$/, "");
       setAiLoading(true);
       setAiError(null);
       try {
