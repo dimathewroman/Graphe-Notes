@@ -13,12 +13,14 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
+import { VersionPreviewArea } from "./VersionPreviewArea";
 import { VaultModal } from "./VaultModal";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
-import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
+import { useCreateNoteVersion, type NoteVersionFull } from "@/hooks/use-note-versions";
 import { useDemoMode } from "@/lib/demo-context";
 import { exportAsPdf, exportAsMarkdown } from "@/hooks/use-note-export";
 import { useUploadAttachment } from "@/hooks/use-attachments";
+import { cn } from "@/lib/utils";
 import { TableOfContents } from "./editor/TableOfContents";
 import { NoteHeader } from "./editor/NoteHeader";
 import { NoteBody } from "./editor/NoteBody";
@@ -36,6 +38,7 @@ export function NoteShell() {
   const toggleNoteList = useAppStore(s => s.toggleNoteList);
   const setMobileView = useAppStore(s => s.setMobileView);
   const setSidebarOpen = useAppStore(s => s.setSidebarOpen);
+  const setNoteListOpen = useAppStore(s => s.setNoteListOpen);
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const queryClient = useQueryClient();
@@ -71,14 +74,39 @@ export function NoteShell() {
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showToc, setShowToc] = useState(false);
+  const [previewVersion, setPreviewVersion] = useState<NoteVersionFull | null>(null);
+  // Snapshot the sidebar/note-list visibility right before we collapse them
+  // for the version history panel, so we can restore the user's previous
+  // layout when the panel closes. Null means "no snapshot held".
+  const prevSidebarOpenRef = useRef<boolean | null>(null);
+  const prevNoteListOpenRef = useRef<boolean | null>(null);
 
   // Editor instance — set via GrapheEditor's onEditorReady callback
   const [editor, setEditor] = useState<Editor | null>(null);
 
+  const createVersion = useCreateNoteVersion();
+
+  // Refs holding the live editor state — used by performSave so we always
+  // snapshot what's currently in the editor, not a stale closure value.
+  const liveStateRef = useRef<{ title: string; content: string; contentText: string }>(
+    { title: "", content: "", contentText: "" },
+  );
+  // Pending save buffer + timer. The debounced save merges multiple change
+  // events into a single payload and fires after 800ms. flushSave() uses these
+  // to commit immediately on Cmd+S or note close.
+  const pendingSaveRef = useRef<{ id: number; data: Record<string, unknown> } | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track the previous selected note id so we can flush on navigation.
+  const prevSelectedNoteId = useRef<number | null>(null);
+  // Stable handle for flushSave so it can be called from effects that fire
+  // before flushSave is declared in render order.
+  const flushSaveRef = useRef<
+    (source: "manual_save" | "auto_close" | "restore") => Promise<boolean>
+  >(async () => false);
+
   // PERF: temporary benchmark timestamps
   const editorInitStart = useRef<number>(typeof performance !== "undefined" ? performance.now() : 0);
   const didLogEditorInit = useRef(false);
-  const lastVersionTimestamp = useRef<number>(0);
   const perfSwitch = useRef({ queryStartTime: 0, queryEndTime: 0, setContentTime: 0 });
   const prevIsLoading = useRef(false);
 
@@ -101,8 +129,26 @@ export function NoteShell() {
       console.log(`[perf] editor-init: ${elapsed.toFixed(1)}ms`);
     }
 
+    // Flush any pending save from the previous note before we swap to the new
+    // one — capture an "auto_close" snapshot if there are unsaved changes.
+    if (
+      prevSelectedNoteId.current != null &&
+      prevSelectedNoteId.current !== selectedNoteId &&
+      pendingSaveRef.current
+    ) {
+      void flushSaveRef.current("auto_close");
+    }
+    prevSelectedNoteId.current = selectedNoteId;
+
     if (note) {
       setTitle(note.title);
+      // Seed the live state so the next save reflects the freshly-loaded note.
+      liveStateRef.current = {
+        title: note.title,
+        content: note.content ?? "",
+        contentText: note.contentText ?? "",
+      };
+      setPreviewVersion(null);
       // PERF: log note-switch breakdown
       perfSwitch.current.setContentTime = performance.now();
       requestAnimationFrame(() => {
@@ -132,51 +178,177 @@ export function NoteShell() {
     setShowVersionHistory(false);
   }, [note?.id, selectedNoteId, editor]);
 
+  // When the version history panel opens on tablet/desktop, collapse the
+  // sidebar and note list so the editor + history can claim the full width.
+  // The previous open-state is restored when the panel closes. Mobile is
+  // unaffected because there are no docked side panels at that breakpoint.
+  useEffect(() => {
+    if (bp === "mobile") return;
+    if (showVersionHistory) {
+      if (prevSidebarOpenRef.current === null) {
+        prevSidebarOpenRef.current = isSidebarOpen;
+        prevNoteListOpenRef.current = isNoteListOpen;
+        if (isSidebarOpen) setSidebarOpen(false);
+        if (isNoteListOpen) setNoteListOpen(false);
+      }
+    } else if (prevSidebarOpenRef.current !== null) {
+      const restoreSidebar = prevSidebarOpenRef.current;
+      const restoreNoteList = prevNoteListOpenRef.current ?? true;
+      prevSidebarOpenRef.current = null;
+      prevNoteListOpenRef.current = null;
+      setSidebarOpen(restoreSidebar);
+      setNoteListOpen(restoreNoteList);
+    }
+    // We intentionally exclude isSidebarOpen / isNoteListOpen from deps so
+    // that the user can still manually toggle the panels while history is
+    // open without re-triggering the snapshot/restore logic.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showVersionHistory, bp]);
+
   const { upload: uploadAttachment } = useUploadAttachment(selectedNoteId);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const debouncedSave = useCallback(
-    (() => {
-      let timeout: ReturnType<typeof setTimeout>;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (id: number, data: any) => {
-        setSaveStatus("saving");
-        clearTimeout(timeout);
-        timeout = setTimeout(async () => {
-          if (isDemoRef.current) {
-            const existing = queryClient.getQueryData(getGetNoteQueryKey(id)) as any;
-            if (existing) {
-              queryClient.setQueryData(getGetNoteQueryKey(id), {
-                ...existing,
-                ...data,
-                updatedAt: new Date().toISOString(),
-              });
-            }
-          } else {
-            await updateNoteMut.mutateAsync({ id, data });
-            queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
-            // Fire-and-forget version snapshot — client-side 5-min guard to skip redundant requests
-            const now = Date.now();
-            if (now - lastVersionTimestamp.current >= 5 * 60 * 1000) {
-              authenticatedFetch(`/api/notes/${id}/versions`, { method: "POST" })
-                .then(() => { lastVersionTimestamp.current = Date.now(); })
-                .catch(() => {});
-            }
-          }
-          setSaveStatus("saved");
-        }, 800);
-      };
-    })(),
-    []
+  // ─── Save pipeline ────────────────────────────────────────────────────────
+  // performSave commits the current pending payload to the server (or the
+  // demo cache) and then takes a version snapshot tagged with `source`.
+  // Auto-save snapshots are gated by the change threshold inside
+  // useCreateNoteVersion so trivial keystrokes don't accumulate versions.
+
+  const performSave = useCallback(
+    async (
+      id: number,
+      data: Record<string, unknown>,
+      source:
+        | "manual_save"
+        | "auto_save"
+        | "auto_close"
+        | "restore"
+        | "pre_ai_rewrite",
+    ) => {
+      const live = liveStateRef.current;
+      if (isDemoRef.current) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const existing = queryClient.getQueryData(getGetNoteQueryKey(id)) as any;
+        if (existing) {
+          queryClient.setQueryData(getGetNoteQueryKey(id), {
+            ...existing,
+            ...data,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await updateNoteMut.mutateAsync({ id, data: data as any });
+        queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+      }
+      setSaveStatus("saved");
+
+      // Take the snapshot AFTER the save completes — in real mode the server
+      // reads from the DB row we just updated, so the version reflects the
+      // current state.
+      await createVersion({
+        noteId: id,
+        source,
+        title: live.title,
+        content: live.content,
+        contentText: live.contentText,
+      });
+    },
+    [queryClient, updateNoteMut, createVersion],
   );
+
+  const debouncedSave = useCallback(
+    (id: number, data: Record<string, unknown>) => {
+      setSaveStatus("saving");
+      pendingSaveRef.current = {
+        id,
+        data: { ...(pendingSaveRef.current?.data ?? {}), ...data },
+      };
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        const pending = pendingSaveRef.current;
+        pendingSaveRef.current = null;
+        saveTimerRef.current = null;
+        if (pending) void performSave(pending.id, pending.data, "auto_save");
+      }, 800);
+    },
+    [performSave],
+  );
+
+  // Flush any pending debounced save immediately. Used for Cmd+S, restore,
+  // pre-AI snapshot, and note-close auto-snapshot. The pending save is
+  // committed AND the resulting snapshot is tagged with `source`. Returns
+  // true if a save was actually flushed.
+  const flushSave = useCallback(
+    async (
+      source:
+        | "manual_save"
+        | "auto_close"
+        | "restore"
+        | "pre_ai_rewrite",
+    ): Promise<boolean> => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      const pending = pendingSaveRef.current;
+      pendingSaveRef.current = null;
+      if (!pending) return false;
+      await performSave(pending.id, pending.data, source);
+      return true;
+    },
+    [performSave],
+  );
+
+  useEffect(() => {
+    flushSaveRef.current = flushSave as (
+      source: "manual_save" | "auto_close" | "restore",
+    ) => Promise<boolean>;
+  }, [flushSave]);
+
+  // Take an explicit snapshot — used by Cmd+S and the AI rewrite pre-snapshot.
+  // If there's a pending debounced save, flush it tagged with `source` so the
+  // version captures the latest state. Otherwise just snapshot the current
+  // editor state directly.
+  const captureSnapshot = useCallback(
+    async (source: "manual_save" | "pre_ai_rewrite") => {
+      if (!selectedNoteId) return;
+      const flushed = await flushSave(source);
+      if (!flushed) {
+        const live = liveStateRef.current;
+        await createVersion({
+          noteId: selectedNoteId,
+          source,
+          title: live.title,
+          content: live.content,
+          contentText: live.contentText,
+        });
+      }
+    },
+    [selectedNoteId, flushSave, createVersion],
+  );
+
+  // Cmd/Ctrl+S manual save → flush + manual_save version.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod || e.key.toLowerCase() !== "s") return;
+      if (!selectedNoteId) return;
+      e.preventDefault();
+      void captureSnapshot("manual_save");
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selectedNoteId, captureSnapshot]);
 
   const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = e.target.value;
     setTitle(newTitle);
+    liveStateRef.current = { ...liveStateRef.current, title: newTitle };
     if (selectedNoteId) debouncedSave(selectedNoteId, { title: newTitle });
   }, [selectedNoteId, debouncedSave]);
 
   const handleContentChange = useCallback((html: string, text: string) => {
+    liveStateRef.current = { ...liveStateRef.current, content: html, contentText: text };
     if (selectedNoteId) debouncedSave(selectedNoteId, { content: html, contentText: text });
   }, [selectedNoteId, debouncedSave]);
 
@@ -198,13 +370,61 @@ export function NoteShell() {
     view.dispatch(tr);
   }, [editor]);
 
-  const handleRestoreVersion = useCallback((content: string, restoredTitle: string) => {
-    if (!editor || !selectedNoteId) return;
-    editor.commands.setContent(content, { emitUpdate: false });
-    setTitle(restoredTitle);
-    debouncedSave(selectedNoteId, { content, title: restoredTitle, contentText: editor.getText() });
-    posthog.capture("version_history_restored", { note_id: selectedNoteId });
-  }, [editor, selectedNoteId, debouncedSave]);
+  // Restore is non-destructive: snapshot the current draft as "Before restore"
+  // first, then replace the editor content with the version. The user can
+  // always undo a restore by restoring the "Before restore" version.
+  const handleRestoreVersion = useCallback(
+    async (version: NoteVersionFull) => {
+      if (!editor || !selectedNoteId) return;
+      // 1. Snapshot the current draft as a labelled version so the restore
+      //    is reversible. flushSave() merges any pending unsaved changes.
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      pendingSaveRef.current = null;
+      const live = liveStateRef.current;
+      await createVersion({
+        noteId: selectedNoteId,
+        source: "restore",
+        label: "Before restore",
+        title: live.title,
+        content: live.content,
+        contentText: live.contentText,
+      });
+
+      // 2. Replace editor content + title with the version's data.
+      editor.commands.setContent(version.content, { emitUpdate: false });
+      setTitle(version.title);
+      const newText = editor.getText();
+      liveStateRef.current = {
+        title: version.title,
+        content: version.content,
+        contentText: newText,
+      };
+
+      // 3. Persist the restored content as the new note state. We use
+      //    performSave directly so the post-restore snapshot is tagged
+      //    "restore" rather than auto_save.
+      await performSave(
+        selectedNoteId,
+        {
+          title: version.title,
+          content: version.content,
+          contentText: newText,
+        },
+        "restore",
+      );
+      setPreviewVersion(null);
+      posthog.capture("version_history_restored", { note_id: selectedNoteId });
+    },
+    [editor, selectedNoteId, createVersion, performSave],
+  );
+
+  // Take a snapshot before any AI rewrite so the user can always undo it.
+  const handleBeforeAiRewrite = useCallback(async () => {
+    await captureSnapshot("pre_ai_rewrite");
+  }, [captureSnapshot]);
 
   const handleDelete = async () => {
     if (!selectedNoteId) return;
@@ -448,8 +668,19 @@ export function NoteShell() {
     );
   }
 
+  // When version history is open on tablet/desktop the panel sits as a fixed
+  // 360px column on the right. Reserve that space on the editor wrapper so the
+  // note + preview overlay sit beside the panel instead of underneath it.
+  const reservePanelSpace =
+    showVersionHistory && bp !== "mobile";
+
   return (
-    <div className="flex-1 flex flex-col bg-editor h-screen overflow-hidden relative">
+    <div
+      className={cn(
+        "flex-1 flex flex-col bg-editor h-screen overflow-hidden relative transition-[padding] duration-200",
+        reservePanelSpace && "pr-[360px]",
+      )}
+    >
       <NoteHeader
         bp={bp}
         note={note}
@@ -472,35 +703,64 @@ export function NoteShell() {
         onDelete={handleDelete}
       />
 
-      <GrapheEditor
-        content={note?.content ?? ""}
-        contentKey={note?.id}
-        onContentChange={handleContentChange}
-        mode="note"
-        isDemo={isDemo}
-        onAttachFile={handleAttachFile}
-        onEditorReady={setEditor}
-        renderContent={(ed) => (
-          <NoteBody
-            editor={ed}
-            title={title}
-            note={note}
-            noteId={selectedNoteId}
-            bp={bp}
-            keyboardHeight={keyboardHeight}
-            onTitleChange={handleTitleChange}
-            onAddTag={addTag}
-            onRemoveTag={removeTag}
-            onDeleteImage={handleDeleteImage}
+      <div className="relative flex-1 flex flex-col min-h-0">
+        <GrapheEditor
+          content={note?.content ?? ""}
+          contentKey={note?.id}
+          onContentChange={handleContentChange}
+          mode="note"
+          isDemo={isDemo}
+          onAttachFile={handleAttachFile}
+          onEditorReady={setEditor}
+          onBeforeAiRewrite={handleBeforeAiRewrite}
+          renderContent={(ed) => (
+            <NoteBody
+              editor={ed}
+              title={title}
+              note={note}
+              noteId={selectedNoteId}
+              bp={bp}
+              keyboardHeight={keyboardHeight}
+              onTitleChange={handleTitleChange}
+              onAddTag={addTag}
+              onRemoveTag={removeTag}
+              onDeleteImage={handleDeleteImage}
+            />
+          )}
+        />
+
+        {previewVersion && selectedNoteId && bp !== "mobile" && (
+          <VersionPreviewArea
+            version={previewVersion}
+            currentTitle={liveStateRef.current.title}
+            currentContent={liveStateRef.current.content}
+            currentContentText={liveStateRef.current.contentText}
+            onRestore={() => handleRestoreVersion(previewVersion)}
+            onBack={() => setPreviewVersion(null)}
+            variant="overlay"
+            // Tablet shares the editor pane with the 360px panel — use the
+            // compact banner so the toggle + Back + Restore buttons don't
+            // overflow the narrowed pane.
+            compact={bp === "tablet"}
           />
         )}
-      />
+      </div>
 
       {showVersionHistory && selectedNoteId && (
         <VersionHistoryPanel
           noteId={selectedNoteId}
-          onRestore={handleRestoreVersion}
-          onClose={() => setShowVersionHistory(false)}
+          bp={bp}
+          previewVersionId={previewVersion?.id ?? null}
+          previewVersion={previewVersion}
+          currentTitle={liveStateRef.current.title}
+          currentContent={liveStateRef.current.content}
+          currentContentText={liveStateRef.current.contentText}
+          onPreview={(v) => setPreviewVersion(v)}
+          onRestoreVersion={handleRestoreVersion}
+          onClose={() => {
+            setShowVersionHistory(false);
+            setPreviewVersion(null);
+          }}
         />
       )}
 

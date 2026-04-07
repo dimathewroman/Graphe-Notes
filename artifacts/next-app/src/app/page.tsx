@@ -5,8 +5,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import Home from "@/components/Home";
 import { Mail, Loader2 } from "lucide-react";
-import { DEMO_NOTES, DEMO_FOLDERS, DEMO_TAGS, DEMO_QUICK_BITS } from "@/lib/demo-data";
+import { DEMO_NOTES, DEMO_FOLDERS, DEMO_TAGS, DEMO_QUICK_BITS, DEMO_NOTE_VERSIONS } from "@/lib/demo-data";
 import { DemoContext } from "@/lib/demo-context";
+import { seedDemoVersionIdCounter } from "@/hooks/use-note-versions";
 
 const grapheLogo = "/graphe_minimalist_1773640203523.png";
 
@@ -36,6 +37,22 @@ function enterDemoMode(
   DEMO_QUICK_BITS.forEach((qb) => {
     queryClient.setQueryData([`/api/quick-bits/${qb.id}`], qb);
   });
+
+  // Seed pre-populated version histories so the demo Version History panel
+  // isn't empty. The query key MUST match noteVersionsKey() in
+  // use-note-versions.ts. Bump the demo ID counter past the highest seeded ID
+  // so any new versions created during the session don't collide.
+  let maxSeedId = 0;
+  for (const [noteIdStr, versions] of Object.entries(DEMO_NOTE_VERSIONS)) {
+    const noteId = Number(noteIdStr);
+    queryClient.setQueryDefaults(["noteVersions", noteId], demoInfinite);
+    queryClient.setQueryData(["noteVersions", noteId], versions);
+    for (const v of versions) {
+      if (v.id > maxSeedId) maxSeedId = v.id;
+    }
+  }
+  if (maxSeedId > 0) seedDemoVersionIdCounter(maxSeedId);
+
   setIsDemo(true);
 }
 
