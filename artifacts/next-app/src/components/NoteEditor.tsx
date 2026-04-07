@@ -37,6 +37,7 @@ import { useUploadAttachment, isImageType } from "@/hooks/use-attachments";
 import { IMAGE_MIME_TYPES } from "@/lib/attachment-limits";
 import { TableOfContents } from "./editor/TableOfContents";
 import { SmartTaskItem } from "./editor/SmartTaskItem";
+import { SwipeIndentExtension } from "./editor/SwipeIndentExtension";
 import { EditorToolbar } from "./editor/EditorToolbar";
 import { useAiAction } from "@/hooks/use-ai-action";
 import { AiSelectionMenu } from "./editor/AiSelectionMenu";
@@ -137,6 +138,7 @@ export function NoteEditor() {
     SubscriptExt,
     FindReplaceExtension,
     VideoEmbedExtension,
+    SwipeIndentExtension,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], []);
 
