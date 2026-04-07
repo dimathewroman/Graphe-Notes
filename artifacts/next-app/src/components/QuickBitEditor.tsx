@@ -436,7 +436,14 @@ export function QuickBitEditor() {
       if (selectedQuickBitId) debouncedSave(selectedQuickBitId, { content: editor.getHTML(), contentText: editor.getText() });
     },
     editorProps: {
-      attributes: { class: "prose prose-invert max-w-none focus:outline-none" },
+      attributes: {
+        class: "prose prose-invert max-w-none focus:outline-none",
+        // Suppress iPadOS / iOS Safari's password-autofill bar above the
+        // soft keyboard. See NoteEditor.tsx for the same fix.
+        autocomplete: "off",
+        autocorrect: "off",
+        spellcheck: "true",
+      },
     },
   }, [selectedQuickBitId]);
 

@@ -124,6 +124,11 @@ export const NoteBody = memo(function NoteBody({
           value={title}
           onChange={onTitleChange}
           placeholder="Note Title"
+          // iPad / iOS would otherwise see this bare text input and offer
+          // contact-name autofill above the keyboard. It's a note title,
+          // not a form field — opt out.
+          autoComplete="off"
+          autoCorrect="off"
           className="w-full text-2xl md:text-4xl font-bold bg-transparent border-none outline-none mb-4 text-foreground placeholder:text-muted-foreground/30 resize-none tracking-tight"
         />
         <TagRow note={note} onAddTag={onAddTag} onRemoveTag={onRemoveTag} />

@@ -153,7 +153,16 @@ export function NoteEditor() {
       handleContentChange(editor.getHTML(), editor.getText());
     },
     editorProps: {
-      attributes: { class: "prose prose-invert max-w-none focus:outline-none" },
+      attributes: {
+        class: "prose prose-invert max-w-none focus:outline-none",
+        // Suppress iPadOS / iOS Safari's password-autofill bar above the
+        // soft keyboard. Without this, focusing the contenteditable inside
+        // a task list (which contains <input type="checkbox"> nodes) makes
+        // iOS treat it like a form field and pop up the AutoFill toolbar.
+        autocomplete: "off",
+        autocorrect: "off",
+        spellcheck: "true",
+      },
     },
   });
 
