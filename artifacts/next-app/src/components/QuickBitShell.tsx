@@ -1,22 +1,10 @@
-import { useEffect, useLayoutEffect, useState, useCallback, useRef } from "react";
+// QuickBitShell — wrapper around GrapheEditor for Quick Bits.
+// Contains the QB header (expiry, notifications, promote-to-note), auto-save, and all
+// QB-specific orchestration. The actual TipTap editor lives in GrapheEditor.
+
+import { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useEditor, EditorContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import UnderlineExt from "@tiptap/extension-underline";
-import { TextStyle, FontSize } from "@tiptap/extension-text-style";
-import Color from "@tiptap/extension-color";
-import FontFamily from "@tiptap/extension-font-family";
-import Image from "@tiptap/extension-image";
-import TextAlign from "@tiptap/extension-text-align";
-import Highlight from "@tiptap/extension-highlight";
-import Placeholder from "@tiptap/extension-placeholder";
-import { Table, TableHeader, TableCell } from "@tiptap/extension-table";
-import { TableRow } from "@tiptap/extension-table-row";
-import Link from "@tiptap/extension-link";
-import TaskList from "@tiptap/extension-task-list";
-import TaskItem from "@tiptap/extension-task-item";
-import SuperscriptExt from "@tiptap/extension-superscript";
-import SubscriptExt from "@tiptap/extension-subscript";
+import { EditorContent } from "@tiptap/react";
 
 import { useAppStore } from "@/store";
 import {
@@ -34,23 +22,15 @@ import type { QuickBit } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, PanelLeft, PanelLeftClose, Trash2, FileText,
-  Clock, Bell, Plus, X, Loader2, Zap, Undo2, Redo2,
+  Clock, Bell, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
-import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
-import { SlashCommandExtension, SlashCommandMenu } from "./editor/SlashCommandMenu";
-import { AiSelectionMenu } from "./editor/AiSelectionMenu";
-import { MobileSelectionMenu } from "./editor/MobileSelectionMenu";
-import { EditorToolbar } from "./editor/EditorToolbar";
 import { NotificationCadenceEditor } from "./NotificationCadenceEditor";
 import { useDemoMode } from "@/lib/demo-context";
 import { DEMO_QUICK_BITS } from "@/lib/demo-data";
-import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindReplace";
-import { SwipeIndentExtension } from "./editor/SwipeIndentExtension";
-import { ListExitOnEnterExtension } from "./editor/ListExitOnEnterExtension";
-import { useAiAction } from "@/hooks/use-ai-action";
+import { GrapheEditor } from "./editor/GrapheEditor";
 import posthog from "posthog-js";
 
 // ─── Expiry helpers ───────────────────────────────────────────────────────────
@@ -260,7 +240,7 @@ function NotificationPopover({
   );
 }
 
-// ─── Expired modal (mobile) ───────────────────────────────────────────────────
+// ─── Expired modal ────────────────────────────────────────────────────────────
 
 function ExpiredModal({
   onExtend,
@@ -305,9 +285,9 @@ function ExpiredModal({
   );
 }
 
-// ─── QuickBitEditor ───────────────────────────────────────────────────────────
+// ─── QuickBitShell ────────────────────────────────────────────────────────────
 
-export function QuickBitEditor() {
+export function QuickBitShell() {
   const {
     selectedQuickBitId,
     selectQuickBit,
@@ -344,6 +324,7 @@ export function QuickBitEditor() {
 
   // Expiry state
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [tick, setTick] = useState(0); // forces re-render every minute
   const [expiryPickerOpen, setExpiryPickerOpen] = useState(false);
   const expiryBtnRef = useRef<HTMLButtonElement>(null);
@@ -355,8 +336,8 @@ export function QuickBitEditor() {
   const [notifPopoverOpen, setNotifPopoverOpen] = useState(false);
   const notifBtnRef = useRef<HTMLButtonElement>(null);
 
-
-  const [showFindReplace, setShowFindReplace] = useState(false);
+  const isDemoRef = useRef(isDemo);
+  isDemoRef.current = isDemo;
 
   // Sync QB data into local state when it loads / changes
   useEffect(() => {
@@ -379,9 +360,6 @@ export function QuickBitEditor() {
     return () => clearInterval(id);
   }, [expiresAt]);
 
-  const isDemoRef = useRef(isDemo);
-  isDemoRef.current = isDemo;
-
   const debouncedSave = useCallback(
     (() => {
       let timeout: ReturnType<typeof setTimeout>;
@@ -403,82 +381,9 @@ export function QuickBitEditor() {
     []
   );
 
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3] }, underline: false, link: false }),
-      UnderlineExt,
-      TextStyle,
-      FontSize,
-      Color,
-      FontFamily,
-      Image,
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
-      Highlight.configure({ multicolor: true }),
-      Placeholder.configure({ placeholder: "Start writing..." }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" },
-      }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      SlashCommandExtension,
-      SuperscriptExt,
-      SubscriptExt,
-      FindReplaceExtension,
-      SwipeIndentExtension,
-      ListExitOnEnterExtension,
-    ],
-    content: (quickBit as QuickBit | undefined)?.content || "",
-    onUpdate: ({ editor }) => {
-      if (selectedQuickBitId) debouncedSave(selectedQuickBitId, { content: editor.getHTML(), contentText: editor.getText() });
-    },
-    editorProps: {
-      attributes: {
-        class: "prose prose-invert max-w-none focus:outline-none",
-        // Suppress iPadOS / iOS Safari's password-autofill bar above the
-        // soft keyboard. See NoteEditor.tsx for the same fix.
-        autocomplete: "off",
-        autocorrect: "off",
-        spellcheck: "true",
-      },
-    },
-  }, [selectedQuickBitId]);
-
-  const { callAI, aiLoading, aiError, captureSelection } = useAiAction(editor, { isDemo });
-
-  // Sync content when QB changes
-  useEffect(() => {
-    if (quickBit && editor) {
-      const content = (quickBit as QuickBit).content || "";
-      if (editor.getHTML() !== content) {
-        editor.commands.setContent(content, { emitUpdate: false });
-      }
-    } else if (editor && !quickBit) {
-      editor.commands.setContent("", { emitUpdate: false });
-      setTitle("");
-    }
-  }, [(quickBit as QuickBit | undefined)?.id, selectedQuickBitId, editor]);
-
-  // Find/replace keyboard shortcut — only intercept when editor has focus
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!editor?.isFocused) return;
-      const mod = e.metaKey || e.ctrlKey;
-      if (!mod) return;
-      const key = e.key.toLowerCase();
-      if (key === "f" || key === "h") {
-        e.preventDefault();
-        setShowFindReplace(true);
-      }
-    };
-    document.addEventListener("keydown", onKeyDown, true);
-    return () => document.removeEventListener("keydown", onKeyDown, true);
-  }, [editor]);
+  const handleContentChange = useCallback((html: string, text: string) => {
+    if (selectedQuickBitId) debouncedSave(selectedQuickBitId, { content: html, contentText: text });
+  }, [selectedQuickBitId, debouncedSave]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newTitle = e.target.value;
@@ -514,6 +419,7 @@ export function QuickBitEditor() {
   const handleDelete = async () => {
     if (!selectedQuickBitId) return;
     if (isDemo) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const existing = queryClient.getQueryData<any>(getGetQuickBitQueryKey(selectedQuickBitId));
       if (existing) {
         const now = new Date();
@@ -608,7 +514,7 @@ export function QuickBitEditor() {
     );
   }
 
-  if (isLoading || !editor) {
+  if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center bg-editor">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -623,7 +529,7 @@ export function QuickBitEditor() {
 
   return (
     <div className="flex-1 flex flex-col bg-editor h-screen overflow-hidden relative">
-      {/* ── Header (consolidated: save status + expiry + reminders + actions) ── */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="h-12 border-b border-panel-border flex items-center px-2 md:px-4 shrink-0 bg-editor/80 backdrop-blur-md z-10 gap-2 md:gap-3 overflow-hidden">
         {bp === "mobile" && (
           <button
@@ -654,7 +560,7 @@ export function QuickBitEditor() {
           <span className="hidden md:inline">{saveStatus === "saved" ? "Saved" : "Saving..."}</span>
         </div>
 
-        {/* Expiration — always visible, compact on mobile */}
+        {/* Expiration */}
         <div className="flex items-center gap-1 shrink-0">
           <Clock className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />
           {isExpiredNow ? (
@@ -697,81 +603,33 @@ export function QuickBitEditor() {
         </div>
       </header>
 
-      {/* ── Toolbar (desktop/tablet) ─────────────────────────────────────────── */}
-      {bp !== "mobile" && (
-        <EditorToolbar
-          editor={editor}
-          showUndoRedo
-        />
-      )}
-
-      {/* ── AI selection menus ───────────────────────────────────────────────── */}
-      {bp === "mobile" ? (
-        <MobileSelectionMenu
-          editor={editor}
-          visible={!aiLoading}
-          onAction={callAI}
-          onSelectionCapture={captureSelection}
-        />
-      ) : (
-        <AiSelectionMenu
-          editor={editor}
-          visible={!aiLoading}
-          onAction={callAI}
-          onSelectionCapture={captureSelection}
-        />
-      )}
-
-      {/* ── AI loading / error ───────────────────────────────────────────────── */}
-      {(aiLoading || aiError) && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
-          {aiLoading ? (
-            <div className="flex items-center gap-2.5 px-4 py-2.5 bg-popover border border-indigo-500/30 rounded-full shadow-xl text-indigo-400">
-              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-              <span className="text-xs font-medium whitespace-nowrap">AI is rewriting…</span>
+      {/* ── GrapheEditor (toolbar + AI menus + content) ──────────────────── */}
+      <GrapheEditor
+        content={(qb as QuickBit | undefined)?.content ?? ""}
+        contentKey={(qb as QuickBit | undefined)?.id}
+        onContentChange={handleContentChange}
+        mode="quickbit"
+        isDemo={isDemo}
+        renderContent={(editor) => (
+          <div className="flex-1 overflow-y-auto">
+            <div
+              className={cn("max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12", bp === "mobile" && "pb-20")}
+              style={bp === "mobile" && keyboardHeight > 0 ? { paddingBottom: `calc(5rem + ${keyboardHeight}px)` } : undefined}
+            >
+              <input
+                type="text"
+                value={title}
+                onChange={handleTitleChange}
+                placeholder="Quick Bit Title"
+                className="w-full text-2xl md:text-4xl font-bold bg-transparent border-none outline-none mb-4 text-foreground placeholder:text-muted-foreground/30 resize-none tracking-tight"
+              />
+              <EditorContent editor={editor} />
             </div>
-          ) : aiError ? (
-            <div className="flex items-center gap-2.5 px-4 py-2.5 bg-popover border border-destructive/30 rounded-full shadow-xl text-destructive pointer-events-auto">
-              <X className="w-3.5 h-3.5 shrink-0" />
-              <span className="text-xs">{aiError}</span>
-            </div>
-          ) : null}
-        </div>
-      )}
+          </div>
+        )}
+      />
 
-      {/* ── Editor content ───────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto">
-        <div
-          className={cn("max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12", bp === "mobile" && "pb-20")}
-          // Mirrors NoteBody: grow the scroll runway by the keyboard height so
-          // the user can scroll the bottom of the document above the fixed
-          // mobile toolbar instead of leaving it trapped behind the keyboard.
-          style={bp === "mobile" && keyboardHeight > 0 ? { paddingBottom: `calc(5rem + ${keyboardHeight}px)` } : undefined}
-        >
-          <input
-            type="text"
-            value={title}
-            onChange={handleTitleChange}
-            placeholder="Quick Bit Title"
-            className="w-full text-2xl md:text-4xl font-bold bg-transparent border-none outline-none mb-4 text-foreground placeholder:text-muted-foreground/30 resize-none tracking-tight"
-          />
-          <EditorContent editor={editor} />
-        </div>
-      </div>
-
-      {/* ── Slash command menu ───────────────────────────────────────────────── */}
-      <SlashCommandMenu editor={editor} />
-
-      {/* ── Mobile bottom toolbar ───────────────────────────────────────────── */}
-      {bp === "mobile" && (
-        <EditorToolbar
-          editor={editor}
-          className="fixed left-0 right-0 z-40 border-t border-panel-border bg-editor/95 backdrop-blur-md"
-          style={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
-        />
-      )}
-
-      {/* ── Portals ─────────────────────────────────────────────────────────── */}
+      {/* ── Portals ─────────────────────────────────────────────────────── */}
       {expiryPickerOpen && (
         <ExpiryPicker
           anchorRef={expiryBtnRef}
@@ -794,16 +652,6 @@ export function QuickBitEditor() {
           onDelete={async () => {
             setShowExpiredModal(false);
             await handleDelete();
-          }}
-        />
-      )}
-
-      {showFindReplace && editor && (
-        <FindReplacePanel
-          editor={editor}
-          onClose={() => {
-            setShowFindReplace(false);
-            frClear(editor);
           }}
         />
       )}

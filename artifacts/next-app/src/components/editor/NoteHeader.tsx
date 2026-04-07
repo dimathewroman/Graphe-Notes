@@ -38,7 +38,7 @@ export const NoteHeader = memo(function NoteHeader({
   saveStatus: "saved" | "saving";
   isSidebarOpen: boolean;
   isNoteListOpen: boolean;
-  editor: ReturnType<typeof useEditor>;
+  editor: ReturnType<typeof useEditor> | null;
   showToc: boolean;
   showVersionHistory: boolean;
   onToggleSidebar: () => void;
