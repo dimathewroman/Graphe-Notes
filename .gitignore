@@ -46,3 +46,15 @@ Thumbs.db
 
 .vercel
 .mcp.json
+
+# Environment variables — never commit real credentials
+.env
+.env.local
+.env.*.local
+
+# Dev logs
+logs/
+
+# Claude Code local config
+.claude/
+artifacts/next-app/.claude/
