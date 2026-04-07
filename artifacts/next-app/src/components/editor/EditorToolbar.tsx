@@ -126,10 +126,12 @@ export const EditorToolbar = memo(function EditorToolbar({
   const fontPickerBtnRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Track can-undo/can-redo reactively. EditorToolbar is memo'd and editor is the same
-  // object reference on every render, so editor.can().undo() evaluated inline in JSX
-  // produces stale values after history changes. Subscribing to transactions ensures
-  // the buttons re-render whenever the undo/redo stack changes.
+  // Track editor state reactively. EditorToolbar is memo'd and editor is the same
+  // object reference on every render, so editor.isActive() / editor.can() evaluated
+  // inline in JSX produce stale values after history or selection changes.
+  // Subscribing to transactions forces a re-render on every state change so all
+  // isActive() calls (headings, bold, italic, etc.) and can() checks stay fresh.
+  const [, forceUpdate] = useState(0);
   const [canUndo, setCanUndo] = useState(false);
   const [canRedo, setCanRedo] = useState(false);
   useEffect(() => {
@@ -137,6 +139,7 @@ export const EditorToolbar = memo(function EditorToolbar({
     const update = () => {
       setCanUndo(editor.can().undo());
       setCanRedo(editor.can().redo());
+      forceUpdate(t => t + 1);
     };
     update();
     editor.on("transaction", update);
@@ -144,6 +147,17 @@ export const EditorToolbar = memo(function EditorToolbar({
   }, [editor]);
 
   if (!editor) return null;
+
+  // Heading toggle: if already at this level → back to paragraph; otherwise apply the heading.
+  // Always clears explicit fontSize so the heading's CSS default sizing takes over.
+  // After applying, the user can still change font size via the font size widget.
+  const handleHeading = (level: 1 | 2 | 3) => {
+    if (editor.isActive("heading", { level })) {
+      editor.chain().focus().setParagraph().unsetFontSize().run();
+    } else {
+      editor.chain().focus().setHeading({ level }).unsetFontSize().run();
+    }
+  };
 
   const activeTextColor: string | undefined = editor.getAttributes("textStyle").color;
   const activeHighlightColor: string | undefined = editor.getAttributes("highlight").color;
@@ -239,9 +253,9 @@ export const EditorToolbar = memo(function EditorToolbar({
 
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
-      <ToolbarButton command={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive("heading", { level: 1 })} icon={<Heading1 className="w-4 h-4" />} />
-      <ToolbarButton command={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive("heading", { level: 2 })} icon={<Heading2 className="w-4 h-4" />} />
-      <ToolbarButton command={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive("heading", { level: 3 })} icon={<Heading3 className="w-4 h-4" />} />
+      <ToolbarButton command={() => handleHeading(1)} active={editor.isActive("heading", { level: 1 })} icon={<Heading1 className="w-4 h-4" />} />
+      <ToolbarButton command={() => handleHeading(2)} active={editor.isActive("heading", { level: 2 })} icon={<Heading2 className="w-4 h-4" />} />
+      <ToolbarButton command={() => handleHeading(3)} active={editor.isActive("heading", { level: 3 })} icon={<Heading3 className="w-4 h-4" />} />
 
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
