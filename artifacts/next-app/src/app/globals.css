@@ -286,16 +286,64 @@
 }
 
 /* ── Details / collapsible toggle blocks ───────────────────────────────────── */
-/* Ensure summary (the toggle header) has a comfortable tap target on mobile */
-.ProseMirror details summary {
-  cursor: pointer;
-  min-height: 44px;
+/* TipTap renders details as <div data-type="details">, not a native <details>.
+   Layout: [button ▶] [wrapper-div: summary + detailsContent] */
+.ProseMirror [data-type="details"] {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  border: 1px solid hsl(var(--panel-border));
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin: 4px 0;
+}
+/* The toggle ▶ button — visible chevron arrow */
+.ProseMirror [data-type="details"] > button {
   display: flex;
   align-items: center;
-  list-style: none;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  min-height: 28px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 10px;
+  transition: transform 160ms ease;
 }
-.ProseMirror details summary::-webkit-details-marker {
+/* Rotate when open */
+.ProseMirror [data-type="details"].is-open > button {
+  transform: rotate(90deg);
+}
+/* CSS triangle chevron */
+.ProseMirror [data-type="details"] > button::before {
+  content: "▶";
+}
+/* Wrapper div holding summary + content */
+.ProseMirror [data-type="details"] > div {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+/* Summary = the typed title row */
+.ProseMirror [data-type="details"] summary {
+  list-style: none;
+  display: block;
+  min-height: 28px;
+  line-height: 28px;
+  cursor: text;
+  font-weight: 500;
+}
+.ProseMirror [data-type="details"] summary::-webkit-details-marker {
   display: none;
+}
+/* Content area below the summary */
+.ProseMirror [data-type="detailsContent"] {
+  padding-top: 4px;
+  padding-left: 4px;
 }
 
 /* ── Syntax highlighting — CodeBlockLowlight (github dark / light themes) ─── */
