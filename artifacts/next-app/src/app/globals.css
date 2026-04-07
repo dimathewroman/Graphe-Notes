@@ -284,3 +284,13 @@
 .bg-accent-gradient {
   background: linear-gradient(135deg, #5B93E8 0%, #9067EE 100%);
 }
+
+/* Version history panel — slide-in animations */
+@keyframes slideInRight {
+  from { transform: translateX(100%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}

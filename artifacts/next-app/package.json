@@ -46,6 +46,7 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "date-fns": "^3.6.0",
+    "diff-match-patch": "^1.0.5",
     "drizzle-orm": "catalog:",
     "framer-motion": "catalog:",
     "geist": "^1.7.0",
@@ -68,6 +69,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.14",
     "@tailwindcss/typography": "^0.5.15",
+    "@types/diff-match-patch": "^1.0.36",
     "@types/node": "catalog:",
     "@types/pg": "^8.18.0",
     "@types/react": "catalog:",
