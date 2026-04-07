@@ -167,27 +167,24 @@
 .ProseMirror h3 {
   @apply text-xl font-medium mt-4 mb-2;
 }
-/* Paragraphs flow with line-height only — no extra margin between
-   consecutive lines so pressing Enter feels like a single line break
-   instead of opening a 16px gap. Other block types (headings, lists,
-   blockquotes, etc.) carry their own margins for separation. */
+/* All block elements (paragraphs, list items, task items) flow with
+   line-height only — no extra margin between blocks. Pressing Enter
+   anywhere produces a single uniform line break, never a 16px gap.
+   Headings, blockquotes, code blocks, etc. keep their own margins. */
 .ProseMirror p {
   @apply leading-relaxed;
 }
-.ProseMirror ul {
-  @apply list-disc list-outside mb-4 pl-6 space-y-1;
+.ProseMirror ul,
+.ProseMirror ol {
+  @apply list-disc list-outside pl-6;
 }
 .ProseMirror ol {
-  @apply list-decimal list-outside mb-4 pl-6 space-y-1;
+  @apply list-decimal;
 }
 .ProseMirror li > p {
   margin-top: 0;
   margin-bottom: 0;
 }
-/* Nested lists (created by swipe-indent / Tab) should not add a bottom
-   margin — that margin is what makes the *next* sibling list item appear
-   to drop into a 16px gap after indenting. Top-level lists keep their
-   margin so they separate from the following paragraph normally. */
 .ProseMirror li > ul,
 .ProseMirror li > ol {
   margin-bottom: 0;
@@ -197,7 +194,6 @@
 .ProseMirror ul[data-type="taskList"] {
   list-style: none !important;
   padding-left: 0 !important;
-  @apply space-y-1 mb-4;
 }
 .ProseMirror ul[data-type="taskList"] > li {
   display: flex !important;
