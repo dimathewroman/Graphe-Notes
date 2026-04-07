@@ -48,6 +48,7 @@ import { NotificationCadenceEditor } from "./NotificationCadenceEditor";
 import { useDemoMode } from "@/lib/demo-context";
 import { DEMO_QUICK_BITS } from "@/lib/demo-data";
 import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindReplace";
+import { SwipeIndentExtension } from "./editor/SwipeIndentExtension";
 import { useAiAction } from "@/hooks/use-ai-action";
 import posthog from "posthog-js";
 
@@ -428,6 +429,7 @@ export function QuickBitEditor() {
       SuperscriptExt,
       SubscriptExt,
       FindReplaceExtension,
+      SwipeIndentExtension,
     ],
     content: (quickBit as QuickBit | undefined)?.content || "",
     onUpdate: ({ editor }) => {
