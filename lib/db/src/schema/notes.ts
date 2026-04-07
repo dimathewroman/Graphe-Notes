@@ -30,6 +30,12 @@ export const noteVersionsTable = pgTable("note_versions", {
   title: text("title").notNull(),
   content: text("content").notNull(),
   contentText: text("content_text"),
+  // User-defined name for this version (e.g. "Before AI rewrite", "Final draft").
+  // NULL for unnamed versions.
+  label: text("label"),
+  // What triggered this version. One of: 'manual_save', 'auto_save',
+  // 'pre_ai_rewrite', 'restore', 'auto_close'. NULL for legacy rows.
+  source: text("source"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("note_versions_note_id_created_at_idx").on(table.noteId, table.createdAt),
