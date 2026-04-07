@@ -80,7 +80,13 @@ export default function Home() {
   // persists across note switches — removing !!selectedNoteId prevents unmount/remount on each click.
   const showEditor = !isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && (bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "editor"));
   const showQuickBitEditor = activeFilter === "quickbits" && (bp === "desktop" || (bp === "tablet" && !!selectedQuickBitId) || (bp === "mobile" && mobileView === "editor"));
-  const showList = bp === "desktop" ? isNoteListOpen : (bp === "tablet" || (bp === "mobile" && mobileView === "list"));
+  const showList = bp === "desktop"
+    ? isNoteListOpen
+    : bp === "tablet"
+      // On tablet the list is open by default but NoteShell may collapse it
+      // (e.g. when the version history panel is open) by clearing the flag.
+      ? isNoteListOpen
+      : (bp === "mobile" && mobileView === "list");
   const showDeletedDetail = isRecentlyDeleted && !!selectedNoteId && (bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor"));
 
   return (
