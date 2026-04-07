@@ -20,7 +20,6 @@
     "@sentry/nextjs": "^10.45.0",
     "@supabase/supabase-js": "^2.99.1",
     "@tanstack/react-query": "catalog:",
-    "@tiptap/extension-bubble-menu": "^3.20.1",
     "@tiptap/extension-color": "^3.20.1",
     "@tiptap/extension-font-family": "^3.20.1",
     "@tiptap/extension-highlight": "^3.20.1",
