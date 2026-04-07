@@ -16,7 +16,9 @@ interface SlashCommand {
   label: string;
   description: string;
   icon: React.ReactNode;
-  execute: (editor: Editor) => void;
+  // `from` and `to` delimit the slash trigger text so each command can delete
+  // it and insert new content in a single chain() call = one undo step.
+  execute: (editor: Editor, from: number, to: number) => void;
 }
 
 const SLASH_COMMANDS: SlashCommand[] = [
@@ -24,79 +26,79 @@ const SLASH_COMMANDS: SlashCommand[] = [
     label: "Heading 1",
     description: "Large section heading",
     icon: <Heading1 className="w-4 h-4" />,
-    execute: (e) => e.chain().focus().toggleHeading({ level: 1 }).run(),
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).toggleHeading({ level: 1 }).run(),
   },
   {
     label: "Heading 2",
     description: "Medium section heading",
     icon: <Heading2 className="w-4 h-4" />,
-    execute: (e) => e.chain().focus().toggleHeading({ level: 2 }).run(),
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).toggleHeading({ level: 2 }).run(),
   },
   {
     label: "Heading 3",
     description: "Small section heading",
     icon: <Heading3 className="w-4 h-4" />,
-    execute: (e) => e.chain().focus().toggleHeading({ level: 3 }).run(),
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).toggleHeading({ level: 3 }).run(),
   },
   {
     label: "Bold",
     description: "Make text bold",
     icon: <Bold className="w-4 h-4" />,
-    execute: (e) => e.chain().focus().toggleBold().run(),
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).toggleBold().run(),
   },
   {
     label: "Italic",
     description: "Make text italic",
     icon: <Italic className="w-4 h-4" />,
-    execute: (e) => e.chain().focus().toggleItalic().run(),
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).toggleItalic().run(),
   },
   {
     label: "Bullet List",
     description: "Unordered list",
     icon: <List className="w-4 h-4" />,
-    execute: (e) => e.chain().focus().toggleBulletList().run(),
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).toggleBulletList().run(),
   },
   {
     label: "Numbered List",
     description: "Ordered list",
     icon: <ListOrdered className="w-4 h-4" />,
-    execute: (e) => e.chain().focus().toggleOrderedList().run(),
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).toggleOrderedList().run(),
   },
   {
     label: "Task List",
     description: "Checklist with checkboxes",
     icon: <ListTodo className="w-4 h-4" />,
-    execute: (e) => e.chain().focus().toggleTaskList().run(),
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).toggleTaskList().run(),
   },
   {
     label: "Horizontal Divider",
     description: "Full-width divider line",
     icon: <Minus className="w-4 h-4" />,
-    execute: (e) => e.chain().focus().setHorizontalRule().run(),
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).setHorizontalRule().run(),
   },
   {
     label: "Table",
     description: "Insert a 3×3 table",
     icon: <Table className="w-4 h-4" />,
-    execute: (e) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
   },
   {
     label: "Code Block",
     description: "Monospace code block",
     icon: <Code className="w-4 h-4" />,
-    execute: (e) => e.chain().focus().toggleCodeBlock().run(),
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).toggleCodeBlock().run(),
   },
   {
     label: "Quote",
     description: "Blockquote",
     icon: <Quote className="w-4 h-4" />,
-    execute: (e) => e.chain().focus().toggleBlockquote().run(),
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).toggleBlockquote().run(),
   },
   {
     label: "Video",
     description: "Embed a YouTube or Vimeo video",
     icon: <Video className="w-4 h-4" />,
-    execute: (e) => {
+    execute: (e, from, to) => {
       const url = window.prompt("Paste a YouTube or Vimeo URL:");
       if (!url) return;
       const parsed = parseVideoUrl(url.trim());
@@ -106,7 +108,7 @@ const SLASH_COMMANDS: SlashCommand[] = [
       }
       const node = e.schema.nodes.videoEmbed?.create({ embedUrl: parsed.embedUrl });
       if (!node) return;
-      e.chain().focus().insertContent(node.toJSON()).run();
+      e.chain().focus().deleteRange({ from, to }).insertContent(node.toJSON()).run();
     },
   },
 ];
@@ -239,15 +241,12 @@ export function SlashCommandMenu({ editor }: SlashCommandMenuProps) {
     if (!editor) return;
     const { from } = state;
     const to = editor.state.selection.from;
-    editor.chain()
-      .focus()
-      .deleteRange({ from, to })
-      .run();
-    // Small timeout so the deletion is committed before command runs
-    setTimeout(() => {
-      cmd.execute(editor);
-    }, 0);
+    // Capture from/to before dismiss() changes any state, then execute the
+    // command. Each command chains deleteRange + its content change in one
+    // .chain()...run() call, so the entire slash-command insertion is a
+    // single ProseMirror transaction = one undo step.
     dismiss();
+    cmd.execute(editor, from, to);
   }, [editor, state, dismiss]);
 
   // Subscribe to editor updates to sync plugin state → React state
