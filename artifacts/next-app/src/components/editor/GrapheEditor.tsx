@@ -25,6 +25,8 @@ import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import { Details, DetailsContent, DetailsSummary } from "@tiptap/extension-details";
 import Emoji from "@tiptap/extension-emoji";
+import { InlineMath, BlockMath } from "@tiptap/extension-mathematics";
+import "katex/dist/katex.min.css";
 
 const lowlight = createLowlight(common);
 
@@ -136,6 +138,8 @@ export function GrapheEditor({
     DetailsContent,
     DetailsSummary,
     Emoji,
+    InlineMath,
+    BlockMath,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], []);
 
