@@ -23,6 +23,7 @@ import SubscriptExt from "@tiptap/extension-subscript";
 import Typography from "@tiptap/extension-typography";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
+import { Details, DetailsContent, DetailsSummary } from "@tiptap/extension-details";
 
 const lowlight = createLowlight(common);
 
@@ -130,6 +131,9 @@ export function GrapheEditor({
     ListExitOnEnterExtension,
     Typography,
     CodeBlockLowlight.configure({ lowlight }),
+    Details,
+    DetailsContent,
+    DetailsSummary,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], []);
 
