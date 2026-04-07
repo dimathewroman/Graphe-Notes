@@ -1,6 +1,6 @@
 // Top header bar: save status, back button, sidebar toggles, action icons, overflow/export menus.
 
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
 import type { useEditor } from "@tiptap/react";
 import {
   Pin, Star, ShieldCheck, Clock, Trash2,
@@ -53,6 +53,23 @@ export const NoteHeader = memo(function NoteHeader({
   onExportMarkdown: () => void;
   onDelete: () => void;
 }) {
+  // Track can-undo/can-redo reactively. NoteHeader is memo'd and editor is the same
+  // object reference on every render, so editor.can().undo() evaluated inline in JSX
+  // produces stale values after history changes. Subscribing to transactions ensures
+  // the buttons re-render whenever the undo/redo stack changes.
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  useEffect(() => {
+    if (!editor) return;
+    const update = () => {
+      setCanUndo(editor.can().undo());
+      setCanRedo(editor.can().redo());
+    };
+    update();
+    editor.on("transaction", update);
+    return () => { editor.off("transaction", update); };
+  }, [editor]);
+
   return (
     <header className="h-14 border-b border-panel-border flex items-center justify-between px-2 md:px-4 shrink-0 bg-editor/80 backdrop-blur-md z-10">
       <div className="flex items-center gap-2">
@@ -88,14 +105,14 @@ export const NoteHeader = memo(function NoteHeader({
             <IconButton
               onClick={() => editor.chain().focus().undo().run()}
               title="Undo"
-              className={!editor.can().undo() ? "opacity-30 pointer-events-none" : ""}
+              className={!canUndo ? "opacity-30 pointer-events-none" : ""}
             >
               <Undo2 className="w-4 h-4" />
             </IconButton>
             <IconButton
               onClick={() => editor.chain().focus().redo().run()}
               title="Redo"
-              className={!editor.can().redo() ? "opacity-30 pointer-events-none" : ""}
+              className={!canRedo ? "opacity-30 pointer-events-none" : ""}
             >
               <Redo2 className="w-4 h-4" />
             </IconButton>
