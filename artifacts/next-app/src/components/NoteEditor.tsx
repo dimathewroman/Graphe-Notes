@@ -613,6 +613,7 @@ export function NoteEditor() {
         note={note}
         noteId={selectedNoteId}
         bp={bp}
+        keyboardHeight={keyboardHeight}
         onTitleChange={handleTitleChange}
         onAddTag={addTag}
         onRemoveTag={removeTag}
