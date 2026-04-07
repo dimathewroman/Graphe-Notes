@@ -1,0 +1,20 @@
+2026-04-06 16:42:19 | INFO | Starting server on 127.0.0.1:8000
+2026-04-06 16:42:19 | INFO | Multi-handler server configuration complete.
+2026-04-06 16:42:19 | INFO | Starting Uvicorn server...
+2026-04-06 16:42:19 | INFO | Model registry initialized
+2026-04-06 16:42:19 | INFO | Spawning handler process for model 'llama-3.1-8b' (type=lm, path=mlx-community/Llama-3.1-8B-Instruct-4bit)
+2026-04-06 16:42:19 | INFO | Spawned handler process for 'llama-3.1-8b' (pid=85790)
+2026-04-06 16:42:26 | INFO | Handler process for 'llama-3.1-8b' is ready
+2026-04-06 16:42:26 | INFO | Registered model: llama-3.1-8b (type=lm, context_length=None)
+2026-04-06 16:42:26 | INFO | Model 'llama-3.1-8b' spawned and registered successfully
+2026-04-06 16:42:26 | INFO | Spawning handler process for model 'llama-3.2-3b' (type=lm, path=mlx-community/Llama-3.2-3B-Instruct-4bit)
+2026-04-06 16:42:26 | INFO | Spawned handler process for 'llama-3.2-3b' (pid=85821)
+2026-04-06 16:42:33 | INFO | Handler process for 'llama-3.2-3b' is ready
+2026-04-06 16:42:33 | INFO | Registered model: llama-3.2-3b (type=lm, context_length=None)
+2026-04-06 16:42:33 | INFO | Model 'llama-3.2-3b' spawned and registered successfully
+2026-04-06 16:42:33 | INFO | Spawning handler process for model 'embeddings' (type=embeddings, path=mlx-community/nomicai-modernbert-embed-base-bf16)
+2026-04-06 16:42:33 | INFO | Spawned handler process for 'embeddings' (pid=85847)
+2026-04-06 16:42:38 | INFO | Handler process for 'embeddings' is ready
+2026-04-06 16:42:38 | INFO | Registered model: embeddings (type=embeddings, context_length=None)
+2026-04-06 16:42:38 | INFO | Model 'embeddings' spawned and registered successfully
+2026-04-06 16:42:38 | INFO | Multi-handler initialization complete. 3 model(s) spawned.
