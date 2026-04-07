@@ -49,6 +49,7 @@ import { useDemoMode } from "@/lib/demo-context";
 import { DEMO_QUICK_BITS } from "@/lib/demo-data";
 import { FindReplaceExtension, FindReplacePanel, frClear } from "./editor/FindReplace";
 import { SwipeIndentExtension } from "./editor/SwipeIndentExtension";
+import { ListExitOnEnterExtension } from "./editor/ListExitOnEnterExtension";
 import { useAiAction } from "@/hooks/use-ai-action";
 import posthog from "posthog-js";
 
@@ -430,6 +431,7 @@ export function QuickBitEditor() {
       SubscriptExt,
       FindReplaceExtension,
       SwipeIndentExtension,
+      ListExitOnEnterExtension,
     ],
     content: (quickBit as QuickBit | undefined)?.content || "",
     onUpdate: ({ editor }) => {
