@@ -5,8 +5,8 @@ import { NoteList } from "@/components/NoteList";
 import { QuickBitList } from "@/components/QuickBitList";
 import { ResizeHandle } from "@/components/ui/ResizeHandle";
 // Fix 4: lazy-load heavy editor bundles — TipTap alone is ~100KB+ gzipped
-const NoteEditor = dynamic(() => import("@/components/NoteEditor").then(m => ({ default: m.NoteEditor })), { ssr: false });
-const QuickBitEditor = dynamic(() => import("@/components/QuickBitEditor").then(m => ({ default: m.QuickBitEditor })), { ssr: false });
+const NoteShell = dynamic(() => import("@/components/NoteShell").then(m => ({ default: m.NoteShell })), { ssr: false });
+const QuickBitShell = dynamic(() => import("@/components/QuickBitShell").then(m => ({ default: m.QuickBitShell })), { ssr: false });
 const SettingsModal = dynamic(() => import("@/components/SettingsModal").then(m => ({ default: m.SettingsModal })), { ssr: false });
 import { RecentlyDeleted } from "@/components/RecentlyDeleted";
 import { RecentlyDeletedDetail } from "@/components/RecentlyDeletedDetail";
@@ -76,7 +76,7 @@ export default function Home() {
   const isCompact = bp === "mobile" || bp === "tablet";
   const isRecentlyDeleted = activeFilter === "recently-deleted";
   const isAttachments = activeFilter === "attachments";
-  // Fix 1: NoteEditor stays mounted on tablet regardless of selection so the editor instance
+  // Fix 1: NoteShell stays mounted on tablet regardless of selection so the editor instance
   // persists across note switches — removing !!selectedNoteId prevents unmount/remount on each click.
   const showEditor = !isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && (bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "editor"));
   const showQuickBitEditor = activeFilter === "quickbits" && (bp === "desktop" || (bp === "tablet" && !!selectedQuickBitId) || (bp === "mobile" && mobileView === "editor"));
@@ -116,8 +116,8 @@ export default function Home() {
       {isAttachments && <AllAttachments />}
       {showList && !isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && <NoteList />}
       {bp === "desktop" && (showList || isAttachments) && <ResizeHandle onResize={handleNoteListResize} />}
-      {showEditor && <NoteEditor />}
-      {showQuickBitEditor && <QuickBitEditor />}
+      {showEditor && <NoteShell />}
+      {showQuickBitEditor && <QuickBitShell />}
       {showDeletedDetail && <RecentlyDeletedDetail />}
 
       <AIPanel />
