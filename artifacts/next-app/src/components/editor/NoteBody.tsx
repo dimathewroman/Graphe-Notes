@@ -17,6 +17,7 @@ export const NoteBody = memo(function NoteBody({
   note,
   noteId,
   bp,
+  keyboardHeight = 0,
   onTitleChange,
   onAddTag,
   onRemoveTag,
@@ -27,6 +28,7 @@ export const NoteBody = memo(function NoteBody({
   note: { tags?: string[] | null } | null | undefined;
   noteId: number | null;
   bp: "mobile" | "tablet" | "desktop";
+  keyboardHeight?: number;
   onTitleChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onAddTag: (tag: string) => Promise<void>;
   onRemoveTag: (tag: string) => Promise<void>;
@@ -107,7 +109,16 @@ export const NoteBody = memo(function NoteBody({
           <p className="text-primary text-sm font-medium">Drop files here</p>
         </div>
       )}
-      <div className={cn("max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12", bp === "mobile" && "pb-20")}>
+      <div
+        className={cn("max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12", bp === "mobile" && "pb-20")}
+        // On mobile the toolbar is `position: fixed` above the soft keyboard,
+        // so it covers the bottom slice of the scrollable body. Without extra
+        // bottom padding the user can't scroll the last few lines of content
+        // above the toolbar — they stay trapped behind it. Grow the runway by
+        // the keyboard height (the base `pb-20` already covers the toolbar
+        // chrome itself when no keyboard is open).
+        style={bp === "mobile" && keyboardHeight > 0 ? { paddingBottom: `calc(5rem + ${keyboardHeight}px)` } : undefined}
+      >
         <input
           type="text"
           value={title}
