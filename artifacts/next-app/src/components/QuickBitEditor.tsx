@@ -730,7 +730,13 @@ export function QuickBitEditor() {
 
       {/* ── Editor content ───────────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
-        <div className={cn("max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12", bp === "mobile" && "pb-20")}>
+        <div
+          className={cn("max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12", bp === "mobile" && "pb-20")}
+          // Mirrors NoteBody: grow the scroll runway by the keyboard height so
+          // the user can scroll the bottom of the document above the fixed
+          // mobile toolbar instead of leaving it trapped behind the keyboard.
+          style={bp === "mobile" && keyboardHeight > 0 ? { paddingBottom: `calc(5rem + ${keyboardHeight}px)` } : undefined}
+        >
           <input
             type="text"
             value={title}
