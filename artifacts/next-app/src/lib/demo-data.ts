@@ -1,4 +1,5 @@
 import type { Note, Folder, QuickBit } from "@workspace/api-client-react";
+import type { NoteVersionFull } from "@/hooks/use-note-versions";
 
 const now = new Date();
 const ago = (d: number, h = 0) =>
@@ -380,3 +381,58 @@ export const DEMO_TAGS: string[] = [
   "journal", "personal", "recipes", "health", "books",
   "learning", "languages", "dev", "travel", "shopping",
 ];
+
+// Pre-seeded version history for the demo. Newest first within each note's
+// list (matches what the API returns). IDs start above 100k so they don't
+// collide with anything created during a session — see
+// `seedDemoVersionIdCounter()` in `use-note-versions.ts`.
+export const DEMO_NOTE_VERSIONS: Record<number, NoteVersionFull[]> = {
+  // Q2 Roadmap — show a Pre-AI snapshot, a manual save, and an auto-save.
+  2: [
+    {
+      id: 100_003,
+      noteId: 2,
+      title: "Q2 Product Roadmap",
+      content: `<h2>Q2 Roadmap — Graphe</h2><p><strong>Theme:</strong> Growth & Retention</p><h3>🚀 Shipping in April</h3><ul><li>Onboarding redesign (Marcus)</li><li>Mobile push notifications</li></ul><h3>📦 Shipping in May</h3><ul><li>Collaboration — shared notes</li><li>Web clipper browser extension</li></ul>`,
+      contentText:
+        "Q2 Roadmap. Theme: Growth & Retention. Shipping in April: Onboarding redesign, mobile push notifications.",
+      label: null,
+      source: "auto_save",
+      createdAt: ago(1),
+    },
+    {
+      id: 100_002,
+      noteId: 2,
+      title: "Q2 Product Roadmap (draft)",
+      content: `<h2>Q2 Roadmap — Graphe</h2><p><strong>Theme:</strong> Growth and Retention</p><h3>April</h3><ul><li>Onboarding redesign</li><li>Push notifications</li></ul><h3>May</h3><ul><li>Shared notes</li></ul>`,
+      contentText:
+        "Q2 Roadmap. Theme: Growth and Retention. April: Onboarding redesign, push notifications. May: Shared notes.",
+      label: "Before AI rewrite",
+      source: "pre_ai_rewrite",
+      createdAt: ago(2),
+    },
+    {
+      id: 100_001,
+      noteId: 2,
+      title: "Q2 Roadmap — first pass",
+      content: `<h2>Q2 Roadmap</h2><p>Theme: growth.</p><ul><li>Onboarding</li><li>Push</li><li>Shared notes</li></ul>`,
+      contentText: "Q2 Roadmap. Theme: growth. Onboarding, push, shared notes.",
+      label: "Initial outline",
+      source: "manual_save",
+      createdAt: ago(7),
+    },
+  ],
+  // Welcome note — single auto snapshot so the panel isn't empty everywhere.
+  1: [
+    {
+      id: 100_010,
+      noteId: 1,
+      title: "Welcome to Graphe Notes",
+      content: `<h2>Welcome to Graphe Notes</h2><p>This is a demo — explore freely.</p>`,
+      contentText: "Welcome to Graphe Notes. This is a demo — explore freely.",
+      label: null,
+      source: "auto_save",
+      createdAt: ago(0, 2),
+    },
+  ],
+};

@@ -42,7 +42,15 @@ const LOCAL_LLM_DEV_ENDPOINT_OVERRIDE =
 
 export function useAiAction(
   editor: Editor | null,
-  options?: { isDemo?: boolean }
+  options?: {
+    isDemo?: boolean;
+    /**
+     * Called once just before any AI rewrite request runs. NoteShell uses this
+     * to take a "pre_ai_rewrite" version snapshot so the user can always undo
+     * an AI change. Should be a no-op outside of full notes (e.g. quick bits).
+     */
+    onBeforeAiRewrite?: () => Promise<void> | void;
+  }
 ): {
   callAI: (action: string, customInstruction?: string) => Promise<void>;
   aiLoading: boolean;
@@ -51,6 +59,7 @@ export function useAiAction(
   captureSelection: (from: number, to: number, text: string) => void;
 } {
   const isDemo = options?.isDemo ?? false;
+  const onBeforeAiRewrite = options?.onBeforeAiRewrite;
   const { setAiSetupModalOpen, setPendingAiAction } = useAppStore();
 
   const [aiLoading, setAiLoading] = useState(false);
@@ -74,6 +83,14 @@ export function useAiAction(
 
     const prompt = buildAiPrompt(action, sel.text, customInstruction);
     if (!prompt) { setAiLoading(false); return; }
+
+    // Take a "pre_ai_rewrite" snapshot of the current note state before we
+    // touch anything. Failing the snapshot must NOT block the AI call — the
+    // worst case is the user can't undo a single rewrite, which is no worse
+    // than today.
+    if (onBeforeAiRewrite) {
+      try { await onBeforeAiRewrite(); } catch { /* swallow */ }
+    }
 
     const taskType = "manual";
 
