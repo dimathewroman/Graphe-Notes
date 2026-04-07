@@ -5,7 +5,7 @@ import { Plugin, PluginKey } from "@tiptap/pm/state";
 import {
   Heading1, Heading2, Heading3, Bold, Italic,
   List, ListOrdered, ListTodo, Minus, Table,
-  Code, Quote, Video,
+  Code, Quote, Video, ChevronRight, Sigma,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { parseVideoUrl } from "./VideoEmbed";
@@ -93,6 +93,24 @@ const SLASH_COMMANDS: SlashCommand[] = [
     description: "Blockquote",
     icon: <Quote className="w-4 h-4" />,
     execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).toggleBlockquote().run(),
+  },
+  {
+    label: "Math block",
+    description: "Display math equation (LaTeX)",
+    icon: <Sigma className="w-4 h-4" />,
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).insertBlockMath({ latex: "" }).run(),
+  },
+  {
+    label: "Inline math",
+    description: "Inline LaTeX expression",
+    icon: <Sigma className="w-4 h-4" />,
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).insertInlineMath({ latex: "" }).run(),
+  },
+  {
+    label: "Toggle",
+    description: "Collapsible content block",
+    icon: <ChevronRight className="w-4 h-4" />,
+    execute: (e, from, to) => e.chain().focus().deleteRange({ from, to }).setDetails().run(),
   },
   {
     label: "Video",
