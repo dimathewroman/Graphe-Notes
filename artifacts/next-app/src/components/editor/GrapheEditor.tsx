@@ -62,6 +62,12 @@ export interface GrapheEditorProps {
    */
   onEditorReady?: (editor: Editor | null) => void;
   /**
+   * Called immediately before any AI rewrite. NoteShell uses this to take a
+   * pre_ai_rewrite version snapshot so the user can always undo a model edit.
+   * Quick bits don't have versions and pass nothing.
+   */
+  onBeforeAiRewrite?: () => Promise<void> | void;
+  /**
    * Render prop for the scrollable content area inside the editor chrome.
    * The shell is responsible for rendering its title input, tag rows, EditorContent, etc.
    */
@@ -77,6 +83,7 @@ export function GrapheEditor({
   isDemo = false,
   onAttachFile,
   onEditorReady,
+  onBeforeAiRewrite,
   renderContent,
 }: GrapheEditorProps) {
   const bp = useBreakpoint();
@@ -167,7 +174,10 @@ export function GrapheEditor({
   }, [contentKey, editor]);
 
   // AI actions
-  const { callAI, aiLoading, aiError, captureSelection } = useAiAction(editor, { isDemo });
+  const { callAI, aiLoading, aiError, captureSelection } = useAiAction(editor, {
+    isDemo,
+    onBeforeAiRewrite,
+  });
 
   // Attach-file wrapper: shell uploads → GrapheEditor inserts image into the editor
   const handleAttachFile = useCallback(async (file: File) => {
