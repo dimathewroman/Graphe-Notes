@@ -20,6 +20,7 @@ import Link from "@tiptap/extension-link";
 import TaskList from "@tiptap/extension-task-list";
 import SuperscriptExt from "@tiptap/extension-superscript";
 import SubscriptExt from "@tiptap/extension-subscript";
+import Typography from "@tiptap/extension-typography";
 
 import { SlashCommandExtension, SlashCommandMenu } from "./SlashCommandMenu";
 import { FindReplaceExtension, FindReplacePanel, frClear } from "./FindReplace";
@@ -123,6 +124,7 @@ export function GrapheEditor({
     VideoEmbedExtension,
     SwipeIndentExtension,
     ListExitOnEnterExtension,
+    Typography,
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], []);
 
