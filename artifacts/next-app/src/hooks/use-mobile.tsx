@@ -1,7 +1,12 @@
 import * as React from "react"
 
 const MOBILE_BREAKPOINT = 768
-const TABLET_BREAKPOINT = 1024
+// Bumped from 1024 to 1200 so iPad Pro 12.9"/13" in portrait orientation
+// (1024–1032px wide) gets the 2-column tablet layout instead of falling
+// into the 3-column desktop layout, where the columns end up too narrow
+// to read titles or use the editor comfortably. Most laptops are ≥1280
+// so this doesn't change desktop behavior on real Mac/PC screens.
+const TABLET_BREAKPOINT = 1200
 
 export function useBreakpoint() {
   const [bp, setBp] = React.useState<"mobile" | "tablet" | "desktop">("desktop")
