@@ -5,7 +5,9 @@
 import * as Sentry from "@sentry/nextjs";
 
 Sentry.init({
-  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  // DSN is public-safe (see .env.example). Hardcoded fallback ensures events
+  // reach Sentry even if NEXT_PUBLIC_SENTRY_DSN isn't baked into the build.
+  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN ?? "https://d68d92514a7a23c735bc9d157cad3b39@o4511108609605632.ingest.us.sentry.io/4511108611178496",
 
   integrations: [Sentry.replayIntegration()],
 
