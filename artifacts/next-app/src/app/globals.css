@@ -33,12 +33,17 @@
   --color-border: hsl(var(--border));
   --color-ring: hsl(var(--ring));
 
-  /* Animation tokens */
+  /* Animation tokens — base values (Full motion level) */
   --spring-easing: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --duration-micro: 100ms;
   --duration-fast: 160ms;
   --duration-standard: 220ms;
+
+  /* Motion-level-aware tokens — updated by data-motion on <html> */
+  --motion-duration-micro: var(--duration-micro);
+  --motion-duration-fast: var(--duration-fast);
+  --motion-duration-standard: var(--duration-standard);
 }
 
 :root {
@@ -233,6 +238,7 @@
   opacity: 0.6;
   text-decoration: line-through;
   text-decoration-color: hsl(var(--muted-foreground));
+  transition: opacity var(--motion-duration-fast) ease-out;
 }
 .ProseMirror ul[data-type="taskList"] > li > div > ul[data-type="taskList"] {
   margin-top: 0.375rem;
@@ -395,7 +401,36 @@
 .light .hljs-addition { color: #22863a; background-color: #f0fff4; }
 .light .hljs-deletion { color: #b31d28; background-color: #ffeef0; }
 
-/* Version history panel — slide-in animations */
+/* ── Motion level overrides — set via data-motion on <html> ──────────────── */
+[data-motion="reduced"] {
+  --motion-duration-micro: 50ms;
+  --motion-duration-fast: 80ms;
+  --motion-duration-standard: 110ms;
+}
+[data-motion="minimal"] {
+  --motion-duration-micro: 100ms;
+  --motion-duration-fast: 100ms;
+  --motion-duration-standard: 100ms;
+}
+/* Honor OS-level prefers-reduced-motion when no manual override */
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion="full"]):not([data-motion="minimal"]) {
+    --motion-duration-micro: 50ms;
+    --motion-duration-fast: 80ms;
+    --motion-duration-standard: 110ms;
+  }
+}
+
+/* ── Checkbox check draw-in animation ─────────────────────────────────────── */
+@keyframes checkDraw {
+  from { opacity: 0.3; transform: scale(0.7); }
+  to   { opacity: 1;   transform: scale(1); }
+}
+.ProseMirror ul[data-type="taskList"] > li > label > input[type="checkbox"]:checked {
+  animation: checkDraw 150ms var(--spring-easing);
+}
+
+/* ── Version history panel — slide-in animations ──────────────────────────── */
 @keyframes slideInRight {
   from { transform: translateX(100%); opacity: 0; }
   to   { transform: translateX(0);    opacity: 1; }

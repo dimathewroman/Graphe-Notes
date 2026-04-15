@@ -5,6 +5,7 @@ type FilterType = "all" | "pinned" | "favorites" | "folder" | "tag" | "attachmen
 type ViewMode = "list" | "gallery";
 type MobileView = "list" | "editor";
 type SettingsTab = "appearance" | "ai" | "data" | "security" | "quickbits" | "account";
+export type MotionLevel = "full" | "reduced" | "minimal";
 
 interface AppState {
   activeFilter: FilterType;
@@ -14,6 +15,9 @@ interface AppState {
   sortBy: GetNotesSortBy;
   sortDir: GetNotesSortDir;
   viewMode: ViewMode;
+
+  motionLevel: MotionLevel;
+  setMotionLevel: (level: MotionLevel) => void;
 
   selectedNoteId: number | null;
   selectedQuickBitId: number | null;
@@ -65,6 +69,9 @@ export const useAppStore = create<AppState>((set) => ({
   sortBy: "updatedAt",
   sortDir: "desc",
   viewMode: "list",
+
+  motionLevel: "full",
+  setMotionLevel: (level) => set({ motionLevel: level }),
 
   selectedNoteId: null,
   selectedQuickBitId: null,

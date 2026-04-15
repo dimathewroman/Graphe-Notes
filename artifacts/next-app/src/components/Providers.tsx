@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { TokenSync } from "@/lib/token-sync";
 import { PHProvider } from "@/components/PostHogProvider";
+import { useMotionInit } from "@/hooks/use-motion";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,10 +23,16 @@ const queryClient = new QueryClient({
 
 export { queryClient };
 
+function MotionInit() {
+  useMotionInit();
+  return null;
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <PHProvider>
       <QueryClientProvider client={queryClient}>
+        <MotionInit />
         <TokenSync />
         <Toaster />
         {children}

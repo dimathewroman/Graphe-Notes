@@ -2,9 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import {
   X, Key, Cloud, Download, Server, Palette, Sun, Moon, Monitor,
   AlertCircle, CheckCircle2, Shield, ShieldCheck, KeyRound, LogOut, Zap, Eye, EyeOff,
+  Wind, Minus,
 } from "lucide-react";
 import { NotificationCadenceEditor } from "./NotificationCadenceEditor";
 import { useAppStore } from "@/store";
+import type { MotionLevel } from "@/store";
+import posthog from "posthog-js";
 import { useAuth } from "@/hooks/use-auth";
 import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
@@ -47,10 +50,18 @@ function applyTheme(mode: ThemeMode, accent: string) {
 }
 
 export function SettingsModal() {
-  const { isSettingsOpen, setSettingsOpen, settingsInitialTab } = useAppStore();
+  const { isSettingsOpen, setSettingsOpen, settingsInitialTab, motionLevel, setMotionLevel } = useAppStore();
   const { user, logout } = useAuth();
   const bp = useBreakpoint();
   const isMobile = bp === "mobile";
+
+  const handleMotionChange = (level: MotionLevel) => {
+    setMotionLevel(level);
+    localStorage.setItem("motion_level", level);
+    try {
+      posthog.capture("motion_level_changed", { level, timestamp: new Date().toISOString() });
+    } catch { /* PostHog may not be ready */ }
+  };
 
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [accentColor, setAccentColor] = useState(ACCENT_PRESETS[0].value);
@@ -664,6 +675,32 @@ export function SettingsModal() {
                         >
                           <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: preset.hex }} />
                           {preset.name}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Motion</h3>
+                    <div className="grid grid-cols-3 gap-2">
+                      {([
+                        { id: "full" as MotionLevel, label: "Full", icon: Zap, desc: "Spring physics" },
+                        { id: "reduced" as MotionLevel, label: "Reduced", icon: Wind, desc: "No springs" },
+                        { id: "minimal" as MotionLevel, label: "Minimal", icon: Minus, desc: "Opacity only" },
+                      ] as const).map((opt) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => handleMotionChange(opt.id)}
+                          className={cn(
+                            "flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-sm font-medium",
+                            motionLevel === opt.id
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-panel-border bg-background hover:border-primary/40 text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          <opt.icon className="w-4 h-4" />
+                          <span>{opt.label}</span>
+                          <span className="text-[9px] font-normal opacity-70">{opt.desc}</span>
                         </button>
                       ))}
                     </div>

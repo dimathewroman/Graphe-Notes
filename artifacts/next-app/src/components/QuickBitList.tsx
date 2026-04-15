@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Zap, Plus, Clock, Menu, PanelLeft, Search, LayoutGrid, LayoutList, SortAsc } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useAnimationConfig } from "@/hooks/use-motion";
 import { useAppStore } from "@/store";
 import {
   useGetQuickBits,
@@ -49,6 +51,7 @@ export function QuickBitList() {
   const { setSidebarOpen, isSidebarOpen, toggleSidebar, selectedQuickBitId, selectQuickBit, setMobileView, viewMode, setViewMode, noteListWidth } = useAppStore();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
+  const anim = useAnimationConfig();
   const queryClient = useQueryClient();
 
   const [qbSortBy, setQbSortBy] = useState<string>("expiresAt");
@@ -253,15 +256,21 @@ export function QuickBitList() {
             )}
           </div>
         ) : viewMode === "gallery" ? (
-          quickBits.map((qb) => {
+          <AnimatePresence initial={false}>
+          {quickBits.map((qb) => {
             const expiry = formatExpiry(qb.expiresAt);
             return (
-              <div
+              <motion.div
                 key={qb.id}
                 data-testid="quickbit-item"
+                layout
+                initial={anim.initialVariants}
+                animate={anim.enterVariants}
+                exit={anim.exitVariants}
+                transition={anim.fastTransition}
                 onClick={() => { selectQuickBit(qb.id); if (bp === "mobile") setMobileView("editor"); }}
                 className={cn(
-                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px] hover:-translate-y-0.5",
+                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px] hover:-translate-y-0.5 active:scale-[0.98]",
                   selectedQuickBitId === qb.id
                     ? "bg-primary/5 border-primary/30 shadow-sm"
                     : "bg-transparent border-transparent hover:bg-panel-hover hover:border-panel-border"
@@ -279,19 +288,27 @@ export function QuickBitList() {
                     <span className={cn("text-[10px] font-mono", expiry.className)}>{expiry.label}</span>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             );
-          })
+          })}
+          </AnimatePresence>
         ) : (
-          quickBits.map((qb) => {
+          <AnimatePresence initial={false}>
+          {quickBits.map((qb) => {
             const expiry = formatExpiry(qb.expiresAt);
             return (
-              <div
+              <motion.div
                 key={qb.id}
                 data-testid="quickbit-item"
+                layout
+                initial={anim.initialVariants}
+                animate={anim.enterVariants}
+                exit={anim.exitVariants}
+                transition={anim.fastTransition}
                 onClick={() => { selectQuickBit(qb.id); if (bp === "mobile") setMobileView("editor"); }}
                 className={cn(
-                  "p-3 rounded-lg cursor-pointer transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
+                  "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
+                  anim.useScale && "hover:-translate-y-[1px] active:scale-[0.98]",
                   selectedQuickBitId === qb.id
                     ? "bg-primary/5 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"
                     : "border-l-2 border-l-transparent border-y border-y-transparent border-r border-r-transparent hover:bg-panel-hover"
@@ -310,9 +327,10 @@ export function QuickBitList() {
                   <Clock className="w-3 h-3 text-muted-foreground/60 shrink-0" />
                   <span className={cn("text-[10px] font-mono", expiry.className)}>{expiry.label}</span>
                 </div>
-              </div>
+              </motion.div>
             );
-          })
+          })}
+          </AnimatePresence>
         )}
       </div>
     </div>
