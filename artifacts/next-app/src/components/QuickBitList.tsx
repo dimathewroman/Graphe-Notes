@@ -194,6 +194,7 @@ export function QuickBitList() {
             <button
               onClick={handleCreateNew}
               disabled={createMut.isPending || isDemo}
+              data-testid="new-quickbit-btn"
               className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center"
             >
               <Plus className="w-4 h-4" />
@@ -257,6 +258,7 @@ export function QuickBitList() {
             return (
               <div
                 key={qb.id}
+                data-testid="quickbit-item"
                 onClick={() => { selectQuickBit(qb.id); if (bp === "mobile") setMobileView("editor"); }}
                 className={cn(
                   "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px] hover:-translate-y-0.5",
@@ -286,6 +288,7 @@ export function QuickBitList() {
             return (
               <div
                 key={qb.id}
+                data-testid="quickbit-item"
                 onClick={() => { selectQuickBit(qb.id); if (bp === "mobile") setMobileView("editor"); }}
                 className={cn(
                   "p-3 rounded-lg cursor-pointer transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",

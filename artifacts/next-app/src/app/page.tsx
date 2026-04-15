@@ -185,6 +185,7 @@ function LoginScreen({ onDemo }: { onDemo: () => void }) {
 
           <button
             onClick={onDemo}
+            data-testid="demo-mode-btn"
             className="w-full py-2 text-xs text-muted-foreground hover:text-foreground transition-colors text-center"
           >
             Try a demo without signing in →

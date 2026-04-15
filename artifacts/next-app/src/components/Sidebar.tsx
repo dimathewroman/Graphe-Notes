@@ -304,8 +304,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <div className="flex-1 overflow-y-auto py-1">
         {/* Primary nav */}
         <div className="px-3 space-y-0.5 mb-3">
-          <NavItem icon={<FileText className="w-4 h-4" />} label="All Notes" active={activeFilter === "all"} onClick={() => handleNavClick("all")} />
-          <NavItem icon={<Zap className="w-4 h-4" />} label="Quick Bits" active={activeFilter === "quickbits"} onClick={() => handleNavClick("quickbits")} />
+          <NavItem icon={<FileText className="w-4 h-4" />} label="All Notes" active={activeFilter === "all"} onClick={() => handleNavClick("all")} testId="nav-all-notes" />
+          <NavItem icon={<Zap className="w-4 h-4" />} label="Quick Bits" active={activeFilter === "quickbits"} onClick={() => handleNavClick("quickbits")} testId="nav-quickbits" />
           <NavItem icon={<Star className="w-4 h-4" />} label="Favorites" active={activeFilter === "favorites"} onClick={() => handleNavClick("favorites")} />
           <NavItem icon={<Pin className="w-4 h-4" />} label="Pinned" active={activeFilter === "pinned"} onClick={() => handleNavClick("all")} />
           <NavItem icon={<Paperclip className="w-4 h-4" />} label="Attachments" active={activeFilter === "attachments"} onClick={() => handleNavClick("attachments")} />
@@ -313,6 +313,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <div className="flex items-center gap-1">
             <button
               onClick={handleVaultClick}
+              data-testid="nav-vault"
               className={cn(
                 "flex-1 flex items-center gap-3 px-3 py-2.5 md:py-2 rounded-lg text-sm",
                 "transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]",
@@ -466,10 +467,11 @@ export function Sidebar() {
   );
 }
 
-function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active?: boolean; onClick: () => void }) {
+function NavItem({ icon, label, active, onClick, testId }: { icon: React.ReactNode; label: string; active?: boolean; onClick: () => void; testId?: string }) {
   return (
     <button
       onClick={onClick}
+      data-testid={testId}
       className={cn(
         "w-full flex items-center gap-3 py-2.5 md:py-2 px-3 rounded-lg text-sm",
         "transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]",
