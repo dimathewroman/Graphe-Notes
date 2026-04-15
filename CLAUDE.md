@@ -36,8 +36,9 @@ A task is not done until all of the following are true:
 2. Vercel preview URL is generated and functional
 3. A posthog.capture() call is added for every new user-facing action (see PostHog section below)
 4. A Sentry error boundary or try/catch with Sentry.captureException is added for every new failure surface
-5. The Notion Active Work row is updated with branch name, preview URL, and Status set to QA Review
-6. A plain English summary is written of what was done and any follow-up tasks
+5. Sentry is checked for new unresolved issues before the PR is opened: resolve intentional test errors, fix any real errors caused by the branch, and resolve stale dev-build noise so the dashboard stays clean
+6. The Notion Active Work row is updated with branch name, preview URL, and Status set to QA Review
+7. A plain English summary is written of what was done and any follow-up tasks
 
 ---
 
