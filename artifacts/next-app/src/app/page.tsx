@@ -5,7 +5,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import Home from "@/components/Home";
 import { Mail, Loader2 } from "lucide-react";
-import * as Sentry from "@sentry/nextjs";
 import { DEMO_NOTES, DEMO_FOLDERS, DEMO_TAGS, DEMO_QUICK_BITS, DEMO_NOTE_VERSIONS } from "@/lib/demo-data";
 import { DemoContext } from "@/lib/demo-context";
 import { seedDemoVersionIdCounter } from "@/hooks/use-note-versions";
@@ -191,13 +190,6 @@ function LoginScreen({ onDemo }: { onDemo: () => void }) {
             Try a demo without signing in →
           </button>
 
-          {/* TEMP: Sentry smoke-test — remove after confirming errors appear in dashboard */}
-          <button
-            onClick={() => Sentry.captureException(new Error("sentry-smoke-test"))}
-            className="w-full py-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground transition-colors text-center"
-          >
-            [Test Sentry]
-          </button>
         </div>
       </div>
     </div>
