@@ -9,6 +9,35 @@
 - API codegen: Orval (from OpenAPI spec)
 - Monorepo: pnpm workspaces
 - Deployment: Vercel
+- Error tracking: Sentry
+- Analytics and feature flags: PostHog
+
+---
+
+## Agent Workspace
+
+This codebase is managed by a team of specialist agents coordinated by DiMathew. The source of truth for all conventions, the definition of done, the PostHog event schema, Sentry setup status, and branch naming lives in Notion:
+
+Graphe Notes — Private > Agent Workspace > Stack and Conventions Reference
+
+After every completed task:
+1. Update the Active Work database row for this task in Notion: set Status to QA Review, add the branch name, and add the Vercel preview URL.
+2. If a significant architectural or engineering decision was made, log it to the Decision Log with a rationale.
+3. If a change was reverted, log it to the Rollback Log with a reason and what to try instead.
+
+DiMathew reviews all diffs on the Vercel preview before merging. Do not merge to master.
+
+---
+
+## Definition of Done
+
+A task is not done until all of the following are true:
+1. Code is on a named branch (never master)
+2. Vercel preview URL is generated and functional
+3. A posthog.capture() call is added for every new user-facing action (see PostHog section below)
+4. A Sentry error boundary or try/catch with Sentry.captureException is added for every new failure surface
+5. The Notion Active Work row is updated with branch name, preview URL, and Status set to QA Review
+6. A plain English summary is written of what was done and any follow-up tasks
 
 ---
 
@@ -80,14 +109,14 @@ All endpoints live in artifacts/next-app/src/app/api/ and are prefixed with /api
 ## Session Startup
 
 At the start of every new session, before doing anything else:
-1. Pull the latest master from GitHub: `git checkout master && git pull origin master`
+1. Pull the latest master from GitHub: git checkout master and git pull origin master
 2. Ask the user what feature or fix they are working on in this session.
-   - Always create a new branch from master for the work: `git checkout -b feature/<name>` (or `fix/<name>` for bug fixes).
-   - Exception: if the user explicitly says they are continuing an in-progress branch that has unmerged work (e.g. "keep working on feature/X"), switch to that branch instead.
+   - Always create a new branch from master for the work: git checkout -b feature/name (or fix/name for bug fixes, chore/name for non-feature work like docs or config).
+   - Exception: if the user explicitly says they are continuing an in-progress branch that has unmerged work, switch to that branch instead.
    - Never silently continue on whatever branch happens to already have commits. Each feature/fix must have its own dedicated branch and PR. Never put two features on the same branch.
-3. Check that .env exists in the repo root -- if not, copy .env.example to .env and inform the user that real credentials from 1Password are needed for full login and DB access
-4. Run pnpm install from the repo root
-5. Start the Next.js dev server on port 3000
+3. Check that .env exists in the repo root -- if not, copy .env.example to .env and inform the user that real credentials from 1Password are needed for full login and DB access.
+4. Run pnpm install from the repo root.
+5. Start the Next.js dev server on port 3000.
 
 Do this automatically without being asked.
 
@@ -155,11 +184,41 @@ Auth lives in artifacts/next-app/src/hooks/use-auth.ts and artifacts/next-app/sr
 useDemoMode() returns isDemo: boolean. Import from @/App.
 
 In demo mode, patch the React Query cache directly instead of calling API mutations:
-```tsx
+```typescript
 queryClient.setQueryData(getGetNoteQueryKey(id), { ...existing, vaulted: true })
 ```
 
 Demo vault PIN is stored in sessionStorage under the key "demo_vault_hash". Always use sessionStorage as the source of truth for whether a PIN is configured in demo mode.
+
+---
+
+## PostHog
+
+PostHog is used for analytics and feature flags. Import the posthog-js client from the PostHog provider.
+
+Event naming format: noun_verb
+
+Baseline events already instrumented:
+- note_created
+- note_opened
+- note_deleted
+- editor_opened
+- sync_triggered
+- search_performed
+
+All events must include a properties object with at minimum: timestamp and any relevant IDs (note_id, user_id where available).
+
+Adding a posthog.capture() call for every new user-facing action is part of the definition of done. Do not close a task without it.
+
+---
+
+## Sentry
+
+Sentry is used for error tracking. Source maps are uploaded to Sentry on every Vercel build via the Sentry Next.js plugin in next.config.js.
+
+Every component or function that can fail (network call, async operation, user input processing) must have either a Sentry.ErrorBoundary wrapper or a try/catch block with Sentry.captureException(error) in the catch.
+
+Adding this is part of the definition of done. Do not close a task without it.
 
 ---
 
@@ -218,6 +277,9 @@ Version 4 via @tailwindcss/postcss. Global styles in artifacts/next-app/src/app/
 | SUPABASE_URL | API routes | Supabase project URL |
 | SUPABASE_SERVICE_ROLE_KEY | API routes only | Admin operations -- never expose to frontend |
 | SUPABASE_DB_URL | lib/db (Drizzle) | Session-mode pooler connection string |
+| SENTRY_DSN | Sentry config files | Error tracking DSN |
+| NEXT_PUBLIC_POSTHOG_KEY | PostHog provider | Analytics project key |
+| NEXT_PUBLIC_POSTHOG_HOST | PostHog provider | Analytics host URL |
 
 For local dev, copy .env.example to .env at the repo root and fill in credentials.
 
@@ -230,7 +292,7 @@ vercel.json at the repo root configures Vercel to build from the monorepo:
 - Output directory: artifacts/next-app/.next
 - Install command: pnpm install
 
-Branch strategy: master is production. feature/* and fix/* branches get Vercel preview deployments automatically.
+Branch strategy: master is production. feature/*, fix/*, and chore/* branches get Vercel preview deployments automatically.
 
 ---
 
@@ -239,11 +301,12 @@ Branch strategy: master is production. feature/* and fix/* branches get Vercel p
 | Branch | Purpose |
 |---|---|
 | master | Production -- Vercel deploys from here |
-| feature/<n> | New feature work, branched from master, pushed to GitHub |
-| fix/<description> | Bug fixes, branched from master, pushed to GitHub |
+| feature/name | New feature work, branched from master |
+| fix/name | Bug fixes, branched from master |
+| chore/name | Docs, config, non-feature work |
 
 PR workflow:
-1. Create feature/<n> or fix/<n> from master
+1. Create feature/name, fix/name, or chore/name from master
 2. Commit all work on that branch
 3. Push and open PR targeting master
 
@@ -254,12 +317,10 @@ One feature = one branch = one PR. Never put two features on the same branch.
 ## Git Workflow
 
 ### Starting a new session
-1. Always run `git fetch origin && git checkout master && git pull origin master` first to ensure you're working from the latest code.
-2. If the user says to continue work on an existing branch:
-   - Run `git checkout <branch-name>` (and `git pull origin <branch-name>` if it exists on remote)
-3. If starting new work:
-   - Create a new branch from the freshly-pulled master: `git checkout -b feature/<descriptive-name>` or `fix/<descriptive-name>`
-4. If you find yourself on any branch that isn't master or a feature/fix branch, switch to master and pull before proceeding. Ask before continuing.
+1. Always run git fetch origin and git checkout master and git pull origin master first to ensure you are working from the latest code.
+2. If the user says to continue work on an existing branch, run git checkout branch-name (and git pull origin branch-name if it exists on remote).
+3. If starting new work, create a new branch from the freshly-pulled master.
+4. If you find yourself on any branch that is not master or a feature/fix/chore branch, switch to master and pull before proceeding. Ask before continuing.
 
 ### During work
 - Commit frequently with clear, descriptive messages
@@ -267,13 +328,15 @@ One feature = one branch = one PR. Never put two features on the same branch.
 - Do NOT push to remote until the work is complete and ready for PR
 
 ### Finishing work
-1. Push the branch to GitHub: `git push -u origin <branch-name>`
-2. Create a PR using `gh pr create --title "<title>" --body "<description>"`
-3. Do NOT merge the PR — the user will review and merge manually in GitHub
+1. Push the branch to GitHub: git push -u origin branch-name
+2. Create a PR using: gh pr create --title "title" --body "description"
+3. Do NOT merge the PR. DiMathew will review and merge manually in GitHub.
+4. Update the Notion Active Work row: Status to QA Review, branch name, Vercel preview URL.
 
 ### Branch naming
-- New features: `feature/<descriptive-name>`
-- Bug fixes: `fix/<descriptive-name>`
+- New features: feature/descriptive-name
+- Bug fixes: fix/descriptive-name
+- Docs, config, chores: chore/descriptive-name
 - Never commit directly to master
 
 ---
@@ -282,19 +345,19 @@ One feature = one branch = one PR. Never put two features on the same branch.
 
 No tests exist. Do not suggest or scaffold tests unless explicitly asked.
 
-NoteEditor.tsx is the orchestrator (~485 lines). Editor sub-components live in components/editor/ — do not add new editor UI directly into NoteEditor.tsx. Key files:
-- editor/EditorToolbar.tsx — full toolbar (font, size, formatting, link, etc.)
-- editor/AiSelectionMenu.tsx / MobileSelectionMenu.tsx — floating AI menus
-- editor/NoteHeader.tsx — top bar (save status, actions, overflow/export menus)
-- editor/NoteBody.tsx — title input + tags + editor content
-- hooks/use-ai-action.ts — AI call flow with first-time setup modal; use in both NoteEditor and QuickBitEditor
-- lib/ai-prompts.ts — single source of truth for AI prompt strings
+NoteEditor.tsx is the orchestrator (~485 lines). Editor sub-components live in components/editor/ -- do not add new editor UI directly into NoteEditor.tsx. Key files:
+- editor/EditorToolbar.tsx -- full toolbar (font, size, formatting, link, etc.)
+- editor/AiSelectionMenu.tsx / MobileSelectionMenu.tsx -- floating AI menus
+- editor/NoteHeader.tsx -- top bar (save status, actions, overflow/export menus)
+- editor/NoteBody.tsx -- title input + tags + editor content
+- hooks/use-ai-action.ts -- AI call flow with first-time setup modal; use in both NoteEditor and QuickBitEditor
+- lib/ai-prompts.ts -- single source of truth for AI prompt strings
 
 Toolbar menus are portaled. See Toolbar Popover Pattern above.
 
 FontSize is a named export from @tiptap/extension-text-style. Do not install @tiptap/extension-font-size -- it is deprecated.
 
-AI provider keys are stored encrypted in the `user_api_keys` DB table. The encryption utility is in `lib/encryption.ts` (AES-256-GCM). The active provider setting is in `user_settings`. Do not use localStorage for AI keys.
+AI provider keys are stored encrypted in the user_api_keys DB table. The encryption utility is in lib/encryption.ts (AES-256-GCM). The active provider setting is in user_settings. Do not use localStorage for AI keys.
 
 ---
 
