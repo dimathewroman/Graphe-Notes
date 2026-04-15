@@ -1,6 +1,7 @@
 // Top header bar: save status, back button, sidebar toggles, action icons, overflow/export menus.
 
 import { memo, useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import type { useEditor } from "@tiptap/react";
 import {
   Pin, Star, ShieldCheck, Clock, Trash2,
@@ -92,11 +93,17 @@ export const NoteHeader = memo(function NoteHeader({
             )}
           </div>
         )}
-        <div className="flex items-center gap-2 text-xs font-mono text-muted-foreground">
+        <motion.div
+          key={saveStatus}
+          initial={{ opacity: 0.6 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+          className="flex items-center gap-2 text-xs font-mono text-muted-foreground"
+        >
           <span className={cn("inline-block w-1.5 h-1.5 rounded-full", saveStatus === "saved" ? "bg-emerald-500" : "bg-amber-500 animate-pulse")} />
           {saveStatus === "saved" ? "Saved" : "Saving..."}
           {bp === "desktop" && note && <span className="ml-2 border-l border-panel-border pl-2">Updated {formatDate(note.updatedAt ?? "")}</span>}
-        </div>
+        </motion.div>
       </div>
 
       <div className="flex items-center gap-0.5 md:gap-1">

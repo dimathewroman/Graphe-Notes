@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useAnimationConfig } from "@/hooks/use-motion";
 import {
   Search, Plus, Pin, Star, FileText, MoreVertical, Trash2, FolderInput,
   LayoutGrid, LayoutList, SortAsc, ShieldCheck, Image as ImageIcon, Hash, X, Tag, Menu, PanelLeftClose, PanelLeft
@@ -62,6 +64,7 @@ export function NoteList() {
   const addDemoNoteId = useAppStore(s => s.addDemoNoteId);
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
+  const anim = useAnimationConfig();
 
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const debouncedSearch = useDebounce(localSearch, 300);
@@ -518,16 +521,22 @@ export function NoteList() {
             {debouncedSearch && <p className="text-xs mt-1 opacity-70">Try a different search term.</p>}
           </div>
         ) : viewMode === "gallery" ? (
-          notes.map(note => {
+          <AnimatePresence initial={false}>
+          {notes.map(note => {
             const img = getFirstImage(note.content);
             return (
-              <div
+              <motion.div
                 key={note.id}
                 data-testid="note-item"
+                layout
+                initial={anim.initialVariants}
+                animate={anim.enterVariants}
+                exit={anim.exitVariants}
+                transition={anim.fastTransition}
                 onClick={() => handleSelectNote(note.id)}
                 onContextMenu={e => handleContextMenu(e, note)}
                 className={cn(
-                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px] hover:-translate-y-0.5",
+                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px] hover:-translate-y-0.5 active:scale-[0.98]",
                   selectedNoteId === note.id
                     ? "bg-primary/5 border-primary/30 shadow-sm"
                     : "bg-transparent border-transparent hover:bg-panel-hover hover:border-panel-border"
@@ -560,18 +569,26 @@ export function NoteList() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             );
-          })
+          })}
+          </AnimatePresence>
         ) : (
-          notes.map(note => (
-            <div
+          <AnimatePresence initial={false}>
+          {notes.map(note => (
+            <motion.div
               key={note.id}
               data-testid="note-item"
+              layout
+              initial={anim.initialVariants}
+              animate={anim.enterVariants}
+              exit={anim.exitVariants}
+              transition={anim.fastTransition}
               onClick={() => handleSelectNote(note.id)}
               onContextMenu={e => handleContextMenu(e, note)}
               className={cn(
-                "p-3 rounded-lg cursor-pointer transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
+                "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
+                anim.useScale && "hover:-translate-y-[1px] active:scale-[0.98]",
                 selectedNoteId === note.id
                   ? "bg-primary/5 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"
                   : "border-l-2 border-l-transparent border-y border-y-transparent border-r border-r-transparent hover:bg-panel-hover"
@@ -613,8 +630,9 @@ export function NoteList() {
                   </div>
                 )}
               </div>
-            </div>
-          ))
+            </motion.div>
+          ))}
+          </AnimatePresence>
         )}
       </div>
 

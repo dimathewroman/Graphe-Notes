@@ -1,5 +1,7 @@
 import { useState } from "react";
 import posthog from "posthog-js";
+import { motion } from "framer-motion";
+import { useAnimationConfig } from "@/hooks/use-motion";
 const grapheLogo = "/graphe_minimalist_1773640203523.png";
 import {
   Folder, FolderOpen, FileText, Star, Pin, Search, Sun, Moon,
@@ -468,19 +470,31 @@ export function Sidebar() {
 }
 
 function NavItem({ icon, label, active, onClick, testId }: { icon: React.ReactNode; label: string; active?: boolean; onClick: () => void; testId?: string }) {
+  const anim = useAnimationConfig();
   return (
     <button
       onClick={onClick}
       data-testid={testId}
       className={cn(
-        "w-full flex items-center gap-3 py-2.5 md:py-2 px-3 rounded-lg text-sm",
-        "transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]",
+        "w-full flex items-center gap-3 py-2.5 md:py-2 px-3 rounded-lg text-sm relative",
+        "transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]",
         "active:scale-[0.97]",
-        active ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
+        active ? "text-primary font-medium" : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
       )}
     >
-      {icon}
-      <span>{label}</span>
+      {active && (
+        <motion.div
+          layoutId="sidebar-active-pill"
+          className="absolute inset-0 rounded-lg bg-primary/10"
+          initial={false}
+          transition={anim.level === "full"
+            ? { type: "spring", stiffness: 380, damping: 30 }
+            : anim.standardTransition
+          }
+        />
+      )}
+      <span className="relative z-10 shrink-0">{icon}</span>
+      <span className="relative z-10">{label}</span>
     </button>
   );
 }
