@@ -443,6 +443,7 @@ export function NoteShell() {
           deletedReason: "deleted",
         });
       }
+      posthog.capture("note_deleted", { note_id: selectedNoteId, timestamp: new Date().toISOString() });
       selectNote(null);
       if (bp !== "desktop") setMobileView("list");
       return;

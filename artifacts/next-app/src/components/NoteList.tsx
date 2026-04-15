@@ -320,6 +320,7 @@ export function NoteList() {
       addDemoNoteId(tempId);
       selectNote(tempId);
       if (bp === "mobile") setMobileView("editor");
+      posthog.capture("note_created", { note_id: tempId, timestamp: new Date().toISOString() });
       return;
     }
     createNoteMut.mutate({
@@ -743,6 +744,7 @@ export function NoteList() {
                   autoDeleteAt,
                   deletedReason: "deleted",
                 });
+                posthog.capture("note_deleted", { note_id: contextMenu.noteId, timestamp: now });
                 if (selectedNoteId === contextMenu.noteId) { selectNote(null); }
               } else {
                 softDeleteMut.mutate({ id: contextMenu.noteId });
