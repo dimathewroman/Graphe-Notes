@@ -189,6 +189,7 @@ function LoginScreen({ onDemo }: { onDemo: () => void }) {
           >
             Try a demo without signing in →
           </button>
+
         </div>
       </div>
     </div>

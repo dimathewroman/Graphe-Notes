@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { TokenSync } from "@/lib/token-sync";
+import { PHProvider } from "@/components/PostHogProvider";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,10 +24,12 @@ export { queryClient };
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <TokenSync />
-      <Toaster />
-      {children}
-    </QueryClientProvider>
+    <PHProvider>
+      <QueryClientProvider client={queryClient}>
+        <TokenSync />
+        <Toaster />
+        {children}
+      </QueryClientProvider>
+    </PHProvider>
   );
 }
