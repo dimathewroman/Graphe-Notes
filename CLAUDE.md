@@ -342,9 +342,33 @@ One feature = one branch = one PR. Never put two features on the same branch.
 
 ---
 
-## Codebase Caveats
+## Testing
 
-No tests exist. Do not suggest or scaffold tests unless explicitly asked.
+Playwright e2e tests live in `artifacts/next-app/e2e/`. Tests run against the Next.js dev server on port 3000.
+
+```bash
+# Run the full e2e suite (from repo root)
+pnpm --filter @workspace/next-app run test:e2e
+
+# Or from artifacts/next-app/
+npx playwright test
+```
+
+Test files:
+- `e2e/01-app-loads.spec.ts` — login screen loads, demo mode boots
+- `e2e/02-notes.spec.ts` — create, open, delete, and search notes
+- `e2e/03-quick-bits.spec.ts` — Quick Bits list and navigation
+- `e2e/04-vault.spec.ts` — vault setup, PIN flow, and vaulting notes
+
+All tests use demo mode (no auth credentials needed). The helper `e2e/helpers.ts` exports `enterDemoMode(page)` which lands on All Notes with demo data pre-seeded.
+
+Use `data-testid` attributes for all selectors — never couple tests to CSS classes. When adding new components that need test coverage, add `data-testid` at the same time.
+
+The Playwright config is at `artifacts/next-app/playwright.config.ts`. Tests run serially (`workers: 1`) because the Next.js dev server cannot reliably handle concurrent test workers.
+
+---
+
+## Codebase Caveats
 
 NoteEditor.tsx is the orchestrator (~485 lines). Editor sub-components live in components/editor/ -- do not add new editor UI directly into NoteEditor.tsx. Key files:
 - editor/EditorToolbar.tsx -- full toolbar (font, size, formatting, link, etc.)

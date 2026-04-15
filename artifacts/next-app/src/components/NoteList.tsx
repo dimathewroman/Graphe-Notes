@@ -428,7 +428,7 @@ export function NoteList() {
     : noteListWidth;
 
   return (
-    <div className={containerClass} style={containerWidth ? { width: containerWidth } : undefined}>
+    <div data-testid="note-list" className={containerClass} style={containerWidth ? { width: containerWidth } : undefined}>
       {/* Header */}
       <div className="p-4 border-b border-panel-border flex flex-col gap-3">
         <div className="flex items-center justify-between">
@@ -484,6 +484,7 @@ export function NoteList() {
             <button
               onClick={handleCreateNew}
               disabled={createNoteMut.isPending}
+              data-testid="new-note-btn"
               className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center"
             >
               <Plus className="w-4 h-4" />
@@ -498,6 +499,7 @@ export function NoteList() {
             placeholder="Search notes..."
             value={localSearch}
             onChange={e => setLocalSearch(e.target.value)}
+            data-testid="note-search-input"
             className="w-full bg-panel border border-panel-border rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-foreground placeholder:text-muted-foreground"
           />
         </div>
@@ -521,6 +523,7 @@ export function NoteList() {
             return (
               <div
                 key={note.id}
+                data-testid="note-item"
                 onClick={() => handleSelectNote(note.id)}
                 onContextMenu={e => handleContextMenu(e, note)}
                 className={cn(
@@ -564,6 +567,7 @@ export function NoteList() {
           notes.map(note => (
             <div
               key={note.id}
+              data-testid="note-item"
               onClick={() => handleSelectNote(note.id)}
               onContextMenu={e => handleContextMenu(e, note)}
               className={cn(
@@ -720,6 +724,7 @@ export function NoteList() {
               <ContextMenuItem
                 icon={<ShieldCheck className={cn("w-4 h-4", contextMenu.vaulted && "text-indigo-400")} />}
                 label={contextMenu.vaulted ? "Remove from Vault" : "Move to Vault"}
+                testId="context-menu-vault"
                 onClick={() => {
                   if (isDemo) { demoPatchNote(contextMenu.noteId, { vaulted: !contextMenu.vaulted }); }
                   else { vaultMut.mutate({ id: contextMenu.noteId, data: { vaulted: !contextMenu.vaulted } }); }
@@ -734,6 +739,7 @@ export function NoteList() {
             icon={<Trash2 className="w-4 h-4" />}
             label="Delete"
             danger
+            testId="context-menu-delete"
             onClick={() => {
               if (isDemo) {
                 const now = new Date().toISOString();
@@ -759,14 +765,15 @@ export function NoteList() {
 }
 
 function ContextMenuItem({
-  icon, label, onClick, danger, chevron, active
+  icon, label, onClick, danger, chevron, active, testId
 }: {
   icon: React.ReactNode; label: string; onClick: () => void;
-  danger?: boolean; chevron?: boolean; active?: boolean;
+  danger?: boolean; chevron?: boolean; active?: boolean; testId?: string;
 }) {
   return (
     <button
       onClick={onClick}
+      data-testid={testId}
       className={cn(
         "w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors text-left",
         danger

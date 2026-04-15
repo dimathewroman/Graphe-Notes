@@ -129,6 +129,7 @@ export const NoteBody = memo(function NoteBody({
           // not a form field — opt out.
           autoComplete="off"
           autoCorrect="off"
+          data-testid="note-title-input"
           className="w-full text-2xl md:text-4xl font-bold bg-transparent border-none outline-none mb-4 text-foreground placeholder:text-muted-foreground/30 resize-none tracking-tight"
         />
         <TagRow note={note} onAddTag={onAddTag} onRemoveTag={onRemoveTag} />
