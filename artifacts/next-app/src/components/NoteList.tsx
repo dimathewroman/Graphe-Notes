@@ -76,6 +76,13 @@ export function NoteList() {
 
   useEffect(() => { setSearchQuery(debouncedSearch); }, [debouncedSearch, setSearchQuery]);
 
+  // Capture search_performed whenever the debounced query becomes non-empty.
+  useEffect(() => {
+    if (debouncedSearch.trim().length > 0) {
+      posthog.capture("search_performed", { query: debouncedSearch, timestamp: new Date().toISOString() });
+    }
+  }, [debouncedSearch]);
+
   // Close menus on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -263,7 +270,7 @@ export function NoteList() {
         queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
         selectNote(newNote.id);
         if (bp === "mobile") setMobileView("editor");
-        posthog.capture("note_created", { note_id: newNote.id });
+        posthog.capture("note_created", { note_id: newNote.id, timestamp: new Date().toISOString() });
       }
     }
   });
@@ -272,11 +279,11 @@ export function NoteList() {
   const vaultMut = useToggleNoteVault({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }) } });
   const softDeleteMut = useSoftDeleteNote({
     mutation: {
-      onSuccess: () => {
+      onSuccess: (_data, variables) => {
         queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
         selectNote(null);
         if (bp === "mobile") setMobileView("list");
-        posthog.capture("note_deleted");
+        posthog.capture("note_deleted", { note_id: variables.id, timestamp: new Date().toISOString() });
       }
     }
   });
@@ -296,6 +303,7 @@ export function NoteList() {
     if (bp === "mobile") {
       setMobileView("editor");
     }
+    posthog.capture("note_opened", { note_id: id, timestamp: new Date().toISOString() });
   };
 
   const handleCreateNew = () => {

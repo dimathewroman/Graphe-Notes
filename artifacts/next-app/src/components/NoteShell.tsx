@@ -127,6 +127,7 @@ export function NoteShell() {
       didLogEditorInit.current = true;
       const elapsed = performance.now() - editorInitStart.current;
       console.log(`[perf] editor-init: ${elapsed.toFixed(1)}ms`);
+      posthog.capture("editor_opened", { timestamp: new Date().toISOString() });
     }
 
     // Flush any pending save from the previous note before we swap to the new
@@ -447,6 +448,7 @@ export function NoteShell() {
       return;
     }
     await softDeleteMut.mutateAsync({ id: selectedNoteId });
+    posthog.capture("note_deleted", { note_id: selectedNoteId, timestamp: new Date().toISOString() });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
     selectNote(null);
     if (bp !== "desktop") setMobileView("list");
