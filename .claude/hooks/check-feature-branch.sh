@@ -9,12 +9,12 @@ if [[ -z "$BRANCH" ]]; then
   exit 2
 fi
 
-if [[ "$BRANCH" == feature/* || "$BRANCH" == fix/* ]]; then
+if [[ "$BRANCH" == feature/* || "$BRANCH" == fix/* || "$BRANCH" == chore/* ]]; then
   exit 0
 fi
 
-echo "BLOCKED: You are on branch '$BRANCH' — not a feature/* or fix/* branch." >&2
-echo "Switch to a feature/* or fix/* branch first." >&2
+echo "BLOCKED: You are on branch '$BRANCH' — not a feature/*, fix/*, or chore/* branch." >&2
+echo "Switch to a feature/*, fix/*, or chore/* branch first." >&2
 echo "  To start fresh:    git fetch origin && git checkout master && git pull origin master && git checkout -b feature/<name>" >&2
 echo "  To resume a branch: git checkout feature/<name>" >&2
 exit 2
