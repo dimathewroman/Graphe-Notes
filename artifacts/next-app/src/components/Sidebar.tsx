@@ -450,6 +450,14 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           onConfirm={handleVaultConfirm}
           onCancel={() => { setVaultModal(null); setVaultError(""); }}
           error={vaultError}
+          onVerifyCurrentPin={vaultModal === "change-password" ? async (hash) => {
+            try {
+              await unlockVaultMut.mutateAsync({ data: { passwordHash: hash } });
+              return true;
+            } catch {
+              return false;
+            }
+          } : undefined}
         />
       )}
     </div>

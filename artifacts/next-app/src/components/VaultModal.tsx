@@ -14,11 +14,15 @@ interface VaultModalProps {
   onConfirm: (hash: string, newHash?: string) => void;
   onCancel: () => void;
   error?: string;
+  /** Optional: called with the SHA-256 hash of the current PIN when in change-password mode.
+   *  Should return true if the PIN is correct, false otherwise.
+   *  When provided, wrong current PINs are rejected immediately at step 1. */
+  onVerifyCurrentPin?: (hash: string) => Promise<boolean>;
 }
 
 type PinStep = "enter" | "confirm" | "current" | "new" | "new-confirm";
 
-export function VaultModal({ mode, onConfirm, onCancel, error: externalError }: VaultModalProps) {
+export function VaultModal({ mode, onConfirm, onCancel, error: externalError, onVerifyCurrentPin }: VaultModalProps) {
   const [step, setStep] = useState<PinStep>(mode === "change-password" ? "current" : "enter");
   const [firstPin, setFirstPin] = useState("");
   const [currentPin, setCurrentPin] = useState("");
@@ -33,6 +37,13 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError }: 
       setErrorResetKey(k => k + 1);
     }
   }, [externalError]);
+
+  // Also reset the PinPad dots when a local error is set (e.g. wrong current PIN on verify)
+  useEffect(() => {
+    if (error) {
+      setErrorResetKey(k => k + 1);
+    }
+  }, [error]);
 
   const displayError = externalError || error;
 
@@ -83,7 +94,15 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError }: 
 
     if (mode === "change-password") {
       if (step === "current") {
-        setCurrentPin(pin);
+        const hash = await sha256(pin);
+        if (onVerifyCurrentPin) {
+          const ok = await onVerifyCurrentPin(hash);
+          if (!ok) {
+            setError("Incorrect PIN. Please try again.");
+            return;
+          }
+        }
+        setCurrentPin(hash); // store the hash directly to avoid recomputing later
         setStep("new");
         return;
       }
@@ -99,13 +118,13 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError }: 
           setStep("new");
           return;
         }
-        const currentHash = await sha256(currentPin);
+        const currentHash = currentPin; // already a SHA-256 hash stored at the "current" step
         const newHash = await sha256(pin);
         onConfirm(currentHash, newHash);
         return;
       }
     }
-  }, [mode, step, firstPin, currentPin, onConfirm]);
+  }, [mode, step, firstPin, currentPin, onConfirm, onVerifyCurrentPin]);
 
   const headerConfig = {
     setup: { icon: <ShieldCheck className="w-5 h-5 text-indigo-500" />, bg: "bg-indigo-500/10 border-indigo-500/20" },
