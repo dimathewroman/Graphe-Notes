@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { useAppStore } from "@/store";
 import type { MotionLevel } from "@/store";
 import posthog from "posthog-js";
@@ -79,6 +79,9 @@ export function useAnimationConfig() {
       initialVariants: { opacity: 0 },
       enterVariants: { opacity: 1 },
       exitVariants: { opacity: 0 },
+      // Card-item exit: opacity-only, no vertical compress
+      cardExitVariants: { opacity: 0, transition: { duration: 0.1, ease: "linear" as const } },
+      cardExitStyle: undefined as CSSProperties | undefined,
     } as const;
   }
 
@@ -95,6 +98,9 @@ export function useAnimationConfig() {
       initialVariants: { opacity: 0 },
       enterVariants: { opacity: 1 },
       exitVariants: { opacity: 0 },
+      // Card-item exit: opacity-only fade, no vertical compress
+      cardExitVariants: { opacity: 0, transition: { duration: 0.15, ease: "easeIn" as const } },
+      cardExitStyle: undefined as CSSProperties | undefined,
     } as const;
   }
 
@@ -111,5 +117,8 @@ export function useAnimationConfig() {
     initialVariants: { opacity: 0, y: 4, scale: 0.97 },
     enterVariants: { opacity: 1, y: 0, scale: 1 },
     exitVariants: { opacity: 0, x: -8, scale: 0.97 },
+    // Card-item exit: vertical compress + fade. originY: 0 anchors the top edge.
+    cardExitVariants: { opacity: 0, scaleY: 0, transition: { duration: 0.2, ease: [0.4, 0, 1, 1] as [number, number, number, number] } },
+    cardExitStyle: { originY: 0 } as CSSProperties,
   };
 }

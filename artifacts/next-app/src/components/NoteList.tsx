@@ -66,16 +66,6 @@ export function NoteList() {
   const isDemo = useDemoMode();
   const anim = useAnimationConfig();
 
-  // Note-item exit: vertical compress + fade (Full), opacity-only (Reduced/Minimal).
-  // transition is embedded in the exit object so it overrides only the exit phase.
-  const noteExitVariants = anim.level === "full"
-    ? { opacity: 0, scaleY: 0, transition: { duration: 0.2, ease: [0.4, 0, 1, 1] as [number, number, number, number] } }
-    : anim.level === "reduced"
-    ? { opacity: 0, transition: { duration: 0.15, ease: "easeIn" as const } }
-    : { opacity: 0, transition: { duration: 0.1, ease: "linear" as const } };
-  // originY: 0 makes scaleY collapse top-to-bottom (anchors the top edge)
-  const noteExitStyle = anim.level === "full" ? { originY: 0 } : undefined;
-
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const debouncedSearch = useDebounce(localSearch, 300);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
@@ -541,9 +531,9 @@ export function NoteList() {
                 layout
                 initial={anim.initialVariants}
                 animate={anim.enterVariants}
-                exit={noteExitVariants}
+                exit={anim.cardExitVariants}
                 transition={anim.fastTransition}
-                style={noteExitStyle}
+                style={anim.cardExitStyle}
                 onClick={() => handleSelectNote(note.id)}
                 onContextMenu={e => handleContextMenu(e, note)}
                 className={cn(
@@ -594,9 +584,9 @@ export function NoteList() {
               layout
               initial={anim.initialVariants}
               animate={anim.enterVariants}
-              exit={noteExitVariants}
+              exit={anim.cardExitVariants}
               transition={anim.fastTransition}
-              style={noteExitStyle}
+              style={anim.cardExitStyle}
               onClick={() => handleSelectNote(note.id)}
               onContextMenu={e => handleContextMenu(e, note)}
               className={cn(
