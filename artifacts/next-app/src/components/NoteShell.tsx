@@ -565,10 +565,15 @@ export function NoteShell() {
       if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, vaulted: true });
       return;
     }
-    await setupVaultMut.mutateAsync({ data: { passwordHash: hash } });
-    await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: true } });
-    queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
-    queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+    try {
+      await setupVaultMut.mutateAsync({ data: { passwordHash: hash } });
+      await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: true } });
+      queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
+      queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+    } catch {
+      // Setup failed — nothing to roll back; the user can try again from the
+      // note overflow menu or Settings.
+    }
   };
 
   const handleUnlockConfirm = async (hash: string) => {
@@ -583,9 +588,14 @@ export function NoteShell() {
       }
       return;
     }
-    setShowVaultUnlockModal(false);
-    await unlockVaultMut.mutateAsync({ data: { passwordHash: hash } });
-    setVaultUnlocked(true);
+    try {
+      await unlockVaultMut.mutateAsync({ data: { passwordHash: hash } });
+      setShowVaultUnlockModal(false);
+      setVaultUnlocked(true);
+    } catch {
+      // Keep the modal open so the user can try again.
+      setVaultUnlockError("Wrong PIN.");
+    }
   };
 
   const addTag = useCallback(async (tag: string) => {
