@@ -476,6 +476,19 @@ export function QuickBitShell() {
     } catch {}
   };
 
+  // Attach images into the editor as base64 data URLs — no server upload needed for QBs.
+  // The data URL is stored inline in the QB content HTML and persists across saves.
+  // Non-image files are ignored (QBs don't have an attachment panel like notes do).
+  const handleAttachFile = useCallback(async (file: File): Promise<{ url?: string } | undefined> => {
+    if (!file.type.startsWith("image/")) return undefined;
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ url: reader.result as string });
+      reader.onerror = () => resolve(undefined);
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
   const handleBack = () => {
     if (expiredWhileEditing.current) {
       setShowExpiredModal(true);
@@ -530,7 +543,7 @@ export function QuickBitShell() {
   return (
     <div className="flex-1 flex flex-col bg-editor h-screen overflow-hidden relative">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="h-12 border-b border-panel-border flex items-center px-2 md:px-4 shrink-0 bg-editor/80 backdrop-blur-md z-10 gap-2 md:gap-3 overflow-hidden">
+      <header className="h-14 border-b border-panel-border flex items-center px-2 md:px-4 shrink-0 bg-editor/80 backdrop-blur-md z-10 gap-2 md:gap-3 overflow-hidden">
         {bp === "mobile" && (
           <button
             onClick={handleBack}
@@ -610,6 +623,7 @@ export function QuickBitShell() {
         onContentChange={handleContentChange}
         mode="quickbit"
         isDemo={isDemo}
+        onAttachFile={handleAttachFile}
         renderContent={(editor) => (
           <div className="flex-1 overflow-y-auto">
             <div
