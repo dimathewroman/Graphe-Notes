@@ -38,11 +38,41 @@ interface AuthState {
   login: (provider?: "google" | "apple") => void;
 }
 
+/** Returns true only if there is a Supabase session token in localStorage that
+ *  needs to be validated. A fresh browser context (no stored token) skips the
+ *  loading spinner entirely and shows the login screen immediately. */
+function hasStoredSession(): boolean {
+  if (typeof window === "undefined") return true; // SSR: assume loading
+  try {
+    return Object.keys(localStorage).some(
+      (k) => k.startsWith("sb-") && k.endsWith("-auth-token"),
+    );
+  } catch {
+    return true; // localStorage blocked (private browsing strict mode)
+  }
+}
+
 export function useAuth(): AuthState {
   const [user, setUser] = useState<AuthUserWithDisplay | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Start as false so the login screen (including the demo button) is visible
+  // immediately on both server and client — no SSR mismatch, no spinner on
+  // first paint for unauthenticated visitors or test environments.
+  // We only flip to true inside useEffect when a stored token actually exists
+  // and needs Supabase validation.
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    // No stored token → nothing to validate; login screen already visible.
+    if (!hasStoredSession()) {
+      return;
+    }
+
+    // A stored token exists: show the spinner while Supabase validates it.
+    // Safety net caps the wait at 5 s so a hanging Supabase call can't lock
+    // the UI indefinitely.
+    setIsLoading(true);
+    const safetyTimer = setTimeout(() => setIsLoading(false), 5000);
+
     supabase.auth
       .getSession()
       .then(({ data: { session } }) => {
@@ -57,6 +87,7 @@ export function useAuth(): AuthState {
         setUser(null);
       })
       .finally(() => {
+        clearTimeout(safetyTimer);
         setIsLoading(false);
       });
 
@@ -73,6 +104,7 @@ export function useAuth(): AuthState {
     });
 
     return () => {
+      clearTimeout(safetyTimer);
       subscription.unsubscribe();
     };
   }, []);

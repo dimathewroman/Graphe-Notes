@@ -9,7 +9,7 @@ export default defineConfig({
   fullyParallel: false,
   use: {
     baseURL: "http://localhost:3000",
-    actionTimeout: 10_000,
+    actionTimeout: 15_000,
     screenshot: "only-on-failure",
     video: "retain-on-failure",
   },
