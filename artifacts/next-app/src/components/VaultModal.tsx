@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { X, ShieldCheck, Lock, KeyRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PinPad } from "./PinPad";
@@ -23,6 +23,16 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError }: 
   const [firstPin, setFirstPin] = useState("");
   const [currentPin, setCurrentPin] = useState("");
   const [error, setError] = useState("");
+  // Incremented whenever an external (server-side) error arrives so the PinPad
+  // remounts with an empty pin — prevents the user from accidentally re-submitting
+  // their failed PIN by pressing Unlock/Confirm again without clearing the dots.
+  const [errorResetKey, setErrorResetKey] = useState(0);
+
+  useEffect(() => {
+    if (externalError) {
+      setErrorResetKey(k => k + 1);
+    }
+  }, [externalError]);
 
   const displayError = externalError || error;
 
@@ -125,7 +135,7 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError }: 
         </div>
 
         <PinPad
-          key={step}
+          key={`${step}-${errorResetKey}`}
           title={title}
           subtitle={subtitle}
           error={displayError}

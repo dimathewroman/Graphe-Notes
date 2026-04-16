@@ -420,7 +420,21 @@ export function SettingsModal() {
 
       if (securityMode === "reset") {
         if (securityStep === "current") {
-          setSecurityCurrentPin(pin);
+          // Verify the current PIN against the server immediately — don't let
+          // the user type their new PIN only to find out the current one was wrong.
+          const currentHash = await sha256(pin);
+          const verifyRes = await authenticatedFetch("/api/vault/unlock", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ passwordHash: currentHash }),
+          });
+          if (!verifyRes.ok) {
+            setSecurityError("Incorrect PIN. Please try again.");
+            setSecurityLoading(false);
+            return;
+          }
+          // Store the hash (already computed) so we don't need to rehash later.
+          setSecurityCurrentPin(currentHash);
           setSecurityStep("new");
           setSecurityLoading(false);
           return;
@@ -439,7 +453,8 @@ export function SettingsModal() {
             setSecurityLoading(false);
             return;
           }
-          const currentHash = await sha256(securityCurrentPin);
+          // securityCurrentPin is already the hash (set at the "current" step above).
+          const currentHash = securityCurrentPin;
           const newHash = await sha256(pin);
           const res = await authenticatedFetch("/api/vault/change-password", {
             method: "POST",
