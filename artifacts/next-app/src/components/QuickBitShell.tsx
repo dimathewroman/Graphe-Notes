@@ -262,19 +262,19 @@ function ExpiredModal({
         <div className="flex flex-col gap-2 pt-1">
           <button
             onClick={onExtend}
-            className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary-hover transition-colors"
+            className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary-hover active-elevate-2"
           >
             Extend expiration
           </button>
           <button
             onClick={onPromote}
-            className="w-full py-2.5 rounded-xl bg-panel border border-panel-border text-sm font-medium text-foreground hover:bg-panel-hover transition-colors"
+            className="w-full py-2.5 rounded-xl bg-panel border border-panel-border text-sm font-medium text-foreground hover:bg-panel-hover active-elevate-2"
           >
             Promote to Note
           </button>
           <button
             onClick={onDelete}
-            className="w-full py-2.5 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+            className="w-full py-2.5 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 active-elevate-2"
           >
             Delete and exit
           </button>
@@ -595,7 +595,7 @@ export function QuickBitShell() {
           <button
             onClick={handlePromote}
             title="Promote to Note"
-            className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium text-primary bg-primary/10 border border-primary/20 hover:bg-primary/15 transition-colors shrink-0"
+            className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium text-primary bg-primary/10 border border-primary/20 hover:bg-primary/15 shrink-0 active-elevate-2"
           >
             <FileText className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Promote to Note</span>

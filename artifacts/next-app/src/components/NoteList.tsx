@@ -498,7 +498,7 @@ export function NoteList() {
               onClick={handleCreateNew}
               disabled={createNoteMut.isPending}
               data-testid="new-note-btn"
-              className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center"
+              className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm disabled:opacity-50 flex items-center justify-center active-elevate-2"
             >
               <Plus className="w-4 h-4" />
             </button>
