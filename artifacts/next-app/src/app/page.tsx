@@ -57,7 +57,9 @@ function enterDemoMode(
 }
 
 function LoginScreen({ onDemo }: { onDemo: () => void }) {
-  const { loginWithOAuth, loginWithEmail, signUpWithEmail, isLoading: authLoading } = useAuth();
+  // AuthGate already confirmed auth is not loading before rendering LoginScreen,
+  // so we only need the action functions here — no isLoading guard needed.
+  const { loginWithOAuth, loginWithEmail, signUpWithEmail } = useAuth();
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
@@ -65,14 +67,6 @@ function LoginScreen({ onDemo }: { onDemo: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-      </div>
-    );
-  }
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
