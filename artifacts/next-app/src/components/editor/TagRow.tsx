@@ -58,6 +58,10 @@ export const TagRow = memo(function TagRow({
             onChange={e => setTagInput(e.target.value)}
             onBlur={() => { if (!tagInput) setShowTagInput(false); }}
             placeholder="tag name..."
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             className="text-xs bg-background border border-primary/30 rounded-full px-2.5 py-1 outline-none focus:border-primary text-foreground w-24"
           />
         </form>

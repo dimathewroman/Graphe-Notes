@@ -638,9 +638,9 @@ export function SettingsModal() {
               </div>
 
               <div className="flex-1 overflow-y-auto">
-              <AnimatePresence mode="wait" initial={false}>
+              <AnimatePresence initial={false}>
               <motion.div
-                key={activeTab}
+                key={isMobile ? (mobileSubPage ?? "__menu__") : activeTab}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
@@ -684,7 +684,7 @@ export function SettingsModal() {
 
                   <section className="space-y-3">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Accent Color</h3>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {ACCENT_PRESETS.map((preset) => (
                         <button
                           key={preset.value}

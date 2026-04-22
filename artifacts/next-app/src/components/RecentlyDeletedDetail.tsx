@@ -163,7 +163,7 @@ export function RecentlyDeletedDetail() {
 
   if (!note) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-background h-screen">
+      <div className="flex-1 flex items-center justify-center bg-background">
         <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
@@ -172,7 +172,7 @@ export function RecentlyDeletedDetail() {
   const isVaultNote = note.vaulted;
 
   return (
-    <div className="flex-1 flex flex-col bg-background h-screen overflow-hidden relative">
+    <div className="flex-1 flex flex-col bg-background overflow-hidden relative">
       {/* Header */}
       <header className="h-14 border-b border-panel-border flex items-center justify-between px-2 md:px-4 shrink-0 bg-background/80 backdrop-blur-md z-10">
         <div className="flex items-center gap-2">

@@ -282,10 +282,12 @@ export function GrapheEditor({
       {/* Slash command floating menu */}
       <SlashCommandMenu editor={editor} />
 
-      {/* Mobile bottom toolbar — keyboard-aware */}
+      {/* Mobile bottom toolbar — keyboard-aware. showUndoRedo lives here (not in the top
+          bar) so the user can undo/redo without dismissing the keyboard. */}
       {bp === "mobile" && (
         <EditorToolbar
           editor={editor}
+          showUndoRedo
           className="fixed left-0 right-0 z-40 border-t border-panel-border bg-editor/95 backdrop-blur-md"
           style={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
           onAttachFile={attachFileHandler}

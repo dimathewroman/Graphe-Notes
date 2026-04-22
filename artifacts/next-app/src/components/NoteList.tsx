@@ -552,7 +552,7 @@ export function NoteList() {
                   </div>
                 )}
                 <div className="p-2.5 flex flex-col flex-1">
-                  <div className="flex items-start justify-between mb-1 gap-1">
+                  <div className="flex items-center justify-between mb-1 gap-1">
                     {/* min-w-0 on h3 allows truncation to work inside flex.
                         Wrap text in <span> so emoji + text truncate as a unit. */}
                     <h3 className="font-medium text-sm text-foreground/90 flex items-center gap-1 flex-1 min-w-0">

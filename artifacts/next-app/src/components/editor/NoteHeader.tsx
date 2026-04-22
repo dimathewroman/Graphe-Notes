@@ -1,12 +1,12 @@
 // Top header bar: save status, back button, sidebar toggles, action icons, overflow/export menus.
 
-import { memo, useEffect, useState } from "react";
+import { memo } from "react";
 import { motion } from "framer-motion";
 import type { useEditor } from "@tiptap/react";
 import { useAnimationConfig } from "@/hooks/use-motion";
 import {
   Pin, Star, ShieldCheck, Clock, Trash2,
-  PanelLeft, PanelLeftClose, ArrowLeft, Undo2, Redo2, LayoutList,
+  PanelLeft, PanelLeftClose, ArrowLeft, LayoutList,
 } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
 import { cn, formatDate } from "@/lib/utils";
@@ -57,22 +57,6 @@ export const NoteHeader = memo(function NoteHeader({
 }) {
   const anim = useAnimationConfig();
 
-  // Track can-undo/can-redo reactively. NoteHeader is memo'd and editor is the same
-  // object reference on every render, so editor.can().undo() evaluated inline in JSX
-  // produces stale values after history changes. Subscribing to transactions ensures
-  // the buttons re-render whenever the undo/redo stack changes.
-  const [canUndo, setCanUndo] = useState(false);
-  const [canRedo, setCanRedo] = useState(false);
-  useEffect(() => {
-    if (!editor) return;
-    const update = () => {
-      setCanUndo(editor.can().undo());
-      setCanRedo(editor.can().redo());
-    };
-    update();
-    editor.on("transaction", update);
-    return () => { editor.off("transaction", update); };
-  }, [editor]);
 
   return (
     <header className="h-14 border-b border-panel-border flex items-center justify-between px-2 md:px-4 shrink-0 bg-editor/80 backdrop-blur-md z-10">
@@ -123,29 +107,13 @@ export const NoteHeader = memo(function NoteHeader({
 
       <div className="flex items-center gap-0.5 md:gap-1">
         {bp === "mobile" && editor && (
-          <>
-            <IconButton
-              onClick={() => editor.chain().focus().undo().run()}
-              title="Undo"
-              className={!canUndo ? "opacity-30 pointer-events-none" : ""}
-            >
-              <Undo2 className="w-4 h-4" />
-            </IconButton>
-            <IconButton
-              onClick={() => editor.chain().focus().redo().run()}
-              title="Redo"
-              className={!canRedo ? "opacity-30 pointer-events-none" : ""}
-            >
-              <Redo2 className="w-4 h-4" />
-            </IconButton>
-            <IconButton
-              onClick={() => onSetShowToc(v => !v)}
-              active={showToc}
-              title="Table of contents"
-            >
-              <LayoutList className="w-4 h-4" />
-            </IconButton>
-          </>
+          <IconButton
+            onClick={() => onSetShowToc(v => !v)}
+            active={showToc}
+            title="Table of contents"
+          >
+            <LayoutList className="w-4 h-4" />
+          </IconButton>
         )}
         {bp !== "mobile" && (
           <>

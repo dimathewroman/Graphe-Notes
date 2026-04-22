@@ -158,6 +158,13 @@
   @apply outline-none min-h-[300px] md:min-h-[500px] pb-32;
 }
 
+/* Preserve text colour when text is selected on mobile (Android Chrome uses
+   its own selection colour which defaults to black, ignoring the element's color).
+   `color: inherit` lets each span keep its applied colour through the highlight. */
+.ProseMirror ::selection {
+  color: inherit;
+}
+
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   @apply text-muted-foreground float-left h-0 pointer-events-none;
