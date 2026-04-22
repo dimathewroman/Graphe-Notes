@@ -266,11 +266,13 @@ export function QuickBitList() {
                 layout
                 initial={anim.initialVariants}
                 animate={anim.enterVariants}
-                exit={anim.exitVariants}
+                exit={anim.cardExitVariants}
                 transition={anim.fastTransition}
+                style={anim.cardExitStyle}
                 onClick={() => { selectQuickBit(qb.id); if (bp === "mobile") setMobileView("editor"); }}
                 className={cn(
-                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px] hover:-translate-y-0.5 active:scale-[0.98]",
+                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px]",
+                  anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
                   selectedQuickBitId === qb.id
                     ? "bg-primary/5 border-primary/30 shadow-sm"
                     : "bg-transparent border-transparent hover:bg-panel-hover hover:border-panel-border"
@@ -303,8 +305,9 @@ export function QuickBitList() {
                 layout
                 initial={anim.initialVariants}
                 animate={anim.enterVariants}
-                exit={anim.exitVariants}
+                exit={anim.cardExitVariants}
                 transition={anim.fastTransition}
+                style={anim.cardExitStyle}
                 onClick={() => { selectQuickBit(qb.id); if (bp === "mobile") setMobileView("editor"); }}
                 className={cn(
                   "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",

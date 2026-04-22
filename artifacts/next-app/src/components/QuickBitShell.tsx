@@ -3,6 +3,7 @@
 // QB-specific orchestration. The actual TipTap editor lives in GrapheEditor.
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { createPortal } from "react-dom";
 import { EditorContent } from "@tiptap/react";
 
@@ -262,19 +263,19 @@ function ExpiredModal({
         <div className="flex flex-col gap-2 pt-1">
           <button
             onClick={onExtend}
-            className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary-hover transition-colors"
+            className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary-hover active-elevate-2"
           >
             Extend expiration
           </button>
           <button
             onClick={onPromote}
-            className="w-full py-2.5 rounded-xl bg-panel border border-panel-border text-sm font-medium text-foreground hover:bg-panel-hover transition-colors"
+            className="w-full py-2.5 rounded-xl bg-panel border border-panel-border text-sm font-medium text-foreground hover:bg-panel-hover active-elevate-2"
           >
             Promote to Note
           </button>
           <button
             onClick={onDelete}
-            className="w-full py-2.5 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+            className="w-full py-2.5 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 active-elevate-2"
           >
             Delete and exit
           </button>
@@ -476,6 +477,22 @@ export function QuickBitShell() {
     } catch {}
   };
 
+  // Attach images into the editor as base64 data URLs — no server upload needed for QBs.
+  // The data URL is stored inline in the QB content HTML and persists across saves.
+  // Non-image files are ignored (QBs don't have an attachment panel like notes do).
+  const handleAttachFile = useCallback(async (file: File): Promise<{ url?: string } | undefined> => {
+    if (!file.type.startsWith("image/")) return undefined;
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ url: reader.result as string });
+      reader.onerror = () => {
+        Sentry.captureException(reader.error, { extra: { fileName: file.name, fileType: file.type } });
+        resolve(undefined);
+      };
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
   const handleBack = () => {
     if (expiredWhileEditing.current) {
       setShowExpiredModal(true);
@@ -530,7 +547,7 @@ export function QuickBitShell() {
   return (
     <div className="flex-1 flex flex-col bg-editor h-screen overflow-hidden relative">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="h-12 border-b border-panel-border flex items-center px-2 md:px-4 shrink-0 bg-editor/80 backdrop-blur-md z-10 gap-2 md:gap-3 overflow-hidden">
+      <header className="h-14 border-b border-panel-border flex items-center px-2 md:px-4 shrink-0 bg-editor/80 backdrop-blur-md z-10 gap-2 md:gap-3 overflow-hidden">
         {bp === "mobile" && (
           <button
             onClick={handleBack}
@@ -595,7 +612,7 @@ export function QuickBitShell() {
           <button
             onClick={handlePromote}
             title="Promote to Note"
-            className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium text-primary bg-primary/10 border border-primary/20 hover:bg-primary/15 transition-colors shrink-0"
+            className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium text-primary bg-primary/10 border border-primary/20 hover:bg-primary/15 shrink-0 active-elevate-2"
           >
             <FileText className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Promote to Note</span>
@@ -610,6 +627,7 @@ export function QuickBitShell() {
         onContentChange={handleContentChange}
         mode="quickbit"
         isDemo={isDemo}
+        onAttachFile={handleAttachFile}
         renderContent={(editor) => (
           <div className="flex-1 overflow-y-auto">
             <div

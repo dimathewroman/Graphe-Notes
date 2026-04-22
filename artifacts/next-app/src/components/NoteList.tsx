@@ -488,7 +488,7 @@ export function NoteList() {
               onClick={handleCreateNew}
               disabled={createNoteMut.isPending}
               data-testid="new-note-btn"
-              className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center"
+              className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm disabled:opacity-50 flex items-center justify-center active-elevate-2"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -531,12 +531,14 @@ export function NoteList() {
                 layout
                 initial={anim.initialVariants}
                 animate={anim.enterVariants}
-                exit={anim.exitVariants}
+                exit={anim.cardExitVariants}
                 transition={anim.fastTransition}
+                style={anim.cardExitStyle}
                 onClick={() => handleSelectNote(note.id)}
                 onContextMenu={e => handleContextMenu(e, note)}
                 className={cn(
-                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px] hover:-translate-y-0.5 active:scale-[0.98]",
+                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px]",
+                  anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
                   selectedNoteId === note.id
                     ? "bg-primary/5 border-primary/30 shadow-sm"
                     : "bg-transparent border-transparent hover:bg-panel-hover hover:border-panel-border"
@@ -582,8 +584,9 @@ export function NoteList() {
               layout
               initial={anim.initialVariants}
               animate={anim.enterVariants}
-              exit={anim.exitVariants}
+              exit={anim.cardExitVariants}
               transition={anim.fastTransition}
+              style={anim.cardExitStyle}
               onClick={() => handleSelectNote(note.id)}
               onContextMenu={e => handleContextMenu(e, note)}
               className={cn(

@@ -3,6 +3,7 @@
 import { memo, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import type { useEditor } from "@tiptap/react";
+import { useAnimationConfig } from "@/hooks/use-motion";
 import {
   Pin, Star, ShieldCheck, Clock, Trash2,
   PanelLeft, PanelLeftClose, ArrowLeft, Undo2, Redo2, LayoutList,
@@ -54,6 +55,8 @@ export const NoteHeader = memo(function NoteHeader({
   onExportMarkdown: () => void;
   onDelete: () => void;
 }) {
+  const anim = useAnimationConfig();
+
   // Track can-undo/can-redo reactively. NoteHeader is memo'd and editor is the same
   // object reference on every render, so editor.can().undo() evaluated inline in JSX
   // produces stale values after history changes. Subscribing to transactions ensures
@@ -95,9 +98,21 @@ export const NoteHeader = memo(function NoteHeader({
         )}
         <motion.div
           key={saveStatus}
-          initial={{ opacity: 0.6 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
+          initial={{ opacity: 0.5 }}
+          animate={
+            saveStatus === "saved" && anim.level !== "minimal"
+              ? {
+                  opacity: anim.level === "reduced"
+                    ? [0.5, 1, 0.75, 1]
+                    : [0.5, 1, 0.6, 1],
+                }
+              : { opacity: 1 }
+          }
+          transition={
+            saveStatus === "saved" && anim.level !== "minimal"
+              ? { duration: anim.level === "reduced" ? 0.15 : 0.3, ease: "easeOut" }
+              : { duration: 0.2, ease: "easeOut" }
+          }
           className="flex items-center gap-2 text-xs font-mono text-muted-foreground"
         >
           <span className={cn("inline-block w-1.5 h-1.5 rounded-full", saveStatus === "saved" ? "bg-emerald-500" : "bg-amber-500 animate-pulse")} />

@@ -421,6 +421,36 @@
   }
 }
 
+/* ── Button tactile press feedback — respects motion level ───────────────── */
+/*
+ * .active-elevate-2 is the shared press-feedback class for Button + any raw
+ * <button> that needs scale-down on :active. The scale value is tuned per level:
+ *   full    → scale(0.97) — 80ms ease-out
+ *   reduced → scale(0.98) — same duration, gentler
+ *   minimal → no transform (only color/bg transitions remain)
+ *
+ * Using the data-motion attribute set by useMotionInit() on <html>.
+ */
+.active-elevate-2 {
+  /* Extend Tailwind transition-colors with transform so release animates out */
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, transform, box-shadow;
+  transition-timing-function: ease, ease, ease, ease, ease, ease, ease-out, ease;
+  transition-duration: 150ms, 150ms, 150ms, 150ms, 150ms, 150ms, 80ms, 150ms;
+}
+/* Full motion (default when no data-motion set) */
+html[data-motion="full"] .active-elevate-2:active,
+html:not([data-motion]) .active-elevate-2:active {
+  transform: scale(0.97);
+}
+/* Reduced motion — gentler press */
+html[data-motion="reduced"] .active-elevate-2:active {
+  transform: scale(0.98);
+}
+/* Minimal — no scale transform on press */
+html[data-motion="minimal"] .active-elevate-2:active {
+  transform: none;
+}
+
 /* ── Checkbox check draw-in animation ─────────────────────────────────────── */
 @keyframes checkDraw {
   from { opacity: 0.3; transform: scale(0.7); }
