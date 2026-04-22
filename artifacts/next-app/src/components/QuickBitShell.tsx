@@ -3,6 +3,7 @@
 // QB-specific orchestration. The actual TipTap editor lives in GrapheEditor.
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { createPortal } from "react-dom";
 import { EditorContent } from "@tiptap/react";
 
@@ -484,7 +485,10 @@ export function QuickBitShell() {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = () => resolve({ url: reader.result as string });
-      reader.onerror = () => resolve(undefined);
+      reader.onerror = () => {
+        Sentry.captureException(reader.error, { extra: { fileName: file.name, fileType: file.type } });
+        resolve(undefined);
+      };
       reader.readAsDataURL(file);
     });
   }, []);
