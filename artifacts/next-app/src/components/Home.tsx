@@ -1,4 +1,6 @@
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import posthog from "posthog-js";
 import dynamic from "next/dynamic";
 import { Sidebar, SidebarContent } from "@/components/Sidebar";
 import { NoteList } from "@/components/NoteList";
@@ -16,14 +18,46 @@ import { AISetupModal } from "@/components/AISetupModal";
 import { QuickBitNotifications } from "@/components/QuickBitNotifications";
 import { useAppStore } from "@/store";
 import { useBreakpoint } from "@/hooks/use-mobile";
+import { useAnimationConfig } from "@/hooks/use-motion";
 import { Drawer, DrawerPortal, DrawerOverlay } from "@/components/ui/drawer";
 import { DrawerPrimitive } from "@/components/ui/drawer-left";
 import { useDemoMode } from "@/lib/demo-context";
 
+// Mobile view stack animation variants — forward: list→editor, backward: editor→list
+const mobileViewVariants = {
+  enter: (dir: string) => ({
+    x: dir === "forward" ? "30%" : "-10%",
+    opacity: 0,
+  }),
+  center: { x: 0, opacity: 1 },
+  exit: (dir: string) => ({
+    x: dir === "forward" ? "-10%" : "30%",
+    opacity: 0,
+  }),
+};
+
 export default function Home() {
-  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId, selectedQuickBitId, activeFilter, noteListWidth, setNoteListWidth } = useAppStore();
+  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId, selectedQuickBitId, activeFilter, noteListWidth, setNoteListWidth, viewMode } = useAppStore();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
+  const anim = useAnimationConfig();
+
+  // Track mobile transition direction synchronously during render (not in effect)
+  const prevMobileViewRef = useRef(mobileView);
+  const mobileTransitionDirRef = useRef<"forward" | "backward">("forward");
+  if (prevMobileViewRef.current !== mobileView) {
+    mobileTransitionDirRef.current = mobileView === "editor" ? "forward" : "backward";
+    prevMobileViewRef.current = mobileView;
+  }
+
+  // Desktop/tablet note list panel width — mirrors what each list component uses internally
+  const listPanelWidth = viewMode === "gallery" ? 384 : bp === "tablet" ? 288 : noteListWidth;
+  const [isResizing, setIsResizing] = useState(false);
+  const panelSlideTransition = isResizing
+    ? { duration: 0 }
+    : anim.level === "minimal"
+      ? { duration: 0.1, ease: "linear" as const }
+      : anim.standardTransition;
 
   const handleNoteListResize = useCallback((delta: number) => {
     setNoteListWidth(Math.min(600, Math.max(280, noteListWidth + delta)));
@@ -79,7 +113,7 @@ export default function Home() {
   // Fix 1: NoteShell stays mounted on tablet regardless of selection so the editor instance
   // persists across note switches — removing !!selectedNoteId prevents unmount/remount on each click.
   const showEditor = !isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && (bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "editor"));
-  const showQuickBitEditor = activeFilter === "quickbits" && (bp === "desktop" || (bp === "tablet" && !!selectedQuickBitId) || (bp === "mobile" && mobileView === "editor"));
+  const showQuickBitEditor = activeFilter === "quickbits" && (bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "editor"));
   const showList = bp === "desktop"
     ? isNoteListOpen
     : bp === "tablet"
@@ -103,7 +137,16 @@ export default function Home() {
       {isCompact && (
         <Drawer
           open={isSidebarOpen}
-          onOpenChange={setSidebarOpen}
+          onOpenChange={(open) => {
+            setSidebarOpen(open);
+            try {
+              posthog.capture("panel_toggled", {
+                panel: "sidebar",
+                action: open ? "open" : "close",
+                timestamp: new Date().toISOString(),
+              });
+            } catch { /* PostHog may not be initialized */ }
+          }}
           direction="left"
         >
           <DrawerPortal>
@@ -117,14 +160,85 @@ export default function Home() {
         </Drawer>
       )}
 
-      {showList && activeFilter === "quickbits" && <QuickBitList />}
-      {showList && isRecentlyDeleted && <RecentlyDeleted />}
-      {isAttachments && <AllAttachments />}
-      {showList && !isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && <NoteList />}
-      {bp === "desktop" && (showList || isAttachments) && <ResizeHandle onResize={handleNoteListResize} />}
-      {showEditor && <NoteShell />}
-      {showQuickBitEditor && <QuickBitShell />}
-      {showDeletedDetail && <RecentlyDeletedDetail />}
+      {bp === "mobile" ? (
+        /* Mobile view stack — directional slide transition between list and editor */
+        <div className="flex-1 relative overflow-hidden">
+          <AnimatePresence custom={mobileTransitionDirRef.current}>
+            <motion.div
+              key={mobileView}
+              custom={mobileTransitionDirRef.current}
+              className="absolute inset-0 flex flex-col"
+              variants={mobileViewVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={
+                anim.level === "minimal"
+                  ? { duration: 0.1, ease: "linear" as const }
+                  : { duration: 0.2, ease: [0.4, 0, 0.2, 1] as [number, number, number, number] }
+              }
+              data-testid={`mobile-view-${mobileView}`}
+            >
+              {mobileView === "list" && (
+                <>
+                  {activeFilter === "quickbits" && <QuickBitList />}
+                  {isRecentlyDeleted && <RecentlyDeleted />}
+                  {isAttachments && <AllAttachments />}
+                  {!isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && <NoteList />}
+                </>
+              )}
+              {mobileView === "editor" && (
+                <>
+                  {showEditor && <NoteShell />}
+                  {showQuickBitEditor && <QuickBitShell />}
+                  {showDeletedDetail && <RecentlyDeletedDetail />}
+                </>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      ) : (
+        /* Desktop/tablet — note list panel with slide-in/out animation */
+        <>
+          <AnimatePresence initial={false}>
+            {showList && (
+              <motion.div
+                key="list-panel"
+                className="shrink-0 overflow-hidden"
+                initial={{ width: 0 }}
+                animate={{ width: listPanelWidth }}
+                exit={{ width: 0 }}
+                transition={panelSlideTransition}
+                style={{ minWidth: 0 }}
+                data-testid="note-list-panel"
+              >
+                <motion.div
+                  style={{ width: listPanelWidth, minWidth: listPanelWidth }}
+                  initial={{ x: -Math.round(listPanelWidth * 0.25), opacity: 0.5 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: -Math.round(listPanelWidth * 0.25), opacity: 0.5 }}
+                  transition={panelSlideTransition}
+                >
+                  {activeFilter === "quickbits" && <QuickBitList />}
+                  {isRecentlyDeleted && <RecentlyDeleted />}
+                  {!isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && <NoteList />}
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {isAttachments && <AllAttachments />}
+          {bp === "desktop" && viewMode !== "gallery" && (showList || isAttachments) && (
+            <ResizeHandle
+              onResize={handleNoteListResize}
+              onResizeStart={() => setIsResizing(true)}
+              onResizeEnd={() => setIsResizing(false)}
+            />
+          )}
+          {showEditor && <NoteShell />}
+          {showQuickBitEditor && <QuickBitShell />}
+          {showDeletedDetail && <RecentlyDeletedDetail />}
+        </>
+      )}
 
       <AIPanel />
       <AISetupModal />

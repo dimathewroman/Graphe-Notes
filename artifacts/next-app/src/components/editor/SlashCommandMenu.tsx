@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Extension } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
@@ -8,6 +9,7 @@ import {
   Code, Quote, Video, ChevronRight, Sigma,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAnimationConfig } from "@/hooks/use-motion";
 import { parseVideoUrl } from "./VideoEmbed";
 
 // ─── Slash command definitions ────────────────────────────────────────────────
@@ -234,6 +236,7 @@ export function SlashCommandMenu({ editor }: SlashCommandMenuProps) {
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const anim = useAnimationConfig();
 
   const filteredCommands = SLASH_COMMANDS.filter((cmd) =>
     cmd.label.toLowerCase().includes(state.query.toLowerCase())
@@ -352,35 +355,43 @@ export function SlashCommandMenu({ editor }: SlashCommandMenuProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, [state.active, dismiss]);
 
-  if (!state.active || !position || filteredCommands.length === 0) return null;
-
   return (
-    <div
-      ref={menuRef}
-      className="fixed z-50 w-64 bg-popover border border-panel-border rounded-xl shadow-2xl py-1.5 overflow-hidden"
-      style={{ top: position.top, left: position.left }}
-    >
-      <p className="px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        {state.query ? `"${state.query}"` : "Commands"}
-      </p>
-      <div className="max-h-64 overflow-y-auto">
-        {filteredCommands.map((cmd, i) => (
-          <button
-            key={cmd.label}
-            ref={(el) => { itemRefs.current[i] = el; }}
-            onClick={() => executeCommand(cmd)}
-            className={cn(
-              "w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors text-left",
-              i === selectedIndex
-                ? "bg-panel-hover text-foreground"
-                : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
-            )}
-          >
-            <span className="shrink-0 text-muted-foreground">{cmd.icon}</span>
-            <span className="font-medium">{cmd.label}</span>
-          </button>
-        ))}
-      </div>
-    </div>
+    <AnimatePresence>
+      {state.active && !!position && filteredCommands.length > 0 && (
+        <motion.div
+          ref={menuRef}
+          key="slash-command-menu"
+          initial={{ opacity: 0, y: anim.level === "full" ? -8 : 0 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, transition: { duration: 0.1 } }}
+          transition={anim.fastTransition}
+          className="fixed z-50 w-64 bg-popover border border-panel-border rounded-xl shadow-2xl py-1.5 overflow-hidden"
+          style={{ top: position.top, left: position.left }}
+          data-testid="slash-command-menu"
+        >
+          <p className="px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {state.query ? `"${state.query}"` : "Commands"}
+          </p>
+          <div className="max-h-64 overflow-y-auto">
+            {filteredCommands.map((cmd, i) => (
+              <button
+                key={cmd.label}
+                ref={(el) => { itemRefs.current[i] = el; }}
+                onClick={() => executeCommand(cmd)}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors text-left",
+                  i === selectedIndex
+                    ? "bg-panel-hover text-foreground"
+                    : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
+                )}
+              >
+                <span className="shrink-0 text-muted-foreground">{cmd.icon}</span>
+                <span className="font-medium">{cmd.label}</span>
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

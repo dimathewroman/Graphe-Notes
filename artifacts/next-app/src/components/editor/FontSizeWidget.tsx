@@ -25,7 +25,21 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
   if (!editor) return null;
 
   const rawSize = editor.getAttributes("textStyle").fontSize as string | undefined;
-  const currentSize = rawSize ? parseInt(rawSize, 10) : DEFAULT_FONT_SIZE;
+  const getComputedSize = (): number => {
+    try {
+      const { from } = editor.state.selection;
+      const domAtPos = editor.view.domAtPos(from);
+      const node = domAtPos.node;
+      const el: Element | null = node instanceof Element ? node : node.parentElement;
+      if (el) {
+        const fs = window.getComputedStyle(el).fontSize;
+        const parsed = parseFloat(fs);
+        if (!isNaN(parsed) && parsed > 0) return Math.round(parsed);
+      }
+    } catch {}
+    return DEFAULT_FONT_SIZE;
+  };
+  const currentSize = rawSize ? parseInt(rawSize, 10) : getComputedSize();
 
   const applySize = (size: number) => {
     editor.chain().focus().setFontSize(`${Math.min(96, Math.max(8, size))}px`).run();

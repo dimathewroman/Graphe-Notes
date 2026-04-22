@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
 interface ResizeHandleProps {
   onResize: (delta: number) => void;
   onResizeEnd?: () => void;
+  onResizeStart?: () => void;
   className?: string;
 }
 
-export function ResizeHandle({ onResize, onResizeEnd, className }: ResizeHandleProps) {
+export function ResizeHandle({ onResize, onResizeEnd, onResizeStart, className }: ResizeHandleProps) {
   const [isDragging, setIsDragging] = useState(false);
   const lastX = useRef(0);
 
@@ -14,7 +16,8 @@ export function ResizeHandle({ onResize, onResizeEnd, className }: ResizeHandleP
     e.preventDefault();
     lastX.current = e.clientX;
     setIsDragging(true);
-  }, []);
+    onResizeStart?.();
+  }, [onResizeStart]);
 
   useEffect(() => {
     if (!isDragging) return;
@@ -46,12 +49,22 @@ export function ResizeHandle({ onResize, onResizeEnd, className }: ResizeHandleP
   return (
     <div
       onMouseDown={handleMouseDown}
-      className={`w-1 shrink-0 cursor-col-resize group relative z-10 ${className ?? ""}`}
+      className={cn(
+        // w-1 = 4px wide — gives a reliable hover target without eating layout space
+        "w-1 shrink-0 cursor-col-resize group relative z-10",
+        className
+      )}
     >
+      {/* Visible 1px separator — centered inside the 4px hit zone.
+          group-hover: fires whenever the 4px outer div is hovered (consistent),
+          not just the 1px inner line (inconsistent). */}
       <div
-        className={`absolute inset-y-0 -left-0.5 w-2 transition-colors ${
-          isDragging ? "bg-primary/30" : "hover:bg-primary/15"
-        }`}
+        className={cn(
+          "absolute inset-y-0 left-1/2 -translate-x-1/2 w-px transition-colors duration-150",
+          isDragging
+            ? "bg-primary/50"
+            : "bg-panel-border group-hover:bg-primary/40"
+        )}
       />
     </div>
   );

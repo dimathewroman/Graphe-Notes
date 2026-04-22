@@ -60,7 +60,7 @@ export function PinPad({ title, subtitle, error, onSubmit, onCancel, submitLabel
 
       <div className="grid grid-cols-3 gap-2 w-full">
         {digits.map((d, i) => {
-          if (d === "") return <div key={`spacer-${i}`} />;
+          if (d === "") return <div key="spacer" />;
           if (d === "back") {
             return (
               <button

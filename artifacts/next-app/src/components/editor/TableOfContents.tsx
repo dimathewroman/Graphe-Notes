@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useEditor } from "@tiptap/react";
 import { X, BookOpen } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
+import { useAnimationConfig } from "@/hooks/use-motion";
 import { cn } from "@/lib/utils";
 
 interface HeadingItem {
@@ -18,6 +20,7 @@ interface Props {
 
 export function TableOfContents({ editor, isOpen, onClose }: Props) {
   const [headings, setHeadings] = useState<HeadingItem[]>([]);
+  const anim = useAnimationConfig();
 
   useEffect(() => {
     if (!editor) return;
@@ -61,10 +64,20 @@ export function TableOfContents({ editor, isOpen, onClose }: Props) {
     editor.chain().focus().setTextSelection(pos + 1).run();
   };
 
-  if (!isOpen) return null;
+  const slideTransition = anim.level === "minimal"
+    ? { duration: 0.1, ease: "linear" as const }
+    : { duration: 0.2, ease: [0.4, 0, 0.2, 1] as [number, number, number, number] };
 
   return (
-    <div className="absolute inset-y-0 left-0 w-full md:w-72 bg-panel border-r border-panel-border flex flex-col z-20 shadow-2xl">
+    <AnimatePresence>
+      {isOpen && (
+    <motion.div
+      initial={{ x: "-100%", opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={{ x: "-100%", opacity: 0 }}
+      transition={slideTransition}
+      className="absolute inset-y-0 left-0 w-full md:w-72 bg-panel border-r border-panel-border flex flex-col z-20 shadow-2xl"
+    >
       {/* Header */}
       <div className="h-14 border-b border-panel-border flex items-center justify-between px-4 shrink-0">
         <div className="flex items-center gap-2 text-sm font-medium">
@@ -106,6 +119,8 @@ export function TableOfContents({ editor, isOpen, onClose }: Props) {
           </ul>
         )}
       </div>
-    </div>
+    </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

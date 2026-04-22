@@ -30,13 +30,14 @@ export const TagRow = memo(function TagRow({
 
   return (
     <div className="flex items-center flex-wrap gap-1.5 mb-8">
-      <AnimatePresence initial={false}>
+      <AnimatePresence initial={false} mode="popLayout">
         {note?.tags?.map(tag => (
           <motion.span
             key={tag}
-            initial={{ scale: anim.useScale ? 0 : 1, opacity: 0 }}
+            layout
+            initial={{ scale: anim.useScale ? 0.8 : 1, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: anim.useScale ? 0 : 1, opacity: 0 }}
+            exit={{ opacity: 0, transition: { duration: 0.1 } }}
             transition={anim.spring}
             className="group flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-primary/10 border border-primary/20 text-primary"
           >
