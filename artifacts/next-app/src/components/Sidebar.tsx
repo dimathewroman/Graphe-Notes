@@ -1,6 +1,6 @@
 import { useState } from "react";
 import posthog from "posthog-js";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAnimationConfig } from "@/hooks/use-motion";
 const grapheLogo = "/graphe_minimalist_1773640203523.png";
 import {
@@ -465,15 +465,45 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function Sidebar() {
-  const { isSidebarOpen } = useAppStore();
+  const { isSidebarOpen, sidebarWidth } = useAppStore();
   const bp = useBreakpoint();
+  const anim = useAnimationConfig();
 
-  if (bp !== "desktop" || !isSidebarOpen) return null;
+  if (bp !== "desktop") return null;
+
+  const w = sidebarWidth; // 240 by default
+  const slideTransition = anim.level === "minimal"
+    ? { duration: 0.1, ease: "linear" as const }
+    : anim.standardTransition;
 
   return (
-    <div className="w-60 border-r border-panel-border bg-panel flex flex-col h-full shrink-0">
-      <SidebarContent />
-    </div>
+    <AnimatePresence initial={false}>
+      {isSidebarOpen && (
+        <motion.div
+          key="desktop-sidebar"
+          // Outer wrapper: animates layout width so flex siblings reflow smoothly
+          className="shrink-0 overflow-hidden border-r border-panel-border bg-panel"
+          initial={{ width: 0 }}
+          animate={{ width: w }}
+          exit={{ width: 0 }}
+          transition={slideTransition}
+          style={{ minWidth: 0 }}
+          data-testid="sidebar"
+        >
+          {/* Inner div stays full-width — clipped by overflow-hidden during animation */}
+          <motion.div
+            className="flex flex-col h-full"
+            style={{ width: w, minWidth: w }}
+            initial={{ x: -w, opacity: 0.5 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -w, opacity: 0.5 }}
+            transition={slideTransition}
+          >
+            <SidebarContent />
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 

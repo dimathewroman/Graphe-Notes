@@ -3,6 +3,9 @@
 // and all note-specific orchestration. The actual TipTap editor lives in GrapheEditor.
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { motion, useAnimation } from "framer-motion";
+import * as Sentry from "@sentry/nextjs";
+import { useAnimationConfig } from "@/hooks/use-motion";
 import type { Editor } from "@tiptap/react";
 
 import { useAppStore } from "@/store";
@@ -85,6 +88,86 @@ export function NoteShell() {
   const [editor, setEditor] = useState<Editor | null>(null);
 
   const createVersion = useCreateNoteVersion();
+
+  // ── View transition animations ──────────────────────────────────────────────
+  const anim = useAnimationConfig();
+  const animRef = useRef(anim);
+  animRef.current = anim;
+  const contentControls = useAnimation();
+  // undefined = first render (skip anim), null = no note selected, number = note ID
+  const prevNoteIdForAnim = useRef<number | null | undefined>(undefined);
+
+  useEffect(() => {
+    const prevId = prevNoteIdForAnim.current;
+    prevNoteIdForAnim.current = selectedNoteId;
+
+    if (prevId === undefined) {
+      // First render — snap to fully visible, no animation
+      contentControls.set({ opacity: 1, y: 0 });
+      return;
+    }
+    if (!selectedNoteId) return;
+
+    const isNewNoteEntrance = prevId === null;
+    const a = animRef.current;
+
+    const runAnim = async () => {
+      if (isNewNoteEntrance) {
+        // New note presented: slide up from below
+        contentControls.set({ opacity: 0, y: a.level === "full" ? 12 : 0 });
+        await contentControls.start({
+          opacity: 1,
+          y: 0,
+          transition: a.standardTransition,
+        });
+      } else {
+        // Note switch crossfade: fade out then fade in with subtle lift
+        await contentControls.start({
+          opacity: 0,
+          y: a.level === "full" ? 4 : 0,
+          transition: { duration: 0.1, ease: "easeOut" as const },
+        });
+        contentControls.set({ y: 0 });
+        await contentControls.start({
+          opacity: 1,
+          y: 0,
+          transition: a.level === "minimal"
+            ? { duration: 0.1, ease: "linear" as const }
+            : a.fastTransition,
+        });
+      }
+    };
+
+    try {
+      runAnim();
+    } catch (err) {
+      Sentry.captureException(err);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedNoteId]);
+
+  // ── PostHog-wrapped panel toggle callbacks ──────────────────────────────────
+  const handleToggleSidebar = useCallback(() => {
+    toggleSidebar();
+    try {
+      posthog.capture("panel_toggled", {
+        panel: "sidebar",
+        action: isSidebarOpen ? "close" : "open",
+        timestamp: new Date().toISOString(),
+      });
+    } catch { /* PostHog may not be initialized */ }
+  }, [toggleSidebar, isSidebarOpen]);
+
+  const handleToggleNoteList = useCallback(() => {
+    toggleNoteList();
+    try {
+      posthog.capture("panel_toggled", {
+        panel: "note_list",
+        action: isNoteListOpen ? "close" : "open",
+        timestamp: new Date().toISOString(),
+      });
+    } catch { /* PostHog may not be initialized */ }
+  }, [toggleNoteList, isNoteListOpen]);
 
   // Refs holding the live editor state — used by performSave so we always
   // snapshot what's currently in the editor, not a stale closure value.
@@ -649,8 +732,8 @@ export function NoteShell() {
         bp={bp}
         isSidebarOpen={isSidebarOpen}
         isNoteListOpen={isNoteListOpen}
-        onToggleSidebar={toggleSidebar}
-        onToggleNoteList={toggleNoteList}
+        onToggleSidebar={handleToggleSidebar}
+        onToggleNoteList={handleToggleNoteList}
       />
     );
   }
@@ -669,8 +752,8 @@ export function NoteShell() {
         bp={bp}
         isSidebarOpen={isSidebarOpen}
         isNoteListOpen={isNoteListOpen}
-        onToggleSidebar={toggleSidebar}
-        onToggleNoteList={toggleNoteList}
+        onToggleSidebar={handleToggleSidebar}
+        onToggleNoteList={handleToggleNoteList}
         onBack={handleBack}
         showVaultUnlockModal={showVaultUnlockModal}
         onRequestUnlock={() => setShowVaultUnlockModal(true)}
@@ -703,8 +786,8 @@ export function NoteShell() {
         editor={editor}
         showToc={showToc}
         showVersionHistory={showVersionHistory}
-        onToggleSidebar={toggleSidebar}
-        onToggleNoteList={toggleNoteList}
+        onToggleSidebar={handleToggleSidebar}
+        onToggleNoteList={handleToggleNoteList}
         onBack={handleBack}
         onPin={handlePin}
         onFav={handleFav}
@@ -716,7 +799,12 @@ export function NoteShell() {
         onDelete={handleDelete}
       />
 
-      <div className="relative flex-1 flex flex-col min-h-0">
+      <motion.div
+        animate={contentControls}
+        initial={{ opacity: 1 }}
+        className="relative flex-1 flex flex-col min-h-0"
+        data-testid="editor-content-area"
+      >
         <GrapheEditor
           content={note?.content ?? ""}
           contentKey={note?.id}
@@ -757,7 +845,7 @@ export function NoteShell() {
             compact={bp === "tablet"}
           />
         )}
-      </div>
+      </motion.div>
 
       {showVersionHistory && selectedNoteId && (
         <VersionHistoryPanel
