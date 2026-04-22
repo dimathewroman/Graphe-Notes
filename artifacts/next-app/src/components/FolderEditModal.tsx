@@ -1,18 +1,25 @@
 import { useState } from "react";
-import { X, Hash, Plus, Folder, Tag } from "lucide-react";
+import { X, Hash, Plus, Folder, Tag, Palette } from "lucide-react";
 import { useUpdateFolder, getGetFoldersQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useDemoMode } from "@/lib/demo-context";
 
+const FOLDER_COLORS: (string | null)[] = [
+  null,
+  "#ef4444", "#f97316", "#eab308", "#22c55e",
+  "#14b8a6", "#3b82f6", "#8b5cf6", "#ec4899", "#6b7280",
+];
+
 interface Props {
-  folder: { id: number; name: string; tagRules: string[] };
+  folder: { id: number; name: string; tagRules: string[]; color?: string | null };
   onClose: () => void;
 }
 
 export function FolderEditModal({ folder, onClose }: Props) {
   const [name, setName] = useState(folder.name);
   const [tagRules, setTagRules] = useState<string[]>(folder.tagRules ?? []);
+  const [color, setColor] = useState<string | null>(folder.color ?? null);
   const [tagInput, setTagInput] = useState("");
   const queryClient = useQueryClient();
   const isDemo = useDemoMode();
@@ -42,12 +49,12 @@ export function FolderEditModal({ folder, onClose }: Props) {
       const folders = (queryClient.getQueryData(["/api/folders"]) as typeof folder[] | undefined) ?? [];
       queryClient.setQueryData(
         ["/api/folders"],
-        folders.map(f => f.id === folder.id ? { ...f, name: name.trim(), tagRules } : f)
+        folders.map(f => f.id === folder.id ? { ...f, name: name.trim(), tagRules, color } : f)
       );
       onClose();
       return;
     }
-    updateMut.mutate({ id: folder.id, data: { name: name.trim(), tagRules } });
+    updateMut.mutate({ id: folder.id, data: { name: name.trim(), tagRules, color } });
   };
 
   return (
@@ -73,6 +80,30 @@ export function FolderEditModal({ folder, onClose }: Props) {
               className="w-full bg-background border border-panel-border rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
               placeholder="Folder name..."
             />
+          </div>
+
+          <div>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Palette className="w-3.5 h-3.5 text-muted-foreground" />
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Folder Color</label>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {FOLDER_COLORS.map((c, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setColor(c)}
+                  title={c ?? "Default"}
+                  className={cn(
+                    "w-6 h-6 rounded-full border-2 transition-transform hover:scale-110",
+                    color === c ? "border-foreground scale-110" : "border-transparent"
+                  )}
+                  style={{ backgroundColor: c ?? "transparent", boxShadow: c ? undefined : "inset 0 0 0 1px var(--color-panel-border)" }}
+                >
+                  {!c && <span className="text-[8px] text-muted-foreground flex items-center justify-center w-full h-full">✕</span>}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>

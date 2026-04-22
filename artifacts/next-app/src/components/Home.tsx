@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import posthog from "posthog-js";
 import dynamic from "next/dynamic";
@@ -52,9 +52,12 @@ export default function Home() {
 
   // Desktop/tablet note list panel width — mirrors what each list component uses internally
   const listPanelWidth = viewMode === "gallery" ? 384 : bp === "tablet" ? 288 : noteListWidth;
-  const panelSlideTransition = anim.level === "minimal"
-    ? { duration: 0.1, ease: "linear" as const }
-    : anim.standardTransition;
+  const [isResizing, setIsResizing] = useState(false);
+  const panelSlideTransition = isResizing
+    ? { duration: 0 }
+    : anim.level === "minimal"
+      ? { duration: 0.1, ease: "linear" as const }
+      : anim.standardTransition;
 
   const handleNoteListResize = useCallback((delta: number) => {
     setNoteListWidth(Math.min(600, Math.max(280, noteListWidth + delta)));
@@ -110,7 +113,7 @@ export default function Home() {
   // Fix 1: NoteShell stays mounted on tablet regardless of selection so the editor instance
   // persists across note switches — removing !!selectedNoteId prevents unmount/remount on each click.
   const showEditor = !isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && (bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "editor"));
-  const showQuickBitEditor = activeFilter === "quickbits" && (bp === "desktop" || (bp === "tablet" && !!selectedQuickBitId) || (bp === "mobile" && mobileView === "editor"));
+  const showQuickBitEditor = activeFilter === "quickbits" && (bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "editor"));
   const showList = bp === "desktop"
     ? isNoteListOpen
     : bp === "tablet"
@@ -224,7 +227,13 @@ export default function Home() {
             )}
           </AnimatePresence>
           {isAttachments && <AllAttachments />}
-          {bp === "desktop" && (showList || isAttachments) && <ResizeHandle onResize={handleNoteListResize} />}
+          {bp === "desktop" && viewMode !== "gallery" && (showList || isAttachments) && (
+            <ResizeHandle
+              onResize={handleNoteListResize}
+              onResizeStart={() => setIsResizing(true)}
+              onResizeEnd={() => setIsResizing(false)}
+            />
+          )}
           {showEditor && <NoteShell />}
           {showQuickBitEditor && <QuickBitShell />}
           {showDeletedDetail && <RecentlyDeletedDetail />}

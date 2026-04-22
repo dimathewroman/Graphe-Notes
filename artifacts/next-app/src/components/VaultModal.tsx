@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { motion } from "framer-motion";
 import { X, ShieldCheck, Lock, KeyRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PinPad } from "./PinPad";
@@ -136,7 +137,12 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
 
   return (
     <div data-testid="vault-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-popover border border-panel-border rounded-2xl shadow-2xl w-full max-w-sm p-6 relative">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+        className="bg-popover border border-panel-border rounded-2xl shadow-2xl w-full max-w-sm p-6 relative"
+      >
         <button onClick={onCancel} className="absolute top-4 right-4 p-1 rounded-lg hover:bg-panel text-muted-foreground hover:text-foreground transition-colors">
           <X className="w-4 h-4" />
         </button>
@@ -162,7 +168,7 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
           onCancel={onCancel}
           submitLabel={step === "confirm" || step === "new-confirm" ? "Confirm" : mode === "unlock" ? "Unlock" : "Next"}
         />
-      </div>
+      </motion.div>
     </div>
   );
 }

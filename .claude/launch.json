@@ -4,8 +4,9 @@
     {
       "name": "next-app",
       "runtimeExecutable": "/bin/sh",
-      "runtimeArgs": ["-c", "export PATH=/usr/local/bin:$PATH && cd /Users/dimathewroman/Repositories/Graphe-Notes && pnpm --filter @workspace/next-app run dev"],
-      "port": 3000
+      "runtimeArgs": ["-c", "export PATH=/usr/local/bin:$PATH && pnpm --filter @workspace/next-app run dev"],
+      "port": 3000,
+      "autoPort": false
     }
   ]
 }

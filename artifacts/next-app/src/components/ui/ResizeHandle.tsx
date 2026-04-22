@@ -3,10 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 interface ResizeHandleProps {
   onResize: (delta: number) => void;
   onResizeEnd?: () => void;
+  onResizeStart?: () => void;
   className?: string;
 }
 
-export function ResizeHandle({ onResize, onResizeEnd, className }: ResizeHandleProps) {
+export function ResizeHandle({ onResize, onResizeEnd, onResizeStart, className }: ResizeHandleProps) {
   const [isDragging, setIsDragging] = useState(false);
   const lastX = useRef(0);
 
@@ -14,7 +15,8 @@ export function ResizeHandle({ onResize, onResizeEnd, className }: ResizeHandleP
     e.preventDefault();
     lastX.current = e.clientX;
     setIsDragging(true);
-  }, []);
+    onResizeStart?.();
+  }, [onResizeStart]);
 
   useEffect(() => {
     if (!isDragging) return;
@@ -46,10 +48,10 @@ export function ResizeHandle({ onResize, onResizeEnd, className }: ResizeHandleP
   return (
     <div
       onMouseDown={handleMouseDown}
-      className={`w-1 shrink-0 cursor-col-resize group relative z-10 ${className ?? ""}`}
+      className={`w-px shrink-0 cursor-col-resize group relative z-10 bg-panel-border ${className ?? ""}`}
     >
       <div
-        className={`absolute inset-y-0 -left-0.5 w-2 transition-colors ${
+        className={`absolute inset-y-0 -left-1 -right-1 transition-colors ${
           isDragging ? "bg-primary/30" : "hover:bg-primary/15"
         }`}
       />

@@ -799,9 +799,7 @@ export function NoteShell() {
         onDelete={handleDelete}
       />
 
-      <motion.div
-        animate={contentControls}
-        initial={{ opacity: 1 }}
+      <div
         className="relative flex-1 flex flex-col min-h-0"
         data-testid="editor-content-area"
       >
@@ -815,18 +813,24 @@ export function NoteShell() {
           onEditorReady={setEditor}
           onBeforeAiRewrite={handleBeforeAiRewrite}
           renderContent={(ed) => (
-            <NoteBody
-              editor={ed}
-              title={title}
-              note={note}
-              noteId={selectedNoteId}
-              bp={bp}
-              keyboardHeight={keyboardHeight}
-              onTitleChange={handleTitleChange}
-              onAddTag={addTag}
-              onRemoveTag={removeTag}
-              onDeleteImage={handleDeleteImage}
-            />
+            <motion.div
+              animate={contentControls}
+              initial={{ opacity: 1 }}
+              className="flex-1 flex flex-col min-h-0"
+            >
+              <NoteBody
+                editor={ed}
+                title={title}
+                note={note}
+                noteId={selectedNoteId}
+                bp={bp}
+                keyboardHeight={keyboardHeight}
+                onTitleChange={handleTitleChange}
+                onAddTag={addTag}
+                onRemoveTag={removeTag}
+                onDeleteImage={handleDeleteImage}
+              />
+            </motion.div>
           )}
         />
 
@@ -839,13 +843,10 @@ export function NoteShell() {
             onRestore={() => handleRestoreVersion(previewVersion)}
             onBack={() => setPreviewVersion(null)}
             variant="overlay"
-            // Tablet shares the editor pane with the 360px panel — use the
-            // compact banner so the toggle + Back + Restore buttons don't
-            // overflow the narrowed pane.
             compact={bp === "tablet"}
           />
         )}
-      </motion.div>
+      </div>
 
       {showVersionHistory && selectedNoteId && (
         <VersionHistoryPanel

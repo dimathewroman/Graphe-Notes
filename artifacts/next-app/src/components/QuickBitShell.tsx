@@ -3,6 +3,7 @@
 // QB-specific orchestration. The actual TipTap editor lives in GrapheEditor.
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { motion, useAnimation } from "framer-motion";
 import * as Sentry from "@sentry/nextjs";
 import { createPortal } from "react-dom";
 import { EditorContent } from "@tiptap/react";
@@ -32,6 +33,7 @@ import { NotificationCadenceEditor } from "./NotificationCadenceEditor";
 import { useDemoMode } from "@/lib/demo-context";
 import { DEMO_QUICK_BITS } from "@/lib/demo-data";
 import { GrapheEditor } from "./editor/GrapheEditor";
+import { useAnimationConfig } from "@/hooks/use-motion";
 import posthog from "posthog-js";
 
 // ─── Expiry helpers ───────────────────────────────────────────────────────────
@@ -340,6 +342,37 @@ export function QuickBitShell() {
   const isDemoRef = useRef(isDemo);
   isDemoRef.current = isDemo;
 
+  // ── Content crossfade animation (mirrors NoteShell) ────────────────────────
+  const anim = useAnimationConfig();
+  const animRef = useRef(anim);
+  animRef.current = anim;
+  const contentControls = useAnimation();
+  const prevQbIdForAnim = useRef<number | null | undefined>(undefined);
+
+  useEffect(() => {
+    const prevId = prevQbIdForAnim.current;
+    prevQbIdForAnim.current = selectedQuickBitId;
+    if (prevId === undefined) {
+      contentControls.set({ opacity: 1, y: 0 });
+      return;
+    }
+    if (!selectedQuickBitId) return;
+    const isNew = prevId === null;
+    const a = animRef.current;
+    const runAnim = async () => {
+      if (isNew) {
+        contentControls.set({ opacity: 0, y: a.level === "full" ? 12 : 0 });
+        await contentControls.start({ opacity: 1, y: 0, transition: a.standardTransition });
+      } else {
+        await contentControls.start({ opacity: 0, y: a.level === "full" ? 4 : 0, transition: { duration: 0.1, ease: "easeOut" as const } });
+        contentControls.set({ y: 0 });
+        await contentControls.start({ opacity: 1, y: 0, transition: a.level === "minimal" ? { duration: 0.1 } : a.fastTransition });
+      }
+    };
+    try { runAnim(); } catch (err) { Sentry.captureException(err); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedQuickBitId]);
+
   // Sync QB data into local state when it loads / changes
   useEffect(() => {
     if (quickBit) {
@@ -629,7 +662,7 @@ export function QuickBitShell() {
         isDemo={isDemo}
         onAttachFile={handleAttachFile}
         renderContent={(editor) => (
-          <div className="flex-1 overflow-y-auto">
+          <motion.div animate={contentControls} initial={{ opacity: 1 }} className="flex-1 overflow-y-auto">
             <div
               className={cn("max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12", bp === "mobile" && "pb-20")}
               style={bp === "mobile" && keyboardHeight > 0 ? { paddingBottom: `calc(5rem + ${keyboardHeight}px)` } : undefined}
@@ -643,7 +676,7 @@ export function QuickBitShell() {
               />
               <EditorContent editor={editor} />
             </div>
-          </div>
+          </motion.div>
         )}
       />
 

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAnimationConfig } from "@/hooks/use-motion";
 const grapheLogo = "/graphe_minimalist_1773640203523.png";
 import {
-  Folder, FolderOpen, FileText, Star, Pin, Search, Sun, Moon,
+  Folder, FolderOpen, FileText, Star, Search, Sun, Moon,
   Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag, Menu, X, ShieldCheck, Lock, Unlock, KeyRound, LogOut, Wand2
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -309,7 +309,6 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <NavItem icon={<FileText className="w-4 h-4" />} label="All Notes" active={activeFilter === "all"} onClick={() => handleNavClick("all")} testId="nav-all-notes" />
           <NavItem icon={<Zap className="w-4 h-4" />} label="Quick Bits" active={activeFilter === "quickbits"} onClick={() => handleNavClick("quickbits")} testId="nav-quickbits" />
           <NavItem icon={<Star className="w-4 h-4" />} label="Favorites" active={activeFilter === "favorites"} onClick={() => handleNavClick("favorites")} />
-          <NavItem icon={<Pin className="w-4 h-4" />} label="Pinned" active={activeFilter === "pinned"} onClick={() => handleNavClick("all")} />
           <NavItem icon={<Paperclip className="w-4 h-4" />} label="Attachments" active={activeFilter === "attachments"} onClick={() => handleNavClick("attachments")} />
           {/* Vault — in main nav after Attachments */}
           <div className="flex items-center gap-1">
