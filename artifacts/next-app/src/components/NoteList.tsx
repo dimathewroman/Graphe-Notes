@@ -537,7 +537,8 @@ export function NoteList() {
                 onClick={() => handleSelectNote(note.id)}
                 onContextMenu={e => handleContextMenu(e, note)}
                 className={cn(
-                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px]",
+                  // flex-col so image + content stack cleanly; footer stays pinned to bottom
+                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden flex flex-col min-h-[80px]",
                   anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
                   selectedNoteId === note.id
                     ? "bg-primary/5 border-primary/30 shadow-sm"
@@ -545,27 +546,38 @@ export function NoteList() {
                 )}
               >
                 {img && (
-                  <div className="w-full h-24 overflow-hidden bg-panel">
+                  // shrink-0 prevents the image from compressing when card height varies
+                  <div className="w-full h-24 overflow-hidden bg-panel shrink-0">
                     <img src={img} alt="" className="w-full h-full object-cover" />
                   </div>
                 )}
-                <div className="p-3">
-                  <div className="flex items-start justify-between mb-1">
-                    <h3 className="font-medium text-sm text-foreground/90 truncate flex-1 flex items-center gap-1">
+                <div className="p-2.5 flex flex-col flex-1">
+                  <div className="flex items-start justify-between mb-1 gap-1">
+                    {/* min-w-0 on h3 allows truncation to work inside flex.
+                        Wrap text in <span> so emoji + text truncate as a unit. */}
+                    <h3 className="font-medium text-sm text-foreground/90 flex items-center gap-1 flex-1 min-w-0">
                       {note.pinned && <Pin className="w-2.5 h-2.5 shrink-0 text-primary fill-primary" />}
                       {note.vaulted && <ShieldCheck className="w-2.5 h-2.5 shrink-0 text-indigo-400" />}
-                      {note.title || "Untitled Note"}
+                      <span className="truncate">{note.title || "Untitled Note"}</span>
                     </h3>
-                    <button onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }} className={cn("rounded-md hover:bg-panel-border transition-all ml-1 shrink-0", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}>
+                    {/* Smaller touch target in gallery cards — 44px is too large for a narrow card */}
+                    <button
+                      onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }}
+                      className={cn(
+                        "rounded-md hover:bg-panel-border transition-all shrink-0",
+                        bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-60 p-1"
+                      )}
+                    >
                       <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
                     </button>
                   </div>
-                  <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+                  <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
                     {note.vaulted ? "🔒 Vault note" : (note.contentText || "No content")}
                   </p>
-                  <div className="flex items-center justify-between mt-2">
+                  {/* mt-auto pins footer to the bottom when grid stretches the card */}
+                  <div className="flex items-center justify-between mt-auto pt-1.5 gap-1">
                     <span className="text-[9px] text-muted-foreground/70 font-mono">{formatDate(note.updatedAt)}</span>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 shrink-0">
                       {note.favorite && <Star className="w-2.5 h-2.5 fill-current text-yellow-500" />}
                       {img && <ImageIcon className="w-2.5 h-2.5 text-muted-foreground opacity-60" />}
                     </div>

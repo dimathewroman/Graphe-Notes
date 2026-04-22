@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
 interface ResizeHandleProps {
   onResize: (delta: number) => void;
@@ -48,12 +49,22 @@ export function ResizeHandle({ onResize, onResizeEnd, onResizeStart, className }
   return (
     <div
       onMouseDown={handleMouseDown}
-      className={`w-px shrink-0 cursor-col-resize group relative z-10 bg-panel-border ${className ?? ""}`}
+      className={cn(
+        // w-1 = 4px wide — gives a reliable hover target without eating layout space
+        "w-1 shrink-0 cursor-col-resize group relative z-10",
+        className
+      )}
     >
+      {/* Visible 1px separator — centered inside the 4px hit zone.
+          group-hover: fires whenever the 4px outer div is hovered (consistent),
+          not just the 1px inner line (inconsistent). */}
       <div
-        className={`absolute inset-y-0 -left-1 -right-1 transition-colors ${
-          isDragging ? "bg-primary/30" : "hover:bg-primary/15"
-        }`}
+        className={cn(
+          "absolute inset-y-0 left-1/2 -translate-x-1/2 w-px transition-colors duration-150",
+          isDragging
+            ? "bg-primary/50"
+            : "bg-panel-border group-hover:bg-primary/40"
+        )}
       />
     </div>
   );

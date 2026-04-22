@@ -637,7 +637,16 @@ export function SettingsModal() {
                 </IconButton>
               </div>
 
-              <div className="p-6 space-y-6 flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-y-auto">
+              <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                className="p-6 space-y-6"
+              >
 
               {/* ── APPEARANCE TAB ─────────────────────────── */}
               {activeTab === "appearance" && (
@@ -1279,7 +1288,9 @@ export function SettingsModal() {
                 </section>
               )}
 
-            </div>
+              </motion.div>
+              </AnimatePresence>
+              </div>
 
               <div className="p-4 border-t border-panel-border bg-background/50 flex justify-end gap-3 shrink-0">
                 <button
