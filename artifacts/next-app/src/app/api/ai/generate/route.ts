@@ -336,7 +336,7 @@ export async function POST(request: NextRequest) {
     // Should never reach here given VALID_PROVIDERS check above.
     return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[ai/generate]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

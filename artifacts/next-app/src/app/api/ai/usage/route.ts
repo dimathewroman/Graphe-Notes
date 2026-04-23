@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
       resetInMs,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[ai/usage]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
