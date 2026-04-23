@@ -1,0 +1,55 @@
+name: E2E Tests
+
+on:
+  pull_request:
+    branches: [master]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @workspace/next-app exec playwright install --with-deps chromium
+
+      - name: Copy env example
+        run: cp .env.example .env
+
+      - name: Run E2E tests
+        run: pnpm --filter @workspace/next-app run test:e2e
+        env:
+          # Tests run in demo mode — no real credentials required.
+          # These placeholders allow Next.js to start without crashing on missing vars.
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+          SUPABASE_DB_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          NEXT_PUBLIC_POSTHOG_KEY: phc_placeholder
+          NEXT_PUBLIC_POSTHOG_HOST: https://app.posthog.com
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: artifacts/next-app/playwright-report/
+          retention-days: 7

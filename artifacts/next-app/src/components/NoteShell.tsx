@@ -664,18 +664,22 @@ export function NoteShell() {
     if (isDemo) {
       const stored = sessionStorage.getItem("demo_vault_hash");
       if (!stored || stored === hash) {
+        posthog.capture("vault_unlock_attempted", { success: true, source: "note", timestamp: new Date().toISOString() });
         setShowVaultUnlockModal(false);
         setVaultUnlocked(true);
       } else {
+        posthog.capture("vault_unlock_attempted", { success: false, source: "note", timestamp: new Date().toISOString() });
         setVaultUnlockError("Wrong PIN.");
       }
       return;
     }
     try {
       await unlockVaultMut.mutateAsync({ data: { passwordHash: hash } });
+      posthog.capture("vault_unlock_attempted", { success: true, source: "note", timestamp: new Date().toISOString() });
       setShowVaultUnlockModal(false);
       setVaultUnlocked(true);
     } catch {
+      posthog.capture("vault_unlock_attempted", { success: false, source: "note", timestamp: new Date().toISOString() });
       // Keep the modal open so the user can try again.
       setVaultUnlockError("Wrong PIN.");
     }

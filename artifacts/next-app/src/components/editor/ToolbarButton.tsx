@@ -23,7 +23,7 @@ export function ToolbarButton({
       className={cn(
         "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground shrink-0 flex items-center justify-center",
         "transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:scale-[1.08] active:scale-[0.95]",
-        active && "bg-panel text-primary",
+        active && "bg-primary/10 text-primary",
         disabled && "opacity-30 cursor-not-allowed pointer-events-none hover:scale-100"
       )}
     >

@@ -26,7 +26,8 @@ test.describe("App loads", () => {
         !e.includes("net::ERR_") && // network errors from missing local resources
         !e.includes("favicon") &&
         !e.includes("Extension") &&
-        !e.includes("ResizeObserver") // benign browser-level warning
+        !e.includes("ResizeObserver") && // benign browser-level warning
+        !e.includes("Invalid Sentry Dsn") // placeholder DSN in CI env
     );
     expect(appErrors, `Unexpected console errors: ${appErrors.join("\n")}`).toHaveLength(0);
   });

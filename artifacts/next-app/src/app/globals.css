@@ -225,13 +225,30 @@
   user-select: none;
 }
 .ProseMirror ul[data-type="taskList"] > li > label > input[type="checkbox"] {
-  width: 1rem;
-  height: 1rem;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
   margin: 0;
-  border-radius: 0.25rem;
+  border-radius: 4px;
+  border: 1.5px solid hsl(var(--muted-foreground) / 0.35);
+  background: transparent;
   cursor: pointer;
-  accent-color: hsl(var(--primary));
   flex-shrink: 0;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.ProseMirror ul[data-type="taskList"] > li > label > input[type="checkbox"]:hover {
+  border-color: hsl(var(--primary));
+}
+.ProseMirror ul[data-type="taskList"] > li > label > input[type="checkbox"]:checked {
+  background-color: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 6l3 3 5-5' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
 }
 .ProseMirror ul[data-type="taskList"] > li > label > span {
   display: none;
@@ -245,7 +262,7 @@
   margin-bottom: 0 !important;
 }
 .ProseMirror ul[data-type="taskList"] > li[data-checked="true"] > div > p {
-  opacity: 0.6;
+  opacity: 0.7;
   text-decoration: line-through;
   text-decoration-color: hsl(var(--muted-foreground));
   transition: opacity var(--motion-duration-fast) ease-out;
@@ -468,6 +485,12 @@ html[data-motion="minimal"] .active-elevate-2:active {
 }
 .ProseMirror ul[data-type="taskList"] > li > label > input[type="checkbox"]:checked {
   animation: checkDraw 150ms var(--spring-easing);
+}
+[data-motion="minimal"] .ProseMirror ul[data-type="taskList"] > li > label > input[type="checkbox"],
+[data-motion="minimal"] .ProseMirror ul[data-type="taskList"] > li > label > input[type="checkbox"]:checked,
+[data-motion="reduced"] .ProseMirror ul[data-type="taskList"] > li > label > input[type="checkbox"]:checked {
+  animation: none;
+  transition: none;
 }
 
 /* ── Version history panel — slide-in animations ──────────────────────────── */

@@ -24,7 +24,7 @@ import type { QuickBit } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, PanelLeft, PanelLeftClose, Trash2, FileText,
-  Clock, Bell, Zap,
+  Clock, Bell, Zap, ArrowUpFromLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
@@ -495,6 +495,7 @@ export function QuickBitShell() {
   const handlePromote = async () => {
     if (!selectedQuickBitId || !quickBit) return;
     if (isDemo) return;
+    posthog.capture("promote_to_note_clicked", { quick_bit_id: selectedQuickBitId, timestamp: new Date().toISOString() });
     const qb = quickBit as QuickBit;
     try {
       const res = await createNoteMut.mutateAsync({
@@ -642,14 +643,21 @@ export function QuickBitShell() {
           <IconButton onClick={handleDelete} className="hover:text-destructive hover:bg-destructive/10" title="Delete Quick Bit">
             <Trash2 className="w-4 h-4" />
           </IconButton>
-          <button
+          <motion.button
             onClick={handlePromote}
             title="Promote to Note"
-            className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs font-medium text-primary bg-primary/10 border border-primary/20 hover:bg-primary/15 shrink-0 active-elevate-2"
+            className="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs font-semibold text-white shrink-0"
+            style={{ background: "linear-gradient(135deg, #5B93E8 0%, #7B6CE8 100%)" }}
+            whileHover={anim.useScale ? {
+              scale: 1.03,
+              boxShadow: "0 4px 16px rgba(91, 147, 232, 0.45)",
+            } : undefined}
+            whileTap={anim.level !== "minimal" ? { scale: 0.97 } : undefined}
+            transition={{ duration: 0.15, ease: "easeOut" }}
           >
-            <FileText className="w-3.5 h-3.5" />
+            <ArrowUpFromLine className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Promote to Note</span>
-          </button>
+          </motion.button>
         </div>
       </header>
 

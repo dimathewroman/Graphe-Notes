@@ -9,6 +9,7 @@ import {
   Image as ImageIcon, Table as TableIcon, RowsIcon, Scissors, X,
   Undo2, Redo2, Minus, Highlighter, Paperclip,
   Superscript as SuperscriptIcon, Subscript as SubscriptIcon,
+  MoreHorizontal,
 } from "lucide-react";
 import { ColorPickerDropdown } from "./ColorPickerDropdown";
 import { WordCountPopover } from "./WordCountPopover";
@@ -18,6 +19,7 @@ import { FontPickerDropdown } from "./FontPickerDropdown";
 import { FontSizeWidget } from "./FontSizeWidget";
 import { LinkPopover } from "./LinkPopover";
 import { createPortal } from "react-dom";
+import { useBreakpoint } from "@/hooks/use-mobile";
 
 // Inline image-URL popover — no window.prompt
 function ImageUrlButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
@@ -62,7 +64,7 @@ function ImageUrlButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
         ref={btnRef}
         onClick={() => { setOpen(v => !v); setUrl(""); }}
         title="Insert image from URL"
-        className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${open ? " bg-panel text-primary" : ""}`}
+        className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${open ? " bg-primary/10 text-primary" : ""}`}
       >
         <ImageIcon className="w-4 h-4" />
       </button>
@@ -105,6 +107,133 @@ function ImageUrlButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
   );
 }
 
+// Overflow "..." button — renders least-used groups in a portaled panel on tablet.
+function OverflowButton({
+  editor,
+  showAttach,
+  onAttachFile,
+  fileInputRef,
+}: {
+  editor: ReturnType<typeof useEditor>;
+  showAttach: boolean;
+  onAttachFile?: (file: File) => void;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const panelW = 260;
+    const pad = 8;
+    let left = r.right - panelW;
+    if (left < pad) left = pad;
+    if (left + panelW > window.innerWidth - pad) left = window.innerWidth - panelW - pad;
+    setPos({ top: r.bottom + 6, left });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node) &&
+          btnRef.current && !btnRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  if (!editor) return null;
+
+  const isTableActive = editor.isActive("table");
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        ref={btnRef}
+        onClick={() => setOpen(v => !v)}
+        title="More formatting"
+        data-testid="toolbar-overflow-btn"
+        className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${open ? " bg-primary/10 text-primary" : ""}`}
+      >
+        <MoreHorizontal className="w-4 h-4" />
+      </button>
+
+      {open && typeof document !== "undefined" && createPortal(
+        <div
+          ref={panelRef}
+          style={{ top: pos.top, left: pos.left, width: 260, zIndex: 50 }}
+          className="fixed bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-2"
+          onMouseDown={e => e.preventDefault()}
+        >
+          {/* Alignment */}
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Alignment</p>
+          <div className="flex gap-0.5 mb-2">
+            <ToolbarButton command={() => { editor.chain().focus().setTextAlign("left").run(); setOpen(false); }} active={editor.isActive({ textAlign: "left" })} icon={<AlignLeft className="w-4 h-4" />} title="Align left" />
+            <ToolbarButton command={() => { editor.chain().focus().setTextAlign("center").run(); setOpen(false); }} active={editor.isActive({ textAlign: "center" })} icon={<AlignCenter className="w-4 h-4" />} title="Align center" />
+            <ToolbarButton command={() => { editor.chain().focus().setTextAlign("right").run(); setOpen(false); }} active={editor.isActive({ textAlign: "right" })} icon={<AlignRight className="w-4 h-4" />} title="Align right" />
+          </div>
+
+          <div className="h-px bg-panel-border mx-1 mb-2" />
+
+          {/* Text style extras */}
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Extras</p>
+          <div className="flex gap-0.5 mb-2">
+            <ToolbarButton command={() => { editor.chain().focus().toggleSuperscript().run(); setOpen(false); }} active={editor.isActive("superscript")} icon={<SuperscriptIcon className="w-4 h-4" />} title="Superscript" />
+            <ToolbarButton command={() => { editor.chain().focus().toggleSubscript().run(); setOpen(false); }} active={editor.isActive("subscript")} icon={<SubscriptIcon className="w-4 h-4" />} title="Subscript" />
+            <ToolbarButton command={() => { editor.chain().focus().toggleBlockquote().run(); setOpen(false); }} active={editor.isActive("blockquote")} icon={<Quote className="w-4 h-4" />} title="Blockquote" />
+            <ToolbarButton command={() => { editor.chain().focus().setHorizontalRule().run(); setOpen(false); }} active={false} icon={<Minus className="w-4 h-4" />} title="Horizontal divider" />
+          </div>
+
+          <div className="h-px bg-panel-border mx-1 mb-2" />
+
+          {/* Table */}
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Table</p>
+          <div className="flex gap-0.5 mb-2">
+            <ToolbarButton
+              command={() => { editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); setOpen(false); }}
+              active={false}
+              icon={<TableIcon className="w-4 h-4" />}
+              title="Insert table"
+            />
+            {isTableActive && (
+              <>
+                <ToolbarButton command={() => { editor.chain().focus().addRowAfter().run(); setOpen(false); }} active={false} icon={<RowsIcon className="w-4 h-4" />} title="Add row" />
+                <ToolbarButton command={() => { editor.chain().focus().deleteRow().run(); setOpen(false); }} active={false} icon={<Scissors className="w-4 h-4" />} title="Delete row" />
+                <ToolbarButton command={() => { editor.chain().focus().deleteTable().run(); setOpen(false); }} active={false} icon={<X className="w-4 h-4" />} title="Delete table" />
+              </>
+            )}
+          </div>
+
+          {/* Word count + attach */}
+          <div className="h-px bg-panel-border mx-1 mb-2" />
+          <div className="flex gap-0.5">
+            <WordCountPopover editor={editor} />
+            {showAttach && (
+              <ToolbarButton
+                command={() => { fileInputRef.current?.click(); setOpen(false); }}
+                active={false}
+                icon={<Paperclip className="w-4 h-4" />}
+                title="Attach file"
+              />
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
 // Fix 5: memo prevents re-renders when NoteEditor state changes but editor/toolbar props are stable
 export const EditorToolbar = memo(function EditorToolbar({
   editor,
@@ -125,6 +254,9 @@ export const EditorToolbar = memo(function EditorToolbar({
   const highlightBtnRef = useRef<HTMLButtonElement>(null);
   const fontPickerBtnRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bp = useBreakpoint();
+  // On tablet, least-used groups go into the "..." overflow panel
+  const isTablet = bp === "tablet";
 
   // Track editor state reactively. EditorToolbar is memo'd and editor is the same
   // object reference on every render, so editor.isActive() / editor.can() evaluated
@@ -188,8 +320,14 @@ export const EditorToolbar = memo(function EditorToolbar({
       <ToolbarButton command={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} icon={<Italic className="w-4 h-4" />} />
       <ToolbarButton command={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} icon={<UnderlineIcon className="w-4 h-4" />} />
       <ToolbarButton command={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive("strike")} icon={<Strikethrough className="w-4 h-4" />} />
-      <ToolbarButton command={() => editor.chain().focus().toggleSuperscript().run()} active={editor.isActive("superscript")} icon={<SuperscriptIcon className="w-4 h-4" />} title="Superscript" />
-      <ToolbarButton command={() => editor.chain().focus().toggleSubscript().run()} active={editor.isActive("subscript")} icon={<SubscriptIcon className="w-4 h-4" />} title="Subscript" />
+
+      {/* Superscript/Subscript: inline on desktop, overflow on tablet */}
+      {!isTablet && (
+        <>
+          <ToolbarButton command={() => editor.chain().focus().toggleSuperscript().run()} active={editor.isActive("superscript")} icon={<SuperscriptIcon className="w-4 h-4" />} title="Superscript" />
+          <ToolbarButton command={() => editor.chain().focus().toggleSubscript().run()} active={editor.isActive("subscript")} icon={<SubscriptIcon className="w-4 h-4" />} title="Subscript" />
+        </>
+      )}
 
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
@@ -199,7 +337,7 @@ export const EditorToolbar = memo(function EditorToolbar({
           ref={fontPickerBtnRef}
           onClick={() => setFontPickerOpen((v) => !v)}
           title="Font family"
-          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center text-sm font-medium${fontPickerOpen ? " bg-panel text-primary" : ""}`}
+          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center text-sm font-medium${fontPickerOpen ? " bg-primary/10 text-primary" : ""}`}
         >
           Aa
         </button>
@@ -222,7 +360,7 @@ export const EditorToolbar = memo(function EditorToolbar({
           ref={textColorBtnRef}
           onClick={() => setColorPicker(colorPicker === "text" ? null : "text")}
           title="Text color"
-          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex flex-col items-center justify-center gap-0.5 py-1${colorPicker === "text" ? " bg-panel text-primary" : ""}`}
+          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex flex-col items-center justify-center gap-0.5 py-1${colorPicker === "text" ? " bg-primary/10 text-primary" : ""}`}
         >
           <span className="text-sm font-bold leading-none">A</span>
           <div
@@ -241,7 +379,7 @@ export const EditorToolbar = memo(function EditorToolbar({
           ref={highlightBtnRef}
           onClick={() => setColorPicker(colorPicker === "highlight" ? null : "highlight")}
           title="Highlight color"
-          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${colorPicker === "highlight" ? " bg-panel text-primary" : ""}${activeHighlightColor ? " text-foreground" : ""}`}
+          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${colorPicker === "highlight" ? " bg-primary/10 text-primary" : ""}${activeHighlightColor ? " text-foreground" : ""}`}
           style={activeHighlightColor ? { color: activeHighlightColor } : undefined}
         >
           <Highlighter className="w-4 h-4" />
@@ -259,36 +397,50 @@ export const EditorToolbar = memo(function EditorToolbar({
 
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
-      <ToolbarButton command={() => editor.chain().focus().setTextAlign("left").run()} active={editor.isActive({ textAlign: "left" })} icon={<AlignLeft className="w-4 h-4" />} />
-      <ToolbarButton command={() => editor.chain().focus().setTextAlign("center").run()} active={editor.isActive({ textAlign: "center" })} icon={<AlignCenter className="w-4 h-4" />} />
-      <ToolbarButton command={() => editor.chain().focus().setTextAlign("right").run()} active={editor.isActive({ textAlign: "right" })} icon={<AlignRight className="w-4 h-4" />} />
-
-      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+      {/* Alignment: inline on desktop, overflow on tablet */}
+      {!isTablet && (
+        <>
+          <ToolbarButton command={() => editor.chain().focus().setTextAlign("left").run()} active={editor.isActive({ textAlign: "left" })} icon={<AlignLeft className="w-4 h-4" />} />
+          <ToolbarButton command={() => editor.chain().focus().setTextAlign("center").run()} active={editor.isActive({ textAlign: "center" })} icon={<AlignCenter className="w-4 h-4" />} />
+          <ToolbarButton command={() => editor.chain().focus().setTextAlign("right").run()} active={editor.isActive({ textAlign: "right" })} icon={<AlignRight className="w-4 h-4" />} />
+          <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+        </>
+      )}
 
       <ToolbarButton command={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive("bulletList")} icon={<List className="w-4 h-4" />} />
       <ToolbarButton command={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} icon={<ListOrdered className="w-4 h-4" />} />
       <ToolbarButton command={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive("taskList")} icon={<ListTodo className="w-4 h-4" />} title="Checklist" />
-      <ToolbarButton command={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive("blockquote")} icon={<Quote className="w-4 h-4" />} />
       <ToolbarButton command={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive("codeBlock")} icon={<Code className="w-4 h-4" />} />
-      <ToolbarButton command={() => editor.chain().focus().setHorizontalRule().run()} active={false} icon={<Minus className="w-4 h-4" />} title="Horizontal divider" />
 
-      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
-
-      <ToolbarButton
-        command={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-        active={false}
-        icon={<TableIcon className="w-4 h-4" />}
-        title="Insert table"
-      />
-      {editor.isActive("table") && (
+      {/* Blockquote + divider: inline on desktop, overflow on tablet */}
+      {!isTablet && (
         <>
-          <ToolbarButton command={() => editor.chain().focus().addRowAfter().run()} active={false} icon={<RowsIcon className="w-4 h-4" />} title="Add row" />
-          <ToolbarButton command={() => editor.chain().focus().deleteRow().run()} active={false} icon={<Scissors className="w-4 h-4" />} title="Delete row" />
-          <ToolbarButton command={() => editor.chain().focus().deleteTable().run()} active={false} icon={<X className="w-4 h-4" />} title="Delete table" />
+          <ToolbarButton command={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive("blockquote")} icon={<Quote className="w-4 h-4" />} />
+          <ToolbarButton command={() => editor.chain().focus().setHorizontalRule().run()} active={false} icon={<Minus className="w-4 h-4" />} title="Horizontal divider" />
         </>
       )}
 
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+
+      {/* Table: inline on desktop, overflow on tablet */}
+      {!isTablet && (
+        <>
+          <ToolbarButton
+            command={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+            active={false}
+            icon={<TableIcon className="w-4 h-4" />}
+            title="Insert table"
+          />
+          {editor.isActive("table") && (
+            <>
+              <ToolbarButton command={() => editor.chain().focus().addRowAfter().run()} active={false} icon={<RowsIcon className="w-4 h-4" />} title="Add row" />
+              <ToolbarButton command={() => editor.chain().focus().deleteRow().run()} active={false} icon={<Scissors className="w-4 h-4" />} title="Delete row" />
+              <ToolbarButton command={() => editor.chain().focus().deleteTable().run()} active={false} icon={<X className="w-4 h-4" />} title="Delete table" />
+            </>
+          )}
+          <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+        </>
+      )}
 
       <ImageUrlButton editor={editor} />
 
@@ -296,28 +448,53 @@ export const EditorToolbar = memo(function EditorToolbar({
 
       <LinkPopover editor={editor} />
 
-      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
-
-      <WordCountPopover editor={editor} />
-
-      {onAttachFile && (
+      {/* Word count + attach: inline on desktop, overflow on tablet */}
+      {!isTablet ? (
         <>
           <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,text/markdown,application/json,application/zip"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) { onAttachFile(file); e.target.value = ""; }
-            }}
-          />
-          <ToolbarButton
-            command={() => fileInputRef.current?.click()}
-            active={false}
-            icon={<Paperclip className="w-4 h-4" />}
-            title="Attach file"
+          <WordCountPopover editor={editor} />
+          {onAttachFile && (
+            <>
+              <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,text/markdown,application/json,application/zip"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) { onAttachFile(file); e.target.value = ""; }
+                }}
+              />
+              <ToolbarButton
+                command={() => fileInputRef.current?.click()}
+                active={false}
+                icon={<Paperclip className="w-4 h-4" />}
+                title="Attach file"
+              />
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+          {onAttachFile && (
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,text/markdown,application/json,application/zip"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file && onAttachFile) { onAttachFile(file); e.target.value = ""; }
+              }}
+            />
+          )}
+          <OverflowButton
+            editor={editor}
+            showAttach={!!onAttachFile}
+            onAttachFile={onAttachFile}
+            fileInputRef={fileInputRef}
           />
         </>
       )}
