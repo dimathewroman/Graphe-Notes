@@ -26,7 +26,7 @@ export function ExportMenu({ onExportPdf, onExportMarkdown }: {
         <Download className="w-4 h-4" />
       </IconButton>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-50 min-w-[190px] bg-popover border border-panel-border rounded-xl shadow-2xl py-1">
+        <div className="absolute right-0 top-full mt-1 z-50 min-w-[190px] bg-popover border border-panel-border rounded-xl shadow-2xl py-1 luminance-border-top">
           <button
             onClick={() => { onExportPdf(); setOpen(false); }}
             className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors"

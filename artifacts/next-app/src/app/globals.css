@@ -33,6 +33,11 @@
   --color-border: hsl(var(--border));
   --color-ring: hsl(var(--ring));
 
+  /* Semantic colors — remapped by colorblind mode overrides */
+  --color-destructive: hsl(var(--color-destructive-hsl));
+  --color-success: hsl(var(--color-success-hsl));
+  --color-warning: hsl(var(--color-warning-hsl));
+
   /* Animation tokens — base values (Full motion level) */
   --spring-easing: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
@@ -48,17 +53,18 @@
 
 :root {
   /* Warm dark theme — "Calm, Crafted, Alive" */
-  --background: 228 25% 5%; /* #0E1017 */
+  /* Surface layer model: Base(5%) → S1/panel(10%) → S2/card(13%) → S3/editor(20%) → Elevated/popover(23%) */
+  --background: 228 25% 5%; /* #0E1017 — Base */
   --foreground: 252 7% 94%; /* #F0EFF2 */
 
-  --panel: 229 20% 10%; /* #14161F */
+  --panel: 229 20% 10%; /* #14161F — Surface 1 */
   --panel-border: 228 14% 18%; /* #272A35 */
   --panel-hover: 228 16% 14%;
 
-  --card: 229 16% 13%; /* #1B1E28 */
+  --card: 229 16% 13%; /* #1B1E28 — Surface 2 */
   --card-foreground: 252 7% 94%;
 
-  --editor: 230 14% 16%; /* #222530 */
+  --editor: 230 11% 20%; /* #2A2D3A — Surface 3: pool of light */
 
   --primary: 216 78% 63%; /* #5B93E8 */
   --primary-hover: 216 78% 68%;
@@ -70,11 +76,16 @@
   --accent: 228 14% 22%;
   --accent-foreground: 0 0% 98%;
 
-  --popover: 229 16% 13%;
+  --popover: 229 10% 23%; /* #323542 — Elevated: lighter than editor + shadow */
   --popover-foreground: 252 7% 94%;
 
   --border: 228 14% 18%;
   --ring: 216 78% 63%;
+
+  /* Semantic color tokens — overridden by colorblind mode selectors */
+  --color-destructive-hsl: 0 72% 51%;
+  --color-success-hsl: 160 84% 39%;
+  --color-warning-hsl: 38 92% 50%;
 }
 
 /* Light mode — warm off-white / stone surfaces */
@@ -501,4 +512,97 @@ html[data-motion="minimal"] .active-elevate-2:active {
 @keyframes slideUp {
   from { transform: translateY(100%); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ── Smooth dark mode level transitions ────────────────────────────────────── */
+body {
+  transition: background-color 200ms ease-in-out, color 200ms ease-in-out;
+}
+
+/* ── Dark mode level: Soft ─────────────────────────────────────────────────── */
+/* Base range #1E2028→#282B35 — warm, gentle, best for ambient evening lighting */
+:root[data-dark-level="soft"]:not(.light) {
+  --background: 224 18% 14%; /* #1C1F28 */
+  --foreground: 252 6% 93%;
+
+  --panel: 224 15% 18%; /* #242832 */
+  --panel-border: 224 12% 26%; /* #363B4A */
+  --panel-hover: 224 13% 22%;
+
+  --card: 224 13% 21%; /* #2B2F3B */
+  --card-foreground: 252 6% 93%;
+
+  --editor: 224 10% 27%; /* #38404F */
+
+  --muted: 224 13% 24%;
+  --muted-foreground: 249 3% 52%;
+
+  --accent: 224 12% 28%;
+  --accent-foreground: 0 0% 98%;
+
+  --popover: 224 10% 29%; /* #3D4453 */
+  --popover-foreground: 252 6% 93%;
+
+  --border: 224 12% 25%;
+}
+
+/* ── Dark mode level: OLED / True Dark ─────────────────────────────────────── */
+/* Base #000000→#0A0C12 — deepest blacks; borders/luminance edges carry depth */
+:root[data-dark-level="oled"]:not(.light) {
+  --background: 0 0% 0%; /* #000000 — true black for OLED battery saving */
+  --foreground: 252 5% 87%; /* slightly dimmer to ease contrast on OLED */
+
+  --panel: 228 25% 4%; /* #090A10 */
+  --panel-border: 228 18% 12%; /* #191C27 */
+  --panel-hover: 228 20% 7%;
+
+  --card: 228 20% 6%; /* #0D0F18 */
+  --card-foreground: 252 5% 87%;
+
+  --editor: 228 14% 10%; /* #151820 */
+
+  --muted: 228 16% 9%;
+  --muted-foreground: 249 3% 46%;
+
+  --accent: 228 16% 13%;
+  --accent-foreground: 0 0% 95%;
+
+  --popover: 228 13% 13%; /* #1A1C26 */
+  --popover-foreground: 252 5% 87%;
+
+  --border: 228 16% 11%;
+}
+
+/* ── Luminance top-edge border for elevated surfaces ────────────────────────── */
+/* Manifesto §5.2: a 1px "light catching the top edge" effect via inset box-shadow.
+   Applied only in dark mode — light mode uses shadows for depth instead.
+   Usage: add .luminance-border-top to bg-popover elements (dropdowns, tooltips, modals). */
+.luminance-border-top {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.light .luminance-border-top {
+  box-shadow: none;
+}
+/* Combine luminance border with existing shadow shadows cleanly */
+.luminance-border-top.shadow-xl {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+.luminance-border-top.shadow-2xl {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 25px 50px -12px rgb(0 0 0 / 0.25);
+}
+.luminance-border-top.shadow-xl.shadow-black\/30 {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 20px 25px -5px rgb(0 0 0 / 0.3);
+}
+
+/* ── Colorblind mode: Protanopia / Deuteranopia (red-green) ─────────────────── */
+/* Remaps: destructive red → orange/amber, success green → blue */
+[data-colorblind="protanopia"] {
+  --color-destructive-hsl: 25 90% 55%; /* #f97316 — orange, clearly distinct from green */
+  --color-success-hsl: 210 88% 56%;    /* #3b8def — blue, distinct from orange */
+}
+
+/* ── Colorblind mode: Tritanopia (blue-yellow) ──────────────────────────────── */
+/* Remaps: warning amber → pink/magenta (amber looks white to tritanopes) */
+[data-colorblind="tritanopia"] {
+  --color-warning-hsl: 330 80% 60%; /* #e879a8 — pink/magenta, clearly distinct */
 }

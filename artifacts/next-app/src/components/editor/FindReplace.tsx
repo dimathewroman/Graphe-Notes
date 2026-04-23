@@ -292,7 +292,7 @@ export function FindReplacePanel({ editor, onClose }: FindReplacePanelProps) {
   return (
     <div
       ref={panelRef}
-      className="absolute top-2 right-4 z-50 w-[340px] bg-popover border border-panel-border rounded-lg shadow-2xl overflow-hidden"
+      className="absolute top-2 right-4 z-50 w-[340px] bg-popover border border-panel-border rounded-lg shadow-2xl overflow-hidden luminance-border-top"
       onMouseDown={(e) => e.stopPropagation()}
     >
       {/* Find row */}

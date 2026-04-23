@@ -165,7 +165,7 @@ export function MobileSelectionMenu({
         style={menuStyle}
         onMouseDown={(e) => e.preventDefault()}
       >
-        <div className="bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 max-h-[60vh] overflow-y-auto">
+        <div className="bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 max-h-[60vh] overflow-y-auto luminance-border-top">
           <div className="flex items-center gap-2 px-2 py-1.5 border-b border-panel-border mb-1">
             <button
               onClick={() => { setShowWritingTools(false); setExpandedGroup(null); setExpandedAction(null); }}
@@ -290,7 +290,7 @@ export function MobileSelectionMenu({
       style={menuStyle}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <div className="bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 flex items-center gap-0.5 p-1">
+      <div className="bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 flex items-center gap-0.5 p-1 luminance-border-top">
         <button onClick={handleCopy} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px]">
           <Copy className="w-3.5 h-3.5" />
           Copy

@@ -6,6 +6,8 @@ type ViewMode = "list" | "gallery";
 type MobileView = "list" | "editor";
 type SettingsTab = "appearance" | "ai" | "data" | "security" | "quickbits" | "account";
 export type MotionLevel = "full" | "reduced" | "minimal";
+export type DarkModeLevel = "soft" | "default" | "oled";
+export type ColorblindMode = "none" | "protanopia" | "tritanopia";
 
 interface AppState {
   activeFilter: FilterType;
@@ -18,6 +20,12 @@ interface AppState {
 
   motionLevel: MotionLevel;
   setMotionLevel: (level: MotionLevel) => void;
+
+  darkModeLevel: DarkModeLevel;
+  setDarkModeLevel: (level: DarkModeLevel) => void;
+
+  colorblindMode: ColorblindMode;
+  setColorblindMode: (mode: ColorblindMode) => void;
 
   selectedNoteId: number | null;
   selectedQuickBitId: number | null;
@@ -75,6 +83,12 @@ export const useAppStore = create<AppState>((set) => ({
 
   motionLevel: "full",
   setMotionLevel: (level) => set({ motionLevel: level }),
+
+  darkModeLevel: "default",
+  setDarkModeLevel: (level) => set({ darkModeLevel: level }),
+
+  colorblindMode: "none",
+  setColorblindMode: (mode) => set({ colorblindMode: mode }),
 
   selectedNoteId: null,
   selectedQuickBitId: null,

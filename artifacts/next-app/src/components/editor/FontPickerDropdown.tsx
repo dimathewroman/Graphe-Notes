@@ -66,7 +66,7 @@ export function FontPickerDropdown({
   return createPortal(
     <div
       ref={containerRef}
-      className="fixed z-50 bg-popover border border-panel-border rounded-xl shadow-2xl py-1.5 w-48"
+      className="fixed z-50 bg-popover border border-panel-border rounded-xl shadow-2xl py-1.5 w-48 luminance-border-top"
       style={{ top: pos.top, left: pos.left }}
     >
       {FONTS.map((font) => {
