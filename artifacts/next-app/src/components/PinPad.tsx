@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Delete } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +32,24 @@ export function PinPad({ title, subtitle, error, onSubmit, onCancel, submitLabel
   const handleSubmit = useCallback(() => {
     if (pin.length >= 4) onSubmit(pin);
   }, [pin, onSubmit]);
+
+  // Keyboard input: digits 0-9, Backspace, Enter
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key >= "0" && e.key <= "9") {
+        e.preventDefault();
+        handleDigit(e.key);
+      } else if (e.key === "Backspace") {
+        e.preventDefault();
+        handleBackspace();
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        handleSubmit();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleDigit, handleBackspace, handleSubmit]);
 
   const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "back"];
 

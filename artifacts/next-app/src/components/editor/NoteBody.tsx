@@ -98,7 +98,7 @@ export const NoteBody = memo(function NoteBody({
 
   return (
     <div
-      className="flex-1 overflow-y-auto relative"
+      className="hide-scrollbar flex-1 overflow-y-auto relative"
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}

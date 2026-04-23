@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import posthog from "posthog-js";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAnimationConfig } from "@/hooks/use-motion";
 const grapheLogo = "/graphe_minimalist_1773640203523.png";
 import {
-  Folder, FolderOpen, FileText, Star, Search, Sun, Moon,
+  Folder, FolderOpen, FileText, Star, Sun, Moon,
   Settings, Hash, Plus, Trash2, Paperclip, Edit2, Zap, Tag, Menu, X, ShieldCheck, Lock, Unlock, KeyRound, LogOut, Wand2
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -76,6 +76,25 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     if (next.has(id)) next.delete(id); else next.add(id);
     setExpandedFolders(next);
   };
+
+  // Auto-expand ancestor folders when the active filter is a subfolder so the
+  // active item stays visible after navigation (e.g. mobile drawer close/reopen
+  // resets component state, losing expanded state for the parent folder).
+  useEffect(() => {
+    if (activeFilter !== "folder" || !activeFolderId || folders.length === 0) return;
+    const toExpand = new Set<number>();
+    let current = folders.find(f => f.id === activeFolderId);
+    while (current?.parentId) {
+      toExpand.add(current.parentId);
+      current = folders.find(f => f.id === current!.parentId);
+    }
+    if (toExpand.size === 0) return;
+    setExpandedFolders(prev => {
+      const next = new Set(prev);
+      toExpand.forEach(id => next.add(id));
+      return next;
+    });
+  }, [activeFilter, activeFolderId, folders]);
 
   const handleCreateFolder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -288,18 +307,6 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <IconButton onClick={() => { setSettingsOpen(true); onNavigate?.(); }}>
             <Settings className="w-4 h-4" />
           </IconButton>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="px-3 pb-2">
-        <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search..."
-            className="w-full bg-background/60 border border-panel-border rounded-lg pl-8 pr-3 py-1.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-foreground placeholder:text-muted-foreground"
-          />
         </div>
       </div>
 

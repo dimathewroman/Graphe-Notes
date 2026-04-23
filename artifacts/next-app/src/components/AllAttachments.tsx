@@ -3,7 +3,7 @@
 import { useState } from "react";
 import {
   FileText, FileSpreadsheet, Presentation, FileCode, Archive, File,
-  Image as ImageIcon, Download, Trash2, Loader2, Paperclip,
+  Image as ImageIcon, Download, Trash2, Loader2, Paperclip, Menu,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -14,6 +14,7 @@ import {
   type AttachmentRecord,
 } from "@/hooks/use-attachments";
 import { useAppStore } from "@/store";
+import { useBreakpoint } from "@/hooks/use-mobile";
 
 function fileIcon(mimeType: string) {
   if (isImageType(mimeType)) return <ImageIcon className="w-5 h-5 text-sky-400 shrink-0" />;
@@ -112,14 +113,27 @@ function AttachmentRow({ attachment, onDeleted }: { attachment: AttachmentRecord
 
 export function AllAttachments() {
   const { data: attachments = [], isLoading, refetch } = useAllAttachments();
+  const { setSidebarOpen } = useAppStore();
+  const bp = useBreakpoint();
 
   return (
     <div className="flex-1 flex flex-col bg-background overflow-hidden">
-      <div className="px-4 py-4 border-b border-panel-border shrink-0">
-        <h2 className="text-base font-semibold text-foreground">Attachments</h2>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          {attachments.length === 0 && !isLoading ? "No attachments yet" : `${attachments.length} file${attachments.length !== 1 ? "s" : ""}`}
-        </p>
+      <div className="px-4 py-4 border-b border-panel-border shrink-0 flex items-center gap-3">
+        {bp === "mobile" && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="min-w-[44px] min-h-[44px] -ml-2 flex items-center justify-center rounded-lg hover:bg-panel transition-colors shrink-0"
+            title="Open menu"
+          >
+            <Menu className="w-5 h-5 text-muted-foreground" />
+          </button>
+        )}
+        <div>
+          <h2 className="text-base font-semibold text-foreground">Attachments</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {attachments.length === 0 && !isLoading ? "No attachments yet" : `${attachments.length} file${attachments.length !== 1 ? "s" : ""}`}
+          </p>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">

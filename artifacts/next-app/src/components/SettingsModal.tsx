@@ -618,12 +618,15 @@ export function SettingsModal() {
               </div>
             )}
 
-            {/* Right content area (desktop always, mobile only when sub-page selected) */}
-            <div className={cn("flex-1 flex flex-col overflow-hidden", isMobile && !mobileSubPage && "hidden")}>
+            {/* Right content area: always on desktop/tablet, only when a sub-page is
+                selected on mobile. Conditional rendering (not CSS hidden) ensures
+                AnimatePresence never has a stale motion.div to flash on re-entry. */}
+            {(!isMobile || mobileSubPage) && (
+            <div className="flex-1 flex flex-col overflow-hidden">
               {/* Content header */}
               <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-panel-border bg-background/30 shrink-0">
                 <div className="flex items-center gap-2">
-                  {isMobile && mobileSubPage && (
+                  {isMobile && (
                     <button onClick={() => setMobileSubPage(null)} className="min-w-[44px] min-h-[44px] -ml-2 flex items-center justify-center rounded-lg hover:bg-panel transition-colors">
                       <ArrowLeft className="w-5 h-5 text-muted-foreground" />
                     </button>
@@ -638,13 +641,13 @@ export function SettingsModal() {
               </div>
 
               <div className="flex-1 overflow-y-auto">
-              <AnimatePresence mode="wait" initial={false}>
+              <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.15, ease: "easeOut" }}
+                transition={{ duration: 0.12, ease: "easeOut" }}
                 className="p-6 space-y-6"
               >
 
@@ -684,7 +687,7 @@ export function SettingsModal() {
 
                   <section className="space-y-3">
                     <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Accent Color</h3>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       {ACCENT_PRESETS.map((preset) => (
                         <button
                           key={preset.value}
@@ -1313,6 +1316,7 @@ export function SettingsModal() {
                 </button>
               </div>
             </div>
+            )}
           </motion.div>
         </>
       )}
