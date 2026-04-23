@@ -48,7 +48,7 @@ function formatExpiry(expiresAt: string): { label: string; className: string } {
 }
 
 export function QuickBitList() {
-  const { setSidebarOpen, isSidebarOpen, toggleSidebar, selectedQuickBitId, selectQuickBit, setMobileView, viewMode, setViewMode, noteListWidth } = useAppStore();
+  const { setSidebarOpen, isSidebarOpen, toggleSidebar, selectedQuickBitId, selectQuickBit, setMobileView, viewMode, setViewMode, noteListWidth, demoExtraQbIds, addDemoQbId } = useAppStore();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
   const anim = useAnimationConfig();
@@ -80,14 +80,19 @@ export function QuickBitList() {
   // In demo mode, read from individually-seeded caches (same pattern as NoteList)
   const demoQbQueries = useQueries({
     queries: isDemo
-      ? DEMO_QUICK_BITS.map((qb) => ({
-          queryKey: getGetQuickBitQueryKey(qb.id),
-          queryFn: () => qb,
-          initialData: qb,
-          staleTime: Infinity,
-          gcTime: Infinity,
-          enabled: true,
-        }))
+      ? [...DEMO_QUICK_BITS.map(qb => qb.id), ...demoExtraQbIds].map(id => {
+          const fallback = DEMO_QUICK_BITS.find(qb => qb.id === id);
+          return {
+            queryKey: getGetQuickBitQueryKey(id),
+            queryFn: fallback
+              ? () => fallback
+              : async () => queryClient.getQueryData<QuickBit>(getGetQuickBitQueryKey(id)),
+            initialData: fallback,
+            staleTime: Infinity,
+            gcTime: Infinity,
+            enabled: true,
+          };
+        })
       : [],
   });
 
@@ -129,7 +134,23 @@ export function QuickBitList() {
   });
 
   const handleCreateNew = () => {
-    if (isDemo) return;
+    if (isDemo) {
+      const tempId = -(Date.now());
+      const tempQb: QuickBit = {
+        id: tempId,
+        title: "",
+        content: "<p></p>",
+        contentText: "",
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } as unknown as QuickBit;
+      queryClient.setQueryData(getGetQuickBitQueryKey(tempId), tempQb);
+      addDemoQbId(tempId);
+      selectQuickBit(tempId);
+      if (bp === "mobile") setMobileView("editor");
+      return;
+    }
     createMut.mutate({ data: { title: "", content: "" } });
   };
 
@@ -196,7 +217,7 @@ export function QuickBitList() {
             {/* New quick bit — rounded square, NOT circle */}
             <button
               onClick={handleCreateNew}
-              disabled={createMut.isPending || isDemo}
+              disabled={createMut.isPending}
               data-testid="new-quickbit-btn"
               className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center"
             >
@@ -245,7 +266,7 @@ export function QuickBitList() {
                 <EmptyContent>
                   <button
                     onClick={handleCreateNew}
-                    disabled={createMut.isPending || isDemo}
+                    disabled={createMut.isPending}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary-hover transition-colors disabled:opacity-50"
                   >
                     <Plus className="w-4 h-4" />
@@ -275,7 +296,7 @@ export function QuickBitList() {
                   anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
                   selectedQuickBitId === qb.id
                     ? "bg-primary/5 border-primary/30 shadow-sm"
-                    : "bg-transparent border-transparent hover:bg-panel-hover hover:border-panel-border"
+                    : "bg-card border-transparent hover:bg-panel-hover hover:border-panel-border"
                 )}
               >
                 <div className="p-3">
@@ -314,7 +335,7 @@ export function QuickBitList() {
                   anim.useScale && "hover:-translate-y-[1px] active:scale-[0.98]",
                   selectedQuickBitId === qb.id
                     ? "bg-primary/5 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"
-                    : "border-l-2 border-l-transparent border-y border-y-transparent border-r border-r-transparent hover:bg-panel-hover"
+                    : "bg-card border-l-2 border-l-transparent border-y border-y-transparent border-r border-r-transparent hover:bg-panel-hover"
                 )}
               >
                 <h3 className={cn(

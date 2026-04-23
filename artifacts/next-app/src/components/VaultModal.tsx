@@ -129,9 +129,9 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
   }, [mode, step, firstPin, currentPin, onConfirm, onVerifyCurrentPin]);
 
   const headerConfig = {
-    setup: { icon: <ShieldCheck className="w-5 h-5 text-indigo-500" />, bg: "bg-indigo-500/10 border-indigo-500/20" },
-    unlock: { icon: <Lock className="w-5 h-5 text-amber-500" />, bg: "bg-amber-500/10 border-amber-500/20" },
-    "change-password": { icon: <KeyRound className="w-5 h-5 text-amber-500" />, bg: "bg-amber-500/10 border-amber-500/20" },
+    setup: { icon: <ShieldCheck className="w-5 h-5 text-indigo-500" />, bg: "bg-indigo-500/10 border-indigo-500/20", dotClass: "bg-indigo-500 border-indigo-500" },
+    unlock: { icon: <Lock className="w-5 h-5 text-amber-500" />, bg: "bg-amber-500/10 border-amber-500/20", dotClass: "bg-amber-500 border-amber-500" },
+    "change-password": { icon: <KeyRound className="w-5 h-5 text-amber-500" />, bg: "bg-amber-500/10 border-amber-500/20", dotClass: "bg-amber-500 border-amber-500" },
   }[mode];
 
   const { title, subtitle } = getStepInfo();
@@ -175,6 +175,7 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
             subtitle={subtitle}
             error={displayError}
             shakeKey={shakeKey}
+            filledDotClass={headerConfig.dotClass}
             onSubmit={handlePinSubmit}
             onCancel={onCancel}
             submitLabel={step === "confirm" || step === "new-confirm" ? "Confirm" : mode === "unlock" ? "Unlock" : "Next"}

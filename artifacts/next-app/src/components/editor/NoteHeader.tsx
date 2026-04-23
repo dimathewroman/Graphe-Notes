@@ -6,7 +6,7 @@ import type { useEditor } from "@tiptap/react";
 import { useAnimationConfig } from "@/hooks/use-motion";
 import {
   Pin, Star, ShieldCheck, Clock, Trash2,
-  PanelLeft, PanelLeftClose, ArrowLeft, LayoutList,
+  PanelLeft, PanelLeftClose, ArrowLeft, LayoutList, Menu,
 } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
 import { cn, formatDate } from "@/lib/utils";
@@ -64,6 +64,11 @@ export const NoteHeader = memo(function NoteHeader({
         {bp === "mobile" && (
           <button onClick={onBack} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors">
             <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+          </button>
+        )}
+        {bp === "tablet" && (
+          <button onClick={onToggleSidebar} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors">
+            <Menu className="w-5 h-5 text-muted-foreground" />
           </button>
         )}
         {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (

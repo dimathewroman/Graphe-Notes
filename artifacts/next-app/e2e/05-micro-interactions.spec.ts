@@ -130,10 +130,11 @@ test.describe("Micro-interactions — Quick Bits list", () => {
     expect(count).toBeGreaterThan(0);
   });
 
-  test("new Quick Bit button is present (disabled in demo mode)", async ({ page }) => {
+  test("new Quick Bit button is present and enabled in demo mode", async ({ page }) => {
     const btn = page.getByTestId("new-quickbit-btn");
     await expect(btn).toBeVisible();
-    await expect(btn).toBeDisabled();
+    // Demo mode supports QB creation — button must be enabled
+    await expect(btn).toBeEnabled();
   });
 
   test("selecting a Quick Bit item applies selected style", async ({ page }) => {
@@ -211,12 +212,18 @@ test.describe("Micro-interactions — console errors", () => {
     await page.getByTestId("nav-quickbits").click();
     await page.waitForTimeout(400);
 
-    // Navigate to Vault — in demo mode with unconfigured vault this opens the
-    // setup modal. Dismiss it before continuing so it doesn't block nav clicks.
+    // Navigate to Vault — opens the PIN setup modal in demo mode.
+    // Type several digits to exercise the PinPad component, then dismiss.
     await page.getByTestId("nav-vault").click();
     await page.waitForTimeout(400);
     const vaultModal = page.getByTestId("vault-modal");
     if (await vaultModal.isVisible()) {
+      // Click digits 1-4 to fill dots — catches any runtime errors from PinPad
+      for (const digit of ["1", "2", "3", "4"]) {
+        await page.getByRole("button", { name: digit, exact: true }).click();
+        await page.waitForTimeout(80);
+      }
+      await page.waitForTimeout(200);
       await page.getByRole("button", { name: "Cancel" }).click();
       await vaultModal.waitFor({ state: "hidden", timeout: 3_000 });
     }
