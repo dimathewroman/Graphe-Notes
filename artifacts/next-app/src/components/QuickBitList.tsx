@@ -275,7 +275,7 @@ export function QuickBitList() {
                   anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
                   selectedQuickBitId === qb.id
                     ? "bg-primary/5 border-primary/30 shadow-sm"
-                    : "bg-transparent border-transparent hover:bg-panel-hover hover:border-panel-border"
+                    : "bg-card border-transparent hover:bg-panel-hover hover:border-panel-border"
                 )}
               >
                 <div className="p-3">
@@ -314,7 +314,7 @@ export function QuickBitList() {
                   anim.useScale && "hover:-translate-y-[1px] active:scale-[0.98]",
                   selectedQuickBitId === qb.id
                     ? "bg-primary/5 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"
-                    : "border-l-2 border-l-transparent border-y border-y-transparent border-r border-r-transparent hover:bg-panel-hover"
+                    : "bg-card border-l-2 border-l-transparent border-y border-y-transparent border-r border-r-transparent hover:bg-panel-hover"
                 )}
               >
                 <h3 className={cn(

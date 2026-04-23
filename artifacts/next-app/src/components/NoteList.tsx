@@ -509,18 +509,22 @@ export function NoteList() {
       </div>
 
       {/* Notes */}
-      <div className={cn("flex-1 overflow-y-auto p-2", viewMode === "gallery" ? "grid grid-cols-2 gap-2 content-start" : "space-y-1")}>
+      <div className="flex-1 overflow-y-auto p-2">
         {isLoading ? (
-          <div className={cn("flex justify-center", viewMode === "gallery" ? "col-span-2 p-4" : "p-4")}>
+          <div className="flex justify-center p-4">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : notes.length === 0 ? (
-          <div className={cn("p-8 text-center flex flex-col items-center justify-center text-muted-foreground", viewMode === "gallery" ? "col-span-2 h-full" : "h-full")}>
+          <div className="p-8 text-center flex flex-col items-center justify-center text-muted-foreground h-full">
             <FileText className="w-12 h-12 mb-4 opacity-20" />
             <p className="text-sm">No notes found.</p>
             {debouncedSearch && <p className="text-xs mt-1 opacity-70">Try a different search term.</p>}
           </div>
         ) : viewMode === "gallery" ? (
+          /* Inner grid wrapper — keeping the grid separate from the overflow container
+             fixes Chrome's min-content row sizing that occurs when grid + overflow-y:auto
+             share the same element with a definite height. */
+          <div className="grid grid-cols-2 gap-2">
           <AnimatePresence initial={false}>
           {notes.map(note => {
             const img = getFirstImage(note.content);
@@ -537,8 +541,7 @@ export function NoteList() {
                 onClick={() => handleSelectNote(note.id)}
                 onContextMenu={e => handleContextMenu(e, note)}
                 className={cn(
-                  // flex-col so image + content stack cleanly; footer stays pinned to bottom
-                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden flex flex-col min-h-[80px]",
+                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden",
                   anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
                   selectedNoteId === note.id
                     ? "bg-primary/5 border-primary/30 shadow-sm"
@@ -546,25 +549,22 @@ export function NoteList() {
                 )}
               >
                 {img && (
-                  // shrink-0 prevents the image from compressing when card height varies
-                  <div className="w-full h-24 overflow-hidden bg-panel shrink-0">
+                  <div className="w-full h-24 overflow-hidden bg-panel">
                     <img src={img} alt="" className="w-full h-full object-cover" />
                   </div>
                 )}
-                <div className="p-2.5 flex flex-col flex-1">
-                  <div className="flex items-center justify-between mb-1 gap-1">
-                    {/* min-w-0 on h3 allows truncation to work inside flex.
-                        Wrap text in <span> so emoji + text truncate as a unit. */}
-                    <h3 className="font-semibold text-sm text-foreground/90 flex items-center gap-1 flex-1 min-w-0">
-                      {note.pinned && <Pin className="w-2.5 h-2.5 shrink-0 text-primary fill-primary" />}
-                      {note.vaulted && <ShieldCheck className="w-2.5 h-2.5 shrink-0 text-indigo-400" />}
-                      <span className="line-clamp-2">{note.title || "Untitled Note"}</span>
+                <div className="p-2.5 flex flex-col">
+                  <div className="flex items-start justify-between mb-1 gap-1">
+                    <h3 className="font-semibold text-sm text-foreground/90 flex-1 min-w-0 line-clamp-2 leading-snug">
+                      {note.pinned && <Pin className="inline-block w-2.5 h-2.5 mr-0.5 text-primary fill-primary align-text-bottom" />}
+                      {note.vaulted && <ShieldCheck className="inline-block w-2.5 h-2.5 mr-0.5 text-indigo-400 align-text-bottom" />}
+                      {note.title || "Untitled Note"}
                     </h3>
                     {/* Smaller touch target in gallery cards — 44px is too large for a narrow card */}
                     <button
                       onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }}
                       className={cn(
-                        "rounded-md hover:bg-panel-border transition-all shrink-0",
+                        "rounded-md hover:bg-panel-border transition-all shrink-0 self-start",
                         bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-60 p-1"
                       )}
                     >
@@ -574,11 +574,10 @@ export function NoteList() {
                   <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
                     {note.vaulted ? "🔒 Vault note" : (note.contentText || "No content")}
                   </p>
-                  {/* mt-auto pins footer to the bottom when grid stretches the card */}
-                  <div className="flex items-center justify-between mt-auto pt-1.5 gap-1">
+                  <div className="flex items-center justify-between pt-1.5 gap-1">
                     <span className="text-xs text-muted-foreground/70 font-mono">{formatDate(note.updatedAt)}</span>
                     <div className="flex items-center gap-1 shrink-0">
-                      {note.favorite && <Star className="w-2.5 h-2.5 fill-current text-yellow-500" />}
+                      {note.favorite && <Star className="w-3 h-3 fill-current text-yellow-500" />}
                       {img && <ImageIcon className="w-2.5 h-2.5 text-muted-foreground opacity-60" />}
                     </div>
                   </div>
@@ -587,7 +586,9 @@ export function NoteList() {
             );
           })}
           </AnimatePresence>
+          </div>
         ) : (
+          <div className="space-y-1">
           <AnimatePresence initial={false}>
           {notes.map(note => (
             <motion.div
@@ -648,6 +649,7 @@ export function NoteList() {
             </motion.div>
           ))}
           </AnimatePresence>
+          </div>
         )}
       </div>
 
