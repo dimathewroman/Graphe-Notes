@@ -99,17 +99,18 @@ export function PinPad({ title, subtitle, error, shakeKey = 0, onSubmit, onCance
         {Array.from({ length: MAX_PIN_LENGTH }).map((_, i) => (
           <motion.div
             key={i}
-            animate={
-              i < pin.length
-                ? { scale: [1, 1.25, 1], backgroundColor: shaking ? "hsl(var(--destructive))" : "hsl(var(--primary))", borderColor: shaking ? "hsl(var(--destructive))" : "hsl(var(--primary))" }
-                : { scale: 1, backgroundColor: "transparent", borderColor: "hsl(var(--muted-foreground) / 0.3)" }
-            }
+            animate={i < pin.length ? { scale: [1, 1.25, 1] } : { scale: 1 }}
             transition={
               anim.level === "full"
                 ? { type: "spring", stiffness: 600, damping: 15 }
                 : { duration: 0.15, ease: "easeOut" }
             }
-            className="w-3 h-3 rounded-full border-2"
+            className={cn(
+              "w-3 h-3 rounded-full border-2 transition-colors duration-150",
+              i < pin.length
+                ? shaking ? "bg-destructive border-destructive" : "bg-primary border-primary"
+                : "border-muted-foreground/30"
+            )}
           />
         ))}
       </motion.div>
