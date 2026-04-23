@@ -23,7 +23,7 @@ import {
 import type { QuickBit } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft, PanelLeft, PanelLeftClose, Trash2, FileText,
+  ArrowLeft, PanelLeft, PanelLeftClose, Trash2, FileText, Menu,
   Clock, Bell, Zap, ArrowUpFromLine,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -542,14 +542,19 @@ export function QuickBitShell() {
     if (bp === "mobile") return null;
     return (
       <div className="flex-1 flex flex-col bg-editor relative">
-        {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (
+        {(bp === "tablet" || (bp === "desktop" && (!isSidebarOpen || !isNoteListOpen))) && (
           <div className="h-14 border-b border-panel-border flex items-center px-2 gap-1 bg-editor/80 backdrop-blur-md shrink-0">
-            {!isSidebarOpen && (
+            {bp === "tablet" && (
+              <button onClick={toggleSidebar} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors">
+                <Menu className="w-5 h-5 text-muted-foreground" />
+              </button>
+            )}
+            {bp === "desktop" && !isSidebarOpen && (
               <IconButton onClick={toggleSidebar} title="Show sidebar">
                 <PanelLeft className="w-4 h-4" />
               </IconButton>
             )}
-            {!isNoteListOpen && (
+            {bp === "desktop" && !isNoteListOpen && (
               <IconButton onClick={toggleNoteList} title="Show note list">
                 <PanelLeftClose className="w-4 h-4 scale-x-[-1]" />
               </IconButton>
@@ -588,6 +593,14 @@ export function QuickBitShell() {
             className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors shrink-0"
           >
             <ArrowLeft className="w-5 h-5 text-muted-foreground" />
+          </button>
+        )}
+        {bp === "tablet" && (
+          <button
+            onClick={toggleSidebar}
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors shrink-0"
+          >
+            <Menu className="w-5 h-5 text-muted-foreground" />
           </button>
         )}
         {bp === "desktop" && (!isSidebarOpen || !isNoteListOpen) && (

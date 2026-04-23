@@ -119,7 +119,7 @@ export function AllAttachments() {
   return (
     <div className="flex-1 flex flex-col bg-background overflow-hidden">
       <div className="px-4 py-4 border-b border-panel-border shrink-0 flex items-center gap-3">
-        {bp === "mobile" && (
+        {bp !== "desktop" && (
           <button
             onClick={() => setSidebarOpen(true)}
             className="min-w-[44px] min-h-[44px] -ml-2 flex items-center justify-center rounded-lg hover:bg-panel transition-colors shrink-0"
