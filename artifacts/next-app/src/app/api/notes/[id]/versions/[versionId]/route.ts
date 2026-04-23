@@ -4,8 +4,14 @@
 
 import { type NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
-import { db, noteVersionsTable } from "@workspace/db";
+import { z } from "zod";
+import { db, noteVersionsTable, notesTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
+
+const routeParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  versionId: z.coerce.number().int().positive(),
+});
 
 export async function GET(
   request: NextRequest,
@@ -14,12 +20,18 @@ export async function GET(
   const { user } = await getAuthUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id, versionId } = await params;
-  const noteId = Number(id);
-  const versionIdNum = Number(versionId);
-  if (isNaN(noteId) || isNaN(versionIdNum)) {
+  const parsed = routeParamsSchema.safeParse(await params);
+  if (!parsed.success) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
+  const { id: noteId, versionId: versionIdNum } = parsed.data;
+
+  const [note] = await db
+    .select({ id: notesTable.id })
+    .from(notesTable)
+    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
+    .limit(1);
+  if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
   const [version] = await db
     .select()
@@ -42,12 +54,18 @@ export async function PATCH(
   const { user } = await getAuthUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id, versionId } = await params;
-  const noteId = Number(id);
-  const versionIdNum = Number(versionId);
-  if (isNaN(noteId) || isNaN(versionIdNum)) {
+  const parsed = routeParamsSchema.safeParse(await params);
+  if (!parsed.success) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
+  const { id: noteId, versionId: versionIdNum } = parsed.data;
+
+  const [note] = await db
+    .select({ id: notesTable.id })
+    .from(notesTable)
+    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
+    .limit(1);
+  if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
   let body: { label?: string | null } = {};
   try {
@@ -60,7 +78,6 @@ export async function PATCH(
     return NextResponse.json({ error: "Missing label field" }, { status: 400 });
   }
 
-  // Empty string and null both clear the label.
   const normalised =
     typeof body.label === "string" && body.label.trim().length > 0
       ? body.label.trim().slice(0, 200)
@@ -88,12 +105,18 @@ export async function DELETE(
   const { user } = await getAuthUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id, versionId } = await params;
-  const noteId = Number(id);
-  const versionIdNum = Number(versionId);
-  if (isNaN(noteId) || isNaN(versionIdNum)) {
+  const parsed = routeParamsSchema.safeParse(await params);
+  if (!parsed.success) {
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
+  const { id: noteId, versionId: versionIdNum } = parsed.data;
+
+  const [note] = await db
+    .select({ id: notesTable.id })
+    .from(notesTable)
+    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
+    .limit(1);
+  if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
   await db
     .delete(noteVersionsTable)

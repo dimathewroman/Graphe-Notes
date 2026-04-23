@@ -12,9 +12,14 @@
 // After creating, prune the oldest versions so each note keeps at most 50.
 
 import { type NextRequest, NextResponse } from "next/server";
-import { eq, desc, count } from "drizzle-orm";
+import { eq, and, desc, count } from "drizzle-orm";
+import { z } from "zod";
 import { db, noteVersionsTable, notesTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
+
+const routeParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
 
 const MAX_VERSIONS = 50;
 const AUTO_SAVE_MIN_INTERVAL_MS = 5 * 60 * 1000;
@@ -36,11 +41,18 @@ export async function GET(
   const { user } = await getAuthUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = await params;
-  const noteId = Number(id);
-  if (isNaN(noteId)) {
+  const parsed = routeParamsSchema.safeParse(await params);
+  if (!parsed.success) {
     return NextResponse.json({ error: "Invalid note id" }, { status: 400 });
   }
+  const noteId = parsed.data.id;
+
+  const [note] = await db
+    .select({ id: notesTable.id })
+    .from(notesTable)
+    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
+    .limit(1);
+  if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
   const versions = await db
     .select({
@@ -67,11 +79,11 @@ export async function POST(
   const { user } = await getAuthUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = await params;
-  const noteId = Number(id);
-  if (isNaN(noteId)) {
+  const parsed = routeParamsSchema.safeParse(await params);
+  if (!parsed.success) {
     return NextResponse.json({ error: "Invalid note id" }, { status: 400 });
   }
+  const noteId = parsed.data.id;
 
   let body: { source?: string; label?: string | null } = {};
   try {
@@ -89,7 +101,10 @@ export async function POST(
       ? body.label.trim().slice(0, 200)
       : null;
 
-  const [note] = await db.select().from(notesTable).where(eq(notesTable.id, noteId));
+  const [note] = await db
+    .select()
+    .from(notesTable)
+    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)));
   if (!note) {
     return NextResponse.json({ error: "Note not found" }, { status: 404 });
   }
