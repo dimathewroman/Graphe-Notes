@@ -114,13 +114,14 @@ export default function Home() {
   // persists across note switches — removing !!selectedNoteId prevents unmount/remount on each click.
   const showEditor = !isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && (bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "editor"));
   const showQuickBitEditor = activeFilter === "quickbits" && (bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "editor"));
-  const showList = bp === "desktop"
+  // Attachments renders its own full-width panel outside the list slot — don't show an empty list panel alongside it.
+  const showList = !isAttachments && (bp === "desktop"
     ? isNoteListOpen
     : bp === "tablet"
       // On tablet the list is open by default but NoteShell may collapse it
       // (e.g. when the version history panel is open) by clearing the flag.
       ? isNoteListOpen
-      : (bp === "mobile" && mobileView === "list");
+      : (bp === "mobile" && mobileView === "list"));
   const showDeletedDetail = isRecentlyDeleted && !!selectedNoteId && (bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor"));
 
   return (
@@ -227,7 +228,7 @@ export default function Home() {
             )}
           </AnimatePresence>
           {isAttachments && <AllAttachments />}
-          {bp === "desktop" && viewMode !== "gallery" && (showList || isAttachments) && (
+          {bp === "desktop" && viewMode !== "gallery" && showList && (
             <ResizeHandle
               onResize={handleNoteListResize}
               onResizeStart={() => setIsResizing(true)}

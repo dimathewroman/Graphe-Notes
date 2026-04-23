@@ -46,6 +46,9 @@ interface AppState {
   addDemoNoteId: (id: number) => void;
   resetDemoNoteIds: () => void;
 
+  demoExtraQbIds: number[];
+  addDemoQbId: (id: number) => void;
+
   setFilter: (filter: FilterType, idOrTag?: number | string | null) => void;
   setSearchQuery: (query: string) => void;
   setSort: (by: GetNotesSortBy, dir: GetNotesSortDir) => void;
@@ -99,6 +102,9 @@ export const useAppStore = create<AppState>((set) => ({
   demoExtraIds: [],
   addDemoNoteId: (id) => set((state) => ({ demoExtraIds: [...state.demoExtraIds, id] })),
   resetDemoNoteIds: () => set({ demoExtraIds: [] }),
+
+  demoExtraQbIds: [],
+  addDemoQbId: (id) => set((state) => ({ demoExtraQbIds: [...state.demoExtraQbIds, id] })),
 
   setFilter: (filter, idOrTag) => set({
     activeFilter: filter,
