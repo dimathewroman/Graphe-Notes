@@ -21,13 +21,13 @@ test.describe("Quick Bits", () => {
     expect(count).toBeGreaterThan(0);
   });
 
-  test("new Quick Bit button is visible (disabled in demo mode)", async ({ page }) => {
+  test("new Quick Bit button is visible and enabled in demo mode", async ({ page }) => {
     await page.getByTestId("nav-quickbits").click();
 
     const btn = page.getByTestId("new-quickbit-btn");
     await expect(btn).toBeVisible();
-    // In demo mode the button is disabled
-    await expect(btn).toBeDisabled();
+    // Demo mode supports QB creation — button must be enabled
+    await expect(btn).toBeEnabled();
   });
 
   test("clicking a Quick Bit selects it", async ({ page }) => {

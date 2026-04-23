@@ -130,10 +130,11 @@ test.describe("Micro-interactions — Quick Bits list", () => {
     expect(count).toBeGreaterThan(0);
   });
 
-  test("new Quick Bit button is present (disabled in demo mode)", async ({ page }) => {
+  test("new Quick Bit button is present and enabled in demo mode", async ({ page }) => {
     const btn = page.getByTestId("new-quickbit-btn");
     await expect(btn).toBeVisible();
-    await expect(btn).toBeDisabled();
+    // Demo mode supports QB creation — button must be enabled
+    await expect(btn).toBeEnabled();
   });
 
   test("selecting a Quick Bit item applies selected style", async ({ page }) => {
