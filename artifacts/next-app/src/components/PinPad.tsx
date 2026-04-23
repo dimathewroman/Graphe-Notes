@@ -99,19 +99,13 @@ export function PinPad({ title, subtitle, error, shakeKey = 0, filledDotClass = 
       {/* Dots row — shakes on wrong PIN */}
       <motion.div animate={shakeControls} className="flex items-center gap-2.5 h-10">
         {Array.from({ length: MAX_PIN_LENGTH }).map((_, i) => (
-          <motion.div
+          <div
             key={i}
-            animate={i < pin.length ? { scale: [1, 1.25, 1] } : { scale: 1 }}
-            transition={
-              anim.level === "full"
-                ? { type: "spring", stiffness: 600, damping: 15 }
-                : { duration: 0.15, ease: "easeOut" }
-            }
             className={cn(
-              "w-3 h-3 rounded-full border-2 transition-colors duration-150",
+              "w-3 h-3 rounded-full border-2 transition-all duration-150",
               i < pin.length
-                ? shaking ? "bg-destructive border-destructive" : filledDotClass
-                : "border-muted-foreground/30"
+                ? cn("scale-110", shaking ? "bg-destructive border-destructive" : filledDotClass)
+                : "scale-100 border-muted-foreground/30"
             )}
           />
         ))}
