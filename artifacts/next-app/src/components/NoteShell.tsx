@@ -87,19 +87,6 @@ export function NoteShell() {
   // Editor instance — set via GrapheEditor's onEditorReady callback
   const [editor, setEditor] = useState<Editor | null>(null);
 
-  // On mobile, when the soft keyboard opens (keyboardHeight increases), the
-  // visible viewport shrinks. Scroll the cursor into view so the user can always
-  // see what they're typing.
-  useEffect(() => {
-    if (bp !== "mobile" || !editor || !keyboardHeight) return;
-    // Give the browser one frame to reflow the layout after the keyboard appears
-    requestAnimationFrame(() => {
-      try {
-        editor.commands.scrollIntoView();
-      } catch { /* editor may be destroyed */ }
-    });
-  }, [keyboardHeight, bp, editor]);
-
   const createVersion = useCreateNoteVersion();
 
   // ── View transition animations ──────────────────────────────────────────────

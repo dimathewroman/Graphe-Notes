@@ -158,10 +158,13 @@
   @apply outline-none min-h-[300px] md:min-h-[500px] pb-32;
 }
 
-/* Preserve text colour when text is selected on mobile (Android Chrome uses
-   its own selection colour which defaults to black, ignoring the element's color).
-   `color: inherit` lets each span keep its applied colour through the highlight. */
+/* Preserve text colour when text is selected. Android Chrome forces its own
+   selection colour (black text on blue) which discards any applied colour.
+   Explicitly setting both properties restores a consistent highlight on all
+   platforms: a semi-transparent primary tint as background, the element's
+   own colour for the text. */
 .ProseMirror ::selection {
+  background-color: hsl(var(--primary) / 0.25);
   color: inherit;
 }
 

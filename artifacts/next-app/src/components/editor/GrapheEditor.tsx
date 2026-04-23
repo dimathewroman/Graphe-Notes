@@ -3,7 +3,7 @@
 // find/replace panel, and clipboard paste handling. It knows nothing about save logic,
 // note metadata, folders, tags, timers, or navigation.
 
-import { useEffect, useCallback, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import { useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import UnderlineExt from "@tiptap/extension-underline";
@@ -240,6 +240,60 @@ export function GrapheEditor({
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);
   }, [editor]);
+
+  // Mobile: keep the cursor above the fixed bottom toolbar.
+  // The browser's built-in scroll-into-view doesn't know about our toolbar, so
+  // after every selection change or document update we check whether the cursor
+  // is hidden behind the toolbar+keyboard and manually scroll the editor's own
+  // scroll container to expose it.  `keyboardHeight` is read via a ref so the
+  // effect doesn't re-subscribe on every keyboard animation frame.
+  const keyboardHeightRef = useRef(keyboardHeight);
+  keyboardHeightRef.current = keyboardHeight;
+
+  useEffect(() => {
+    if (bp !== "mobile" || !editor) return;
+
+    // Approximate height of the fixed mobile formatting toolbar (ScrollableToolbar).
+    // The toolbar uses min-h-[44px] buttons inside a scrollable strip — 56px is safe.
+    const TOOLBAR_HEIGHT = 56;
+
+    const ensureCursorVisible = () => {
+      // Defer one frame so ProseMirror's own DOM updates have settled
+      requestAnimationFrame(() => {
+        const { from } = editor.state.selection;
+        let coords: { top: number; bottom: number };
+        try {
+          coords = editor.view.coordsAtPos(from);
+        } catch {
+          return; // editor may have been destroyed
+        }
+
+        // The lowest pixel the user can actually see (above toolbar + keyboard + buffer)
+        const visibleBottom =
+          window.innerHeight - (keyboardHeightRef.current || 0) - TOOLBAR_HEIGHT - 16;
+
+        if (coords.bottom > visibleBottom) {
+          // Walk up the DOM from the ProseMirror root to find the scroll container
+          let el: HTMLElement | null = editor.view.dom as HTMLElement;
+          while (el && el !== document.body) {
+            const style = window.getComputedStyle(el);
+            if (style.overflowY === "auto" || style.overflowY === "scroll") {
+              el.scrollBy({ top: coords.bottom - visibleBottom, behavior: "instant" });
+              break;
+            }
+            el = el.parentElement;
+          }
+        }
+      });
+    };
+
+    editor.on("selectionUpdate", ensureCursorVisible);
+    editor.on("update", ensureCursorVisible);
+    return () => {
+      editor.off("selectionUpdate", ensureCursorVisible);
+      editor.off("update", ensureCursorVisible);
+    };
+  }, [bp, editor]); // keyboardHeight read via ref — no re-subscribe on each animation frame
 
   // Render nothing until editor is ready
   if (!editor) return null;
