@@ -1,6 +1,8 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Delete } from "lucide-react";
+import { motion, useAnimation } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useAnimationConfig } from "@/hooks/use-motion";
 
 const MAX_PIN_LENGTH = 6;
 
@@ -8,14 +10,20 @@ interface PinPadProps {
   title: string;
   subtitle?: string;
   error?: string;
+  /** Increment to trigger shake + sequential clear without remounting */
+  shakeKey?: number;
   onSubmit: (pin: string) => void;
   onCancel?: () => void;
   submitLabel?: string;
 }
 
-export function PinPad({ title, subtitle, error, onSubmit, onCancel, submitLabel = "Confirm" }: PinPadProps) {
+export function PinPad({ title, subtitle, error, shakeKey = 0, onSubmit, onCancel, submitLabel = "Confirm" }: PinPadProps) {
   const [pin, setPin] = useState("");
   const [pressed, setPressed] = useState<string | null>(null);
+  const [shaking, setShaking] = useState(false);
+  const shakeControls = useAnimation();
+  const anim = useAnimationConfig();
+  const prevShakeKey = useRef(shakeKey);
 
   const handleDigit = useCallback((digit: string) => {
     setPin(prev => prev.length < MAX_PIN_LENGTH ? prev + digit : prev);
@@ -32,6 +40,32 @@ export function PinPad({ title, subtitle, error, onSubmit, onCancel, submitLabel
   const handleSubmit = useCallback(() => {
     if (pin.length >= 4) onSubmit(pin);
   }, [pin, onSubmit]);
+
+  // Trigger shake + sequential dot clear when shakeKey increments
+  useEffect(() => {
+    if (shakeKey === prevShakeKey.current) return;
+    prevShakeKey.current = shakeKey;
+
+    setShaking(true);
+
+    if (anim.level !== "minimal") {
+      shakeControls.start({
+        x: [0, 10, -10, 6, -6, 3, -3, 0],
+        transition: { duration: 0.45, ease: "easeInOut" },
+      });
+    }
+
+    // Sequential dot clear: right-to-left, 50ms stagger
+    const currentLen = pin.length;
+    for (let i = currentLen - 1; i >= 0; i--) {
+      setTimeout(() => {
+        setPin(prev => prev.slice(0, i));
+        if (i === 0) setShaking(false);
+      }, (currentLen - 1 - i) * 50 + 300);
+    }
+    if (currentLen === 0) setShaking(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shakeKey]);
 
   // Keyboard input: digits 0-9, Backspace, Enter
   useEffect(() => {
@@ -60,19 +94,25 @@ export function PinPad({ title, subtitle, error, onSubmit, onCancel, submitLabel
         {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
       </div>
 
-      <div className="flex items-center gap-2.5 h-10">
+      {/* Dots row — shakes on wrong PIN */}
+      <motion.div animate={shakeControls} className="flex items-center gap-2.5 h-10">
         {Array.from({ length: MAX_PIN_LENGTH }).map((_, i) => (
-          <div
+          <motion.div
             key={i}
-            className={cn(
-              "w-3 h-3 rounded-full border-2 transition-all duration-150",
+            animate={
               i < pin.length
-                ? "bg-primary border-primary scale-110"
-                : "border-muted-foreground/30"
-            )}
+                ? { scale: [1, 1.25, 1], backgroundColor: shaking ? "hsl(var(--destructive))" : "hsl(var(--primary))", borderColor: shaking ? "hsl(var(--destructive))" : "hsl(var(--primary))" }
+                : { scale: 1, backgroundColor: "transparent", borderColor: "hsl(var(--muted-foreground) / 0.3)" }
+            }
+            transition={
+              anim.level === "full"
+                ? { type: "spring", stiffness: 600, damping: 15 }
+                : { duration: 0.15, ease: "easeOut" }
+            }
+            className="w-3 h-3 rounded-full border-2"
           />
         ))}
-      </div>
+      </motion.div>
 
       {error && <p className="text-xs text-destructive text-center">{error}</p>}
 

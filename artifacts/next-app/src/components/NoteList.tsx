@@ -542,7 +542,7 @@ export function NoteList() {
                   anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
                   selectedNoteId === note.id
                     ? "bg-primary/5 border-primary/30 shadow-sm"
-                    : "bg-transparent border-transparent hover:bg-panel-hover hover:border-panel-border"
+                    : "bg-card border-transparent hover:bg-panel-hover hover:border-panel-border"
                 )}
               >
                 {img && (
@@ -555,10 +555,10 @@ export function NoteList() {
                   <div className="flex items-center justify-between mb-1 gap-1">
                     {/* min-w-0 on h3 allows truncation to work inside flex.
                         Wrap text in <span> so emoji + text truncate as a unit. */}
-                    <h3 className="font-medium text-sm text-foreground/90 flex items-center gap-1 flex-1 min-w-0">
+                    <h3 className="font-semibold text-sm text-foreground/90 flex items-center gap-1 flex-1 min-w-0">
                       {note.pinned && <Pin className="w-2.5 h-2.5 shrink-0 text-primary fill-primary" />}
                       {note.vaulted && <ShieldCheck className="w-2.5 h-2.5 shrink-0 text-indigo-400" />}
-                      <span className="truncate">{note.title || "Untitled Note"}</span>
+                      <span className="line-clamp-2">{note.title || "Untitled Note"}</span>
                     </h3>
                     {/* Smaller touch target in gallery cards — 44px is too large for a narrow card */}
                     <button
@@ -571,12 +571,12 @@ export function NoteList() {
                       <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
                     </button>
                   </div>
-                  <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                  <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
                     {note.vaulted ? "🔒 Vault note" : (note.contentText || "No content")}
                   </p>
                   {/* mt-auto pins footer to the bottom when grid stretches the card */}
                   <div className="flex items-center justify-between mt-auto pt-1.5 gap-1">
-                    <span className="text-[9px] text-muted-foreground/70 font-mono">{formatDate(note.updatedAt)}</span>
+                    <span className="text-xs text-muted-foreground/70 font-mono">{formatDate(note.updatedAt)}</span>
                     <div className="flex items-center gap-1 shrink-0">
                       {note.favorite && <Star className="w-2.5 h-2.5 fill-current text-yellow-500" />}
                       {img && <ImageIcon className="w-2.5 h-2.5 text-muted-foreground opacity-60" />}
@@ -606,12 +606,12 @@ export function NoteList() {
                 anim.useScale && "hover:-translate-y-[1px] active:scale-[0.98]",
                 selectedNoteId === note.id
                   ? "bg-primary/5 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"
-                  : "border-l-2 border-l-transparent border-y border-y-transparent border-r border-r-transparent hover:bg-panel-hover"
+                  : "bg-card border-l-2 border-l-transparent border-y border-y-transparent border-r border-r-transparent hover:bg-panel-hover"
               )}
             >
               <div className="flex items-start justify-between mb-1">
                 <h3 className={cn(
-                  "font-medium truncate pr-2 text-sm flex items-center gap-1.5",
+                  "font-semibold truncate pr-2 text-sm flex items-center gap-1.5",
                   selectedNoteId === note.id ? "text-foreground" : "text-foreground/90"
                 )}>
                   {note.pinned && <Pin className="w-3 h-3 shrink-0 text-primary fill-primary" />}
@@ -633,7 +633,7 @@ export function NoteList() {
                 {note.vaulted ? "🔒 Vault note" : (note.contentText || "No content")}
               </p>
               <div className="flex items-center justify-between mt-auto">
-                <span className="text-[10px] text-muted-foreground/70 font-mono">{formatDate(note.updatedAt)}</span>
+                <span className="text-xs text-muted-foreground/70 font-mono">{formatDate(note.updatedAt)}</span>
                 {note.tags && note.tags.length > 0 && (
                   <div className="flex gap-1 overflow-hidden">
                     {note.tags.slice(0, 2).map(tag => (

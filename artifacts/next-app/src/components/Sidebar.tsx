@@ -147,9 +147,11 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       } else if (vaultModal === "unlock") {
         const stored = sessionStorage.getItem(DEMO_VAULT_KEY);
         if (stored && stored === hash) {
+          posthog.capture("vault_unlock_attempted", { success: true, source: "sidebar", timestamp: new Date().toISOString() });
           setVaultUnlocked(true);
           setVaultModal(null);
         } else {
+          posthog.capture("vault_unlock_attempted", { success: false, source: "sidebar", timestamp: new Date().toISOString() });
           setVaultError("Wrong PIN.");
         }
       } else if (vaultModal === "change-password" && newHash) {
@@ -171,6 +173,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         queryClient.invalidateQueries({ queryKey: ["/api/vault/status"] });
       } else if (vaultModal === "unlock") {
         await unlockVaultMut.mutateAsync({ data: { passwordHash: hash } });
+        posthog.capture("vault_unlock_attempted", { success: true, source: "sidebar", timestamp: new Date().toISOString() });
         setVaultUnlocked(true);
         setVaultModal(null);
       } else if (vaultModal === "change-password" && newHash) {
@@ -178,6 +181,9 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         setVaultModal(null);
       }
     } catch {
+      if (vaultModal === "unlock") {
+        posthog.capture("vault_unlock_attempted", { success: false, source: "sidebar", timestamp: new Date().toISOString() });
+      }
       setVaultError(vaultModal === "unlock" ? "Wrong PIN." : vaultModal === "change-password" ? "Wrong current PIN." : "Failed to set up vault.");
     }
   };

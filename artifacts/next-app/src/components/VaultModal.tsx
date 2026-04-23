@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
-import { X, ShieldCheck, Lock, KeyRound } from "lucide-react";
+import { X, ShieldCheck, Lock, KeyRound, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PinPad } from "./PinPad";
 
@@ -28,21 +28,21 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
   const [firstPin, setFirstPin] = useState("");
   const [currentPin, setCurrentPin] = useState("");
   const [error, setError] = useState("");
-  // Incremented whenever an external (server-side) error arrives so the PinPad
-  // remounts with an empty pin — prevents the user from accidentally re-submitting
-  // their failed PIN by pressing Unlock/Confirm again without clearing the dots.
-  const [errorResetKey, setErrorResetKey] = useState(0);
+  const [shakeKey, setShakeKey] = useState(0);
+  const [unlockSuccess, setUnlockSuccess] = useState(false);
 
+  // Shake (not remount) on external server errors; cancel any optimistic success
   useEffect(() => {
     if (externalError) {
-      setErrorResetKey(k => k + 1);
+      setUnlockSuccess(false);
+      setShakeKey(k => k + 1);
     }
   }, [externalError]);
 
-  // Also reset the PinPad dots when a local error is set (e.g. wrong current PIN on verify)
+  // Also shake when a local error fires (e.g. wrong current PIN on verify)
   useEffect(() => {
     if (error) {
-      setErrorResetKey(k => k + 1);
+      setShakeKey(k => k + 1);
     }
   }, [error]);
 
@@ -70,7 +70,8 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
 
     if (mode === "unlock") {
       const hash = await sha256(pin);
-      onConfirm(hash);
+      setUnlockSuccess(true);
+      setTimeout(() => onConfirm(hash), 350);
       return;
     }
 
@@ -148,26 +149,37 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
         </button>
 
         <div className="flex items-center gap-3 mb-5">
-          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center border", headerConfig.bg)}>
-            {headerConfig.icon}
-          </div>
+          <motion.div
+            animate={unlockSuccess ? { scale: [1, 1.2, 1] } : { scale: 1 }}
+            transition={{ type: "spring", stiffness: 400, damping: 15 }}
+            className={cn("w-10 h-10 rounded-xl flex items-center justify-center border", unlockSuccess ? "bg-emerald-500/10 border-emerald-500/20" : headerConfig.bg)}
+          >
+            {unlockSuccess
+              ? <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              : headerConfig.icon}
+          </motion.div>
           <div>
             <h2 className="font-semibold text-foreground">
-              {mode === "setup" ? "Set Up Vault" : mode === "change-password" ? "Change Vault PIN" : "Unlock Vault"}
+              {unlockSuccess ? "Vault Unlocked" : mode === "setup" ? "Set Up Vault" : mode === "change-password" ? "Change Vault PIN" : "Unlock Vault"}
             </h2>
-            <p className="text-xs text-muted-foreground">Secure your notes with a PIN</p>
+            <p className="text-xs text-muted-foreground">
+              {unlockSuccess ? "Opening your notes…" : "Secure your notes with a PIN"}
+            </p>
           </div>
         </div>
 
-        <PinPad
-          key={`${step}-${errorResetKey}`}
-          title={title}
-          subtitle={subtitle}
-          error={displayError}
-          onSubmit={handlePinSubmit}
-          onCancel={onCancel}
-          submitLabel={step === "confirm" || step === "new-confirm" ? "Confirm" : mode === "unlock" ? "Unlock" : "Next"}
-        />
+        {!unlockSuccess && (
+          <PinPad
+            key={step}
+            title={title}
+            subtitle={subtitle}
+            error={displayError}
+            shakeKey={shakeKey}
+            onSubmit={handlePinSubmit}
+            onCancel={onCancel}
+            submitLabel={step === "confirm" || step === "new-confirm" ? "Confirm" : mode === "unlock" ? "Unlock" : "Next"}
+          />
+        )}
       </motion.div>
     </div>
   );
