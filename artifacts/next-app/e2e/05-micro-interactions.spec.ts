@@ -189,6 +189,7 @@ test.describe("Micro-interactions — console errors", () => {
           "net::ERR_FAILED", // Supabase auth check failing in demo mode is expected
           "Failed to load resource", // Offline asset in dev is expected
           "Invalid Sentry Dsn", // placeholder DSN in CI env
+          "[PostHog.js]", // placeholder PostHog key in CI env causes 404/401 noise
           // PRE-EXISTING BUG (exists on master, not introduced by micro-interactions):
           // NoteList renders note ID 9 with duplicate keys during certain navigations.
           // Tracked separately — do not let this mask new errors from this branch.
