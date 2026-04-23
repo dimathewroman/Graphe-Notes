@@ -641,13 +641,13 @@ export function SettingsModal() {
               </div>
 
               <div className="flex-1 overflow-y-auto">
-              <AnimatePresence>
+              <AnimatePresence mode="wait">
               <motion.div
                 key={activeTab}
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.15, ease: "easeOut" }}
+                transition={{ duration: 0.12, ease: "easeOut" }}
                 className="p-6 space-y-6"
               >
 
