@@ -12,12 +12,14 @@ interface PinPadProps {
   error?: string;
   /** Increment to trigger shake + sequential clear without remounting */
   shakeKey?: number;
+  /** Tailwind bg class for filled dots — defaults to bg-primary */
+  filledDotClass?: string;
   onSubmit: (pin: string) => void;
   onCancel?: () => void;
   submitLabel?: string;
 }
 
-export function PinPad({ title, subtitle, error, shakeKey = 0, onSubmit, onCancel, submitLabel = "Confirm" }: PinPadProps) {
+export function PinPad({ title, subtitle, error, shakeKey = 0, filledDotClass = "bg-primary border-primary", onSubmit, onCancel, submitLabel = "Confirm" }: PinPadProps) {
   const [pin, setPin] = useState("");
   const [pressed, setPressed] = useState<string | null>(null);
   const [shaking, setShaking] = useState(false);
@@ -108,7 +110,7 @@ export function PinPad({ title, subtitle, error, shakeKey = 0, onSubmit, onCance
             className={cn(
               "w-3 h-3 rounded-full border-2 transition-colors duration-150",
               i < pin.length
-                ? shaking ? "bg-destructive border-destructive" : "bg-primary border-primary"
+                ? shaking ? "bg-destructive border-destructive" : filledDotClass
                 : "border-muted-foreground/30"
             )}
           />
