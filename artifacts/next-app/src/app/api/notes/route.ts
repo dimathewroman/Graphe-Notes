@@ -42,8 +42,9 @@ export async function GET(request: NextRequest) {
     conditions.push(eq(notesTable.favorite, favorite));
   }
   if (search) {
+    const escaped = search.replace(/[%_\\]/g, "\\$&");
     conditions.push(
-      or(ilike(notesTable.title, `%${search}%`), ilike(notesTable.contentText, `%${search}%`))!,
+      or(ilike(notesTable.title, `%${escaped}%`), ilike(notesTable.contentText, `%${escaped}%`))!,
     );
   }
   if (tag) {
