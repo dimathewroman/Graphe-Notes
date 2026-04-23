@@ -544,7 +544,7 @@ export function NoteList() {
                   "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden",
                   anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
                   selectedNoteId === note.id
-                    ? "bg-primary/5 border-primary/30 shadow-sm"
+                    ? "bg-primary/10 border-primary/30 shadow-sm"
                     : "bg-card border-transparent hover:bg-panel-hover hover:border-panel-border"
                 )}
               >
@@ -606,7 +606,7 @@ export function NoteList() {
                 "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
                 anim.useScale && "hover:-translate-y-[1px] active:scale-[0.98]",
                 selectedNoteId === note.id
-                  ? "bg-primary/5 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"
+                  ? "bg-primary/10 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"
                   : "bg-card border-l-2 border-l-transparent border-y border-y-transparent border-r border-r-transparent hover:bg-panel-hover"
               )}
             >
@@ -657,7 +657,7 @@ export function NoteList() {
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 min-w-[200px] bg-popover text-popover-foreground border border-panel-border rounded-xl shadow-2xl shadow-black/40 py-1 overflow-visible backdrop-blur-none"
+          className="fixed z-50 min-w-[200px] bg-popover text-popover-foreground border border-panel-border rounded-xl shadow-2xl shadow-black/40 py-1 overflow-visible backdrop-blur-none luminance-border-top"
           style={clampMenuStyle(contextMenu.x, contextMenu.y)}
         >
           <ContextMenuItem
@@ -742,7 +742,7 @@ export function NoteList() {
                   onClick={() => { setMoveMenuNoteId(moveMenuNoteId === contextMenu.noteId ? null : contextMenu.noteId); setShowTagsPanel(false); }}
                 />
                 {moveMenuNoteId === contextMenu.noteId && (
-                  <div className={cn("absolute top-0 min-w-[150px] bg-popover text-popover-foreground border border-panel-border rounded-xl shadow-2xl shadow-black/40 py-1 z-50", contextMenu.x > window.innerWidth / 2 ? "right-full mr-1" : "left-full ml-1")}>
+                  <div className={cn("absolute top-0 min-w-[150px] bg-popover text-popover-foreground border border-panel-border rounded-xl shadow-2xl shadow-black/40 py-1 z-50 luminance-border-top", contextMenu.x > window.innerWidth / 2 ? "right-full mr-1" : "left-full ml-1")}>
                     <ContextMenuItem icon={<FileText className="w-4 h-4" />} label="No folder" onClick={() => moveNote(contextMenu.noteId, null)} />
                     {folders.map(f => (
                       <ContextMenuItem key={f.id} icon={<FileText className="w-4 h-4" />} label={f.name} onClick={() => moveNote(contextMenu.noteId, f.id)} />

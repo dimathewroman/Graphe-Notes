@@ -72,7 +72,7 @@ function ImageUrlButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
         <div
           ref={popRef}
           style={style}
-          className="bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-2 flex flex-col gap-2"
+          className="bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-2 flex flex-col gap-2 luminance-border-top"
           onMouseDown={e => e.preventDefault()}
         >
           <p className="text-xs text-muted-foreground px-1">Image URL</p>

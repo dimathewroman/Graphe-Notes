@@ -67,7 +67,7 @@ export function LinkPopover({ editor }: { editor: ReturnType<typeof useEditor> }
       {linkPopover.visible && (
         <div
           ref={linkPopoverRef}
-          className="absolute top-full mt-1.5 z-30 flex items-center gap-1.5 bg-popover border border-panel-border rounded-xl shadow-xl px-3 py-2 min-w-[280px]"
+          className="absolute top-full mt-1.5 z-30 flex items-center gap-1.5 bg-popover border border-panel-border rounded-xl shadow-xl px-3 py-2 min-w-[280px] luminance-border-top"
           style={{ left: linkLeft }}
         >
           <Link2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />

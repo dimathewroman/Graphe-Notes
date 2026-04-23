@@ -115,7 +115,7 @@ export function WordCountPopover({ editor }: WordCountPopoverProps) {
       {open && createPortal(
         <div
           ref={menuRef}
-          className="fixed z-50 bg-popover border border-panel-border rounded-xl shadow-2xl p-3 w-48"
+          className="fixed z-50 bg-popover border border-panel-border rounded-xl shadow-2xl p-3 w-48 luminance-border-top"
           style={{ top: pos.top, left: pos.left }}
         >
           <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">

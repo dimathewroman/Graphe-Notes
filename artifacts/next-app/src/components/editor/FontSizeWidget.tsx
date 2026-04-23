@@ -172,7 +172,7 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
       {dropdownOpen && createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-50 bg-popover border border-panel-border rounded-xl shadow-2xl py-1.5 w-20 max-h-64 overflow-y-auto"
+          className="fixed z-50 bg-popover border border-panel-border rounded-xl shadow-2xl py-1.5 w-20 max-h-64 overflow-y-auto luminance-border-top"
           style={{ top: pos.top, left: pos.left }}
           onMouseEnter={() => { if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current); }}
           onMouseLeave={handleHoverLeave}

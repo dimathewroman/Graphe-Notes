@@ -62,7 +62,7 @@ function ImageToolbar({
     <div
       ref={ref}
       style={style}
-      className="bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1.5 flex flex-col gap-1"
+      className="bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1.5 flex flex-col gap-1 luminance-border-top"
       onMouseDown={(e) => e.stopPropagation()}
     >
       {/* Source badge row */}

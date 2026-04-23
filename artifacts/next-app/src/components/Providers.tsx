@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TokenSync } from "@/lib/token-sync";
 import { PHProvider } from "@/components/PostHogProvider";
 import { useMotionInit } from "@/hooks/use-motion";
+import { useAtmosphereInit } from "@/hooks/use-atmosphere";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -28,11 +29,17 @@ function MotionInit() {
   return null;
 }
 
+function AtmosphereInit() {
+  useAtmosphereInit();
+  return null;
+}
+
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <PHProvider>
       <QueryClientProvider client={queryClient}>
         <MotionInit />
+        <AtmosphereInit />
         <TokenSync />
         <Toaster />
         {children}

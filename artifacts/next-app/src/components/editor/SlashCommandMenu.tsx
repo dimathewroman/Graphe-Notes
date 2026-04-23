@@ -365,7 +365,7 @@ export function SlashCommandMenu({ editor }: SlashCommandMenuProps) {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, transition: { duration: 0.1 } }}
           transition={anim.fastTransition}
-          className="fixed z-50 w-64 bg-popover border border-panel-border rounded-xl shadow-2xl py-1.5 overflow-hidden"
+          className="fixed z-50 w-64 bg-popover border border-panel-border rounded-xl shadow-2xl py-1.5 overflow-hidden luminance-border-top"
           style={{ top: position.top, left: position.left }}
           data-testid="slash-command-menu"
         >

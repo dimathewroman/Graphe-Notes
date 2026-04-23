@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import {
   X, Key, Cloud, Download, Server, Palette, Sun, Moon, Monitor,
   AlertCircle, CheckCircle2, Shield, ShieldCheck, KeyRound, LogOut, Zap, Eye, EyeOff,
-  Wind, Minus,
+  Wind, Minus, CircleDot, Contrast, Accessibility,
 } from "lucide-react";
 import { NotificationCadenceEditor } from "./NotificationCadenceEditor";
 import { useAppStore } from "@/store";
-import type { MotionLevel } from "@/store";
+import type { MotionLevel, DarkModeLevel, ColorblindMode } from "@/store";
+import { applyDarkModeLevel, applyColorblindMode } from "@/hooks/use-atmosphere";
 import posthog from "posthog-js";
 import { useAuth } from "@/hooks/use-auth";
 import { IconButton } from "./ui/IconButton";
@@ -50,7 +51,7 @@ function applyTheme(mode: ThemeMode, accent: string) {
 }
 
 export function SettingsModal() {
-  const { isSettingsOpen, setSettingsOpen, settingsInitialTab, motionLevel, setMotionLevel } = useAppStore();
+  const { isSettingsOpen, setSettingsOpen, settingsInitialTab, motionLevel, setMotionLevel, darkModeLevel, setDarkModeLevel, colorblindMode, setColorblindMode } = useAppStore();
   const { user, logout } = useAuth();
   const bp = useBreakpoint();
   const isMobile = bp === "mobile";
@@ -61,6 +62,16 @@ export function SettingsModal() {
     try {
       posthog.capture("motion_level_changed", { level, timestamp: new Date().toISOString() });
     } catch { /* PostHog may not be ready */ }
+  };
+
+  const handleDarkLevelChange = (level: DarkModeLevel) => {
+    setDarkModeLevel(level);
+    applyDarkModeLevel(level);
+  };
+
+  const handleColorblindChange = (mode: ColorblindMode) => {
+    setColorblindMode(mode);
+    applyColorblindMode(mode);
   };
 
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
@@ -550,7 +561,7 @@ export function SettingsModal() {
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1, transition: { type: "spring", stiffness: 380, damping: 30 } }}
             exit={{ opacity: 0, transition: { duration: 0.15, ease: "easeOut" } }}
-            className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-[720px] md:h-[min(580px,80vh)] bg-panel border border-panel-border rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col md:flex-row"
+            className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-[720px] md:h-[min(580px,80vh)] bg-panel border border-panel-border rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col md:flex-row luminance-border-top"
           >
             {/* Left sidebar nav */}
             <div className="hidden md:flex flex-col w-[200px] border-r border-panel-border bg-background/40 shrink-0">
@@ -747,6 +758,67 @@ export function SettingsModal() {
                         <button className="px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-medium">Button</button>
                       </div>
                     </div>
+                  </section>
+
+                  {/* Dark mode level — only shown in dark mode */}
+                  {themeMode === "dark" && (
+                    <section className="space-y-3">
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dark Intensity</h3>
+                      <div className="grid grid-cols-3 gap-2">
+                        {([
+                          { id: "soft" as DarkModeLevel, label: "Soft", icon: Moon, desc: "Warm & gentle", swatch: "#1C1F28" },
+                          { id: "default" as DarkModeLevel, label: "Dark", icon: CircleDot, desc: "Balanced depth", swatch: "#151720" },
+                          { id: "oled" as DarkModeLevel, label: "OLED", icon: Contrast, desc: "True black", swatch: "#000000" },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.id}
+                            onClick={() => handleDarkLevelChange(opt.id)}
+                            data-testid={`dark-level-${opt.id}`}
+                            className={cn(
+                              "flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-sm font-medium",
+                              darkModeLevel === opt.id
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-panel-border bg-background hover:border-primary/40 text-muted-foreground hover:text-foreground"
+                            )}
+                          >
+                            <span className="w-5 h-5 rounded-full border border-panel-border shrink-0" style={{ backgroundColor: opt.swatch }} />
+                            <span>{opt.label}</span>
+                            <span className="text-[9px] font-normal opacity-70">{opt.desc}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  )}
+
+                  {/* Accessibility — colorblind modes */}
+                  <section className="space-y-3">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Accessibility</h3>
+                    <div className="grid grid-cols-3 gap-2">
+                      {([
+                        { id: "none" as ColorblindMode, label: "Default", desc: "Standard colors" },
+                        { id: "protanopia" as ColorblindMode, label: "P/D", desc: "Red-green safe" },
+                        { id: "tritanopia" as ColorblindMode, label: "Trit.", desc: "Blue-yellow safe" },
+                      ] as const).map((opt) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => handleColorblindChange(opt.id)}
+                          data-testid={`colorblind-${opt.id}`}
+                          className={cn(
+                            "flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all text-sm font-medium",
+                            colorblindMode === opt.id
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "border-panel-border bg-background hover:border-primary/40 text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          <Accessibility className="w-4 h-4" />
+                          <span>{opt.label}</span>
+                          <span className="text-[9px] font-normal opacity-70">{opt.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      Remaps semantic colors (errors, success, warnings) for colorblind users. P/D = Protanopia &amp; Deuteranopia.
+                    </p>
                   </section>
                 </>
               )}

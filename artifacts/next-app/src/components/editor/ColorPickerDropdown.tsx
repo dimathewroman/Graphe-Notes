@@ -314,7 +314,7 @@ export function ColorPickerDropdown({ type, editor, onClose, triggerRef }: Color
   return createPortal(
     <div
       ref={containerRef}
-      className="fixed z-50 bg-popover border border-panel-border rounded-xl shadow-2xl p-3 w-56"
+      className="fixed z-50 bg-popover border border-panel-border rounded-xl shadow-2xl p-3 w-56 luminance-border-top"
       style={{ top: pos.top, left: pos.left }}
     >
       {/* None / Remove option */}

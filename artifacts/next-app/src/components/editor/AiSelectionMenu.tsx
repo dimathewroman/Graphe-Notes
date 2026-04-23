@@ -171,7 +171,7 @@ export function AiSelectionMenu({
       onMouseDown={(e) => e.preventDefault()}
     >
       <div className={cn(
-        "bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1",
+        "bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 luminance-border-top",
         isMobile ? "flex flex-wrap items-center gap-0.5" : "flex items-center gap-0.5"
       )}>
         <span className="text-xs text-muted-foreground px-2 font-medium flex items-center gap-1">
@@ -216,7 +216,7 @@ export function AiSelectionMenu({
             {expandedGroup === group.label && (
               <div
                 className={cn(
-                  "bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 min-w-[160px] z-50",
+                  "bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 min-w-[160px] z-50 luminance-border-top",
                   isMobile
                     ? "fixed left-2 right-2"
                     : dropdownDir === "up"
@@ -263,7 +263,7 @@ export function AiSelectionMenu({
                         {expandedAction === action.id && (
                           <div
                             className={cn(
-                              "bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 min-w-[180px] z-50",
+                              "bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 p-1 min-w-[180px] z-50 luminance-border-top",
                               isMobile
                                 ? "pl-4 border-l border-t-0 border-r-0 border-b-0 rounded-none shadow-none"
                                 : dropdownDir === "up"
