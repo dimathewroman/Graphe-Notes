@@ -41,7 +41,7 @@ jobs:
           SUPABASE_DB_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
           NEXT_PUBLIC_POSTHOG_KEY: phc_placeholder
           NEXT_PUBLIC_POSTHOG_HOST: https://app.posthog.com
-          AI_KEY_ENCRYPTION_SECRET: 0000000000000000000000000000000000000000000000000000000000000000
+          AI_KEY_ENCRYPTION_SECRET: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
   e2e:
     name: E2E Tests
