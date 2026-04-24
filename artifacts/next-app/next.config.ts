@@ -10,7 +10,7 @@ const cspDirectives = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.i.posthog.com https://us-assets.i.posthog.com",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' blob: data: https://*.supabase.co",
+  "img-src 'self' blob: data: https://*.supabase.co https://lh3.googleusercontent.com",
   "font-src 'self' data:",
   // Sentry ingest endpoints must be in connect-src so error reports are not blocked.
   // worker-src must be set explicitly (with blob:) because Sentry's SDK uses a blob:
