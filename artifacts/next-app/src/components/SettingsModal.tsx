@@ -12,7 +12,7 @@ import posthog from "posthog-js";
 import { useAuth } from "@/hooks/use-auth";
 import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
-import { cn, sha256 } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import { PinPad } from "./PinPad";
@@ -417,11 +417,11 @@ export function SettingsModal() {
             setSecurityLoading(false);
             return;
           }
-          const hash = await sha256(pin);
+          // Send plaintext PIN — hashing happens server-side with bcrypt
           const res = await authenticatedFetch("/api/vault/setup", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ passwordHash: hash }),
+            body: JSON.stringify({ pin }),
           });
           if (!res.ok) throw new Error("Setup failed");
           setVaultConfigured(true);
@@ -433,19 +433,18 @@ export function SettingsModal() {
         if (securityStep === "current") {
           // Verify the current PIN against the server immediately — don't let
           // the user type their new PIN only to find out the current one was wrong.
-          const currentHash = await sha256(pin);
           const verifyRes = await authenticatedFetch("/api/vault/unlock", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ passwordHash: currentHash }),
+            body: JSON.stringify({ pin }),
           });
           if (!verifyRes.ok) {
             setSecurityError("Incorrect PIN. Please try again.");
             setSecurityLoading(false);
             return;
           }
-          // Store the hash (already computed) so we don't need to rehash later.
-          setSecurityCurrentPin(currentHash);
+          // Store the plaintext PIN so we can send it in the change-password call.
+          setSecurityCurrentPin(pin);
           setSecurityStep("new");
           setSecurityLoading(false);
           return;
@@ -464,13 +463,11 @@ export function SettingsModal() {
             setSecurityLoading(false);
             return;
           }
-          // securityCurrentPin is already the hash (set at the "current" step above).
-          const currentHash = securityCurrentPin;
-          const newHash = await sha256(pin);
+          // Send plaintext PINs — hashing happens server-side with bcrypt
           const res = await authenticatedFetch("/api/vault/change-password", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ currentPasswordHash: currentHash, newPasswordHash: newHash }),
+            body: JSON.stringify({ currentPin: securityCurrentPin, newPin: pin }),
           });
           if (!res.ok) {
             const data = await res.json().catch(() => ({}));

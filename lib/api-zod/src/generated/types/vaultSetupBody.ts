@@ -7,5 +7,6 @@
  */
 
 export interface VaultSetupBody {
-  passwordHash: string;
+  /** Plaintext PIN (4–6 digits). Hashed server-side with bcrypt. */
+  pin: string;
 }

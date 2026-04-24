@@ -4,21 +4,25 @@ import { X, ShieldCheck, Lock, KeyRound, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PinPad } from "./PinPad";
 
-async function sha256(text: string): Promise<string> {
-  const encoded = new TextEncoder().encode(text);
-  const buf = await crypto.subtle.digest("SHA-256", encoded);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
 interface VaultModalProps {
   mode: "setup" | "unlock" | "change-password";
-  onConfirm: (hash: string, newHash?: string) => void;
+  /**
+   * Called with the plaintext PIN(s) when the user completes the flow.
+   * The server is now responsible for hashing — do NOT hash on the client.
+   *
+   * - setup/unlock:       onConfirm(pin)
+   * - change-password:    onConfirm(currentPin, newPin)
+   */
+  onConfirm: (pin: string, newPin?: string) => void;
   onCancel: () => void;
   error?: string;
-  /** Optional: called with the SHA-256 hash of the current PIN when in change-password mode.
-   *  Should return true if the PIN is correct, false otherwise.
-   *  When provided, wrong current PINs are rejected immediately at step 1. */
-  onVerifyCurrentPin?: (hash: string) => Promise<boolean>;
+  /**
+   * Optional early verification of the current PIN in change-password mode.
+   * Receives the plaintext PIN; should return true if the server accepts it.
+   * When provided, the wrong current PIN is rejected immediately at step 1
+   * before the user is asked for a new PIN.
+   */
+  onVerifyCurrentPin?: (pin: string) => Promise<boolean>;
 }
 
 type PinStep = "enter" | "confirm" | "current" | "new" | "new-confirm";
@@ -69,9 +73,9 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
     setError("");
 
     if (mode === "unlock") {
-      const hash = await sha256(pin);
+      // Pass plaintext PIN — hashing happens server-side
       setUnlockSuccess(true);
-      setTimeout(() => onConfirm(hash), 350);
+      setTimeout(() => onConfirm(pin), 350);
       return;
     }
 
@@ -88,23 +92,22 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
           setStep("enter");
           return;
         }
-        const hash = await sha256(pin);
-        onConfirm(hash);
+        // Pass plaintext PIN — hashing happens server-side
+        onConfirm(pin);
         return;
       }
     }
 
     if (mode === "change-password") {
       if (step === "current") {
-        const hash = await sha256(pin);
         if (onVerifyCurrentPin) {
-          const ok = await onVerifyCurrentPin(hash);
+          const ok = await onVerifyCurrentPin(pin);
           if (!ok) {
             setError("Incorrect PIN. Please try again.");
             return;
           }
         }
-        setCurrentPin(hash); // store the hash directly to avoid recomputing later
+        setCurrentPin(pin);
         setStep("new");
         return;
       }
@@ -120,9 +123,8 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
           setStep("new");
           return;
         }
-        const currentHash = currentPin; // already a SHA-256 hash stored at the "current" step
-        const newHash = await sha256(pin);
-        onConfirm(currentHash, newHash);
+        // Pass both plaintext PINs — hashing happens server-side
+        onConfirm(currentPin, pin);
         return;
       }
     }

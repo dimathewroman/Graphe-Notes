@@ -4,10 +4,21 @@ import { db, vaultSettingsTable } from "@workspace/db";
 import { SetupVaultBody, SetupVaultResponse } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
+import { vaultSetupLimiter } from "@/lib/rate-limit";
+import { hashPin } from "@/lib/vault-hash";
 
 export async function POST(request: NextRequest) {
   const { user } = await getAuthUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Rate limit: 3 setup attempts per hour per user
+  const rl = await vaultSetupLimiter.check(user.id);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many setup attempts. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } },
+    );
+  }
 
   const body = await request.json();
   const parsed = SetupVaultBody.safeParse(body);
@@ -25,9 +36,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Vault is already configured" }, { status: 409 });
   }
 
+  // Hash the PIN server-side before storing
+  const passwordHash = await hashPin(parsed.data.pin);
+
   await db
     .insert(vaultSettingsTable)
-    .values({ userId: user.id, passwordHash: parsed.data.passwordHash });
+    .values({ userId: user.id, passwordHash });
 
   getPostHogClient().capture({ distinctId: user.id, event: "vault_setup_completed" });
   return NextResponse.json(SetupVaultResponse.parse({ isConfigured: true }));

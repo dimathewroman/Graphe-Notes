@@ -7,5 +7,6 @@
  */
 
 export interface VaultUnlockBody {
-  passwordHash: string;
+  /** Plaintext PIN. Verified server-side with bcrypt.compare(). */
+  pin: string;
 }

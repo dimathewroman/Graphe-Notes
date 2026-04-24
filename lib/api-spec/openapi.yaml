@@ -1389,29 +1389,33 @@ components:
     VaultSetupBody:
       type: object
       properties:
-        passwordHash:
+        pin:
           type: string
+          description: Plaintext PIN (4–6 digits). Hashed server-side with bcrypt.
       required:
-        - passwordHash
+        - pin
 
     VaultUnlockBody:
       type: object
       properties:
-        passwordHash:
+        pin:
           type: string
+          description: Plaintext PIN. Verified server-side with bcrypt.compare().
       required:
-        - passwordHash
+        - pin
 
     VaultChangePasswordBody:
       type: object
       properties:
-        currentPasswordHash:
+        currentPin:
           type: string
-        newPasswordHash:
+          description: Current plaintext PIN for verification.
+        newPin:
           type: string
+          description: New plaintext PIN. Hashed server-side with bcrypt.
       required:
-        - currentPasswordHash
-        - newPasswordHash
+        - currentPin
+        - newPin
 
     VaultStatusResponse:
       type: object

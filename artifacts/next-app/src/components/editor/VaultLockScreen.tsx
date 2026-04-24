@@ -25,7 +25,7 @@ export function VaultLockScreen({
   onBack: () => void;
   showVaultUnlockModal: boolean;
   onRequestUnlock: () => void;
-  onUnlockConfirm: (hash: string) => Promise<void>;
+  onUnlockConfirm: (pin: string) => Promise<void>;
   onUnlockCancel: () => void;
   vaultUnlockError: string;
 }) {
