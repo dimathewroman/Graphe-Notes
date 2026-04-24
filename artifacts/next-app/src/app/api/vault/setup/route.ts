@@ -4,10 +4,20 @@ import { db, vaultSettingsTable } from "@workspace/db";
 import { SetupVaultBody, SetupVaultResponse } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
+import { vaultSetupLimiter } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   const { user } = await getAuthUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Rate limit: 3 setup attempts per hour per user
+  const rl = await vaultSetupLimiter.check(user.id);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many setup attempts. Please try again later." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfterSeconds) } },
+    );
+  }
 
   const body = await request.json();
   const parsed = SetupVaultBody.safeParse(body);
