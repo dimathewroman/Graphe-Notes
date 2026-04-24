@@ -25,8 +25,9 @@ export async function GET(request: NextRequest) {
   const conditions = [eq(quickBitsTable.userId, user.id)];
 
   if (search) {
+    const escaped = search.replace(/[%_\\]/g, "\\$&");
     conditions.push(
-      or(ilike(quickBitsTable.title, `%${search}%`), ilike(quickBitsTable.contentText, `%${search}%`))!,
+      or(ilike(quickBitsTable.title, `%${escaped}%`), ilike(quickBitsTable.contentText, `%${escaped}%`))!,
     );
   }
 
