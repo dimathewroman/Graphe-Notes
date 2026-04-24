@@ -12,7 +12,12 @@ const cspDirectives = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data: https://*.supabase.co",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://us.i.posthog.com https://us-assets.i.posthog.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com",
+  // Sentry ingest endpoints must be in connect-src so error reports are not blocked.
+  // worker-src must be set explicitly (with blob:) because Sentry's SDK uses a blob:
+  // worker for its replay / profiling features and the script-src fallback does not
+  // include blob:, which causes a CSP violation.
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://us.i.posthog.com https://us-assets.i.posthog.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://*.ingest.us.sentry.io https://*.ingest.sentry.io",
+  "worker-src 'self' blob:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
