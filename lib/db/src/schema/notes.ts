@@ -27,6 +27,9 @@ export const notesTable = pgTable("notes", {
 export const noteVersionsTable = pgTable("note_versions", {
   id: serial("id").primaryKey(),
   noteId: integer("note_id").notNull(),
+  // Denormalised user_id so RLS can use a direct equality check instead of
+  // joining through the notes table on every read/write.
+  userId: varchar("user_id").notNull(),
   title: text("title").notNull(),
   content: text("content").notNull(),
   contentText: text("content_text"),
@@ -39,6 +42,7 @@ export const noteVersionsTable = pgTable("note_versions", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("note_versions_note_id_created_at_idx").on(table.noteId, table.createdAt),
+  index("note_versions_user_id_idx").on(table.userId),
 ]);
 
 export const vaultSettingsTable = pgTable("vault_settings", {

@@ -139,6 +139,7 @@ export async function POST(
     .insert(noteVersionsTable)
     .values({
       noteId,
+      userId: user.id,
       title: note.title,
       content: note.content,
       contentText: note.contentText ?? null,
