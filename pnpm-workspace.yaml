@@ -38,3 +38,9 @@ onlyBuiltDependencies:
 
 overrides:
   esbuild: 0.27.3
+  protobufjs: ">=7.5.5"
+  picomatch: ">=4.0.4"
+  brace-expansion: ">=2.0.3"
+  dompurify: ">=3.4.0"
+  yaml: ">=2.8.3"
+  uuid: ">=14.0.0"
