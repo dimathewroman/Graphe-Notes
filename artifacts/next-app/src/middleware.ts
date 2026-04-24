@@ -10,13 +10,29 @@
  *   /api/healthz          — public health-check endpoint
  *   /api/cron/*           — cron jobs authenticate via CRON_SECRET header
  *
- * JWT verification is done locally against SUPABASE_JWT_SECRET so there
- * is no extra network round-trip. The token is not looked up in the DB —
- * signature validity and expiry are sufficient at this layer.
+ * JWT verification uses the Supabase JWKS endpoint so the middleware
+ * always has the current signing key. jose caches the JWKS response
+ * internally — no extra network round-trip per request after the first
+ * fetch. The JWKS endpoint returns all active keys (including any
+ * previously-used keys still in rotation), and jose selects the correct
+ * one by matching the `kid` in the JWT header automatically.
+ *
+ * No additional env vars are required — NEXT_PUBLIC_SUPABASE_URL is
+ * already in the environment.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { jwtVerify, type JWTPayload } from "jose";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+
+// Module-level singleton — createRemoteJWKSet returns a function that
+// fetches and caches the JWKS on first use, then refreshes when it
+// encounters an unknown `kid`. This is safe at module scope in the
+// Edge Runtime because the runtime is stateless between invocations
+// but the module is re-used within a single instance lifetime.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+const JWKS = createRemoteJWKSet(
+  new URL(`${supabaseUrl}/auth/v1/.well-known/jwks.json`),
+);
 
 // Routes that do not require a user JWT
 const PUBLIC_API_PREFIXES = ["/api/healthz", "/api/cron/"];
@@ -52,22 +68,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const jwtSecret = process.env.SUPABASE_JWT_SECRET;
-  if (!jwtSecret) {
-    // Misconfiguration: fail open in development, fail closed in production
-    if (process.env.NODE_ENV === "production") {
-      console.error("[middleware] SUPABASE_JWT_SECRET is not set — rejecting all API requests");
-      return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
-    }
-    // In dev without the secret configured, let the route handler's own
-    // getAuthUser() call do the validation against Supabase directly.
-    console.warn("[middleware] SUPABASE_JWT_SECRET not set; skipping middleware JWT check in development");
-    return NextResponse.next();
-  }
-
   try {
-    const secret = new TextEncoder().encode(jwtSecret);
-    await jwtVerify(token, secret) as { payload: JWTPayload };
+    await jwtVerify(token, JWKS, {
+      // Validates the `iss` claim — rejects tokens not issued by this project.
+      issuer: `${supabaseUrl}/auth/v1`,
+    });
     return NextResponse.next();
   } catch {
     return NextResponse.json(
