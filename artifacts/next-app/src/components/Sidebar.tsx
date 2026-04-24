@@ -136,17 +136,17 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     }
   };
 
-  const handleVaultConfirm = async (hash: string, newHash?: string) => {
+  const handleVaultConfirm = async (pin: string, newPin?: string) => {
     setVaultError("");
     if (isDemo) {
       if (vaultModal === "setup") {
-        sessionStorage.setItem(DEMO_VAULT_KEY, hash);
+        sessionStorage.setItem(DEMO_VAULT_KEY, pin);
         queryClient.setQueryData(["/api/vault/status"], { isConfigured: true });
         setVaultUnlocked(true);
         setVaultModal(null);
       } else if (vaultModal === "unlock") {
         const stored = sessionStorage.getItem(DEMO_VAULT_KEY);
-        if (stored && stored === hash) {
+        if (stored && stored === pin) {
           posthog.capture("vault_unlock_attempted", { success: true, source: "sidebar", timestamp: new Date().toISOString() });
           setVaultUnlocked(true);
           setVaultModal(null);
@@ -154,10 +154,10 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           posthog.capture("vault_unlock_attempted", { success: false, source: "sidebar", timestamp: new Date().toISOString() });
           setVaultError("Wrong PIN.");
         }
-      } else if (vaultModal === "change-password" && newHash) {
+      } else if (vaultModal === "change-password" && newPin) {
         const stored = sessionStorage.getItem(DEMO_VAULT_KEY);
-        if (stored && stored === hash) {
-          sessionStorage.setItem(DEMO_VAULT_KEY, newHash);
+        if (stored && stored === pin) {
+          sessionStorage.setItem(DEMO_VAULT_KEY, newPin);
           setVaultModal(null);
         } else {
           setVaultError("Wrong current PIN.");
@@ -167,17 +167,17 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     }
     try {
       if (vaultModal === "setup") {
-        await setupVaultMut.mutateAsync({ data: { passwordHash: hash } });
+        await setupVaultMut.mutateAsync({ data: { pin } });
         setVaultUnlocked(true);
         setVaultModal(null);
         queryClient.invalidateQueries({ queryKey: ["/api/vault/status"] });
       } else if (vaultModal === "unlock") {
-        await unlockVaultMut.mutateAsync({ data: { passwordHash: hash } });
+        await unlockVaultMut.mutateAsync({ data: { pin } });
         posthog.capture("vault_unlock_attempted", { success: true, source: "sidebar", timestamp: new Date().toISOString() });
         setVaultUnlocked(true);
         setVaultModal(null);
-      } else if (vaultModal === "change-password" && newHash) {
-        await changePasswordMut.mutateAsync({ data: { currentPasswordHash: hash, newPasswordHash: newHash } });
+      } else if (vaultModal === "change-password" && newPin) {
+        await changePasswordMut.mutateAsync({ data: { currentPin: pin, newPin } });
         setVaultModal(null);
       }
     } catch {
@@ -462,9 +462,9 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           onConfirm={handleVaultConfirm}
           onCancel={() => { setVaultModal(null); setVaultError(""); }}
           error={vaultError}
-          onVerifyCurrentPin={vaultModal === "change-password" ? async (hash) => {
+          onVerifyCurrentPin={vaultModal === "change-password" ? async (pin) => {
             try {
-              await unlockVaultMut.mutateAsync({ data: { passwordHash: hash } });
+              await unlockVaultMut.mutateAsync({ data: { pin } });
               return true;
             } catch {
               return false;

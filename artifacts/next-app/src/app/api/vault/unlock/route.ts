@@ -5,6 +5,7 @@ import { UnlockVaultBody, UnlockVaultResponse } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { vaultUnlockLimiter } from "@/lib/rate-limit";
+import { verifyPin, hashPin } from "@/lib/vault-hash";
 
 export async function POST(request: NextRequest) {
   const { user } = await getAuthUser(request);
@@ -35,8 +36,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Vault not configured" }, { status: 404 });
   }
 
-  if (settings.passwordHash !== parsed.data.passwordHash) {
+  const { valid, needsMigration } = await verifyPin(parsed.data.pin, settings.passwordHash);
+
+  if (!valid) {
     return NextResponse.json({ error: "Wrong password" }, { status: 401 });
+  }
+
+  // Transparently migrate legacy SHA-256 hashes to bcrypt on the user's
+  // first successful unlock after the server-side hashing upgrade.
+  if (needsMigration) {
+    const newHash = await hashPin(parsed.data.pin);
+    await db
+      .update(vaultSettingsTable)
+      .set({ passwordHash: newHash, updatedAt: new Date() })
+      .where(eq(vaultSettingsTable.userId, user.id));
   }
 
   getPostHogClient().capture({ distinctId: user.id, event: "vault_unlocked" });

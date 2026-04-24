@@ -5,6 +5,7 @@ import { SetupVaultBody, SetupVaultResponse } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { vaultSetupLimiter } from "@/lib/rate-limit";
+import { hashPin } from "@/lib/vault-hash";
 
 export async function POST(request: NextRequest) {
   const { user } = await getAuthUser(request);
@@ -35,9 +36,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Vault is already configured" }, { status: 409 });
   }
 
+  // Hash the PIN server-side before storing
+  const passwordHash = await hashPin(parsed.data.pin);
+
   await db
     .insert(vaultSettingsTable)
-    .values({ userId: user.id, passwordHash: parsed.data.passwordHash });
+    .values({ userId: user.id, passwordHash });
 
   getPostHogClient().capture({ distinctId: user.id, event: "vault_setup_completed" });
   return NextResponse.json(SetupVaultResponse.parse({ isConfigured: true }));

@@ -228,16 +228,20 @@ export interface ToggleNoteVaultBody {
 }
 
 export interface VaultSetupBody {
-  passwordHash: string;
+  /** Plaintext PIN (4–6 digits). Hashed server-side with bcrypt. */
+  pin: string;
 }
 
 export interface VaultUnlockBody {
-  passwordHash: string;
+  /** Plaintext PIN. Verified server-side with bcrypt.compare(). */
+  pin: string;
 }
 
 export interface VaultChangePasswordBody {
-  currentPasswordHash: string;
-  newPasswordHash: string;
+  /** Current plaintext PIN for verification. */
+  currentPin: string;
+  /** New plaintext PIN. Hashed server-side with bcrypt. */
+  newPin: string;
 }
 
 export interface VaultStatusResponse {

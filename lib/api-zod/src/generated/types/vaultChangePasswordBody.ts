@@ -7,6 +7,8 @@
  */
 
 export interface VaultChangePasswordBody {
-  currentPasswordHash: string;
-  newPasswordHash: string;
+  /** Current plaintext PIN for verification. */
+  currentPin: string;
+  /** New plaintext PIN. Hashed server-side with bcrypt. */
+  newPin: string;
 }

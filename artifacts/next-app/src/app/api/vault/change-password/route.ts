@@ -4,6 +4,7 @@ import { db, vaultSettingsTable } from "@workspace/db";
 import { ChangeVaultPasswordBody, ChangeVaultPasswordResponse } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
 import { vaultUnlockLimiter } from "@/lib/rate-limit";
+import { verifyPin, hashPin } from "@/lib/vault-hash";
 
 export async function POST(request: NextRequest) {
   const { user } = await getAuthUser(request);
@@ -34,13 +35,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Vault not configured" }, { status: 404 });
   }
 
-  if (settings.passwordHash !== parsed.data.currentPasswordHash) {
+  const { valid } = await verifyPin(parsed.data.currentPin, settings.passwordHash);
+  if (!valid) {
     return NextResponse.json({ error: "Wrong current password" }, { status: 401 });
   }
 
+  // Hash the new PIN server-side before storing
+  const newHash = await hashPin(parsed.data.newPin);
+
   await db
     .update(vaultSettingsTable)
-    .set({ passwordHash: parsed.data.newPasswordHash, updatedAt: new Date() })
+    .set({ passwordHash: newHash, updatedAt: new Date() })
     .where(
       and(eq(vaultSettingsTable.id, settings.id), eq(vaultSettingsTable.userId, user.id)),
     );

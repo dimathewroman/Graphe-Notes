@@ -636,12 +636,12 @@ export function NoteShell() {
     exportAsMarkdown(title, editor?.getHTML() ?? note?.content ?? "");
   }, [title, editor, note?.content]);
 
-  const handleVaultSetupConfirm = async (hash: string) => {
+  const handleVaultSetupConfirm = async (pin: string) => {
     if (!selectedNoteId || !note) return;
     setShowVaultSetupModal(false);
     if (isDemo) {
       setDemoVaultConfigured(true);
-      sessionStorage.setItem("demo_vault_hash", hash);
+      sessionStorage.setItem("demo_vault_hash", pin);
       queryClient.setQueryData(["/api/vault/status"], { isConfigured: true });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
@@ -649,7 +649,7 @@ export function NoteShell() {
       return;
     }
     try {
-      await setupVaultMut.mutateAsync({ data: { passwordHash: hash } });
+      await setupVaultMut.mutateAsync({ data: { pin } });
       await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: true } });
       queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
       queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
@@ -659,11 +659,11 @@ export function NoteShell() {
     }
   };
 
-  const handleUnlockConfirm = async (hash: string) => {
+  const handleUnlockConfirm = async (pin: string) => {
     setVaultUnlockError("");
     if (isDemo) {
       const stored = sessionStorage.getItem("demo_vault_hash");
-      if (!stored || stored === hash) {
+      if (!stored || stored === pin) {
         posthog.capture("vault_unlock_attempted", { success: true, source: "note", timestamp: new Date().toISOString() });
         setShowVaultUnlockModal(false);
         setVaultUnlocked(true);
@@ -674,7 +674,7 @@ export function NoteShell() {
       return;
     }
     try {
-      await unlockVaultMut.mutateAsync({ data: { passwordHash: hash } });
+      await unlockVaultMut.mutateAsync({ data: { pin } });
       posthog.capture("vault_unlock_attempted", { success: true, source: "note", timestamp: new Date().toISOString() });
       setShowVaultUnlockModal(false);
       setVaultUnlocked(true);

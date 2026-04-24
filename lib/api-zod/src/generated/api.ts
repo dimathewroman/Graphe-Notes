@@ -397,7 +397,9 @@ export const ToggleNoteVaultResponse = zod.object({
  * @summary Set up vault with a password
  */
 export const SetupVaultBody = zod.object({
-  passwordHash: zod.string(),
+  pin: zod
+    .string()
+    .describe("Plaintext PIN (4–6 digits). Hashed server-side with bcrypt."),
 });
 
 export const SetupVaultResponse = zod.object({
@@ -408,7 +410,9 @@ export const SetupVaultResponse = zod.object({
  * @summary Unlock the vault with a password
  */
 export const UnlockVaultBody = zod.object({
-  passwordHash: zod.string(),
+  pin: zod
+    .string()
+    .describe("Plaintext PIN. Verified server-side with bcrypt.compare()."),
 });
 
 export const UnlockVaultResponse = zod.object({
@@ -426,8 +430,10 @@ export const GetVaultStatusResponse = zod.object({
  * @summary Change vault password
  */
 export const ChangeVaultPasswordBody = zod.object({
-  currentPasswordHash: zod.string(),
-  newPasswordHash: zod.string(),
+  currentPin: zod.string().describe("Current plaintext PIN for verification."),
+  newPin: zod
+    .string()
+    .describe("New plaintext PIN. Hashed server-side with bcrypt."),
 });
 
 export const ChangeVaultPasswordResponse = zod.object({
