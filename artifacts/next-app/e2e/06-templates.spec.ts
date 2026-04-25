@@ -117,21 +117,8 @@ test.describe("Template System", () => {
 
     // Open template picker via store
     await page.evaluate(() => {
-      try { (window as any).__ZUSTAND_STORE__?.getState().openTemplatePicker("note"); } catch {}
+      (window as any).__ZUSTAND_STORE__.getState().openTemplatePicker("note");
     });
-
-    // Alternative: use chevron if store shortcut unavailable
-    const btn = page.getByTestId("new-note-btn");
-    if (await btn.isVisible()) {
-      const box = await btn.boundingBox();
-      if (box) {
-        await page.mouse.click(box.x + box.width * 0.85, box.y + box.height / 2);
-        const fromTemplate = page.getByTestId("from-template-btn");
-        if (await fromTemplate.isVisible({ timeout: 1000 }).catch(() => false)) {
-          await fromTemplate.click();
-        }
-      }
-    }
 
     await expect(page.getByTestId("template-card").first()).toBeVisible({ timeout: 5000 });
 
