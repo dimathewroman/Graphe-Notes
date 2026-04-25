@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { useDemoMode } from "@/lib/demo-context";
 import posthog from "posthog-js";
+import { ScrollArea } from "./ui/scroll-area";
 
 interface LocalLlmChatResponse {
   choices: Array<{ message: { content: string } }>;
@@ -189,7 +190,8 @@ export function AIPanel() {
             </IconButton>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
+          <ScrollArea className="flex-1">
+          <div className="p-4 flex flex-col gap-4">
             {!result && !isPending && (
               <div className="space-y-2 mb-4">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">Quick Actions</p>
@@ -233,6 +235,7 @@ export function AIPanel() {
               </div>
             )}
           </div>
+          </ScrollArea>
 
           <div className="p-4 border-t border-panel-border bg-background/50">
             <div className="relative flex items-end gap-2">

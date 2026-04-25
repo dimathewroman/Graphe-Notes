@@ -13,10 +13,15 @@ import { useAuth } from "@/hooks/use-auth";
 import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogClose } from "./ui/dialog";
+import { Dialog as DialogPrimitive, VisuallyHidden } from "radix-ui";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import { PinPad } from "./PinPad";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from "./ui/select";
 
 const ACCENT_PRESETS = [
   { name: "Periwinkle", value: "216 78% 63%",  hex: "#5B93E8" },
@@ -543,23 +548,32 @@ export function SettingsModal() {
   const activeCard = aiProvider === "openai" || aiProvider === "anthropic" ? "byok" : aiProvider;
 
   return (
-    <AnimatePresence>
-      {isSettingsOpen && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={() => setSettingsOpen(false)}
-            className="fixed inset-0 bg-black/35 z-40"
-            style={{ backdropFilter: "blur(14px) saturate(1.2)", WebkitBackdropFilter: "blur(14px) saturate(1.2)" }}
-          />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1, transition: { type: "spring", stiffness: 380, damping: 30 } }}
-            exit={{ opacity: 0, transition: { duration: 0.15, ease: "easeOut" } }}
-            className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-[720px] md:h-[min(580px,80vh)] bg-panel border border-panel-border rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col md:flex-row luminance-border-top"
-          >
+    <Dialog open={isSettingsOpen} onOpenChange={(open) => { if (!open) setSettingsOpen(false); }}>
+      <DialogPrimitive.Portal forceMount>
+        <AnimatePresence>
+          {isSettingsOpen && (
+            <>
+              <DialogPrimitive.Overlay forceMount asChild>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black/35 z-40"
+                  style={{ backdropFilter: "blur(14px) saturate(1.2)", WebkitBackdropFilter: "blur(14px) saturate(1.2)" }}
+                />
+              </DialogPrimitive.Overlay>
+              <DialogPrimitive.Content forceMount asChild
+                aria-describedby={undefined}
+                onOpenAutoFocus={(e) => e.preventDefault()}>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1, transition: { type: "spring", stiffness: 380, damping: 30 } }}
+                  exit={{ opacity: 0, transition: { duration: 0.15, ease: "easeOut" } }}
+                  className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-[720px] md:h-[min(580px,80vh)] bg-panel border border-panel-border rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col md:flex-row luminance-border-top"
+                >
+                  <VisuallyHidden.Root asChild>
+                    <DialogPrimitive.Title>Settings</DialogPrimitive.Title>
+                  </VisuallyHidden.Root>
             {/* Left sidebar nav */}
             <div className="hidden md:flex flex-col w-[200px] border-r border-panel-border bg-background/40 shrink-0">
               <div className="p-4 pb-2">
@@ -607,9 +621,11 @@ export function SettingsModal() {
               <div className="flex-1 flex flex-col overflow-hidden md:hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-panel-border bg-background/30 shrink-0">
                   <h2 className="text-lg font-semibold tracking-tight">Settings</h2>
-                  <IconButton onClick={() => setSettingsOpen(false)}>
-                    <X className="w-5 h-5" />
-                  </IconButton>
+                  <DialogClose asChild>
+                    <IconButton>
+                      <X className="w-5 h-5" />
+                    </IconButton>
+                  </DialogClose>
                 </div>
                 <div className="flex-1 overflow-y-auto">
                   {tabs.map((tab) => (
@@ -644,9 +660,11 @@ export function SettingsModal() {
                     {tabs.find(t => t.id === activeTab)?.label ?? "Settings"}
                   </h2>
                 </div>
-                <IconButton onClick={() => setSettingsOpen(false)}>
-                  <X className="w-5 h-5" />
-                </IconButton>
+                <DialogClose asChild>
+                  <IconButton>
+                    <X className="w-5 h-5" />
+                  </IconButton>
+                </DialogClose>
               </div>
 
               <div className="flex-1 overflow-y-auto">
@@ -1092,16 +1110,16 @@ export function SettingsModal() {
                                   Loading models…
                                 </div>
                               ) : models.length > 0 ? (
-                                <select
-                                  value={model}
-                                  onChange={(e) => setModel(e.target.value)}
-                                  className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
-                                >
-                                  <option value="">Select a model…</option>
-                                  {models.map((m) => (
-                                    <option key={m} value={m}>{m}</option>
-                                  ))}
-                                </select>
+                                <Select value={model} onValueChange={setModel}>
+                                  <SelectTrigger className="w-full bg-panel border-panel-border rounded-lg">
+                                    <SelectValue placeholder="Select a model…" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-popover border-panel-border">
+                                    {models.map((m) => (
+                                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               ) : (
                                 <input
                                   type="text"
@@ -1387,9 +1405,12 @@ export function SettingsModal() {
               </div>
             </div>
             )}
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+                </motion.div>
+              </DialogPrimitive.Content>
+            </>
+          )}
+        </AnimatePresence>
+      </DialogPrimitive.Portal>
+    </Dialog>
   );
 }

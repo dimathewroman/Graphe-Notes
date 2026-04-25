@@ -23,6 +23,7 @@ import {
 import { IconButton } from "./ui/IconButton";
 import { cn } from "@/lib/utils";
 import { VersionPreviewArea } from "./VersionPreviewArea";
+import { Sheet, SheetContent } from "./ui/sheet";
 import {
   useNoteVersionsList,
   useNoteVersionDetail,
@@ -153,23 +154,19 @@ export function VersionHistoryPanel({
     setConfirmDeleteId(null);
   };
 
-  const containerClass = isMobile
-    ? // Bottom sheet on mobile
-      "fixed inset-x-0 bottom-0 top-16 bg-panel border-t border-panel-border rounded-t-2xl shadow-2xl flex flex-col z-40 animate-[slideUp_220ms_ease-out]"
-    : // Slide-over from the right on tablet/desktop
-      "fixed inset-y-0 right-0 w-[360px] bg-panel border-l border-panel-border shadow-2xl flex flex-col z-30 animate-[slideInRight_220ms_ease-out]";
-
   return (
-    <>
-      {/* Mobile backdrop */}
-      {isMobile && (
-        <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30"
-          onClick={onClose}
-        />
-      )}
-
-      <div className={containerClass} role="dialog" aria-label="Version history">
+    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent
+        showCloseButton={false}
+        side={isMobile ? "bottom" : "right"}
+        className={cn(
+          "bg-panel flex flex-col p-0",
+          isMobile
+            ? "h-[calc(100vh-64px)] rounded-t-2xl border-t border-panel-border"
+            : "w-[360px] border-l border-panel-border"
+        )}
+        aria-label="Version history"
+      >
         {/* Header */}
         <div className="h-14 border-b border-panel-border flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center gap-2 text-[13px] font-medium text-foreground">
@@ -363,7 +360,7 @@ export function VersionHistoryPanel({
         </div>
         </>
         )}
-      </div>
-    </>
+      </SheetContent>
+    </Sheet>
   );
 }

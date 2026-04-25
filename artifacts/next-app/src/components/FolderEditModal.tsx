@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { X, Hash, Plus, Folder, Tag, Palette } from "lucide-react";
+import { Hash, Plus, Folder, Tag, Palette, X } from "lucide-react";
 import { useUpdateFolder, getGetFoldersQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useDemoMode } from "@/lib/demo-context";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose,
+} from "./ui/dialog";
 
 const FOLDER_COLORS: (string | null)[] = [
   null,
@@ -58,17 +61,22 @@ export function FolderEditModal({ folder, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-popover border border-panel-border rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-5" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent
+        showCloseButton={false}
+        aria-describedby={undefined}
+        className="bg-popover border-panel-border rounded-2xl shadow-2xl max-w-sm p-5"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <DialogHeader className="flex-row items-center justify-between space-y-0">
           <div className="flex items-center gap-2">
             <Folder className="w-4 h-4 text-muted-foreground" />
-            <h2 className="font-semibold text-foreground">Edit Folder</h2>
+            <DialogTitle className="text-base">Edit Folder</DialogTitle>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-panel transition-colors text-muted-foreground hover:text-foreground">
+          <DialogClose className="p-1.5 rounded-lg hover:bg-panel transition-colors text-muted-foreground hover:text-foreground">
             <X className="w-4 h-4" />
-          </button>
-        </div>
+          </DialogClose>
+        </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -111,7 +119,7 @@ export function FolderEditModal({ folder, onClose }: Props) {
               <Tag className="w-3.5 h-3.5 text-muted-foreground" />
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tag Rules</label>
             </div>
-            <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
+            <p className="text-xs text-muted-foreground/60 mb-2 leading-relaxed">
               Notes tagged with any of these will automatically appear in this folder.
             </p>
 
@@ -178,7 +186,7 @@ export function FolderEditModal({ folder, onClose }: Props) {
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

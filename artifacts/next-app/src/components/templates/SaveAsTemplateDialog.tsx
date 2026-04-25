@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import ReactDOM from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
 import { useAnimationConfig } from "@/hooks/use-motion";
@@ -13,6 +12,8 @@ import { useDemoMode } from "@/lib/demo-context";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import posthog from "posthog-js";
+import { Dialog } from "../ui/dialog";
+import { Dialog as DialogPrimitive } from "radix-ui";
 
 function stripImagesFromHtml(html: string): { html: string; hadImages: boolean } {
   const hadImages = /<img\s/i.test(html);
@@ -21,8 +22,6 @@ function stripImagesFromHtml(html: string): { html: string; hadImages: boolean }
 }
 
 function htmlToTiptapJson(html: string): Record<string, unknown> {
-  // Build a minimal TipTap JSON doc — the API stores this so the picker can render it
-  // For now we store a simple paragraph structure; the full editor roundtrip happens on use
   return {
     type: "doc",
     content: [
@@ -100,27 +99,9 @@ export function SaveAsTemplateDialog({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") { e.preventDefault(); handleSave(); }
-    if (e.key === "Escape") { e.preventDefault(); closeSaveAsTemplate(); }
   };
-
-  useEffect(() => {
-    if (!isSaveAsTemplateOpen) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeSaveAsTemplate();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [isSaveAsTemplateOpen, closeSaveAsTemplate]);
-
-  if (!isSaveAsTemplateOpen) return null;
 
   const isMobile = bp === "mobile";
-
-  const backdropVariants = {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1 },
-    exit: { opacity: 0 },
-  };
 
   const dialogVariants = isMobile
     ? {
@@ -140,73 +121,80 @@ export function SaveAsTemplateDialog({
       ? { duration: 0.2, ease: "easeOut" as const }
       : { type: "spring" as const, stiffness: 320, damping: 28 };
 
-  return ReactDOM.createPortal(
-    <AnimatePresence>
-      {isSaveAsTemplateOpen && (
-        <>
-          <motion.div
-            className="fixed inset-0 z-50"
-            style={{ background: "rgba(0,0,0,0.25)" }}
-            variants={backdropVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            transition={{ duration: 0.2 }}
-            onClick={closeSaveAsTemplate}
-          />
-          <motion.div
-            data-testid="save-as-template-dialog"
-            className={cn(
-              "fixed z-50 bg-[var(--color-surface-3,var(--color-panel))] shadow-lg",
-              isMobile
-                ? "bottom-0 left-0 right-0 rounded-t-2xl p-6 pb-8"
-                : "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[400px] rounded-xl p-6 luminance-border-top"
-            )}
-            variants={dialogVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            transition={dialogTransition}
-          >
-            <h2 className="text-lg font-semibold mb-3 tracking-tight">Save as template</h2>
-            <p className="text-[13px] text-muted-foreground mb-4">
-              Save this note&rsquo;s structure as a reusable template.
-            </p>
+  return (
+    <Dialog open={isSaveAsTemplateOpen} onOpenChange={(open) => { if (!open) closeSaveAsTemplate(); }}>
+      <DialogPrimitive.Portal forceMount>
+        <AnimatePresence>
+          {isSaveAsTemplateOpen && (
+            <>
+              <DialogPrimitive.Overlay forceMount asChild>
+                <motion.div
+                  className="fixed inset-0 z-50"
+                  style={{ background: "rgba(0,0,0,0.25)" }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                />
+              </DialogPrimitive.Overlay>
+              <DialogPrimitive.Content forceMount asChild
+                aria-describedby={undefined}
+                onOpenAutoFocus={(e) => e.preventDefault()}>
+                <motion.div
+                  data-testid="save-as-template-dialog"
+                  className={cn(
+                    "fixed z-50 bg-[var(--color-surface-3,var(--color-panel))] shadow-lg",
+                    isMobile
+                      ? "bottom-0 left-0 right-0 rounded-t-2xl p-6 pb-8"
+                      : "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[400px] rounded-xl p-6 luminance-border-top"
+                  )}
+                  variants={dialogVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  transition={dialogTransition}
+                >
+                  <DialogPrimitive.Title className="text-lg font-semibold mb-3 tracking-tight">Save as template</DialogPrimitive.Title>
+                  <p className="text-[13px] text-muted-foreground mb-4">
+                    Save this note&rsquo;s structure as a reusable template.
+                  </p>
 
-            <input
-              ref={inputRef}
-              value={name}
-              onChange={e => setName(e.target.value.slice(0, 60))}
-              onKeyDown={handleKeyDown}
-              placeholder="Template name"
-              maxLength={60}
-              data-testid="template-name-input"
-              className="w-full h-10 px-3 rounded-md bg-[var(--color-surface-1,var(--color-background))] border border-border text-[14px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all mb-5"
-            />
+                  <input
+                    ref={inputRef}
+                    value={name}
+                    onChange={e => setName(e.target.value.slice(0, 60))}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Template name"
+                    maxLength={60}
+                    data-testid="template-name-input"
+                    className="w-full h-10 px-3 rounded-md bg-[var(--color-surface-1,var(--color-background))] border border-border text-[14px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all mb-5"
+                  />
 
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={closeSaveAsTemplate}
-                className="h-9 px-3 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-panel transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={!name.trim() || createMut.isPending}
-                data-testid="save-template-btn"
-                className={cn(
-                  "h-9 px-4 rounded-md bg-primary text-primary-foreground text-[14px] font-semibold transition-all disabled:opacity-50",
-                  anim.useScale && "hover:bg-primary/90 active:scale-[0.97]"
-                )}
-              >
-                {createMut.isPending ? "Saving..." : "Save"}
-              </button>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>,
-    document.body
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={closeSaveAsTemplate}
+                      className="h-9 px-3 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-panel transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      disabled={!name.trim() || createMut.isPending}
+                      data-testid="save-template-btn"
+                      className={cn(
+                        "h-9 px-4 rounded-md bg-primary text-primary-foreground text-[14px] font-semibold transition-all disabled:opacity-50",
+                        anim.useScale && "hover:bg-primary/90 active:scale-[0.97]"
+                      )}
+                    >
+                      {createMut.isPending ? "Saving..." : "Save"}
+                    </button>
+                  </div>
+                </motion.div>
+              </DialogPrimitive.Content>
+            </>
+          )}
+        </AnimatePresence>
+      </DialogPrimitive.Portal>
+    </Dialog>
   );
 }

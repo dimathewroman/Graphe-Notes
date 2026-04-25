@@ -15,6 +15,7 @@ import {
 } from "@/hooks/use-attachments";
 import { useAppStore } from "@/store";
 import { useBreakpoint } from "@/hooks/use-mobile";
+import { ScrollArea } from "./ui/scroll-area";
 
 function fileIcon(mimeType: string) {
   if (isImageType(mimeType)) return <ImageIcon className="w-5 h-5 text-sky-400 shrink-0" />;
@@ -136,7 +137,7 @@ export function AllAttachments() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <ScrollArea className="flex-1">
         {isLoading ? (
           <div className="flex items-center justify-center h-32">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -156,7 +157,7 @@ export function AllAttachments() {
             <AttachmentRow key={a.id} attachment={a} onDeleted={refetch} />
           ))
         )}
-      </div>
+      </ScrollArea>
     </div>
   );
 }

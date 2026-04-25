@@ -3,25 +3,15 @@ import { motion } from "framer-motion";
 import { X, ShieldCheck, Lock, KeyRound, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PinPad } from "./PinPad";
+import {
+  Dialog, DialogContent, DialogClose, DialogTitle,
+} from "./ui/dialog";
 
 interface VaultModalProps {
   mode: "setup" | "unlock" | "change-password";
-  /**
-   * Called with the plaintext PIN(s) when the user completes the flow.
-   * The server is now responsible for hashing — do NOT hash on the client.
-   *
-   * - setup/unlock:       onConfirm(pin)
-   * - change-password:    onConfirm(currentPin, newPin)
-   */
   onConfirm: (pin: string, newPin?: string) => void;
   onCancel: () => void;
   error?: string;
-  /**
-   * Optional early verification of the current PIN in change-password mode.
-   * Receives the plaintext PIN; should return true if the server accepts it.
-   * When provided, the wrong current PIN is rejected immediately at step 1
-   * before the user is asked for a new PIN.
-   */
   onVerifyCurrentPin?: (pin: string) => Promise<boolean>;
 }
 
@@ -35,7 +25,6 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
   const [shakeKey, setShakeKey] = useState(0);
   const [unlockSuccess, setUnlockSuccess] = useState(false);
 
-  // Shake (not remount) on external server errors; cancel any optimistic success
   useEffect(() => {
     if (externalError) {
       setUnlockSuccess(false);
@@ -43,7 +32,6 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
     }
   }, [externalError]);
 
-  // Also shake when a local error fires (e.g. wrong current PIN on verify)
   useEffect(() => {
     if (error) {
       setShakeKey(k => k + 1);
@@ -73,7 +61,6 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
     setError("");
 
     if (mode === "unlock") {
-      // Pass plaintext PIN — hashing happens server-side
       setUnlockSuccess(true);
       setTimeout(() => onConfirm(pin), 350);
       return;
@@ -92,7 +79,6 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
           setStep("enter");
           return;
         }
-        // Pass plaintext PIN — hashing happens server-side
         onConfirm(pin);
         return;
       }
@@ -123,7 +109,6 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
           setStep("new");
           return;
         }
-        // Pass both plaintext PINs — hashing happens server-side
         onConfirm(currentPin, pin);
         return;
       }
@@ -139,16 +124,17 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
   const { title, subtitle } = getStepInfo();
 
   return (
-    <div data-testid="vault-modal" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96, y: 8 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
-        className="bg-popover border border-panel-border rounded-2xl shadow-2xl w-full max-w-sm p-6 relative"
+    <Dialog open onOpenChange={(open) => { if (!open) onCancel(); }}>
+      <DialogContent
+        data-testid="vault-modal"
+        showCloseButton={false}
+        aria-describedby={undefined}
+        className="bg-popover border-panel-border rounded-2xl shadow-2xl max-w-sm p-6 backdrop-blur-sm"
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <button onClick={onCancel} className="absolute top-4 right-4 p-1 rounded-lg hover:bg-panel text-muted-foreground hover:text-foreground transition-colors">
+        <DialogClose className="absolute top-4 right-4 p-1 rounded-lg hover:bg-panel text-muted-foreground hover:text-foreground transition-colors">
           <X className="w-4 h-4" />
-        </button>
+        </DialogClose>
 
         <div className="flex items-center gap-3 mb-5">
           <motion.div
@@ -161,9 +147,9 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
               : headerConfig.icon}
           </motion.div>
           <div>
-            <h2 className="font-semibold text-foreground">
+            <DialogTitle className="font-semibold text-foreground text-base">
               {unlockSuccess ? "Vault Unlocked" : mode === "setup" ? "Set Up Vault" : mode === "change-password" ? "Change Vault PIN" : "Unlock Vault"}
-            </h2>
+            </DialogTitle>
             <p className="text-xs text-muted-foreground">
               {unlockSuccess ? "Opening your notes…" : "Secure your notes with a PIN"}
             </p>
@@ -183,7 +169,7 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
             submitLabel={step === "confirm" || step === "new-confirm" ? "Confirm" : mode === "unlock" ? "Unlock" : "Next"}
           />
         )}
-      </motion.div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

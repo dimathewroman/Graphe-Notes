@@ -2,6 +2,10 @@
 
 import { useState, useRef, useEffect, useMemo } from "react";
 import { Trash2, MoreVertical, Menu, PanelLeft, Lock, ShieldCheck, ZapOff } from "lucide-react";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from "./ui/alert-dialog";
 import { useQueryClient, useQueries } from "@tanstack/react-query";
 import {
   useGetNotes,
@@ -17,6 +21,7 @@ import { useBreakpoint } from "@/hooks/use-mobile";
 import { useDemoMode } from "@/lib/demo-context";
 import { DEMO_NOTES } from "@/lib/demo-data";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "./ui/empty";
+import { ScrollArea } from "./ui/scroll-area";
 
 function daysUntil(dateStr: string | null | undefined): number {
   if (!dateStr) return 30;
@@ -203,11 +208,11 @@ export function RecentlyDeleted() {
       </div>
 
       {/* Confirm empty dialog */}
-      {showConfirmEmpty && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-popover border border-panel-border rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="text-base font-semibold text-foreground mb-2">Empty Recently Deleted</h3>
-            <p className="text-sm text-muted-foreground mb-4">
+      <AlertDialog open={showConfirmEmpty} onOpenChange={setShowConfirmEmpty}>
+        <AlertDialogContent className="bg-popover border-panel-border rounded-2xl shadow-2xl max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base">Empty Recently Deleted</AlertDialogTitle>
+            <AlertDialogDescription>
               This will permanently delete{" "}
               {regularCount > 0 && (
                 <span className="font-medium text-foreground">{regularCount} note{regularCount !== 1 ? "s" : ""}</span>
@@ -220,27 +225,18 @@ export function RecentlyDeleted() {
                 <span className="font-medium text-foreground">0 items</span>
               )}
               . This cannot be undone.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setShowConfirmEmpty(false)}
-                className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:bg-panel transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleEmptyConfirm}
-                className="px-4 py-2 rounded-lg text-sm bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
-              >
-                Delete All
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel variant="ghost">Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handleEmptyConfirm}>Delete All</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+      <ScrollArea className="flex-1">
+      <div className="p-2 space-y-1">
         {isLoading ? (
           <div className="flex justify-center p-4">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -316,6 +312,7 @@ export function RecentlyDeleted() {
           </>
         )}
       </div>
+      </ScrollArea>
     </div>
   );
 }

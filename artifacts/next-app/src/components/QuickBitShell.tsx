@@ -6,6 +6,9 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, useAnimation } from "framer-motion";
 import * as Sentry from "@sentry/nextjs";
 import { createPortal } from "react-dom";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "./ui/dialog";
 import { EditorContent } from "@tiptap/react";
 
 import { useAppStore } from "@/store";
@@ -246,22 +249,26 @@ function NotificationPopover({
 // ─── Expired modal ────────────────────────────────────────────────────────────
 
 function ExpiredModal({
+  open,
   onExtend,
   onPromote,
   onDelete,
 }: {
+  open: boolean;
   onExtend: () => void;
   onPromote: () => void;
   onDelete: () => void;
 }) {
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-sm bg-panel border border-panel-border rounded-2xl shadow-2xl p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <Zap className="w-4 h-4 text-red-500" />
-          <h3 className="font-semibold text-foreground">This Quick Bit has expired</h3>
-        </div>
-        <p className="text-sm text-muted-foreground">It will be permanently deleted if you exit.</p>
+  return (
+    <Dialog open={open}>
+      <DialogContent showCloseButton={false} className="bg-panel border-panel-border rounded-2xl shadow-2xl max-w-sm p-5 sm:items-start">
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-red-500" />
+            <DialogTitle className="text-base">This Quick Bit has expired</DialogTitle>
+          </div>
+          <DialogDescription>It will be permanently deleted if you exit.</DialogDescription>
+        </DialogHeader>
         <div className="flex flex-col gap-2 pt-1">
           <button
             onClick={onExtend}
@@ -282,9 +289,8 @@ function ExpiredModal({
             Delete and exit
           </button>
         </div>
-      </div>
-    </div>,
-    document.body
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -704,16 +710,15 @@ export function QuickBitShell() {
           onClose={() => setNotifPopoverOpen(false)}
         />
       )}
-      {showExpiredModal && (
-        <ExpiredModal
-          onExtend={() => { setShowExpiredModal(false); setExpiryPickerOpen(true); }}
-          onPromote={async () => { setShowExpiredModal(false); await handlePromote(); }}
-          onDelete={async () => {
-            setShowExpiredModal(false);
-            await handleDelete();
-          }}
-        />
-      )}
+      <ExpiredModal
+        open={showExpiredModal}
+        onExtend={() => { setShowExpiredModal(false); setExpiryPickerOpen(true); }}
+        onPromote={async () => { setShowExpiredModal(false); await handlePromote(); }}
+        onDelete={async () => {
+          setShowExpiredModal(false);
+          await handleDelete();
+        }}
+      />
     </div>
   );
 }
