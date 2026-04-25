@@ -318,7 +318,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="py-1">
         {/* Primary nav */}
         <div className="px-3 space-y-0.5 mb-3">

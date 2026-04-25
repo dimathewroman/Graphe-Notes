@@ -500,9 +500,40 @@ export function QuickBitShell() {
 
   const handlePromote = async () => {
     if (!selectedQuickBitId || !quickBit) return;
-    if (isDemo) return;
     posthog.capture("promote_to_note_clicked", { quick_bit_id: selectedQuickBitId, timestamp: new Date().toISOString() });
     const qb = quickBit as QuickBit;
+
+    if (isDemo) {
+      const now = new Date();
+      const tempId = -(Date.now() + (Math.random() * 1000 | 0));
+      queryClient.setQueryData(getGetNoteQueryKey(tempId), {
+        id: tempId,
+        title: qb.title || "",
+        content: qb.content || "",
+        contentText: qb.contentText || "",
+        folderId: null,
+        tags: [],
+        pinned: false,
+        favorite: false,
+        coverImage: null,
+        vaulted: false,
+        deletedAt: null,
+        autoDeleteAt: null,
+        deletedReason: null,
+        createdAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      });
+      addDemoNoteId(tempId);
+      queryClient.setQueryData(getGetQuickBitQueryKey(selectedQuickBitId), null);
+      queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+      selectQuickBit(null);
+      setFilter("all");
+      selectNote(tempId);
+      if (bp !== "desktop") setMobileView("editor");
+      return;
+    }
+
     try {
       const res = await createNoteMut.mutateAsync({
         data: { title: qb.title || "", content: qb.content || "" },

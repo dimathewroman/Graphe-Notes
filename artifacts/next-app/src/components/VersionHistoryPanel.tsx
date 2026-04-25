@@ -23,7 +23,7 @@ import {
 import { IconButton } from "./ui/IconButton";
 import { cn } from "@/lib/utils";
 import { VersionPreviewArea } from "./VersionPreviewArea";
-import { Sheet, SheetContent } from "./ui/sheet";
+import { Dialog as DialogPrimitive } from "radix-ui";
 import {
   useNoteVersionsList,
   useNoteVersionDetail,
@@ -155,18 +155,25 @@ export function VersionHistoryPanel({
   };
 
   return (
-    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <SheetContent
-        showCloseButton={false}
-        side={isMobile ? "bottom" : "right"}
-        className={cn(
-          "bg-panel flex flex-col p-0",
-          isMobile
-            ? "h-[calc(100vh-64px)] rounded-t-2xl border-t border-panel-border"
-            : "w-[360px] border-l border-panel-border"
+    <DialogPrimitive.Root open modal={isMobile} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogPrimitive.Portal>
+        {isMobile && (
+          <DialogPrimitive.Overlay className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
         )}
-        aria-label="Version history"
-      >
+        <DialogPrimitive.Content
+          aria-label="Version history"
+          aria-describedby={undefined}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={(e) => { if (!isMobile) e.preventDefault(); }}
+          className={cn(
+            "fixed z-40 bg-panel flex flex-col shadow-2xl outline-none",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out",
+            isMobile
+              ? "inset-x-0 bottom-0 top-16 rounded-t-2xl border-t border-panel-border data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom"
+              : "inset-y-0 right-0 w-[360px] border-l border-panel-border data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right"
+          )}
+        >
+          <DialogPrimitive.Title className="sr-only">Version history</DialogPrimitive.Title>
         {/* Header */}
         <div className="h-14 border-b border-panel-border flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center gap-2 text-[13px] font-medium text-foreground">
@@ -360,7 +367,8 @@ export function VersionHistoryPanel({
         </div>
         </>
         )}
-      </SheetContent>
-    </Sheet>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

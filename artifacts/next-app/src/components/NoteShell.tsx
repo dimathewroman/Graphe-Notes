@@ -808,7 +808,7 @@ export function NoteShell() {
         onExportPdf={handleExportPdf}
         onExportMarkdown={handleExportMarkdown}
         onDelete={handleDelete}
-        onSaveAsTemplate={handleSaveAsTemplate}
+        onSaveAsTemplate={note?.vaulted ? undefined : handleSaveAsTemplate}
       />
 
       <div

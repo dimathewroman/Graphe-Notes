@@ -190,7 +190,7 @@ export function AIPanel() {
             </IconButton>
           </div>
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
           <div className="p-4 flex flex-col gap-4">
             {!result && !isPending && (
               <div className="space-y-2 mb-4">
