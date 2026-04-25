@@ -54,7 +54,8 @@ export default function Home() {
   // Desktop/tablet note list panel width — mirrors what each list component uses internally
   const listPanelWidth = viewMode === "gallery" ? galleryWidth : noteListWidth;
   // Per-mode minimums: gallery needs more room for the 2-col grid; list cards truncate gracefully
-  const minPanelWidth = viewMode === "gallery" ? 340 : 280;
+  // Tablet list headers include a 44px hamburger button not present on desktop
+  const minPanelWidth = (viewMode === "gallery" || bp === "tablet") ? 340 : 280;
   const [isResizing, setIsResizing] = useState(false);
   const panelSlideTransition = isResizing
     ? { duration: 0 }
