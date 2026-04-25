@@ -1,16 +1,24 @@
 # Graphe Notes — Claude Code Guide
 
+<!-- Last audited: 2026-04-24 -->
+
 ## Stack
-- Frontend: Next.js 15 (App Router), React 19, Tailwind CSS v4, TanStack Query v5, Zustand, Framer Motion, Tiptap
-- Backend: Next.js API Route Handlers (in artifacts/next-app/src/app/api/)
-- Auth: Supabase Auth (Google/Apple OAuth, email/password)
-- Database: Supabase PostgreSQL + Drizzle ORM
-- Validation: Zod, drizzle-zod
-- API codegen: Orval (from OpenAPI spec)
-- Monorepo: pnpm workspaces
-- Deployment: Vercel
-- Error tracking: Sentry
-- Analytics and feature flags: PostHog
+
+- **Runtime**: Next.js 16 (App Router), React 19
+- **Styling**: Tailwind CSS v4 (`@tailwindcss/postcss`), `@tailwindcss/typography`
+- **State**: Zustand (client), TanStack Query v5 (server)
+- **Animation**: Framer Motion 12
+- **Editor**: Tiptap 3 (rich text, code blocks, tables, math, slash commands, images, task lists)
+- **Auth**: Supabase Auth (Google/Apple OAuth, email/password)
+- **Database**: Supabase PostgreSQL + Drizzle ORM 0.45
+- **Validation**: Zod 3, drizzle-zod
+- **API codegen**: Orval (from OpenAPI spec)
+- **Monorepo**: pnpm workspaces
+- **Deployment**: Vercel
+- **Error tracking**: Sentry 10 (`@sentry/nextjs`)
+- **Analytics**: PostHog (`posthog-js`, `posthog-node`)
+- **UI primitives**: Radix UI (dialog, dropdown, toast, tooltip, toggle, label, separator, slot), Vaul (drawers), Sonner (toasts), Lucide icons
+- **Other**: `jose` (JWT), `bcryptjs` (vault hashing), `html2pdf.js` (export), `turndown`/`turndown-plugin-gfm` (HTML-to-markdown), `date-fns`, `diff-match-patch` (version diffing), `katex` (math rendering), `lowlight` (code highlighting), `geist` (font), `next-themes`
 
 ---
 
@@ -45,65 +53,119 @@ A task is not done until all of the following are true:
 ## Project Structure
 
 ```
-artifacts/next-app/        -- Next.js app (frontend + API routes)
-artifacts/mockup-sandbox/  -- Component preview sandbox
-lib/api-spec/              -- OpenAPI spec + Orval codegen config
-lib/api-client-react/      -- Generated React Query hooks
-lib/api-zod/               -- Generated Zod schemas
-lib/db/                    -- Drizzle ORM schema + DB connection
-scripts/                   -- Utility scripts
+artifacts/next-app/            -- Next.js app (frontend + API routes)
+  src/
+    app/                       -- App Router pages + API route handlers
+    components/                -- React components
+      editor/                  -- Tiptap editor sub-components
+      onboarding/              -- Onboarding modal
+      templates/               -- Template picker + save-as-template
+      ui/                      -- Shared UI primitives (button, dialog, drawer, etc.)
+    hooks/                     -- Custom React hooks
+    lib/                       -- Utilities (auth, Supabase clients, AI prompts, demo data, etc.)
+    types/                     -- Type declarations
+  e2e/                         -- Playwright e2e tests
+  sentry.client.config.ts      -- Sentry client config
+  sentry.server.config.ts      -- Sentry server config
+  sentry.edge.config.ts        -- Sentry edge config
+  next.config.ts               -- Next.js config (CSP headers, Sentry plugin, PostHog rewrites)
+  playwright.config.ts         -- Playwright config
+
+lib/api-spec/                  -- OpenAPI spec (openapi.yaml) + Orval codegen config
+lib/api-client-react/          -- Generated React Query hooks + custom fetch
+lib/api-zod/                   -- Generated Zod schemas
+lib/db/                        -- Drizzle ORM schema + DB connection
+lib/encryption.ts              -- AES-256-GCM encryption for AI provider keys
+
+scripts/
+  post-merge.sh                -- Runs pnpm install + db push after git pull/merge
+  pre-push.sh                  -- Runs typecheck before every push
+  seed-templates.ts            -- Seeds preset templates into DB
 ```
 
 ---
 
 ## Database Schema
 
-- folders: id, name, parentId, color, icon, sortOrder, createdAt, updatedAt
-- notes: id, title, content (HTML), contentText (plain), folderId, tags (text[]), pinned, favorite, vaulted, coverImage, deletedAt, autoDeleteAt, deletedReason, createdAt, updatedAt
-- note_versions: id, noteId, title, content, contentText, createdAt
-- vault_settings: id, userId, passwordHash, createdAt, updatedAt
-- user_api_keys: id, userId, provider, encryptedKey, endpointUrl, modelOverride, createdAt, updatedAt
-- user_settings: userId, activeAiProvider, createdAt, updatedAt
-- quick_bits: id, userId, content, type, sortOrder, createdAt, updatedAt
-- smart_folders: id, name, filterJson, sortOrder, createdAt, updatedAt
+Tables defined in `lib/db/src/schema/`:
 
-Note: `notes.deletedAt` is set on soft-delete. Notes with `deletedAt` are not hard-deleted immediately — use the `/notes/:id/delete`, `/notes/:id/restore`, and `/notes/:id/permanent` endpoints, not a plain DELETE on the note.
+- **users**: id, email, firstName, lastName, profileImageUrl, storageTier, createdAt, updatedAt
+- **folders**: id, userId, name, parentId, color, icon, tagRules (text[]), sortOrder, createdAt, updatedAt
+- **notes**: id, userId, title, content (HTML), contentText (plain), folderId, tags (text[]), pinned, favorite, vaulted, coverImage, deletedAt, autoDeleteAt, deletedReason, createdAt, updatedAt
+- **note_versions**: id, noteId, userId, title, content, contentText, label, source, createdAt
+- **vault_settings**: id, userId, passwordHash, createdAt, updatedAt
+- **templates**: id, userId, name, description, category (capture|plan|reflect|create|mine), content (JSONB), isPreset, createdAt, updatedAt
+- **attachments**: id, noteId, userId, fileName, fileType, fileSize, storagePath, displayMode, createdAt, deletedAt
+- **quick_bits**: id, userId, title, content, contentText, expiresAt, notificationHours (int[]), createdAt, updatedAt
+- **quick_bit_settings**: id, userId, defaultExpirationDays, defaultNotificationHours (int[]), createdAt, updatedAt
+- **smart_folders**: id, userId, name, tagRules (text[]), color, sortOrder, createdAt, updatedAt
+- **user_api_keys**: id, userId, provider, encryptedKey, endpointUrl, modelOverride, createdAt, updatedAt
+- **user_settings**: userId, activeAiProvider, hasCompletedAiSetup, onboardingCompleted, accentColor, motionLevel, updatedAt
+- **ai_usage**: id, userId, requestsThisHour, hourWindowStart, requestsThisMonth, monthWindowStart, totalTokensUsed, lastRequestAt, createdAt
+
+Soft-delete pattern: `notes.deletedAt` is set on soft-delete. Use `/notes/:id/delete`, `/notes/:id/restore`, and `/notes/:id/permanent` endpoints — not a plain DELETE.
 
 ---
 
 ## API Endpoints
 
-All endpoints live in artifacts/next-app/src/app/api/ and are prefixed with /api:
+All endpoints live in `artifacts/next-app/src/app/api/` and are prefixed with `/api`:
 
-- GET/POST /folders
-- PATCH/DELETE /folders/:id
+**Notes**
 - GET/POST /notes (filters: folderId, search, pinned, favorite, tag, sortBy, sortDir)
 - GET/PATCH /notes/:id
 - PATCH /notes/:id/pin
 - PATCH /notes/:id/favorite
 - PATCH /notes/:id/move
-- PATCH /notes/:id/vault (body: { vaulted: boolean })
-- POST /notes/:id/delete (soft-delete — sets deletedAt)
-- POST /notes/:id/restore (undelete)
-- DELETE /notes/:id/permanent (hard-delete)
+- PATCH /notes/:id/vault
+- POST /notes/:id/delete (soft-delete)
+- POST /notes/:id/restore
+- DELETE /notes/:id/permanent
 - GET /notes/:id/versions
 - GET/DELETE /notes/:id/versions/:versionId
-- GET /tags
+- POST /notes/:id/versions/:versionId/restore
+
+**Folders**
+- GET/POST /folders
+- PATCH/DELETE /folders/:id
+
+**Quick Bits**
+- GET/POST /quick-bits
+- GET/PATCH/DELETE /quick-bits/:id
+- DELETE /quick-bits/:id/soft-delete
+- GET/PATCH /quick-bits/settings
+- DELETE /quick-bits/expired
+
+**Templates**
+- GET/POST /templates
+- PATCH/DELETE /templates/:id
+
+**Attachments**
+- POST /attachments/upload
+- GET /attachments/all
+- GET /attachments/note/:noteId
+- GET/DELETE /attachments/:attachmentId
+
+**Vault**
 - GET /vault/status
 - POST /vault/setup
 - POST /vault/unlock
 - POST /vault/change-password
-- GET/POST /quick-bits
-- GET/PATCH/DELETE /quick-bits/:id
-- GET/PATCH /quick-bits/settings
-- DELETE /quick-bits/:id/soft-delete
-- GET/POST /smart-folders
-- PATCH/DELETE /smart-folders/:id
+
+**AI**
 - POST /ai/generate
 - GET/POST/PATCH/DELETE /ai/keys
 - GET/PATCH /ai/settings
 - GET /ai/usage
 - POST /ai/models
+
+**Other**
+- GET /tags
+- GET/POST /smart-folders
+- PATCH/DELETE /smart-folders/:id
+- POST /onboarding
+- GET /healthz
+- POST /cron/purge-deleted (Vercel cron, daily at 3 AM UTC)
 
 ---
 
@@ -137,6 +199,9 @@ pnpm --filter @workspace/db run push
 
 # Regenerate API hooks and Zod schemas from OpenAPI spec
 pnpm --filter @workspace/api-spec run codegen
+
+# Seed preset templates
+npx tsx scripts/seed-templates.ts
 ```
 
 ---
@@ -147,79 +212,51 @@ pnpm --filter @workspace/api-spec run codegen
 pnpm add some-package --filter @workspace/next-app
 ```
 
-For packages shared across workspaces, add to the catalog: section of pnpm-workspace.yaml and reference it as "catalog:" in each package.json.
+For packages shared across workspaces, add to the `catalog:` section of `pnpm-workspace.yaml` and reference it as `"catalog:"` in each package.json.
 
 ---
 
-## Post-Merge Hook
+## Git Hooks
 
-A git post-merge hook lives at scripts/post-merge.sh. It runs automatically after every git merge or git pull and does two things:
-1. pnpm install --frozen-lockfile
-2. pnpm --filter db push
+**post-merge** (`scripts/post-merge.sh`): Runs after every `git merge` or `git pull`:
+1. `pnpm install --frozen-lockfile`
+2. `pnpm --filter db push`
 
 Do not skip or manually replicate these steps. Let the hook handle them.
+
+**pre-push** (`scripts/pre-push.sh`): Runs `pnpm run typecheck` before every push. If typecheck fails, the push is blocked.
 
 ---
 
 ## API Client Pattern
 
-Never write raw fetch calls. All API calls go through generated React Query hooks in @workspace/api-client-react.
+Never write raw fetch calls. All API calls go through generated React Query hooks in `@workspace/api-client-react`.
 
 To add a new endpoint:
-1. Edit lib/api-spec/openapi.yaml
-2. Run pnpm --filter @workspace/api-spec run codegen
+1. Edit `lib/api-spec/openapi.yaml`
+2. Run `pnpm --filter @workspace/api-spec run codegen`
 3. Import and use the generated hook
 
-Query cache keys are exported alongside hooks: getGetNotesQueryKey(), getGetNoteQueryKey(id), etc.
+Query cache keys are exported alongside hooks: `getGetNotesQueryKey()`, `getGetNoteQueryKey(id)`, etc.
 
 ---
 
 ## Auth
 
-Auth lives in artifacts/next-app/src/hooks/use-auth.ts and artifacts/next-app/src/lib/supabase.ts. The Supabase client uses NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY. Server-side auth validation uses SUPABASE_SERVICE_ROLE_KEY via artifacts/next-app/src/lib/auth-server.ts.
+Auth lives in `artifacts/next-app/src/hooks/use-auth.ts` and `artifacts/next-app/src/lib/supabase.ts`. The Supabase client uses `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Server-side auth uses `artifacts/next-app/src/lib/auth-server.ts` with the admin client in `artifacts/next-app/src/lib/supabase-admin.ts`.
 
 ---
 
 ## Demo Mode Pattern
 
-useDemoMode() returns isDemo: boolean. Import from @/App.
+`useDemoMode()` returns a boolean. Import from `@/lib/demo-context`.
 
 In demo mode, patch the React Query cache directly instead of calling API mutations:
 ```typescript
 queryClient.setQueryData(getGetNoteQueryKey(id), { ...existing, vaulted: true })
 ```
 
-Demo vault PIN is stored in sessionStorage under the key "demo_vault_hash". Always use sessionStorage as the source of truth for whether a PIN is configured in demo mode.
-
----
-
-## PostHog
-
-PostHog is used for analytics and feature flags. Import the posthog-js client from the PostHog provider.
-
-Event naming format: noun_verb
-
-Baseline events already instrumented:
-- note_created
-- note_opened
-- note_deleted
-- editor_opened
-- sync_triggered
-- search_performed
-
-All events must include a properties object with at minimum: timestamp and any relevant IDs (note_id, user_id where available).
-
-Adding a posthog.capture() call for every new user-facing action is part of the definition of done. Do not close a task without it.
-
----
-
-## Sentry
-
-Sentry is used for error tracking. Source maps are uploaded to Sentry on every Vercel build via the Sentry Next.js plugin in next.config.js.
-
-Every component or function that can fail (network call, async operation, user input processing) must have either a Sentry.ErrorBoundary wrapper or a try/catch block with Sentry.captureException(error) in the catch.
-
-Adding this is part of the definition of done. Do not close a task without it.
+Demo vault PIN is stored in sessionStorage under the key `"demo_vault_hash"`. Always use sessionStorage as the source of truth for whether a PIN is configured in demo mode.
 
 ---
 
@@ -227,45 +264,156 @@ Adding this is part of the definition of done. Do not close a task without it.
 
 | Concern | Where |
 |---|---|
-| Selected note, active filter, sidebar/note-list visibility, vault unlock | Zustand -- artifacts/next-app/src/store.ts |
-| Server data (notes, folders, tags, vault status) | React Query (TanStack Query v5) |
+| Selected note/quickbit, active filter, sidebar/note-list visibility, vault unlock, motion level, dark mode level, colorblind mode, template picker, onboarding, AI setup modal | Zustand — `artifacts/next-app/src/store.ts` |
+| Server data (notes, folders, tags, vault status, templates, attachments) | React Query (TanStack Query v5) |
 
 ---
 
-## Responsive Breakpoints
+## Motion Level System
 
-useBreakpoint() from src/hooks/use-mobile.tsx returns "mobile" | "tablet" | "desktop"
+Three motion levels: `full`, `reduced`, `minimal`. Stored in Zustand and persisted to `user_settings.motionLevel`.
 
-- Mobile < 768px
-- Tablet 768-1023px
-- Desktop 1024px+
+- `useMotionLevel()` — returns current level
+- `useSetMotionLevel()` — setter that also captures PostHog event
+- `useMotionInit()` — call once at app root; syncs `prefers-reduced-motion` and sets `data-motion` attribute on `<html>`
+- `useAnimationConfig()` — returns Framer Motion transition objects tuned to the current level
 
-Mobile is single-column with no persistent panels. Always ensure a back navigation button exists on every mobile screen including vault-locked notes.
+All Framer Motion components should use `useAnimationConfig()` rather than hardcoding durations. Hook lives in `artifacts/next-app/src/hooks/use-motion.ts`.
+
+---
+
+## Atmosphere System
+
+Dark mode intensity levels (`soft`, `default`, `oled`) and colorblind modes (`none`, `protanopia`, `tritanopia`). Sets `data-dark-level` and `data-colorblind` attributes on `<html>` so CSS in `globals.css` can remap surface tokens. Hook lives in `artifacts/next-app/src/hooks/use-atmosphere.ts`.
+
+---
+
+## Editor Architecture
+
+The editor is split into two layers:
+
+- **NoteShell.tsx** (`components/NoteShell.tsx`, ~910 lines) — orchestrator for full notes. Contains note header, save logic, title/tag state, version history panel, vault state, and all note-specific orchestration.
+- **GrapheEditor.tsx** (`components/editor/GrapheEditor.tsx`, ~363 lines) — the Tiptap editor instance. Shared between notes and quick bits.
+
+Editor sub-components in `components/editor/`:
+- `EditorToolbar.tsx` — full toolbar (font, size, formatting, link, etc.)
+- `AiSelectionMenu.tsx` / `MobileSelectionMenu.tsx` — floating AI menus
+- `NoteHeader.tsx` — top bar (save status, actions, overflow/export menus)
+- `NoteBody.tsx` — title input + tags + editor content
+- `AttachmentPanel.tsx` — file attachment management
+- `FindReplace.tsx` — find and replace
+- `SlashCommandMenu.tsx` — slash command menu
+- `TableOfContents.tsx` — document outline
+- `ScrollableToolbar.tsx` — horizontally scrollable mobile toolbar
+- Various dropdowns: `ColorPickerDropdown`, `FontPickerDropdown`, `FontSizeWidget`, `LinkPopover`, `WordCountPopover`, `ExportMenu`, `OverflowMenu`
+
+Key hooks:
+- `hooks/use-ai-action.ts` — AI call flow with first-time setup modal
+- `hooks/use-note-export.ts` — export functionality
+- `hooks/use-note-versions.ts` — version history management
+- `hooks/use-attachments.ts` — attachment CRUD
+- `lib/ai-prompts.ts` — single source of truth for AI prompt strings
+
+Do not add new editor UI directly into NoteShell.tsx — create sub-components in `components/editor/`.
+
+---
+
+## Templates System
+
+Preset and user-created templates stored in the `templates` table. Categories: capture, plan, reflect, create, mine.
+
+- `components/templates/TemplatePickerModal.tsx` — modal to browse and apply templates
+- `components/templates/SaveAsTemplateDialog.tsx` — save current note/quickbit as template
+- Template picker state managed in Zustand: `isTemplatePickerOpen`, `templatePickerContext` ("note" | "quickbit")
+- Preset templates seeded via `scripts/seed-templates.ts`
+
+---
+
+## Onboarding System
+
+4-step first-run onboarding flow for new users and demo mode.
+
+- `components/onboarding/OnboardingModal.tsx` — the modal UI
+- `hooks/use-onboarding.ts` — trigger logic (checks `user_settings.onboardingCompleted` for auth users, sessionStorage for demo)
+- API: `POST /onboarding` marks onboarding complete
+- State in Zustand: `isOnboardingOpen`, `onboardingStep`
 
 ---
 
 ## Toolbar Popover Pattern
 
 All toolbar menus (color picker, word count, font picker, font size, link popover) must:
-- Render via ReactDOM.createPortal targeting document.body
-- Position using getBoundingClientRect() on the trigger button
+- Render via `ReactDOM.createPortal` targeting `document.body`
+- Position using `getBoundingClientRect()` on the trigger button
 - Clamp to viewport with at least 8px padding on all edges
-- Use z-50
+- Use `z-50`
 - Close on outside click and Escape key
 
-Never render toolbar dropdowns as direct children of the toolbar -- they will be clipped.
+Never render toolbar dropdowns as direct children of the toolbar — they will be clipped.
 
 ---
 
-## Path Alias
+## Responsive Breakpoints
 
-artifacts/next-app uses @/ as an alias for src/. Use @/components/..., @/hooks/..., @/lib/..., etc. in all imports.
+`useBreakpoint()` from `src/hooks/use-mobile.tsx` returns `"mobile" | "tablet" | "desktop"`
+
+- Mobile: < 768px
+- Tablet: 768–1199px
+- Desktop: 1200px+
+
+The tablet threshold is 1200px (not 1024) so iPad Pro in portrait gets the 2-column tablet layout. Mobile is single-column with no persistent panels. Always ensure a back navigation button exists on every mobile screen including vault-locked notes.
+
+---
+
+## Path Aliases
+
+`artifacts/next-app` defines two aliases in `tsconfig.json`:
+- `@/*` → `./src/*` (app-internal imports)
+- `@lib/*` → `../../lib/*` (shared lib imports, e.g. `@lib/encryption`)
 
 ---
 
 ## Tailwind CSS
 
-Version 4 via @tailwindcss/postcss. Global styles in artifacts/next-app/src/app/globals.css. Use @import "tailwindcss" at the top of CSS files. No tailwind.config.* needed unless customizing the theme.
+Version 4 via `@tailwindcss/postcss`. Global styles in `artifacts/next-app/src/app/globals.css`. Use `@import "tailwindcss"` at the top of CSS files. No tailwind.config.* needed unless customizing the theme.
+
+---
+
+## PostHog
+
+PostHog is used for analytics. Import the `posthog-js` client from the PostHog provider. Server-side PostHog client in `lib/posthog-server.ts`.
+
+Event naming format: `noun_verb`
+
+Baseline events already instrumented:
+- note_created, note_opened, note_deleted
+- editor_opened, sync_triggered, search_performed
+- motion_level_changed
+
+All events must include a properties object with at minimum: `timestamp` and any relevant IDs (`note_id`, `user_id` where available).
+
+Adding a `posthog.capture()` call for every new user-facing action is part of the definition of done.
+
+PostHog requests are proxied through Next.js rewrites (`/ingest/*`) to avoid ad blockers.
+
+---
+
+## Sentry
+
+Sentry 10 (`@sentry/nextjs`) is used for error tracking. Config files:
+- `artifacts/next-app/sentry.client.config.ts`
+- `artifacts/next-app/sentry.server.config.ts`
+- `artifacts/next-app/sentry.edge.config.ts`
+
+Source maps are uploaded to Sentry on every Vercel build via the Sentry plugin in `next.config.ts` (org: `dimathew-roman`, project: `javascript-nextjs`).
+
+Every component or function that can fail must have either a `Sentry.ErrorBoundary` wrapper or a `try/catch` with `Sentry.captureException(error)`.
+
+---
+
+## Security Headers
+
+`next.config.ts` sets CSP, X-Frame-Options (DENY), HSTS, and other security headers on all routes. When adding new external domains (CDNs, APIs), update the CSP `connect-src` directive.
 
 ---
 
@@ -276,24 +424,29 @@ Version 4 via @tailwindcss/postcss. Global styles in artifacts/next-app/src/app/
 | NEXT_PUBLIC_SUPABASE_URL | frontend | Client-safe Supabase project URL |
 | NEXT_PUBLIC_SUPABASE_ANON_KEY | frontend | Client-safe public anon key |
 | SUPABASE_URL | API routes | Supabase project URL |
-| SUPABASE_SERVICE_ROLE_KEY | API routes only | Admin operations -- never expose to frontend |
+| SUPABASE_SERVICE_ROLE_KEY | API routes | Admin operations — never expose to frontend |
 | SUPABASE_DB_URL | lib/db (Drizzle) | Session-mode pooler connection string |
-| SENTRY_DSN | Sentry config files | Error tracking DSN |
-| NEXT_PUBLIC_POSTHOG_KEY | PostHog provider | Analytics project key |
-| NEXT_PUBLIC_POSTHOG_HOST | PostHog provider | Analytics host URL |
+| AI_KEY_ENCRYPTION_SECRET | API routes | 32-byte hex secret for AES-256-GCM encryption of AI keys |
+| GEMINI_API_KEY | API routes | Google Gemini API key |
+| CRON_SECRET | Vercel cron | Authenticates cron requests |
+| SENTRY_AUTH_TOKEN | build | Sentry source map upload token |
+| NEXT_PUBLIC_SENTRY_DSN | frontend + server | Sentry DSN (public, safe for client) |
+| NEXT_PUBLIC_POSTHOG_KEY | frontend | PostHog project token |
+| NEXT_PUBLIC_POSTHOG_HOST | frontend | PostHog host URL |
 
-For local dev, copy .env.example to .env at the repo root and fill in credentials.
+For local dev, copy `.env.example` to `.env` at the repo root and fill in credentials.
 
 ---
 
 ## Vercel Deployment
 
-vercel.json at the repo root configures Vercel to build from the monorepo:
-- Build command: pnpm --filter @workspace/next-app run build
-- Output directory: artifacts/next-app/.next
-- Install command: pnpm install
+`vercel.json` at the repo root:
+- Build command: `pnpm --filter @workspace/next-app run build`
+- Output directory: `.next`
+- Install command: `pnpm install`
+- Cron: `POST /api/cron/purge-deleted` runs daily at 3 AM UTC (hard-deletes expired soft-deleted notes)
 
-Branch strategy: master is production. feature/*, fix/*, and chore/* branches get Vercel preview deployments automatically.
+Branch strategy: `master` is production. `feature/*`, `fix/*`, and `chore/*` branches get Vercel preview deployments automatically.
 
 ---
 
@@ -301,15 +454,10 @@ Branch strategy: master is production. feature/*, fix/*, and chore/* branches ge
 
 | Branch | Purpose |
 |---|---|
-| master | Production -- Vercel deploys from here |
+| master | Production — Vercel deploys from here |
 | feature/name | New feature work, branched from master |
 | fix/name | Bug fixes, branched from master |
 | chore/name | Docs, config, non-feature work |
-
-PR workflow:
-1. Create feature/name, fix/name, or chore/name from master
-2. Commit all work on that branch
-3. Push and open PR targeting master
 
 One feature = one branch = one PR. Never put two features on the same branch.
 
@@ -318,27 +466,19 @@ One feature = one branch = one PR. Never put two features on the same branch.
 ## Git Workflow
 
 ### Starting a new session
-1. Always run git fetch origin and git checkout master and git pull origin master first to ensure you are working from the latest code.
-2. If the user says to continue work on an existing branch, run git checkout branch-name (and git pull origin branch-name if it exists on remote).
+1. Always run `git fetch origin` and `git checkout master` and `git pull origin master` first.
+2. If the user says to continue work on an existing branch, `git checkout branch-name`.
 3. If starting new work, create a new branch from the freshly-pulled master.
-4. If you find yourself on any branch that is not master or a feature/fix/chore branch, switch to master and pull before proceeding. Ask before continuing.
 
 ### During work
 - Commit frequently with clear, descriptive messages
 - All commits are local until explicitly pushed
-- Do NOT push to remote until the work is complete and ready for PR
 
 ### Finishing work
-1. Push the branch to GitHub: git push -u origin branch-name
-2. Create a PR using: gh pr create --title "title" --body "description"
-3. Do NOT merge the PR. DiMathew will review and merge manually in GitHub.
+1. Push the branch: `git push -u origin branch-name`
+2. Create a PR: `gh pr create --title "title" --body "description"`
+3. Do NOT merge the PR. DiMathew reviews and merges manually.
 4. Update the Notion Active Work row: Status to QA Review, branch name, Vercel preview URL.
-
-### Branch naming
-- New features: feature/descriptive-name
-- Bug fixes: fix/descriptive-name
-- Docs, config, chores: chore/descriptive-name
-- Never commit directly to master
 
 ---
 
@@ -359,30 +499,23 @@ Test files:
 - `e2e/02-notes.spec.ts` — create, open, delete, and search notes
 - `e2e/03-quick-bits.spec.ts` — Quick Bits list and navigation
 - `e2e/04-vault.spec.ts` — vault setup, PIN flow, and vaulting notes
+- `e2e/05-micro-interactions.spec.ts` — micro-interaction tests
+- `e2e/06-templates.spec.ts` — template picker and save-as-template
+- `e2e/07-onboarding.spec.ts` — onboarding flow
 
 All tests use demo mode (no auth credentials needed). The helper `e2e/helpers.ts` exports `enterDemoMode(page)` which lands on All Notes with demo data pre-seeded.
 
-Use `data-testid` attributes for all selectors — never couple tests to CSS classes. When adding new components that need test coverage, add `data-testid` at the same time.
+Use `data-testid` attributes for all selectors — never couple tests to CSS classes.
 
-The Playwright config is at `artifacts/next-app/playwright.config.ts`. Tests run serially (`workers: 1`) because the Next.js dev server cannot reliably handle concurrent test workers.
+Tests run serially (`workers: 1`) because the Next.js dev server cannot reliably handle concurrent test workers.
 
 ---
 
 ## Codebase Caveats
 
-NoteEditor.tsx is the orchestrator (~485 lines). Editor sub-components live in components/editor/ -- do not add new editor UI directly into NoteEditor.tsx. Key files:
-- editor/EditorToolbar.tsx -- full toolbar (font, size, formatting, link, etc.)
-- editor/AiSelectionMenu.tsx / MobileSelectionMenu.tsx -- floating AI menus
-- editor/NoteHeader.tsx -- top bar (save status, actions, overflow/export menus)
-- editor/NoteBody.tsx -- title input + tags + editor content
-- hooks/use-ai-action.ts -- AI call flow with first-time setup modal; use in both NoteEditor and QuickBitEditor
-- lib/ai-prompts.ts -- single source of truth for AI prompt strings
+FontSize is a named export from `@tiptap/extension-text-style`. Do not install `@tiptap/extension-font-size` — it is deprecated.
 
-Toolbar menus are portaled. See Toolbar Popover Pattern above.
-
-FontSize is a named export from @tiptap/extension-text-style. Do not install @tiptap/extension-font-size -- it is deprecated.
-
-AI provider keys are stored encrypted in the user_api_keys DB table. The encryption utility is in lib/encryption.ts (AES-256-GCM). The active provider setting is in user_settings. Do not use localStorage for AI keys.
+AI provider keys are stored encrypted in the `user_api_keys` DB table. The encryption utility is in `lib/encryption.ts` (AES-256-GCM, imported via `@lib/encryption`). The active provider setting is in `user_settings`. Do not use localStorage for AI keys.
 
 ---
 
