@@ -17,7 +17,7 @@
 - **Deployment**: Vercel
 - **Error tracking**: Sentry 10 (`@sentry/nextjs`)
 - **Analytics**: PostHog (`posthog-js`, `posthog-node`)
-- **UI primitives**: Radix UI (dialog, dropdown, toast, tooltip, toggle, label, separator, slot), Vaul (drawers), Sonner (toasts), Lucide icons
+- **UI primitives**: shadcn/ui (new-york style) wrapping Radix UI (`radix-ui` monorepo package), Vaul (drawers), Sonner (toasts), Lucide icons. Components live in `src/components/ui/` and the shadcn config is in `artifacts/next-app/components.json`.
 - **Other**: `jose` (JWT), `bcryptjs` (vault hashing), `html2pdf.js` (export), `turndown`/`turndown-plugin-gfm` (HTML-to-markdown), `date-fns`, `diff-match-patch` (version diffing), `katex` (math rendering), `lowlight` (code highlighting), `geist` (font), `next-themes`
 
 ---
@@ -60,7 +60,7 @@ artifacts/next-app/            -- Next.js app (frontend + API routes)
       editor/                  -- Tiptap editor sub-components
       onboarding/              -- Onboarding modal
       templates/               -- Template picker + save-as-template
-      ui/                      -- Shared UI primitives (button, dialog, drawer, etc.)
+      ui/                      -- shadcn/ui components + custom wrappers (IconButton, ToolbarButton, drawer, drawer-left, sonner, empty, ResizeHandle)
     hooks/                     -- Custom React hooks
     lib/                       -- Utilities (auth, Supabase clients, AI prompts, demo data, etc.)
     types/                     -- Type declarations
@@ -174,7 +174,7 @@ All endpoints live in `artifacts/next-app/src/app/api/` and are prefixed with `/
 At the start of every new session, before doing anything else:
 1. Pull the latest master from GitHub: git checkout master and git pull origin master
 2. Ask the user what feature or fix they are working on in this session.
-   - Always create a new branch from master for the work: git checkout -b feature/name (or fix/name for bug fixes, chore/name for non-feature work like docs or config).
+   - Always create a new branch from master for the work: git checkout -b feature/name (or fix/name for bug fixes, chore/name for non-feature work like docs or config, refactor/name for restructuring without behavior change, test/name for test-only changes).
    - Exception: if the user explicitly says they are continuing an in-progress branch that has unmerged work, switch to that branch instead.
    - Never silently continue on whatever branch happens to already have commits. Each feature/fix must have its own dedicated branch and PR. Never put two features on the same branch.
 3. Check that .env exists in the repo root -- if not, copy .env.example to .env and inform the user that real credentials from 1Password are needed for full login and DB access.
@@ -340,16 +340,83 @@ Preset and user-created templates stored in the `templates` table. Categories: c
 
 ---
 
-## Toolbar Popover Pattern
+## shadcn/ui Patterns
 
-All toolbar menus (color picker, word count, font picker, font size, link popover) must:
-- Render via `ReactDOM.createPortal` targeting `document.body`
-- Position using `getBoundingClientRect()` on the trigger button
-- Clamp to viewport with at least 8px padding on all edges
-- Use `z-50`
-- Close on outside click and Escape key
+All modals, dropdowns, popovers, and tooltips use shadcn/ui components (`src/components/ui/`) which wrap Radix primitives. Do NOT hand-roll new modal/popover code with `createPortal` + `getBoundingClientRect` + manual click-outside listeners — use the shadcn primitives instead.
 
-Never render toolbar dropdowns as direct children of the toolbar — they will be clipped.
+### Toolbar dropdowns and popovers
+
+- Toolbar menus (export, overflow, font picker, word count, link, color picker, font size) use `DropdownMenu` or `Popover` from shadcn. Radix handles positioning, collision detection, click-outside, and Escape automatically — no `createPortal` or `getBoundingClientRect` needed.
+- For popovers whose trigger lives in a separate component (e.g. ColorPickerDropdown receives `triggerRef` from EditorToolbar), use `<PopoverAnchor virtualRef={triggerRef as React.RefObject<HTMLElement>} />` to position the content relative to an external trigger.
+
+### Modals with Framer Motion enter/exit animation
+
+Modals that need spring/scale exit animations (SettingsModal, AISetupModal, SaveAsTemplateDialog, TemplatePickerModal) use the raw Radix primitives directly — NOT the shadcn `DialogContent` wrapper, which bundles its own Portal+Overlay and conflicts with `forceMount` + `asChild`.
+
+Pattern:
+```tsx
+import { Dialog as DialogPrimitive } from "radix-ui";
+
+<Dialog open={open} onOpenChange={setOpen}>
+  <DialogPrimitive.Portal forceMount>
+    <AnimatePresence>
+      {open && (
+        <>
+          <DialogPrimitive.Overlay forceMount asChild>
+            <motion.div initial={...} animate={...} exit={...} />
+          </DialogPrimitive.Overlay>
+          <DialogPrimitive.Content forceMount asChild
+            aria-describedby={undefined}
+            onOpenAutoFocus={(e) => e.preventDefault()}>
+            <motion.div initial={...} animate={...} exit={...}>
+              {children}
+            </motion.div>
+          </DialogPrimitive.Content>
+        </>
+      )}
+    </AnimatePresence>
+  </DialogPrimitive.Portal>
+</Dialog>
+```
+
+Simpler modals without exit animations (FolderEditModal, VaultModal, QuickBitShell ExpiredModal) use the shadcn `<Dialog><DialogContent>` wrapper directly.
+
+For confirm/cancel dialogs, use `<AlertDialog>` instead of `<Dialog>`.
+
+### ScrollArea in flex contexts
+
+Radix `ScrollArea`'s Viewport is `size-full`, so it expands to its parent's bounded height. When the ScrollArea is a `flex-1` child of a flex column, you MUST also add `min-h-0`:
+
+```tsx
+<div className="h-screen flex flex-col">
+  <header />
+  <ScrollArea className="flex-1 min-h-0">  {/* min-h-0 is required */}
+    <div className="p-2">{children}</div>
+  </ScrollArea>
+</div>
+```
+
+Without `min-h-0`, flex children don't shrink below their content size — the ScrollArea expands to content height and never scrolls.
+
+### IconButton and ToolbarButton
+
+`IconButton` and `ToolbarButton` are thin internal wrappers around shadcn `Button` (variant=ghost) and `Toggle` respectively. They preserve the existing API for ~50 consumer files and add app-specific tactile feedback (hover scale, touch targets, `active-elevate-2`). Don't replace existing consumers with raw `<Button>` — keep using the wrappers.
+
+### VersionHistoryPanel — non-modal Sheet
+
+The version history panel uses raw Radix Dialog with `modal={isMobile}` so the desktop slide-in panel doesn't dim or block the editor. Mobile keeps the modal bottom-sheet behavior.
+
+### Custom color picker
+
+The custom color picker (`ColorPickerDropdown`) uses pending state — color is NOT applied on every drag/slider change (which would call `editor.focus()` and steal focus from the popover). The user commits via the OK button or discards via Cancel. The PopoverContent has `onFocusOutside={(e) => e.preventDefault()}` to prevent close on focus changes.
+
+### Adding new shadcn components
+
+Run from `artifacts/next-app/`:
+```bash
+pnpm dlx shadcn@latest add <component>
+```
+This adds the component to `src/components/ui/`. After install, verify it doesn't overwrite custom files (IconButton, ToolbarButton, sonner, drawer, drawer-left, empty, ResizeHandle).
 
 ---
 
@@ -446,7 +513,7 @@ For local dev, copy `.env.example` to `.env` at the repo root and fill in creden
 - Install command: `pnpm install`
 - Cron: `POST /api/cron/purge-deleted` runs daily at 3 AM UTC (hard-deletes expired soft-deleted notes)
 
-Branch strategy: `master` is production. `feature/*`, `fix/*`, and `chore/*` branches get Vercel preview deployments automatically.
+Branch strategy: `master` is production. `feature/*`, `fix/*`, `chore/*`, `refactor/*`, and `test/*` branches get Vercel preview deployments automatically.
 
 ---
 
@@ -458,6 +525,8 @@ Branch strategy: `master` is production. `feature/*`, `fix/*`, and `chore/*` bra
 | feature/name | New feature work, branched from master |
 | fix/name | Bug fixes, branched from master |
 | chore/name | Docs, config, non-feature work |
+| refactor/name | Restructuring code without changing behavior (e.g., the shadcn/ui migration) |
+| test/name | Test-only changes (adding/updating Playwright specs without feature changes) |
 
 One feature = one branch = one PR. Never put two features on the same branch.
 
