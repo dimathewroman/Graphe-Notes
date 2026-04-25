@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue } from "framer-motion";
 import posthog from "posthog-js";
 import dynamic from "next/dynamic";
 import { Sidebar, SidebarContent } from "@/components/Sidebar";
@@ -60,9 +60,19 @@ export default function Home() {
       ? { duration: 0.1, ease: "linear" as const }
       : anim.standardTransition;
 
+  // MotionValue drives the panel width directly on the DOM — zero React re-renders during drag.
+  // Framer Motion's animate prop still drives this value for enter/exit animations;
+  // panelWidthMv.set() during drag interrupts any running animation and writes instantly.
+  const panelWidthMv = useMotionValue(listPanelWidth);
+
   const handleNoteListResize = useCallback((delta: number) => {
-    setNoteListWidth(Math.min(600, Math.max(300, noteListWidth + delta)));
-  }, [noteListWidth, setNoteListWidth]);
+    panelWidthMv.set(Math.min(600, Math.max(300, panelWidthMv.get() + delta)));
+  }, [panelWidthMv]);
+
+  const handleResizeEnd = useCallback(() => {
+    setIsResizing(false);
+    setNoteListWidth(Math.round(panelWidthMv.get()));
+  }, [setNoteListWidth, panelWidthMv]);
 
   useEffect(() => {
     if (bp === "desktop") {
@@ -211,11 +221,11 @@ export default function Home() {
                 animate={{ width: listPanelWidth }}
                 exit={{ width: 0 }}
                 transition={panelSlideTransition}
-                style={{ minWidth: 0 }}
+                style={{ width: panelWidthMv, minWidth: 0 }}
                 data-testid="note-list-panel"
               >
                 <motion.div
-                  style={{ width: listPanelWidth, minWidth: listPanelWidth }}
+                  style={{ width: panelWidthMv, minWidth: panelWidthMv }}
                   initial={{ x: -Math.round(listPanelWidth * 0.25), opacity: 0.5 }}
                   animate={{ x: 0, opacity: 1 }}
                   exit={{ x: -Math.round(listPanelWidth * 0.25), opacity: 0.5 }}
@@ -233,7 +243,7 @@ export default function Home() {
             <ResizeHandle
               onResize={handleNoteListResize}
               onResizeStart={() => setIsResizing(true)}
-              onResizeEnd={() => setIsResizing(false)}
+              onResizeEnd={handleResizeEnd}
             />
           )}
           {showEditor && <NoteShell />}

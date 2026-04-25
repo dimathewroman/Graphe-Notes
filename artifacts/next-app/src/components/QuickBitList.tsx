@@ -49,7 +49,7 @@ function formatExpiry(expiresAt: string): { label: string; className: string } {
 }
 
 export function QuickBitList() {
-  const { setSidebarOpen, isSidebarOpen, toggleSidebar, selectedQuickBitId, selectQuickBit, setMobileView, viewMode, setViewMode, noteListWidth, demoExtraQbIds, addDemoQbId, openTemplatePicker, setFilter } = useAppStore();
+  const { setSidebarOpen, isSidebarOpen, toggleSidebar, selectedQuickBitId, selectQuickBit, setMobileView, viewMode, setViewMode, demoExtraQbIds, addDemoQbId, openTemplatePicker, setFilter } = useAppStore();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
   const anim = useAnimationConfig();
@@ -166,14 +166,10 @@ export function QuickBitList() {
   const containerClass =
     bp === "mobile"
       ? "flex-1 bg-background flex flex-col h-screen"
-      : "border-r border-panel-border bg-background flex flex-col h-screen shrink-0";
-
-  const containerWidth = bp === "mobile" ? undefined
-    : viewMode === "gallery" ? 384
-    : noteListWidth;
+      : "border-r border-panel-border bg-background flex flex-col h-screen w-full";
 
   return (
-    <div className={containerClass} style={containerWidth ? { width: containerWidth } : undefined}>
+    <div className={containerClass}>
       {/* Header */}
       <div className="p-4 border-b border-panel-border flex flex-col gap-3">
         <div className="flex items-center justify-between">

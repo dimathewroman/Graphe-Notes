@@ -432,17 +432,12 @@ export function NoteList() {
     };
   };
 
-  const { noteListWidth } = useAppStore();
   const containerClass = bp === "mobile"
     ? "flex-1 bg-background flex flex-col h-screen"
-    : "border-r border-panel-border bg-background flex flex-col h-screen shrink-0";
-
-  const containerWidth = bp === "mobile" ? undefined
-    : viewMode === "gallery" ? 384
-    : noteListWidth;
+    : "border-r border-panel-border bg-background flex flex-col h-screen w-full";
 
   return (
-    <div data-testid="note-list" className={containerClass} style={containerWidth ? { width: containerWidth } : undefined}>
+    <div data-testid="note-list" className={containerClass}>
       {/* Header */}
       <div className="p-4 border-b border-panel-border flex flex-col gap-3">
         <div className="flex items-center justify-between">
