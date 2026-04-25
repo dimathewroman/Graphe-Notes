@@ -54,7 +54,7 @@ export default function Home() {
   // Desktop/tablet note list panel width — mirrors what each list component uses internally
   const listPanelWidth = viewMode === "gallery" ? galleryWidth : noteListWidth;
   // Per-mode minimums: gallery needs more room for the 2-col grid; list cards truncate gracefully
-  const minPanelWidth = viewMode === "gallery" ? 320 : 260;
+  const minPanelWidth = viewMode === "gallery" ? 340 : 280;
   const [isResizing, setIsResizing] = useState(false);
   const panelSlideTransition = isResizing
     ? { duration: 0 }
@@ -232,7 +232,7 @@ export default function Home() {
                 data-testid="note-list-panel"
               >
                 <motion.div
-                  style={{ width: panelWidthMv, minWidth: panelWidthMv }}
+                  style={{ width: panelWidthMv, minWidth: 0 }}
                   initial={{ x: -Math.round(listPanelWidth * 0.25), opacity: 0.5 }}
                   animate={{ x: 0, opacity: 1 }}
                   exit={{ x: -Math.round(listPanelWidth * 0.25), opacity: 0.5 }}
