@@ -82,6 +82,17 @@ export default function Home() {
     }
   }, [setNoteListWidth, setGalleryWidth, viewMode, panelWidthMv]);
 
+  // When the breakpoint changes (e.g. window resized desktop→tablet), clamp the stored
+  // width up to the new minimum if it falls below. Only increases, never shrinks.
+  useEffect(() => {
+    const min = (viewMode === "gallery" || bp === "tablet") ? 340 : 280;
+    if (listPanelWidth < min) {
+      if (viewMode === "gallery") setGalleryWidth(min);
+      else setNoteListWidth(min);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bp]);
+
   useEffect(() => {
     if (bp === "desktop") {
       setSidebarOpen(true);
