@@ -162,3 +162,8 @@ export const useAppStore = create<AppState>((set) => ({
   setAIPanelOpen: (isOpen) => set({ isAIPanelOpen: isOpen }),
   setSettingsOpen: (isOpen, tab) => set({ isSettingsOpen: isOpen, settingsInitialTab: tab ?? null }),
 }));
+
+// Expose the store on window for E2E tests (dev only; tree-shaken in production)
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+  (window as any).__ZUSTAND_STORE__ = useAppStore;
+}

@@ -27,7 +27,10 @@ test.describe("Template System", () => {
   });
 
   test("+ button in Quick Bits section creates a blank Quick Bit on primary click", async ({ page }) => {
-    // Find and click the Quick Bits section via Sidebar
+    // Navigate to Quick Bits (enterDemoMode lands on All Notes)
+    await page.getByTestId("nav-quickbits").click();
+    await page.getByTestId("new-quickbit-btn").waitFor({ state: "visible" });
+
     const zbits = page.getByTestId("quickbit-item");
     const countBefore = await zbits.count();
 
@@ -65,6 +68,9 @@ test.describe("Template System", () => {
 
   test("chevron click on quick bit + button opens dropdown with 'From template' and 'New note instead'", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
+
+    // Navigate to Quick Bits (enterDemoMode lands on All Notes)
+    await page.getByTestId("nav-quickbits").click();
 
     const btn = page.getByTestId("new-quickbit-btn");
     await btn.waitFor({ state: "visible" });
