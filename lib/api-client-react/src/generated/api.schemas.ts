@@ -283,6 +283,54 @@ export interface UpdateSmartFolderBody {
   sortOrder?: number;
 }
 
+export type TemplateCategory =
+  (typeof TemplateCategory)[keyof typeof TemplateCategory];
+
+export const TemplateCategory = {
+  capture: "capture",
+  plan: "plan",
+  reflect: "reflect",
+  create: "create",
+  mine: "mine",
+} as const;
+
+export type TemplateContent = { [key: string]: unknown };
+
+export interface Template {
+  id: string;
+  /** @nullable */
+  userId?: string | null;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  category: TemplateCategory;
+  content: TemplateContent;
+  isPreset: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type CreateTemplateBodyCategory =
+  (typeof CreateTemplateBodyCategory)[keyof typeof CreateTemplateBodyCategory];
+
+export const CreateTemplateBodyCategory = {
+  capture: "capture",
+  plan: "plan",
+  reflect: "reflect",
+  create: "create",
+  mine: "mine",
+} as const;
+
+export type CreateTemplateBodyContent = { [key: string]: unknown };
+
+export interface CreateTemplateBody {
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  category: CreateTemplateBodyCategory;
+  content: CreateTemplateBodyContent;
+}
+
 export type AuthorizationSessionHeaderParameter = string;
 
 export type GetNotesParams = {
@@ -377,6 +425,10 @@ export const GetQuickBitsSortDir = {
   asc: "asc",
   desc: "desc",
 } as const;
+
+export type DeleteTemplate200 = {
+  success: boolean;
+};
 
 export type BeginBrowserLoginParams = {
   returnTo?: string;

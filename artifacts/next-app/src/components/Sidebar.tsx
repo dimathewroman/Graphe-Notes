@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import ReactDOM from "react-dom";
 import posthog from "posthog-js";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAnimationConfig } from "@/hooks/use-motion";
@@ -456,7 +457,9 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         />
       )}
 
-      {vaultModal && (
+      {/* Portal the VaultModal to document.body so it escapes any CSS-transform container
+          (Vaul drawer uses translate3d on mobile/tablet, which breaks position:fixed children) */}
+      {vaultModal && typeof window !== "undefined" && ReactDOM.createPortal(
         <VaultModal
           mode={vaultModal}
           onConfirm={handleVaultConfirm}
@@ -470,7 +473,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               return false;
             }
           } : undefined}
-        />
+        />,
+        document.body
       )}
     </div>
   );

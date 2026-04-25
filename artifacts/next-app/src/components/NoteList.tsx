@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAnimationConfig } from "@/hooks/use-motion";
 import {
   Search, Plus, Pin, Star, FileText, MoreVertical, Trash2, FolderInput,
-  LayoutGrid, LayoutList, SortAsc, ShieldCheck, Image as ImageIcon, Hash, X, Tag, Menu, PanelLeftClose, PanelLeft
+  LayoutGrid, LayoutList, SortAsc, ShieldCheck, Image as ImageIcon, Hash, X, Tag, Menu, PanelLeftClose, PanelLeft,
+  ChevronDown, LayoutTemplate, Zap
 } from "lucide-react";
 import { useAppStore } from "@/store";
+import ReactDOM from "react-dom";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   useGetNotes, useCreateNote, useToggleNotePin, useToggleNoteFavorite,
@@ -62,12 +64,19 @@ export function NoteList() {
   const isVaultUnlocked = useAppStore(s => s.isVaultUnlocked);
   const demoExtraIds = useAppStore(s => s.demoExtraIds);
   const addDemoNoteId = useAppStore(s => s.addDemoNoteId);
+  const openTemplatePicker = useAppStore(s => s.openTemplatePicker);
+  const setFilter = useAppStore(s => s.setFilter);
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
   const anim = useAnimationConfig();
 
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const debouncedSearch = useDebounce(localSearch, 300);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [plusMenuPos, setPlusMenuPos] = useState<{ bottom: number; right: number } | null>(null);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
+  const plusBtnRef = useRef<HTMLButtonElement>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
   const [moveMenuNoteId, setMoveMenuNoteId] = useState<number | null>(null);
   const [showTagsPanel, setShowTagsPanel] = useState(false);
@@ -94,6 +103,9 @@ export function NoteList() {
       }
       if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
         setShowSortMenu(false);
+      }
+      if (plusMenuRef.current && !plusMenuRef.current.contains(e.target as Node)) {
+        setShowPlusMenu(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -420,18 +432,12 @@ export function NoteList() {
     };
   };
 
-  const { noteListWidth } = useAppStore();
   const containerClass = bp === "mobile"
     ? "flex-1 bg-background flex flex-col h-screen"
-    : "border-r border-panel-border bg-background flex flex-col h-screen shrink-0";
-
-  const containerWidth = bp === "mobile" ? undefined
-    : viewMode === "gallery" ? 384
-    : bp === "tablet" ? 288
-    : noteListWidth;
+    : "border-r border-panel-border bg-background flex flex-col h-screen w-full";
 
   return (
-    <div data-testid="note-list" className={containerClass} style={containerWidth ? { width: containerWidth } : undefined}>
+    <div data-testid="note-list" className={containerClass}>
       {/* Header */}
       <div className="p-4 border-b border-panel-border flex flex-col gap-3">
         <div className="flex items-center justify-between">
@@ -449,7 +455,7 @@ export function NoteList() {
                 <PanelLeft className="w-4 h-4" />
               </IconButton>
             )}
-            <h2 className="text-lg font-semibold tracking-tight truncate">{listTitle}</h2>
+            <h2 className="text-lg font-semibold tracking-tight whitespace-nowrap">{listTitle}</h2>
             {isFolderSmart && (
               <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">smart</span>
             )}
@@ -483,15 +489,144 @@ export function NoteList() {
                 </div>
               )}
             </div>
-            {/* New note — rounded square, NOT circle */}
-            <button
-              onClick={handleCreateNew}
-              disabled={createNoteMut.isPending}
-              data-testid="new-note-btn"
-              className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm disabled:opacity-50 flex items-center justify-center active-elevate-2"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+            {/* New note — split primary + chevron zone */}
+            <div className="relative" ref={plusMenuRef}>
+              {bp !== "mobile" ? (
+                /* Desktop: split button with chevron */
+                <button
+                  ref={plusBtnRef}
+                  data-testid="new-note-btn"
+                  disabled={createNoteMut.isPending}
+                  onClick={(e) => {
+                    const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                    const chevronZoneStart = rect.right - rect.width * 0.3;
+                    if (e.clientX >= chevronZoneStart) {
+                      e.preventDefault();
+                      setShowPlusMenu(v => !v);
+                    } else {
+                      handleCreateNew();
+                    }
+                  }}
+                  className="flex items-center rounded-[10px] bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 overflow-hidden h-9 active-elevate-2 transition-colors"
+                  aria-label="New note or choose from template"
+                >
+                  <span className="flex items-center justify-center px-2.5 h-full">
+                    <Plus className="w-4 h-4" />
+                  </span>
+                  <span className="w-px h-5 bg-white/25 shrink-0" />
+                  <span className="flex items-center justify-center px-2 h-full hover:bg-white/8">
+                    <motion.span
+                      animate={{ rotate: showPlusMenu ? 180 : 0 }}
+                      transition={{ duration: 0.15, ease: "easeOut" }}
+                    >
+                      <ChevronDown className="w-2.5 h-2.5" />
+                    </motion.span>
+                  </span>
+                </button>
+              ) : (
+                /* Mobile: simple + button, long-press opens sheet */
+                <button
+                  ref={plusBtnRef}
+                  data-testid="new-note-btn"
+                  disabled={createNoteMut.isPending}
+                  onPointerDown={() => {
+                    longPressTimer.current = setTimeout(() => {
+                      const box = plusBtnRef.current?.getBoundingClientRect();
+                      if (box) setPlusMenuPos({ bottom: box.bottom, right: box.right });
+                      setShowPlusMenu(true);
+                    }, 400);
+                  }}
+                  onPointerUp={() => {
+                    if (longPressTimer.current) {
+                      clearTimeout(longPressTimer.current);
+                      longPressTimer.current = null;
+                      if (!showPlusMenu) handleCreateNew();
+                    }
+                  }}
+                  onPointerLeave={() => {
+                    if (longPressTimer.current) {
+                      clearTimeout(longPressTimer.current);
+                      longPressTimer.current = null;
+                    }
+                  }}
+                  className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 flex items-center justify-center active-elevate-2 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              )}
+
+              {/* Desktop dropdown */}
+              {bp !== "mobile" && showPlusMenu && (
+                <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[200px] bg-popover border border-panel-border rounded-lg shadow-md py-2 luminance-border-top"
+                  data-testid="new-note-dropdown"
+                >
+                  <button
+                    data-testid="from-template-btn"
+                    onClick={() => { setShowPlusMenu(false); openTemplatePicker("note"); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-[13px] font-medium text-foreground hover:bg-panel rounded-md transition-colors"
+                  >
+                    <LayoutTemplate className="w-4 h-4 text-muted-foreground" />
+                    From template
+                  </button>
+                  <button
+                    onClick={() => { setShowPlusMenu(false); setFilter("quickbits"); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-[13px] font-medium text-foreground hover:bg-panel rounded-md transition-colors"
+                  >
+                    <Zap className="w-4 h-4 text-muted-foreground" />
+                    New Quick Bit instead
+                  </button>
+                </div>
+              )}
+
+              {/* Mobile anchored popover — pops out of the + button, Framer Motion animated */}
+              {bp === "mobile" && typeof window !== "undefined" && ReactDOM.createPortal(
+                <AnimatePresence>
+                  {showPlusMenu && plusMenuPos && (
+                    <>
+                      <motion.div
+                        key="note-plus-backdrop"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={anim.fastTransition}
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowPlusMenu(false)}
+                      />
+                      <motion.div
+                        key="note-plus-menu"
+                        initial={anim.useScale ? { opacity: 0, scale: 0.88 } : { opacity: 0 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={anim.useScale ? { opacity: 0, scale: 0.88 } : { opacity: 0 }}
+                        transition={anim.fastTransition}
+                        className="fixed z-50 bg-[var(--color-surface-3,var(--color-panel))] border border-panel-border rounded-xl shadow-lg overflow-hidden w-52"
+                        style={{
+                          top: plusMenuPos.bottom + 6,
+                          right: window.innerWidth - plusMenuPos.right,
+                          transformOrigin: "top right",
+                        }}
+                      >
+                        <button
+                          onClick={() => { setShowPlusMenu(false); openTemplatePicker("note"); }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-[14px] text-foreground hover:bg-panel transition-colors"
+                        >
+                          <LayoutTemplate className="w-4 h-4 text-muted-foreground shrink-0" />
+                          From template
+                        </button>
+                        <div className="h-px bg-panel-border mx-3" />
+                        <button
+                          onClick={() => { setShowPlusMenu(false); setFilter("quickbits"); }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-[14px] text-foreground hover:bg-panel transition-colors"
+                        >
+                          <Zap className="w-4 h-4 text-muted-foreground shrink-0" />
+                          New Quick Bit instead
+                        </button>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>,
+                document.body
+              )}
+            </div>
           </div>
         </div>
 

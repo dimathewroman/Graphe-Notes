@@ -7,3 +7,4 @@ export * from "./quick-bits";
 export * from "./smart-folders";
 export * from "./user-api-keys";
 export * from "./user-settings";
+export * from "./templates";

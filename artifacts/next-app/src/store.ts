@@ -39,8 +39,10 @@ interface AppState {
 
   sidebarWidth: number;
   noteListWidth: number;
+  galleryWidth: number;
   setSidebarWidth: (w: number) => void;
   setNoteListWidth: (w: number) => void;
+  setGalleryWidth: (w: number) => void;
 
   isVaultUnlocked: boolean;
   setVaultUnlocked: (isUnlocked: boolean) => void;
@@ -49,6 +51,15 @@ interface AppState {
   pendingAiAction: ((provider: string) => Promise<void>) | null;
   setAiSetupModalOpen: (isOpen: boolean) => void;
   setPendingAiAction: (action: ((provider: string) => Promise<void>) | null) => void;
+
+  isTemplatePickerOpen: boolean;
+  templatePickerContext: "note" | "quickbit";
+  openTemplatePicker: (context: "note" | "quickbit") => void;
+  closeTemplatePicker: () => void;
+
+  isSaveAsTemplateOpen: boolean;
+  openSaveAsTemplate: () => void;
+  closeSaveAsTemplate: () => void;
 
   demoExtraIds: number[];
   addDemoNoteId: (id: number) => void;
@@ -102,8 +113,10 @@ export const useAppStore = create<AppState>((set) => ({
 
   sidebarWidth: 240,
   noteListWidth: 340,
+  galleryWidth: 384,
   setSidebarWidth: (w) => set({ sidebarWidth: w }),
   setNoteListWidth: (w) => set({ noteListWidth: w }),
+  setGalleryWidth: (w) => set({ galleryWidth: w }),
 
   isVaultUnlocked: false,
   setVaultUnlocked: (isUnlocked) => set({ isVaultUnlocked: isUnlocked }),
@@ -112,6 +125,15 @@ export const useAppStore = create<AppState>((set) => ({
   pendingAiAction: null,
   setAiSetupModalOpen: (isOpen) => set({ isAiSetupModalOpen: isOpen }),
   setPendingAiAction: (action) => set({ pendingAiAction: action }),
+
+  isTemplatePickerOpen: false,
+  templatePickerContext: "note",
+  openTemplatePicker: (context) => set({ isTemplatePickerOpen: true, templatePickerContext: context }),
+  closeTemplatePicker: () => set({ isTemplatePickerOpen: false }),
+
+  isSaveAsTemplateOpen: false,
+  openSaveAsTemplate: () => set({ isSaveAsTemplateOpen: true }),
+  closeSaveAsTemplate: () => set({ isSaveAsTemplateOpen: false }),
 
   demoExtraIds: [],
   addDemoNoteId: (id) => set((state) => ({ demoExtraIds: [...state.demoExtraIds, id] })),
@@ -140,3 +162,8 @@ export const useAppStore = create<AppState>((set) => ({
   setAIPanelOpen: (isOpen) => set({ isAIPanelOpen: isOpen }),
   setSettingsOpen: (isOpen, tab) => set({ isSettingsOpen: isOpen, settingsInitialTab: tab ?? null }),
 }));
+
+// Expose the store on window for E2E tests (dev only; tree-shaken in production)
+if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+  (window as any).__ZUSTAND_STORE__ = useAppStore;
+}

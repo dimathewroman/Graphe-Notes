@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { TableOfContents } from "./editor/TableOfContents";
 import { NoteHeader } from "./editor/NoteHeader";
 import { NoteBody } from "./editor/NoteBody";
+import { SaveAsTemplateDialog } from "./templates/SaveAsTemplateDialog";
 import { EmptyEditorState } from "./editor/EmptyEditorState";
 import { VaultLockScreen } from "./editor/VaultLockScreen";
 import { GrapheEditor } from "./editor/GrapheEditor";
@@ -42,6 +43,7 @@ export function NoteShell() {
   const setMobileView = useAppStore(s => s.setMobileView);
   const setSidebarOpen = useAppStore(s => s.setSidebarOpen);
   const setNoteListOpen = useAppStore(s => s.setNoteListOpen);
+  const openSaveAsTemplate = useAppStore(s => s.openSaveAsTemplate);
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const queryClient = useQueryClient();
@@ -636,6 +638,11 @@ export function NoteShell() {
     exportAsMarkdown(title, editor?.getHTML() ?? note?.content ?? "");
   }, [title, editor, note?.content]);
 
+  const handleSaveAsTemplate = useCallback(() => {
+    posthog.capture("save_as_template_opened", { note_id: selectedNoteId, timestamp: new Date().toISOString() });
+    openSaveAsTemplate();
+  }, [selectedNoteId, openSaveAsTemplate]);
+
   const handleVaultSetupConfirm = async (pin: string) => {
     if (!selectedNoteId || !note) return;
     setShowVaultSetupModal(false);
@@ -801,6 +808,7 @@ export function NoteShell() {
         onExportPdf={handleExportPdf}
         onExportMarkdown={handleExportMarkdown}
         onDelete={handleDelete}
+        onSaveAsTemplate={handleSaveAsTemplate}
       />
 
       <div
@@ -892,6 +900,11 @@ export function NoteShell() {
           onCancel={() => { setShowVaultUnlockModal(false); setVaultUnlockError(""); }}
         />
       )}
+
+      <SaveAsTemplateDialog
+        noteTitle={title}
+        noteContent={editor?.getHTML() ?? note?.content ?? ""}
+      />
     </div>
   );
 }

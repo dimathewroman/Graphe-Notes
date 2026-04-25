@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue } from "framer-motion";
 import posthog from "posthog-js";
 import dynamic from "next/dynamic";
 import { Sidebar, SidebarContent } from "@/components/Sidebar";
@@ -15,6 +15,7 @@ import { RecentlyDeletedDetail } from "@/components/RecentlyDeletedDetail";
 import { AllAttachments } from "@/components/AllAttachments";
 import { AIPanel } from "@/components/AIPanel";
 import { AISetupModal } from "@/components/AISetupModal";
+import { TemplatePickerModal } from "@/components/templates/TemplatePickerModal";
 import { QuickBitNotifications } from "@/components/QuickBitNotifications";
 import { useAppStore } from "@/store";
 import { useBreakpoint } from "@/hooks/use-mobile";
@@ -37,7 +38,7 @@ const mobileViewVariants = {
 };
 
 export default function Home() {
-  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId, selectedQuickBitId, activeFilter, noteListWidth, setNoteListWidth, viewMode } = useAppStore();
+  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId, selectedQuickBitId, activeFilter, noteListWidth, setNoteListWidth, galleryWidth, setGalleryWidth, viewMode } = useAppStore();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
   const anim = useAnimationConfig();
@@ -51,7 +52,10 @@ export default function Home() {
   }
 
   // Desktop/tablet note list panel width — mirrors what each list component uses internally
-  const listPanelWidth = viewMode === "gallery" ? 384 : bp === "tablet" ? 288 : noteListWidth;
+  const listPanelWidth = viewMode === "gallery" ? galleryWidth : noteListWidth;
+  // Per-mode minimums: gallery needs more room for the 2-col grid; list cards truncate gracefully
+  // Tablet list headers include a 44px hamburger button not present on desktop
+  const minPanelWidth = (viewMode === "gallery" || bp === "tablet") ? 340 : 280;
   const [isResizing, setIsResizing] = useState(false);
   const panelSlideTransition = isResizing
     ? { duration: 0 }
@@ -59,9 +63,35 @@ export default function Home() {
       ? { duration: 0.1, ease: "linear" as const }
       : anim.standardTransition;
 
+  // MotionValue drives the panel width directly on the DOM — zero React re-renders during drag.
+  // Framer Motion's animate prop still drives this value for enter/exit animations;
+  // panelWidthMv.set() during drag interrupts any running animation and writes instantly.
+  const panelWidthMv = useMotionValue(listPanelWidth);
+
   const handleNoteListResize = useCallback((delta: number) => {
-    setNoteListWidth(Math.min(600, Math.max(280, noteListWidth + delta)));
-  }, [noteListWidth, setNoteListWidth]);
+    panelWidthMv.set(Math.min(600, Math.max(minPanelWidth, panelWidthMv.get() + delta)));
+  }, [panelWidthMv, minPanelWidth]);
+
+  const handleResizeEnd = useCallback(() => {
+    setIsResizing(false);
+    const newWidth = Math.round(panelWidthMv.get());
+    if (viewMode === "gallery") {
+      setGalleryWidth(newWidth);
+    } else {
+      setNoteListWidth(newWidth);
+    }
+  }, [setNoteListWidth, setGalleryWidth, viewMode, panelWidthMv]);
+
+  // When the breakpoint changes (e.g. window resized desktop→tablet), clamp the stored
+  // width up to the new minimum if it falls below. Only increases, never shrinks.
+  useEffect(() => {
+    const min = (viewMode === "gallery" || bp === "tablet") ? 340 : 280;
+    if (listPanelWidth < min) {
+      if (viewMode === "gallery") setGalleryWidth(min);
+      else setNoteListWidth(min);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bp]);
 
   useEffect(() => {
     if (bp === "desktop") {
@@ -210,11 +240,11 @@ export default function Home() {
                 animate={{ width: listPanelWidth }}
                 exit={{ width: 0 }}
                 transition={panelSlideTransition}
-                style={{ minWidth: 0 }}
+                style={{ width: panelWidthMv, minWidth: 0 }}
                 data-testid="note-list-panel"
               >
                 <motion.div
-                  style={{ width: listPanelWidth, minWidth: listPanelWidth }}
+                  style={{ width: panelWidthMv, minWidth: 0 }}
                   initial={{ x: -Math.round(listPanelWidth * 0.25), opacity: 0.5 }}
                   animate={{ x: 0, opacity: 1 }}
                   exit={{ x: -Math.round(listPanelWidth * 0.25), opacity: 0.5 }}
@@ -228,11 +258,11 @@ export default function Home() {
             )}
           </AnimatePresence>
           {isAttachments && <AllAttachments />}
-          {bp === "desktop" && viewMode !== "gallery" && showList && (
+          {(bp === "desktop" || bp === "tablet") && showList && (
             <ResizeHandle
               onResize={handleNoteListResize}
               onResizeStart={() => setIsResizing(true)}
-              onResizeEnd={() => setIsResizing(false)}
+              onResizeEnd={handleResizeEnd}
             />
           )}
           {showEditor && <NoteShell />}
@@ -245,6 +275,7 @@ export default function Home() {
       <AISetupModal />
       <SettingsModal />
       <QuickBitNotifications />
+      <TemplatePickerModal />
       </div>
     </div>
   );

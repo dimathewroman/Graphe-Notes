@@ -663,6 +663,43 @@ export const SoftDeleteQuickBitResponse = zod.object({
 });
 
 /**
+ * @summary Get all templates (presets + user's own)
+ */
+export const GetTemplatesResponseItem = zod.object({
+  id: zod.string(),
+  userId: zod.string().nullish(),
+  name: zod.string(),
+  description: zod.string().nullish(),
+  category: zod.enum(["capture", "plan", "reflect", "create", "mine"]),
+  content: zod.record(zod.string(), zod.unknown()),
+  isPreset: zod.boolean(),
+  createdAt: zod.date(),
+  updatedAt: zod.date(),
+});
+export const GetTemplatesResponse = zod.array(GetTemplatesResponseItem);
+
+/**
+ * @summary Save a new user template
+ */
+export const CreateTemplateBody = zod.object({
+  name: zod.string(),
+  description: zod.string().nullish(),
+  category: zod.enum(["capture", "plan", "reflect", "create", "mine"]),
+  content: zod.record(zod.string(), zod.unknown()),
+});
+
+/**
+ * @summary Delete a user template (presets cannot be deleted)
+ */
+export const DeleteTemplateParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const DeleteTemplateResponse = zod.object({
+  success: zod.boolean(),
+});
+
+/**
  * @summary Get all unique tags used across notes
  */
 export const GetTagsResponseItem = zod.string();

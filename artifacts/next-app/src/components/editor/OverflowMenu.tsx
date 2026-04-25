@@ -1,11 +1,11 @@
 // Mobile/tablet overflow menu with note actions (pin, fav, vault, export, delete).
 
 import { useEffect, useRef, useState } from "react";
-import { Pin, Star, Share, Download, FileText, ShieldCheck, Clock, Search, Trash2, MoreVertical } from "lucide-react";
+import { Pin, Star, Share, Download, FileText, ShieldCheck, Clock, Search, Trash2, MoreVertical, LayoutTemplate } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
 import { cn } from "@/lib/utils";
 
-export function OverflowMenu({ note, onPin, onFav, onVaultToggle, onVersionHistory, onExportPdf, onExportMarkdown, onDelete, showVersionHistory, isMobile }: {
+export function OverflowMenu({ note, onPin, onFav, onVaultToggle, onVersionHistory, onExportPdf, onExportMarkdown, onDelete, onSaveAsTemplate, showVersionHistory, isMobile }: {
   note: { vaulted?: boolean | null; pinned?: boolean | null; favorite?: boolean | null } | null | undefined;
   onPin?: () => void;
   onFav?: () => void;
@@ -14,6 +14,7 @@ export function OverflowMenu({ note, onPin, onFav, onVaultToggle, onVersionHisto
   onExportPdf: () => void;
   onExportMarkdown: () => void;
   onDelete: () => void;
+  onSaveAsTemplate?: () => void;
   showVersionHistory: boolean;
   isMobile?: boolean;
 }) {
@@ -73,6 +74,12 @@ export function OverflowMenu({ note, onPin, onFav, onVaultToggle, onVersionHisto
             <Search className="w-4 h-4" />
             Find in Page
           </button>
+          {onSaveAsTemplate && (
+            <button onClick={() => { onSaveAsTemplate(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-panel transition-colors">
+              <LayoutTemplate className="w-4 h-4" />
+              Save as template
+            </button>
+          )}
           <div className="h-px bg-panel-border mx-2 my-1" />
           <button onClick={() => { onDelete(); setOpen(false); }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-destructive hover:bg-destructive/10 transition-colors">
             <Trash2 className="w-4 h-4" />

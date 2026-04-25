@@ -6,7 +6,7 @@ import type { useEditor } from "@tiptap/react";
 import { useAnimationConfig } from "@/hooks/use-motion";
 import {
   Pin, Star, ShieldCheck, Clock, Trash2,
-  PanelLeft, PanelLeftClose, ArrowLeft, LayoutList, Menu,
+  PanelLeft, PanelLeftClose, ArrowLeft, LayoutList, Menu, LayoutTemplate,
 } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
 import { cn, formatDate } from "@/lib/utils";
@@ -34,6 +34,7 @@ export const NoteHeader = memo(function NoteHeader({
   onExportPdf,
   onExportMarkdown,
   onDelete,
+  onSaveAsTemplate,
 }: {
   bp: "mobile" | "tablet" | "desktop";
   note: { vaulted?: boolean | null; pinned?: boolean | null; favorite?: boolean | null; updatedAt?: string } | null | undefined;
@@ -54,6 +55,7 @@ export const NoteHeader = memo(function NoteHeader({
   onExportPdf: () => void;
   onExportMarkdown: () => void;
   onDelete: () => void;
+  onSaveAsTemplate?: () => void;
 }) {
   const anim = useAnimationConfig();
 
@@ -166,12 +168,18 @@ export const NoteHeader = memo(function NoteHeader({
             onExportPdf={onExportPdf}
             onExportMarkdown={onExportMarkdown}
             onDelete={onDelete}
+            onSaveAsTemplate={onSaveAsTemplate}
             showVersionHistory={showVersionHistory}
             isMobile={bp === "mobile"}
           />
         )}
         {bp === "desktop" && (
           <>
+            {onSaveAsTemplate && (
+              <IconButton onClick={onSaveAsTemplate} title="Save as template">
+                <LayoutTemplate className="w-4 h-4" />
+              </IconButton>
+            )}
             <ExportMenu onExportPdf={onExportPdf} onExportMarkdown={onExportMarkdown} />
             <div className="w-px h-4 bg-panel-border mx-1" />
             <IconButton onClick={onDelete} className="hover:text-destructive hover:bg-destructive/10" title="Delete">
