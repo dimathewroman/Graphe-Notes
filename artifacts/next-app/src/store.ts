@@ -50,6 +50,15 @@ interface AppState {
   setAiSetupModalOpen: (isOpen: boolean) => void;
   setPendingAiAction: (action: ((provider: string) => Promise<void>) | null) => void;
 
+  isTemplatePickerOpen: boolean;
+  templatePickerContext: "note" | "quickbit";
+  openTemplatePicker: (context: "note" | "quickbit") => void;
+  closeTemplatePicker: () => void;
+
+  isSaveAsTemplateOpen: boolean;
+  openSaveAsTemplate: () => void;
+  closeSaveAsTemplate: () => void;
+
   demoExtraIds: number[];
   addDemoNoteId: (id: number) => void;
   resetDemoNoteIds: () => void;
@@ -112,6 +121,15 @@ export const useAppStore = create<AppState>((set) => ({
   pendingAiAction: null,
   setAiSetupModalOpen: (isOpen) => set({ isAiSetupModalOpen: isOpen }),
   setPendingAiAction: (action) => set({ pendingAiAction: action }),
+
+  isTemplatePickerOpen: false,
+  templatePickerContext: "note",
+  openTemplatePicker: (context) => set({ isTemplatePickerOpen: true, templatePickerContext: context }),
+  closeTemplatePicker: () => set({ isTemplatePickerOpen: false }),
+
+  isSaveAsTemplateOpen: false,
+  openSaveAsTemplate: () => set({ isSaveAsTemplateOpen: true }),
+  closeSaveAsTemplate: () => set({ isSaveAsTemplateOpen: false }),
 
   demoExtraIds: [],
   addDemoNoteId: (id) => set((state) => ({ demoExtraIds: [...state.demoExtraIds, id] })),

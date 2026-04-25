@@ -25,6 +25,8 @@ tags:
     description: Smart folder operations
   - name: quick-bits
     description: Quick Bit operations
+  - name: templates
+    description: Template operations
 paths:
   /healthz:
     get:
@@ -848,6 +850,74 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /templates:
+    get:
+      operationId: getTemplates
+      tags: [templates]
+      summary: Get all templates (presets + user's own)
+      responses:
+        "200":
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Template"
+    post:
+      operationId: createTemplate
+      tags: [templates]
+      summary: Save a new user template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTemplateBody"
+      responses:
+        "201":
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /templates/{id}:
+    delete:
+      operationId: deleteTemplate
+      tags: [templates]
+      summary: Delete a user template (presets cannot be deleted)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                required:
+                  - success
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /tags:
     get:
       operationId: getTags
@@ -1500,3 +1570,55 @@ components:
           type: ["string", "null"]
         sortOrder:
           type: integer
+
+    Template:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: ["string", "null"]
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        category:
+          type: string
+          enum: [capture, plan, reflect, create, mine]
+        content:
+          type: object
+          additionalProperties: true
+        isPreset:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - category
+        - content
+        - isPreset
+        - createdAt
+        - updatedAt
+
+    CreateTemplateBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        category:
+          type: string
+          enum: [capture, plan, reflect, create, mine]
+        content:
+          type: object
+          additionalProperties: true
+      required:
+        - name
+        - category
+        - content

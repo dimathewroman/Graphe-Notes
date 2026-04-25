@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { Zap, Plus, Clock, Menu, PanelLeft, Search, LayoutGrid, LayoutList, SortAsc } from "lucide-react";
+import { Zap, Plus, Clock, Menu, PanelLeft, Search, LayoutGrid, LayoutList, SortAsc, ChevronDown, LayoutTemplate, FileText } from "lucide-react";
+import ReactDOM from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAnimationConfig } from "@/hooks/use-motion";
 import { useAppStore } from "@/store";
@@ -48,7 +49,7 @@ function formatExpiry(expiresAt: string): { label: string; className: string } {
 }
 
 export function QuickBitList() {
-  const { setSidebarOpen, isSidebarOpen, toggleSidebar, selectedQuickBitId, selectQuickBit, setMobileView, viewMode, setViewMode, noteListWidth, demoExtraQbIds, addDemoQbId } = useAppStore();
+  const { setSidebarOpen, isSidebarOpen, toggleSidebar, selectedQuickBitId, selectQuickBit, setMobileView, viewMode, setViewMode, noteListWidth, demoExtraQbIds, addDemoQbId, openTemplatePicker, setFilter } = useAppStore();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
   const anim = useAnimationConfig();
@@ -60,11 +61,18 @@ export function QuickBitList() {
   const debouncedSearch = useDebounce(localSearch, 300);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
+  const plusBtnRef = useRef<HTMLButtonElement>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (sortMenuRef.current && !sortMenuRef.current.contains(e.target as Node)) {
         setShowSortMenu(false);
+      }
+      if (plusMenuRef.current && !plusMenuRef.current.contains(e.target as Node)) {
+        setShowPlusMenu(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -214,15 +222,118 @@ export function QuickBitList() {
                 </div>
               )}
             </div>
-            {/* New quick bit — rounded square, NOT circle */}
-            <button
-              onClick={handleCreateNew}
-              disabled={createMut.isPending}
-              data-testid="new-quickbit-btn"
-              className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary-hover shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
+            {/* New quick bit — split primary + chevron zone */}
+            <div className="relative" ref={plusMenuRef}>
+              {bp !== "mobile" ? (
+                <button
+                  ref={plusBtnRef}
+                  data-testid="new-quickbit-btn"
+                  disabled={createMut.isPending}
+                  onClick={(e) => {
+                    const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                    const chevronZoneStart = rect.right - rect.width * 0.3;
+                    if (e.clientX >= chevronZoneStart) {
+                      e.preventDefault();
+                      setShowPlusMenu(v => !v);
+                    } else {
+                      handleCreateNew();
+                    }
+                  }}
+                  className="flex items-center rounded-[10px] bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 overflow-hidden h-9 transition-colors"
+                  aria-label="New Quick Bit or choose from template"
+                >
+                  <span className="flex items-center justify-center px-2.5 h-full">
+                    <Plus className="w-4 h-4" />
+                  </span>
+                  <span className="w-px h-5 bg-white/25 shrink-0" />
+                  <span className="flex items-center justify-center px-2 h-full hover:bg-white/8">
+                    <motion.span
+                      animate={{ rotate: showPlusMenu ? 180 : 0 }}
+                      transition={{ duration: 0.15, ease: "easeOut" }}
+                    >
+                      <ChevronDown className="w-2.5 h-2.5" />
+                    </motion.span>
+                  </span>
+                </button>
+              ) : (
+                <button
+                  ref={plusBtnRef}
+                  data-testid="new-quickbit-btn"
+                  disabled={createMut.isPending}
+                  onPointerDown={() => {
+                    longPressTimer.current = setTimeout(() => {
+                      setShowPlusMenu(true);
+                    }, 400);
+                  }}
+                  onPointerUp={() => {
+                    if (longPressTimer.current) {
+                      clearTimeout(longPressTimer.current);
+                      longPressTimer.current = null;
+                      if (!showPlusMenu) handleCreateNew();
+                    }
+                  }}
+                  onPointerLeave={() => {
+                    if (longPressTimer.current) {
+                      clearTimeout(longPressTimer.current);
+                      longPressTimer.current = null;
+                    }
+                  }}
+                  className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 flex items-center justify-center transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              )}
+
+              {/* Desktop dropdown */}
+              {bp !== "mobile" && showPlusMenu && (
+                <div className="absolute right-0 top-full mt-1.5 z-50 min-w-[200px] bg-popover border border-panel-border rounded-lg shadow-md py-2 luminance-border-top"
+                  data-testid="new-quickbit-dropdown"
+                >
+                  <button
+                    data-testid="from-template-qb-btn"
+                    onClick={() => { setShowPlusMenu(false); openTemplatePicker("quickbit"); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-[13px] font-medium text-foreground hover:bg-panel rounded-md transition-colors"
+                  >
+                    <LayoutTemplate className="w-4 h-4 text-muted-foreground" />
+                    From template
+                  </button>
+                  <button
+                    onClick={() => { setShowPlusMenu(false); setFilter("all"); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-[13px] font-medium text-foreground hover:bg-panel rounded-md transition-colors"
+                  >
+                    <FileText className="w-4 h-4 text-muted-foreground" />
+                    New note instead
+                  </button>
+                </div>
+              )}
+
+              {/* Mobile bottom sheet */}
+              {bp === "mobile" && showPlusMenu && ReactDOM.createPortal(
+                <>
+                  <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setShowPlusMenu(false)} />
+                  <div className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface-3,var(--color-panel))] rounded-t-2xl shadow-lg pb-8 pt-2">
+                    <div className="flex justify-center mb-4">
+                      <div className="w-9 h-1 rounded-full bg-border/60" />
+                    </div>
+                    <button
+                      onClick={() => { setShowPlusMenu(false); openTemplatePicker("quickbit"); }}
+                      className="w-full flex items-center gap-3 px-6 py-3 text-[14px] text-foreground hover:bg-panel transition-colors"
+                    >
+                      <LayoutTemplate className="w-5 h-5 text-muted-foreground" />
+                      From template
+                    </button>
+                    <button
+                      onClick={() => { setShowPlusMenu(false); setFilter("all"); }}
+                      className="w-full flex items-center gap-3 px-6 py-3 text-[14px] text-foreground hover:bg-panel transition-colors"
+                    >
+                      <FileText className="w-5 h-5 text-muted-foreground" />
+                      New note instead
+                    </button>
+                  </div>
+                </>,
+                document.body
+              )}
+            </div>
           </div>
         </div>
 

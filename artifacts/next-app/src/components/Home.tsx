@@ -15,6 +15,7 @@ import { RecentlyDeletedDetail } from "@/components/RecentlyDeletedDetail";
 import { AllAttachments } from "@/components/AllAttachments";
 import { AIPanel } from "@/components/AIPanel";
 import { AISetupModal } from "@/components/AISetupModal";
+import { TemplatePickerModal } from "@/components/templates/TemplatePickerModal";
 import { QuickBitNotifications } from "@/components/QuickBitNotifications";
 import { useAppStore } from "@/store";
 import { useBreakpoint } from "@/hooks/use-mobile";
@@ -245,6 +246,7 @@ export default function Home() {
       <AISetupModal />
       <SettingsModal />
       <QuickBitNotifications />
+      <TemplatePickerModal />
       </div>
     </div>
   );

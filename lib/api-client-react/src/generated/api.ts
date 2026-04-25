@@ -23,6 +23,8 @@ import type {
   CreateNoteBody,
   CreateQuickBitBody,
   CreateSmartFolderBody,
+  CreateTemplateBody,
+  DeleteTemplate200,
   ErrorEnvelope,
   ErrorResponse,
   Folder,
@@ -42,6 +44,7 @@ import type {
   QuickBitSettings,
   SmartFolder,
   SoftDeleteQuickBitResponse,
+  Template,
   ToggleNoteVaultBody,
   UpdateFolderBody,
   UpdateNoteBody,
@@ -2842,6 +2845,251 @@ export const useSoftDeleteQuickBit = <
   TContext
 > => {
   return useMutation(getSoftDeleteQuickBitMutationOptions(options));
+};
+
+/**
+ * @summary Get all templates (presets + user's own)
+ */
+export const getGetTemplatesUrl = () => {
+  return `/api/templates`;
+};
+
+export const getTemplates = async (
+  options?: RequestInit,
+): Promise<Template[]> => {
+  return customFetch<Template[]>(getGetTemplatesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTemplatesQueryKey = () => {
+  return [`/api/templates`] as const;
+};
+
+export const getGetTemplatesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTemplates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTemplates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTemplatesQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTemplates>>> = ({
+    signal,
+  }) => getTemplates({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTemplates>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTemplatesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTemplates>>
+>;
+export type GetTemplatesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get all templates (presets + user's own)
+ */
+
+export function useGetTemplates<
+  TData = Awaited<ReturnType<typeof getTemplates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTemplates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTemplatesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Save a new user template
+ */
+export const getCreateTemplateUrl = () => {
+  return `/api/templates`;
+};
+
+export const createTemplate = async (
+  createTemplateBody: CreateTemplateBody,
+  options?: RequestInit,
+): Promise<Template> => {
+  return customFetch<Template>(getCreateTemplateUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createTemplateBody),
+  });
+};
+
+export const getCreateTemplateMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTemplate>>,
+    TError,
+    { data: BodyType<CreateTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createTemplate>>,
+  TError,
+  { data: BodyType<CreateTemplateBody> },
+  TContext
+> => {
+  const mutationKey = ["createTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createTemplate>>,
+    { data: BodyType<CreateTemplateBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createTemplate(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createTemplate>>
+>;
+export type CreateTemplateMutationBody = BodyType<CreateTemplateBody>;
+export type CreateTemplateMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Save a new user template
+ */
+export const useCreateTemplate = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createTemplate>>,
+    TError,
+    { data: BodyType<CreateTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createTemplate>>,
+  TError,
+  { data: BodyType<CreateTemplateBody> },
+  TContext
+> => {
+  return useMutation(getCreateTemplateMutationOptions(options));
+};
+
+/**
+ * @summary Delete a user template (presets cannot be deleted)
+ */
+export const getDeleteTemplateUrl = (id: string) => {
+  return `/api/templates/${id}`;
+};
+
+export const deleteTemplate = async (
+  id: string,
+  options?: RequestInit,
+): Promise<DeleteTemplate200> => {
+  return customFetch<DeleteTemplate200>(getDeleteTemplateUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteTemplateMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTemplate>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteTemplate>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deleteTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteTemplate>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteTemplate(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteTemplate>>
+>;
+
+export type DeleteTemplateMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a user template (presets cannot be deleted)
+ */
+export const useDeleteTemplate = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteTemplate>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteTemplate>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeleteTemplateMutationOptions(options));
 };
 
 /**
