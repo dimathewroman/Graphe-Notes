@@ -21,6 +21,7 @@ import { IconButton } from "./ui/IconButton";
 import { useDemoMode } from "@/lib/demo-context";
 import { FolderEditModal } from "./FolderEditModal";
 import { useBreakpoint } from "@/hooks/use-mobile";
+import { ScrollArea } from "./ui/scroll-area";
 
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const {
@@ -317,7 +318,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-1">
+      <ScrollArea className="flex-1 min-h-0">
+        <div className="py-1">
         {/* Primary nav */}
         <div className="px-3 space-y-0.5 mb-3">
           <NavItem icon={<FileText className="w-4 h-4" />} label="All Notes" active={activeFilter === "all"} onClick={() => handleNavClick("all")} testId="nav-all-notes" />
@@ -412,7 +414,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           />
         </div>
 
-      </div>
+        </div>
+      </ScrollArea>
 
       {/* AI Assistant — directly above profile */}
       <div className="px-3 py-2">

@@ -1,11 +1,9 @@
-// Font size control with inline edit, hover dropdown, and mobile input support.
-
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState } from "react";
 import type { useEditor } from "@tiptap/react";
 import { cn } from "@/lib/utils";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { FONT_SIZE_PRESETS, DEFAULT_FONT_SIZE } from "./ai-action-groups";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 
 export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor> }) {
   const breakpoint = useBreakpoint();
@@ -14,11 +12,9 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
   const [editing, setEditing] = useState(false);
   const [inputVal, setInputVal] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number }>({ top: -9999, left: -9999 });
 
   const valueRef = useRef<HTMLButtonElement>(null);
   const inlineInputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
   const mobileInputRef = useRef<HTMLInputElement>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -80,143 +76,108 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
     setEditing(false);
   };
 
-  useLayoutEffect(() => {
-    if (!dropdownOpen) return;
-    const trigger = valueRef.current;
-    const menu = dropdownRef.current;
-    if (!trigger || !menu) return;
-    const rect = trigger.getBoundingClientRect();
-    const menuW = menu.offsetWidth || 80;
-    const menuH = menu.offsetHeight || 200;
-    const pad = 8;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let top = rect.bottom + 4;
-    let left = rect.left + rect.width / 2 - menuW / 2;
-    if (left + menuW > vw - pad) left = vw - pad - menuW;
-    if (left < pad) left = pad;
-    if (top + menuH > vh - pad) top = rect.top - menuH - 4;
-    if (top < pad) top = pad;
-    setPos({ top, left });
-  }, [dropdownOpen]);
-
   useEffect(() => {
     if (editing) inlineInputRef.current?.select();
   }, [editing]);
 
-  useEffect(() => {
-    if (!dropdownOpen) return;
-    const handler = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (
-        valueRef.current && !valueRef.current.contains(t) &&
-        dropdownRef.current && !dropdownRef.current.contains(t)
-      ) closeDropdown();
-    };
-    const keyHandler = (e: KeyboardEvent) => { if (e.key === "Escape") closeDropdown(); };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("keydown", keyHandler);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("keydown", keyHandler);
-    };
-  }, [dropdownOpen]);
-
   return (
-    <div className="flex items-center shrink-0 rounded border border-panel-border">
-      <button
-        onClick={() => nudge(-1)}
-        className="min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 md:w-5 md:h-6 flex items-center justify-center text-muted-foreground hover:bg-panel hover:text-foreground transition-colors text-sm px-1"
-        title="Decrease font size"
-      >
-        −
-      </button>
-
-      <div className="w-px h-3.5 bg-panel-border" />
-
-      {editing ? (
-        <input
-          ref={inlineInputRef}
-          value={inputVal}
-          onChange={(e) => setInputVal(e.target.value)}
-          onBlur={() => confirmEdit(inputVal)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") { e.preventDefault(); confirmEdit(inputVal); }
-            if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
-          }}
-          className="w-9 text-center text-xs bg-transparent outline-none text-foreground tabular-nums py-1"
-        />
-      ) : (
+    <Popover open={dropdownOpen} onOpenChange={(open) => { if (!open) closeDropdown(); }}>
+      <div className="flex items-center shrink-0 rounded border border-panel-border">
         <button
-          ref={valueRef}
-          onClick={handleValueClick}
-          onMouseEnter={handleHoverEnter}
-          onMouseLeave={handleHoverLeave}
-          className="min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 md:w-9 md:h-6 flex items-center justify-center text-xs text-foreground hover:bg-panel transition-colors tabular-nums"
-          title="Font size — hover to pick, click to type"
+          onClick={() => nudge(-1)}
+          className="min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 md:w-5 md:h-6 flex items-center justify-center text-muted-foreground hover:bg-panel hover:text-foreground transition-colors text-sm px-1"
+          title="Decrease font size"
         >
-          {currentSize}
+          −
         </button>
-      )}
 
-      <div className="w-px h-3.5 bg-panel-border" />
+        <div className="w-px h-3.5 bg-panel-border" />
 
-      <button
-        onClick={() => nudge(1)}
-        className="min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 md:w-5 md:h-6 flex items-center justify-center text-muted-foreground hover:bg-panel hover:text-foreground transition-colors text-sm px-1"
-        title="Increase font size"
-      >
-        +
-      </button>
+        {editing ? (
+          <input
+            ref={inlineInputRef}
+            value={inputVal}
+            onChange={(e) => setInputVal(e.target.value)}
+            onBlur={() => confirmEdit(inputVal)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") { e.preventDefault(); confirmEdit(inputVal); }
+              if (e.key === "Escape") { e.preventDefault(); setEditing(false); }
+            }}
+            className="w-9 text-center text-xs bg-transparent outline-none text-foreground tabular-nums py-1"
+          />
+        ) : (
+          <PopoverAnchor asChild>
+            <button
+              ref={valueRef}
+              onClick={handleValueClick}
+              onMouseEnter={handleHoverEnter}
+              onMouseLeave={handleHoverLeave}
+              className="min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 md:w-9 md:h-6 flex items-center justify-center text-xs text-foreground hover:bg-panel transition-colors tabular-nums"
+              title="Font size — hover to pick, click to type"
+            >
+              {currentSize}
+            </button>
+          </PopoverAnchor>
+        )}
 
-      {dropdownOpen && createPortal(
-        <div
-          ref={dropdownRef}
-          className="fixed z-50 bg-popover border border-panel-border rounded-xl shadow-2xl py-1.5 w-20 max-h-64 overflow-y-auto luminance-border-top"
-          style={{ top: pos.top, left: pos.left }}
-          onMouseEnter={() => { if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current); }}
-          onMouseLeave={handleHoverLeave}
+        <div className="w-px h-3.5 bg-panel-border" />
+
+        <button
+          onClick={() => nudge(1)}
+          className="min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 md:w-5 md:h-6 flex items-center justify-center text-muted-foreground hover:bg-panel hover:text-foreground transition-colors text-sm px-1"
+          title="Increase font size"
         >
-          {isMobile && (
-            <div className="px-2 pb-1.5 border-b border-panel-border mb-1">
-              <input
-                ref={mobileInputRef}
-                type="number"
-                min={8}
-                max={96}
-                defaultValue={currentSize}
-                className="w-full text-center text-xs bg-panel rounded px-1 py-0.5 outline-none text-foreground"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    const val = parseInt((e.target as HTMLInputElement).value, 10);
-                    if (!isNaN(val) && val >= 8 && val <= 96) applySize(val);
-                    closeDropdown();
-                  }
-                  if (e.key === "Escape") closeDropdown();
-                }}
-                onBlur={(e) => {
-                  const val = parseInt(e.target.value, 10);
+          +
+        </button>
+      </div>
+
+      <PopoverContent
+        side="bottom"
+        align="center"
+        sideOffset={4}
+        className="w-20 p-0 py-1.5 max-h-64 overflow-y-auto bg-popover border-panel-border rounded-xl shadow-2xl luminance-border-top"
+        onMouseEnter={() => { if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current); }}
+        onMouseLeave={handleHoverLeave}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        {isMobile && (
+          <div className="px-2 pb-1.5 border-b border-panel-border mb-1">
+            <input
+              ref={mobileInputRef}
+              type="number"
+              min={8}
+              max={96}
+              defaultValue={currentSize}
+              className="w-full text-center text-xs bg-panel rounded px-1 py-0.5 outline-none text-foreground"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const val = parseInt((e.target as HTMLInputElement).value, 10);
                   if (!isNaN(val) && val >= 8 && val <= 96) applySize(val);
                   closeDropdown();
-                }}
-              />
-            </div>
-          )}
-          {FONT_SIZE_PRESETS.map((size) => (
-            <button
-              key={size}
-              onClick={() => { applySize(size); closeDropdown(); }}
-              className={cn(
-                "w-full text-center px-2 py-1 text-xs transition-colors hover:bg-panel-hover",
-                currentSize === size && "text-primary bg-panel"
-              )}
-            >
-              {size}
-            </button>
-          ))}
-        </div>,
-        document.body
-      )}
-    </div>
+                }
+                if (e.key === "Escape") closeDropdown();
+              }}
+              onBlur={(e) => {
+                const val = parseInt(e.target.value, 10);
+                if (!isNaN(val) && val >= 8 && val <= 96) applySize(val);
+                closeDropdown();
+              }}
+            />
+          </div>
+        )}
+        {FONT_SIZE_PRESETS.map((size) => (
+          <button
+            key={size}
+            onClick={() => { applySize(size); closeDropdown(); }}
+            className={cn(
+              "w-full text-center px-2 py-1 text-xs transition-colors hover:bg-panel-hover",
+              currentSize === size && "text-primary bg-panel"
+            )}
+          >
+            {size}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
   );
 }

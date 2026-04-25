@@ -1,17 +1,22 @@
-import { forwardRef } from "react";
+import * as React from "react";
+import { Button } from "./button";
 import { cn } from "@/lib/utils";
 
-interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface IconButtonProps extends Omit<React.ComponentProps<"button">, "ref"> {
   active?: boolean;
+  asChild?: boolean;
+  ref?: React.Ref<HTMLButtonElement>;
 }
 
-export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
+const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
   ({ className, active, ...props }, ref) => {
     return (
-      <button
+      <Button
         ref={ref}
+        variant="ghost"
+        size="icon"
         className={cn(
-          "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-2 rounded-md flex items-center justify-center",
+          "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-2 rounded-md",
           "transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]",
           "text-muted-foreground hover:text-foreground hover:bg-panel-hover hover:scale-[1.08] active:scale-[0.95]",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
@@ -24,3 +29,5 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
   }
 );
 IconButton.displayName = "IconButton";
+
+export { IconButton };

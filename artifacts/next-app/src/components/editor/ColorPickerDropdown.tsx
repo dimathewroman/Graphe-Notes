@@ -1,8 +1,8 @@
-import { useRef, useEffect, useLayoutEffect, useState, useCallback } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useRef, useState, useCallback } from "react";
 import type { Editor } from "@tiptap/react";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 
 // ─── Color palettes ──────────────────────────────────────────────────────────
 
@@ -84,7 +84,15 @@ function isValidHex(hex: string): boolean {
 
 // ─── Custom gradient color picker panel ──────────────────────────────────────
 
-function CustomColorPanel({ value, onChange }: { value: string; onChange: (hex: string) => void }) {
+function CustomColorPanel({
+  value,
+  onApply,
+  onCancel,
+}: {
+  value: string;
+  onApply: (hex: string) => void;
+  onCancel: () => void;
+}) {
   const [hue, setHue] = useState<number>(0);
   const [sat, setSat] = useState<number>(1);
   const [val, setVal] = useState<number>(1);
@@ -107,8 +115,9 @@ function CustomColorPanel({ value, onChange }: { value: string; onChange: (hex: 
   const emitColor = useCallback((h: number, s: number, v: number) => {
     const hex = hsvToHex(h, s, v);
     setHexInput(hex);
-    onChange(hex);
-  }, [onChange]);
+  }, []);
+
+  const currentHex = hsvToHex(hue, sat, val);
 
   const handleGradientPointer = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     const el = gradientRef.current;
@@ -147,7 +156,6 @@ function CustomColorPanel({ value, onChange }: { value: string; onChange: (hex: 
       setHue(h);
       setSat(s);
       setVal(v);
-      onChange(hex);
     }
   };
 
@@ -201,7 +209,7 @@ function CustomColorPanel({ value, onChange }: { value: string; onChange: (hex: 
       <div className="flex items-center gap-2">
         <div
           className="w-6 h-6 rounded border border-panel-border shrink-0"
-          style={{ backgroundColor: hsvToHex(hue, sat, val) }}
+          style={{ backgroundColor: currentHex }}
         />
         <input
           type="text"
@@ -211,6 +219,24 @@ function CustomColorPanel({ value, onChange }: { value: string; onChange: (hex: 
           maxLength={7}
           className="flex-1 bg-panel text-foreground text-xs font-mono px-2 py-1 rounded border border-panel-border outline-none focus:ring-1 focus:ring-ring"
         />
+      </div>
+
+      {/* Cancel / OK */}
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 h-8 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-panel-hover transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => onApply(currentHex)}
+          className="flex-1 h-8 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover transition-colors"
+        >
+          OK
+        </button>
       </div>
     </div>
   );
@@ -245,52 +271,10 @@ interface ColorPickerDropdownProps {
 export function ColorPickerDropdown({ type, editor, onClose, triggerRef }: ColorPickerDropdownProps) {
   const [showCustom, setShowCustom] = useState(false);
   const [customColor, setCustomColor] = useState("#3B82F6");
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; left: number }>({ top: -9999, left: -9999 });
 
-  useLayoutEffect(() => {
-    const trigger = triggerRef.current;
-    const menu = containerRef.current;
-    if (!trigger || !menu) return;
-    const triggerRect = trigger.getBoundingClientRect();
-    const menuW = menu.offsetWidth || 224;
-    const menuH = menu.offsetHeight || 300;
-    const pad = 8;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let top = triggerRect.bottom + 6;
-    let left = triggerRect.left;
-    if (left + menuW > vw - pad) left = vw - pad - menuW;
-    if (left < pad) left = pad;
-    if (top + menuH > vh - pad) top = triggerRect.top - menuH - 6;
-    if (top < pad) top = pad;
-    setPos({ top, left });
-  // Re-clamp when the custom panel expands (menu grows taller)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showCustom]);
-
-  // Current active color from editor
   const activeColor = type === "text"
     ? (editor.getAttributes("textStyle").color as string | undefined)
     : (editor.getAttributes("highlight").color as string | undefined);
-
-  // Click outside to close
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const keyHandler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("keydown", keyHandler);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("keydown", keyHandler);
-    };
-  }, [onClose]);
 
   const applyColor = (hex: string) => {
     if (type === "text") {
@@ -311,22 +295,30 @@ export function ColorPickerDropdown({ type, editor, onClose, triggerRef }: Color
 
   const rainbow = type === "text" ? RAINBOW_TEXT : RAINBOW_HIGHLIGHT;
 
-  return createPortal(
-    <div
-      ref={containerRef}
-      className="fixed z-50 bg-popover border border-panel-border rounded-xl shadow-2xl p-3 w-56 luminance-border-top"
-      style={{ top: pos.top, left: pos.left }}
-    >
-      {/* None / Remove option */}
-      <button
-        onClick={removeColor}
-        className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-panel-hover rounded-lg transition-colors mb-2"
+  return (
+    <Popover open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <PopoverAnchor virtualRef={triggerRef as React.RefObject<HTMLElement>} />
+      <PopoverContent
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        className="w-56 p-3 bg-popover border-panel-border rounded-xl shadow-2xl luminance-border-top"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onFocusOutside={(e) => e.preventDefault()}
       >
-        <X className="w-3 h-3" />
-        {type === "highlight" ? "None" : "Remove color"}
-      </button>
-
-      <div className="h-px bg-panel-border mb-2" />
+      {/* None option — highlight only */}
+      {type === "highlight" && (
+        <>
+          <button
+            onClick={removeColor}
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-panel-hover rounded-lg transition-colors mb-2"
+          >
+            <X className="w-3 h-3" />
+            None
+          </button>
+          <div className="h-px bg-panel-border mb-2" />
+        </>
+      )}
 
       {/* Grayscale row */}
       <p className="text-[10px] text-muted-foreground mb-1.5 font-medium uppercase tracking-wide">Grayscale</p>
@@ -370,13 +362,15 @@ export function ColorPickerDropdown({ type, editor, onClose, triggerRef }: Color
       {showCustom && (
         <CustomColorPanel
           value={customColor}
-          onChange={(hex) => {
+          onApply={(hex) => {
             setCustomColor(hex);
             applyColor(hex);
+            onClose();
           }}
+          onCancel={() => setShowCustom(false)}
         />
       )}
-    </div>,
-    document.body
+      </PopoverContent>
+    </Popover>
   );
 }

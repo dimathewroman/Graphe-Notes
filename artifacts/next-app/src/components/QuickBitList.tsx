@@ -19,6 +19,7 @@ import { useDemoMode } from "@/lib/demo-context";
 import { DEMO_QUICK_BITS } from "@/lib/demo-data";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "./ui/empty";
 import { useDebounce } from "@/hooks/use-debounce";
+import { ScrollArea } from "./ui/scroll-area";
 
 const QB_SORT_OPTIONS = [
   { label: "Expires soonest", sortBy: "expiresAt" as const, sortDir: "asc" as const },
@@ -370,7 +371,8 @@ export function QuickBitList() {
       </div>
 
       {/* List */}
-      <div className={cn("flex-1 overflow-y-auto p-2", viewMode === "gallery" ? "grid grid-cols-2 gap-2 content-start" : "space-y-1")}>
+      <ScrollArea className="flex-1 min-h-0">
+      <div className={cn("p-2", viewMode === "gallery" ? "grid grid-cols-2 gap-2 content-start" : "space-y-1")}>
         {isLoading ? (
           <div className={cn("flex justify-center", viewMode === "gallery" ? "col-span-2 p-4" : "p-4")}>
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -488,6 +490,7 @@ export function QuickBitList() {
           </AnimatePresence>
         )}
       </div>
+      </ScrollArea>
     </div>
   );
 }

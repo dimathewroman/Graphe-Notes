@@ -22,6 +22,7 @@ import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { useDemoMode } from "@/lib/demo-context";
 import { DEMO_NOTES } from "@/lib/demo-data";
 import posthog from "posthog-js";
+import { ScrollArea } from "./ui/scroll-area";
 
 interface ContextMenu {
   noteId: number;
@@ -644,7 +645,8 @@ export function NoteList() {
       </div>
 
       {/* Notes */}
-      <div className="flex-1 overflow-y-auto p-2">
+      <ScrollArea className="flex-1 min-h-0">
+      <div className="p-2">
         {isLoading ? (
           <div className="flex justify-center p-4">
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -787,6 +789,7 @@ export function NoteList() {
           </div>
         )}
       </div>
+      </ScrollArea>
 
       {/* Context Menu */}
       {contextMenu && (

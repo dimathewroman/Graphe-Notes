@@ -30,6 +30,10 @@ import { cn } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { useDemoMode } from "@/lib/demo-context";
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
+} from "./ui/alert-dialog";
 
 export function RecentlyDeletedDetail() {
   const {
@@ -263,32 +267,22 @@ export function RecentlyDeletedDetail() {
       </div>
 
       {/* Confirm permanent delete dialog */}
-      {showConfirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-popover border border-panel-border rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="text-base font-semibold text-foreground mb-2">Permanently Delete</h3>
-            <p className="text-sm text-muted-foreground mb-4">
+      <AlertDialog open={showConfirmDelete} onOpenChange={setShowConfirmDelete}>
+        <AlertDialogContent className="bg-popover border-panel-border rounded-2xl shadow-2xl max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base">Permanently Delete</AlertDialogTitle>
+            <AlertDialogDescription>
               {isVaultNote
                 ? "This will permanently delete a vault note. This cannot be undone."
                 : "Permanently delete this note? This cannot be undone."}
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setShowConfirmDelete(false)}
-                className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:bg-panel transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handlePermanentDelete}
-                className="px-4 py-2 rounded-lg text-sm bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
-              >
-                Delete Forever
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel variant="ghost">Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={handlePermanentDelete}>Delete Forever</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Content */}
       <div className={cn("flex-1 overflow-y-auto", bp === "mobile" && "pb-28")}>

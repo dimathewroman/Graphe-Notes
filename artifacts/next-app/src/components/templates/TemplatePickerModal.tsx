@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import ReactDOM from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, ArrowLeft, LayoutGrid, CheckCircle2, Trash2 } from "lucide-react";
 import { useAnimationConfig } from "@/hooks/use-motion";
 import { useAppStore } from "@/store";
 import { useBreakpoint } from "@/hooks/use-mobile";
+import { Dialog } from "../ui/dialog";
+import { Dialog as DialogPrimitive } from "radix-ui";
 import {
   useGetTemplates, useDeleteTemplate, getGetTemplatesQueryKey,
   useCreateNote, useCreateQuickBit,
@@ -237,17 +238,7 @@ export function TemplatePickerModal() {
     }
   }, [isTemplatePickerOpen]);
 
-  useEffect(() => {
-    if (!isTemplatePickerOpen) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (previewTemplate) closePreview();
-        else closeTemplatePicker();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [isTemplatePickerOpen, previewTemplate, closeTemplatePicker]);
+  // Escape is handled by Dialog's onEscapeKeyDown
 
   const filteredPresets = activeCategory === "all" || activeCategory === "mine"
     ? presetTemplates
@@ -290,39 +281,46 @@ export function TemplatePickerModal() {
       ? { duration: 0.2, ease: "easeOut" as const }
       : { type: "spring" as const, stiffness: 300, damping: 28 };
 
-  return ReactDOM.createPortal(
-    <AnimatePresence>
-      {isTemplatePickerOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            className="fixed inset-0 z-40"
-            style={{ background: isMobile ? "rgba(0,0,0,0.3)" : "rgba(0,0,0,0.25)" }}
-            variants={backdropVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            transition={{ duration: anim.level === "minimal" ? 0 : anim.level === "reduced" ? 0.15 : 0.2 }}
-            onClick={() => {
-              if (previewTemplate) closePreview();
-              else closeTemplatePicker();
-            }}
-          />
+  return (
+    <Dialog open={isTemplatePickerOpen} onOpenChange={(open) => { if (!open) closeTemplatePicker(); }}>
+      <DialogPrimitive.Portal forceMount>
+        <AnimatePresence>
+          {isTemplatePickerOpen && (
+            <>
+              <DialogPrimitive.Overlay forceMount asChild>
+                <motion.div
+                  className="fixed inset-0 z-40"
+                  style={{ background: isMobile ? "rgba(0,0,0,0.3)" : "rgba(0,0,0,0.25)" }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: anim.level === "minimal" ? 0 : anim.level === "reduced" ? 0.15 : 0.2 }}
+                />
+              </DialogPrimitive.Overlay>
 
-          {/* Modal */}
-          <motion.div
-            className={cn(
-              "fixed z-50 flex flex-col bg-[var(--color-surface-3,var(--color-panel))] overflow-hidden",
-              isMobile
-                ? "bottom-0 left-0 right-0 rounded-t-2xl h-[calc(100vh-48px)]"
-                : "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[560px] h-[70vh] rounded-xl shadow-lg luminance-border-top"
-            )}
-            variants={modalVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            transition={modalTransition}
-          >
+              <DialogPrimitive.Content forceMount asChild
+                aria-describedby={undefined}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                onEscapeKeyDown={(e) => {
+                  if (previewTemplate) {
+                    e.preventDefault();
+                    closePreview();
+                  }
+                }}
+              >
+                <motion.div
+                  className={cn(
+                    "fixed z-50 flex flex-col bg-[var(--color-surface-3,var(--color-panel))] overflow-hidden",
+                    isMobile
+                      ? "bottom-0 left-0 right-0 rounded-t-2xl h-[calc(100vh-48px)]"
+                      : "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[560px] h-[70vh] rounded-xl shadow-lg luminance-border-top"
+                  )}
+                  variants={modalVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  transition={modalTransition}
+                >
             {/* Drag handle (mobile) */}
             {isMobile && (
               <div className="flex justify-center pt-3 pb-1 shrink-0">
@@ -355,7 +353,7 @@ export function TemplatePickerModal() {
                       </button>
                     )}
                   </div>
-                  <h2 className="text-lg font-semibold tracking-[-0.005em] text-foreground">Templates</h2>
+                  <DialogPrimitive.Title className="text-lg font-semibold tracking-[-0.005em] text-foreground">Templates</DialogPrimitive.Title>
                 </div>
 
                 {/* Category chips — sticky below header */}
@@ -528,11 +526,13 @@ export function TemplatePickerModal() {
                 )}
               </motion.div>
             </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>,
-    document.body
+                </motion.div>
+              </DialogPrimitive.Content>
+            </>
+          )}
+        </AnimatePresence>
+      </DialogPrimitive.Portal>
+    </Dialog>
   );
 }
 
