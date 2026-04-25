@@ -62,6 +62,7 @@ export function QuickBitList() {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [plusMenuPos, setPlusMenuPos] = useState<{ bottom: number; right: number } | null>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const plusBtnRef = useRef<HTMLButtonElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -169,7 +170,6 @@ export function QuickBitList() {
 
   const containerWidth = bp === "mobile" ? undefined
     : viewMode === "gallery" ? 384
-    : bp === "tablet" ? 288
     : noteListWidth;
 
   return (
@@ -262,6 +262,8 @@ export function QuickBitList() {
                   disabled={createMut.isPending}
                   onPointerDown={() => {
                     longPressTimer.current = setTimeout(() => {
+                      const box = plusBtnRef.current?.getBoundingClientRect();
+                      if (box) setPlusMenuPos({ bottom: box.bottom, right: box.right });
                       setShowPlusMenu(true);
                     }, 400);
                   }}
@@ -307,37 +309,54 @@ export function QuickBitList() {
                 </div>
               )}
 
-              {/* Mobile anchored popover — pops out of the + button */}
-              {bp === "mobile" && showPlusMenu && (() => {
-                const box = plusBtnRef.current?.getBoundingClientRect();
-                if (!box) return null;
-                return ReactDOM.createPortal(
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowPlusMenu(false)} />
-                    <div
-                      className="fixed z-50 bg-[var(--color-surface-3,var(--color-panel))] border border-panel-border rounded-xl shadow-lg overflow-hidden w-52"
-                      style={{ top: box.bottom + 6, right: window.innerWidth - box.right }}
-                    >
-                      <button
-                        onClick={() => { setShowPlusMenu(false); openTemplatePicker("quickbit"); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-[14px] text-foreground hover:bg-panel transition-colors"
+              {/* Mobile anchored popover — pops out of the + button, Framer Motion animated */}
+              {bp === "mobile" && typeof window !== "undefined" && ReactDOM.createPortal(
+                <AnimatePresence>
+                  {showPlusMenu && plusMenuPos && (
+                    <>
+                      <motion.div
+                        key="qb-plus-backdrop"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={anim.fastTransition}
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowPlusMenu(false)}
+                      />
+                      <motion.div
+                        key="qb-plus-menu"
+                        initial={anim.useScale ? { opacity: 0, scale: 0.88 } : { opacity: 0 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={anim.useScale ? { opacity: 0, scale: 0.88 } : { opacity: 0 }}
+                        transition={anim.fastTransition}
+                        className="fixed z-50 bg-[var(--color-surface-3,var(--color-panel))] border border-panel-border rounded-xl shadow-lg overflow-hidden w-52"
+                        style={{
+                          top: plusMenuPos.bottom + 6,
+                          right: window.innerWidth - plusMenuPos.right,
+                          transformOrigin: "top right",
+                        }}
                       >
-                        <LayoutTemplate className="w-4 h-4 text-muted-foreground shrink-0" />
-                        From template
-                      </button>
-                      <div className="h-px bg-panel-border mx-3" />
-                      <button
-                        onClick={() => { setShowPlusMenu(false); setFilter("all"); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-[14px] text-foreground hover:bg-panel transition-colors"
-                      >
-                        <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-                        New note instead
-                      </button>
-                    </div>
-                  </>,
-                  document.body
-                );
-              })()}
+                        <button
+                          onClick={() => { setShowPlusMenu(false); openTemplatePicker("quickbit"); }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-[14px] text-foreground hover:bg-panel transition-colors"
+                        >
+                          <LayoutTemplate className="w-4 h-4 text-muted-foreground shrink-0" />
+                          From template
+                        </button>
+                        <div className="h-px bg-panel-border mx-3" />
+                        <button
+                          onClick={() => { setShowPlusMenu(false); setFilter("all"); }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-[14px] text-foreground hover:bg-panel transition-colors"
+                        >
+                          <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                          New note instead
+                        </button>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>,
+                document.body
+              )}
             </div>
           </div>
         </div>
