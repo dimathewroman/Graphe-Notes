@@ -52,7 +52,7 @@ export default function Home() {
   }
 
   // Desktop/tablet note list panel width — mirrors what each list component uses internally
-  const listPanelWidth = viewMode === "gallery" ? 384 : bp === "tablet" ? 288 : noteListWidth;
+  const listPanelWidth = viewMode === "gallery" ? 384 : noteListWidth;
   const [isResizing, setIsResizing] = useState(false);
   const panelSlideTransition = isResizing
     ? { duration: 0 }
@@ -61,7 +61,7 @@ export default function Home() {
       : anim.standardTransition;
 
   const handleNoteListResize = useCallback((delta: number) => {
-    setNoteListWidth(Math.min(600, Math.max(280, noteListWidth + delta)));
+    setNoteListWidth(Math.min(600, Math.max(300, noteListWidth + delta)));
   }, [noteListWidth, setNoteListWidth]);
 
   useEffect(() => {
@@ -229,7 +229,7 @@ export default function Home() {
             )}
           </AnimatePresence>
           {isAttachments && <AllAttachments />}
-          {bp === "desktop" && viewMode !== "gallery" && showList && (
+          {(bp === "desktop" || bp === "tablet") && viewMode !== "gallery" && showList && (
             <ResizeHandle
               onResize={handleNoteListResize}
               onResizeStart={() => setIsResizing(true)}

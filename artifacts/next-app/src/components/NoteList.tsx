@@ -438,7 +438,6 @@ export function NoteList() {
 
   const containerWidth = bp === "mobile" ? undefined
     : viewMode === "gallery" ? 384
-    : bp === "tablet" ? 288
     : noteListWidth;
 
   return (
@@ -460,7 +459,7 @@ export function NoteList() {
                 <PanelLeft className="w-4 h-4" />
               </IconButton>
             )}
-            <h2 className="text-lg font-semibold tracking-tight truncate">{listTitle}</h2>
+            <h2 className="text-lg font-semibold tracking-tight whitespace-nowrap">{listTitle}</h2>
             {isFolderSmart && (
               <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">smart</span>
             )}
@@ -581,32 +580,37 @@ export function NoteList() {
                 </div>
               )}
 
-              {/* Mobile bottom sheet */}
-              {bp === "mobile" && showPlusMenu && ReactDOM.createPortal(
-                <>
-                  <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setShowPlusMenu(false)} />
-                  <div className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--color-surface-3,var(--color-panel))] rounded-t-2xl shadow-lg pb-8 pt-2">
-                    <div className="flex justify-center mb-4">
-                      <div className="w-9 h-1 rounded-full bg-border/60" />
+              {/* Mobile anchored popover — pops out of the + button */}
+              {bp === "mobile" && showPlusMenu && (() => {
+                const box = plusBtnRef.current?.getBoundingClientRect();
+                if (!box) return null;
+                return ReactDOM.createPortal(
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowPlusMenu(false)} />
+                    <div
+                      className="fixed z-50 bg-[var(--color-surface-3,var(--color-panel))] border border-panel-border rounded-xl shadow-lg overflow-hidden w-52"
+                      style={{ top: box.bottom + 6, right: window.innerWidth - box.right }}
+                    >
+                      <button
+                        onClick={() => { setShowPlusMenu(false); openTemplatePicker("note"); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-[14px] text-foreground hover:bg-panel transition-colors"
+                      >
+                        <LayoutTemplate className="w-4 h-4 text-muted-foreground shrink-0" />
+                        From template
+                      </button>
+                      <div className="h-px bg-panel-border mx-3" />
+                      <button
+                        onClick={() => { setShowPlusMenu(false); setFilter("quickbits"); }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-[14px] text-foreground hover:bg-panel transition-colors"
+                      >
+                        <Zap className="w-4 h-4 text-muted-foreground shrink-0" />
+                        New Quick Bit instead
+                      </button>
                     </div>
-                    <button
-                      onClick={() => { setShowPlusMenu(false); openTemplatePicker("note"); }}
-                      className="w-full flex items-center gap-3 px-6 py-3 text-[14px] text-foreground hover:bg-panel transition-colors"
-                    >
-                      <LayoutTemplate className="w-5 h-5 text-muted-foreground" />
-                      From template
-                    </button>
-                    <button
-                      onClick={() => { setShowPlusMenu(false); setFilter("quickbits"); }}
-                      className="w-full flex items-center gap-3 px-6 py-3 text-[14px] text-foreground hover:bg-panel transition-colors"
-                    >
-                      <Zap className="w-5 h-5 text-muted-foreground" />
-                      New Quick Bit instead
-                    </button>
-                  </div>
-                </>,
-                document.body
-              )}
+                  </>,
+                  document.body
+                );
+              })()}
             </div>
           </div>
         </div>
