@@ -39,8 +39,10 @@ interface AppState {
 
   sidebarWidth: number;
   noteListWidth: number;
+  galleryWidth: number;
   setSidebarWidth: (w: number) => void;
   setNoteListWidth: (w: number) => void;
+  setGalleryWidth: (w: number) => void;
 
   isVaultUnlocked: boolean;
   setVaultUnlocked: (isUnlocked: boolean) => void;
@@ -111,8 +113,10 @@ export const useAppStore = create<AppState>((set) => ({
 
   sidebarWidth: 240,
   noteListWidth: 340,
+  galleryWidth: 384,
   setSidebarWidth: (w) => set({ sidebarWidth: w }),
   setNoteListWidth: (w) => set({ noteListWidth: w }),
+  setGalleryWidth: (w) => set({ galleryWidth: w }),
 
   isVaultUnlocked: false,
   setVaultUnlocked: (isUnlocked) => set({ isVaultUnlocked: isUnlocked }),

@@ -38,7 +38,7 @@ const mobileViewVariants = {
 };
 
 export default function Home() {
-  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId, selectedQuickBitId, activeFilter, noteListWidth, setNoteListWidth, viewMode } = useAppStore();
+  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId, selectedQuickBitId, activeFilter, noteListWidth, setNoteListWidth, galleryWidth, setGalleryWidth, viewMode } = useAppStore();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
   const anim = useAnimationConfig();
@@ -52,7 +52,9 @@ export default function Home() {
   }
 
   // Desktop/tablet note list panel width — mirrors what each list component uses internally
-  const listPanelWidth = viewMode === "gallery" ? 384 : noteListWidth;
+  const listPanelWidth = viewMode === "gallery" ? galleryWidth : noteListWidth;
+  // Per-mode minimums: gallery needs more room for the 2-col grid; list cards truncate gracefully
+  const minPanelWidth = viewMode === "gallery" ? 320 : 260;
   const [isResizing, setIsResizing] = useState(false);
   const panelSlideTransition = isResizing
     ? { duration: 0 }
@@ -66,13 +68,18 @@ export default function Home() {
   const panelWidthMv = useMotionValue(listPanelWidth);
 
   const handleNoteListResize = useCallback((delta: number) => {
-    panelWidthMv.set(Math.min(600, Math.max(300, panelWidthMv.get() + delta)));
-  }, [panelWidthMv]);
+    panelWidthMv.set(Math.min(600, Math.max(minPanelWidth, panelWidthMv.get() + delta)));
+  }, [panelWidthMv, minPanelWidth]);
 
   const handleResizeEnd = useCallback(() => {
     setIsResizing(false);
-    setNoteListWidth(Math.round(panelWidthMv.get()));
-  }, [setNoteListWidth, panelWidthMv]);
+    const newWidth = Math.round(panelWidthMv.get());
+    if (viewMode === "gallery") {
+      setGalleryWidth(newWidth);
+    } else {
+      setNoteListWidth(newWidth);
+    }
+  }, [setNoteListWidth, setGalleryWidth, viewMode, panelWidthMv]);
 
   useEffect(() => {
     if (bp === "desktop") {
@@ -239,7 +246,7 @@ export default function Home() {
             )}
           </AnimatePresence>
           {isAttachments && <AllAttachments />}
-          {(bp === "desktop" || bp === "tablet") && viewMode !== "gallery" && showList && (
+          {(bp === "desktop" || bp === "tablet") && showList && (
             <ResizeHandle
               onResize={handleNoteListResize}
               onResizeStart={() => setIsResizing(true)}
