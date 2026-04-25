@@ -76,7 +76,7 @@ This applies the Drizzle schema to your Supabase project.
 
 ```
 ├── artifacts/
-│   ├── next-app/        # Next.js 15 app — frontend + API routes (port 3000)
+│   ├── next-app/        # Next.js 16 app — frontend + API routes (port 3000)
 │   └── mockup-sandbox/  # Component preview sandbox
 ├── lib/
 │   ├── api-spec/        # OpenAPI spec + Orval codegen config
@@ -88,7 +88,7 @@ This applies the Drizzle schema to your Supabase project.
 
 ## Tech stack
 
-- **Frontend + Backend**: Next.js 15 (App Router), React 19, Tailwind CSS v4, TanStack Query v5, Zustand, Framer Motion, Tiptap
+- **Frontend + Backend**: Next.js 16 (App Router), React 19, Tailwind CSS v4, shadcn/ui (Radix), TanStack Query v5, Zustand, Framer Motion, Tiptap
 - **Auth + DB**: Supabase (PostgreSQL, Auth)
 - **ORM**: Drizzle ORM
 - **Monorepo**: pnpm workspaces
