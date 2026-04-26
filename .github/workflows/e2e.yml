@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [master]
 
-# Shared env vars used by both the build and the test server.
+# Shared env vars used by both build and the next start server.
 # Tests run in demo mode — no real credentials required.
 # Placeholders allow Next.js to start without crashing on missing vars.
 env:
@@ -18,12 +18,13 @@ env:
   AI_KEY_ENCRYPTION_SECRET: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 jobs:
-  # ── Job 1: Typecheck ──────────────────────────────────────────────────────────
-  # Runs in parallel with Build. Fast — no build output needed.
+  # ── Job 1: Typecheck + Build verification ────────────────────────────────────
+  # Runs in parallel with E2E. Fast path for type/build errors — gives feedback
+  # before the slower E2E suite finishes.
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -46,50 +47,17 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
-  # ── Job 2: Build ─────────────────────────────────────────────────────────────
-  # Produces the production bundle used by the E2E job's next start server.
-  # Runs in parallel with Typecheck.
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
       - name: Build
         run: pnpm --filter @workspace/next-app run build
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: next-build
-          path: artifacts/next-app/.next/
-          retention-days: 1
-
-  # ── Job 3: E2E Tests ─────────────────────────────────────────────────────────
-  # Waits for Typecheck and Build to succeed, then runs the full Playwright suite
-  # against the production build (next start) for realistic performance numbers.
+  # ── Job 2: E2E Tests ─────────────────────────────────────────────────────────
+  # Runs in parallel with Typecheck. Builds the production bundle independently,
+  # starts next start, and runs the full Playwright suite including performance
+  # measurements and visual regression comparisons.
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: [typecheck, build]
+    timeout-minutes: 35
 
     permissions:
       pull-requests: write  # Required to post the performance PR comment
@@ -115,15 +83,12 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter @workspace/next-app exec playwright install --with-deps chromium
 
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: next-build
-          path: artifacts/next-app/.next/
-
       - name: Copy env file
         shell: bash
         run: cp .env.example .env
+
+      - name: Build production bundle
+        run: pnpm --filter @workspace/next-app run build
 
       - name: Run E2E tests
         run: >-
@@ -175,6 +140,12 @@ jobs:
               '',
               `*Project: \`${report.project}\` · [Run #${context.runNumber}](${runUrl})*`,
             ].join('\n');
+
+            // Only post if this is a pull request event (not workflow_dispatch)
+            if (!context.issue || !context.issue.number) {
+              console.log('Not a pull request event — skipping PR comment.');
+              return;
+            }
 
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
