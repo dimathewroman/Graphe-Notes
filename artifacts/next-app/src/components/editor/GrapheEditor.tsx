@@ -178,13 +178,31 @@ export function GrapheEditor({
   // contentKey must be note.id or quickBit.id — changes when the user selects a different item.
   // content is intentionally NOT in deps: the editor is the source of truth while the user is
   // typing; we only override it when switching to a different item.
+  const prevContentKeyRef = useRef<string | number | undefined>(undefined);
   useEffect(() => {
     if (!editor) return;
+    // Track whether this is a switch (not the initial load) so we can mask the
+    // one-frame blank that appears between contentKey changing and setContent firing.
+    const isSwitch = prevContentKeyRef.current !== undefined && prevContentKeyRef.current !== contentKey;
+    prevContentKeyRef.current = contentKey;
     // Defer outside React's commit phase — TipTap's ReactNodeViewRenderer calls
     // flushSync when editor.isInitialized, which React 19 forbids inside lifecycle methods.
     setTimeout(() => {
       if (!editor.isDestroyed) {
+        const dom = editor.view.dom as HTMLElement;
+        if (isSwitch) {
+          // Hide instantly before setting content so the one-frame blank is invisible.
+          dom.style.opacity = "0";
+          dom.style.transition = "none";
+        }
         editor.commands.setContent(content, { emitUpdate: false });
+        if (isSwitch) {
+          // Next frame: fade the new content in once the DOM has been updated.
+          requestAnimationFrame(() => {
+            dom.style.transition = "opacity 80ms ease";
+            dom.style.opacity = "1";
+          });
+        }
       }
     }, 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps

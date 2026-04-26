@@ -55,7 +55,7 @@ export function NoteShell() {
   const { data: note, isLoading } = useGetNote(selectedNoteId || 0, {
     query: {
       enabled: !!selectedNoteId,
-      staleTime: isDemo ? Infinity : 30_000,
+      staleTime: isDemo ? Infinity : 5 * 60 * 1000,
       gcTime: isDemo ? Infinity : 5 * 60 * 1000,
     } as any,
   });
@@ -749,14 +749,6 @@ export function NoteShell() {
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-editor">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
   if (note?.vaulted && !isVaultUnlocked) {
     return (
       <VaultLockScreen
@@ -830,18 +822,24 @@ export function NoteShell() {
               initial={{ opacity: 1 }}
               className="flex-1 flex flex-col min-h-0"
             >
-              <NoteBody
-                editor={ed}
-                title={title}
-                note={note}
-                noteId={selectedNoteId}
-                bp={bp}
-                keyboardHeight={keyboardHeight}
-                onTitleChange={handleTitleChange}
-                onAddTag={addTag}
-                onRemoveTag={removeTag}
-                onDeleteImage={handleDeleteImage}
-              />
+              {isLoading ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : (
+                <NoteBody
+                  editor={ed}
+                  title={title}
+                  note={note}
+                  noteId={selectedNoteId}
+                  bp={bp}
+                  keyboardHeight={keyboardHeight}
+                  onTitleChange={handleTitleChange}
+                  onAddTag={addTag}
+                  onRemoveTag={removeTag}
+                  onDeleteImage={handleDeleteImage}
+                />
+              )}
             </motion.div>
           )}
         />
