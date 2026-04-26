@@ -362,7 +362,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full pb-[env(safe-area-inset-bottom)]">
       {/* Logo + Settings */}
       <div className="p-4 pb-2 flex items-center justify-between">
         <div className="flex items-center gap-2 text-foreground font-semibold">

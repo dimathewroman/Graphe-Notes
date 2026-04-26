@@ -8,16 +8,12 @@ export const metadata: Metadata = {
   description: "Notes that get you, wherever you go.",
 };
 
-// initialScale + maximumScale: 1 stops iOS WebKit (Safari, Edge, Chrome on
-// iPad — all WebKit) from auto-zooming the page when the contenteditable
-// focuses. That auto-zoom was the cause of the "page shifts up behind the
-// demo banner" bug — zoom made the layout visually larger so the top went
-// off-screen. iOS 10+ ignores user-scalable: false for accessibility, so
-// pinch-zoom still works as a recovery for any other layout issue.
+// initialScale: 1 only. maximumScale: 1 was tried for the iPad page-shift
+// bug but didn't fix it and made the UI render slightly enlarged on iPad,
+// clipping bottom-of-sidebar buttons. Leaving zoom unconstrained.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
 };
 
