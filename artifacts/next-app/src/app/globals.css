@@ -145,19 +145,23 @@
     @apply bg-background text-foreground antialiased font-sans overflow-hidden;
   }
 
-  /* Custom Scrollbar for a premium feel */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  ::-webkit-scrollbar-thumb {
-    @apply bg-panel-border rounded-full;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground;
+  /* Custom scrollbar for a premium feel — scoped to pointer-fine devices.
+     Touch devices get the native overlay scrollbar, which doesn't reserve
+     layout width and so doesn't shift editor content as you scroll. */
+  @media (pointer: fine) {
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      @apply bg-panel-border rounded-full;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      @apply bg-muted-foreground;
+    }
   }
 }
 
@@ -188,6 +192,9 @@
 /* Tiptap Editor Styles */
 .ProseMirror {
   @apply outline-none min-h-[300px] md:min-h-[500px] pb-32;
+  /* Suppress iOS long-press callout — our MobileSelectionMenu replaces it
+     with one unified menu (cut/copy/paste/select-all + AI tools). */
+  -webkit-touch-callout: none;
 }
 
 /* Preserve text colour when text is selected. Android Chrome forces its own

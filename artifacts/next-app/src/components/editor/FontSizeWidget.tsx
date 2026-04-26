@@ -17,6 +17,11 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
   const inlineInputRef = useRef<HTMLInputElement>(null);
   const mobileInputRef = useRef<HTMLInputElement>(null);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Selection range captured before any toolbar-button interaction. Tapping a
+  // toolbar button or focusing the size input would otherwise drop the editor
+  // selection on iPad/Android — restoring this range before applying keeps
+  // the user's intent intact.
+  const savedRangeRef = useRef<{ from: number; to: number } | null>(null);
 
   if (!editor) return null;
 
@@ -37,8 +42,18 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
   };
   const currentSize = rawSize ? parseInt(rawSize, 10) : getComputedSize();
 
+  const captureRange = () => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    if (from !== to) savedRangeRef.current = { from, to };
+  };
+
   const applySize = (size: number) => {
-    editor.chain().focus().setFontSize(`${Math.min(96, Math.max(8, size))}px`).run();
+    const clamped = Math.min(96, Math.max(8, size));
+    const sel = savedRangeRef.current;
+    const chain = editor.chain().focus();
+    if (sel) chain.setTextSelection(sel);
+    chain.setFontSize(`${clamped}px`).run();
   };
 
   const nudge = (dir: 1 | -1) => {
@@ -76,6 +91,15 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
     setEditing(false);
   };
 
+  // preventDefault on pointerdown stops the toolbar button from stealing focus
+  // from the contenteditable. Without this, on iPad the selection collapses
+  // (so setFontSize has nothing to apply to) and the AI selection menu briefly
+  // re-renders against the new (empty) selection — the "AI toolbar flash."
+  const preserveFocus = (e: React.PointerEvent | React.MouseEvent) => {
+    e.preventDefault();
+    captureRange();
+  };
+
   useEffect(() => {
     if (editing) inlineInputRef.current?.select();
   }, [editing]);
@@ -84,6 +108,7 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
     <Popover open={dropdownOpen} onOpenChange={(open) => { if (!open) closeDropdown(); }}>
       <div className="flex items-center shrink-0 rounded border border-panel-border">
         <button
+          onPointerDown={preserveFocus}
           onClick={() => nudge(-1)}
           className="min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 md:w-5 md:h-6 flex items-center justify-center text-muted-foreground hover:bg-panel hover:text-foreground transition-colors text-sm px-1"
           title="Decrease font size"
@@ -109,6 +134,7 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
           <PopoverAnchor asChild>
             <button
               ref={valueRef}
+              onPointerDown={preserveFocus}
               onClick={handleValueClick}
               onMouseEnter={handleHoverEnter}
               onMouseLeave={handleHoverLeave}
@@ -123,6 +149,7 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
         <div className="w-px h-3.5 bg-panel-border" />
 
         <button
+          onPointerDown={preserveFocus}
           onClick={() => nudge(1)}
           className="min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 md:w-5 md:h-6 flex items-center justify-center text-muted-foreground hover:bg-panel hover:text-foreground transition-colors text-sm px-1"
           title="Increase font size"
@@ -144,13 +171,22 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
           <div className="px-2 pb-1.5 border-b border-panel-border mb-1">
             <input
               ref={mobileInputRef}
-              type="number"
-              min={8}
-              max={96}
+              // inputMode=numeric (instead of type=number) gives Android the
+              // numeric pad without the spinner UI that fights with our Enter
+              // handler. enterKeyHint=done relabels the soft-keyboard return
+              // key so it reads as "Done" rather than "Return."
+              inputMode="numeric"
+              pattern="[0-9]*"
+              enterKeyHint="done"
               defaultValue={currentSize}
               className="w-full text-center text-xs bg-panel rounded px-1 py-0.5 outline-none text-foreground"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
+                  // Stop the Enter from bubbling into the contenteditable
+                  // (which would otherwise replace the selection with a line
+                  // break, "deleting" the user's text).
+                  e.preventDefault();
+                  e.stopPropagation();
                   const val = parseInt((e.target as HTMLInputElement).value, 10);
                   if (!isNaN(val) && val >= 8 && val <= 96) applySize(val);
                   closeDropdown();
@@ -168,6 +204,7 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
         {FONT_SIZE_PRESETS.map((size) => (
           <button
             key={size}
+            onPointerDown={preserveFocus}
             onClick={() => { applySize(size); closeDropdown(); }}
             className={cn(
               "w-full text-center px-2 py-1 text-xs transition-colors hover:bg-panel-hover",

@@ -295,6 +295,39 @@ export function GrapheEditor({
     };
   }, [bp, editor]); // keyboardHeight read via ref — no re-subscribe on each animation frame
 
+  // Mobile/touch: suppress the OS native context menu inside the editor so the
+  // app's MobileSelectionMenu is the only floating toolbar. Desktop right-click
+  // still gets the native menu (preserving copy/paste/inspect-element).
+  useEffect(() => {
+    if (bp !== "mobile" || !editor) return;
+    const dom = editor.view.dom as HTMLElement;
+    const onContext = (e: Event) => e.preventDefault();
+    dom.addEventListener("contextmenu", onContext);
+    return () => dom.removeEventListener("contextmenu", onContext);
+  }, [bp, editor]);
+
+  // Mobile (Android): when the soft keyboard is dismissed via the system back
+  // gesture, the contenteditable keeps DOM focus and the caret keeps blinking
+  // even though the keyboard is gone. Detect the keyboard-close transition and
+  // explicitly blur the active editable so the caret disappears with it.
+  const prevKeyboardOpenRef = useRef(false);
+  useEffect(() => {
+    if (bp !== "mobile") return;
+    const isOpen = keyboardHeight > 0;
+    if (prevKeyboardOpenRef.current && !isOpen) {
+      const active = document.activeElement as HTMLElement | null;
+      if (
+        active &&
+        (active.isContentEditable ||
+          active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA")
+      ) {
+        active.blur();
+      }
+    }
+    prevKeyboardOpenRef.current = isOpen;
+  }, [bp, keyboardHeight]);
+
   // Render nothing until editor is ready
   if (!editor) return null;
 

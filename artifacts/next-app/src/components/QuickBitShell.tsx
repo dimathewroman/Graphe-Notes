@@ -707,7 +707,7 @@ export function QuickBitShell() {
         isDemo={isDemo}
         onAttachFile={handleAttachFile}
         renderContent={(editor) => (
-          <motion.div animate={contentControls} initial={{ opacity: 1 }} className="flex-1 overflow-y-auto">
+          <motion.div animate={contentControls} initial={{ opacity: 1 }} className="hide-scrollbar flex-1 overflow-y-auto">
             <div
               className={cn("max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12", bp === "mobile" && "pb-20")}
               style={bp === "mobile" && keyboardHeight > 0 ? { paddingBottom: `calc(5rem + ${keyboardHeight}px)` } : undefined}
