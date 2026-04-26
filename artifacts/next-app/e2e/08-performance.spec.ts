@@ -342,7 +342,11 @@ test.describe("Performance", () => {
     }
 
     // ── Threshold assertions ───────────────────────────────────────────────
-    if (!isFirstRun) {
+    // Skip in CI — the baseline was recorded on a local machine and GitHub
+    // Actions runners are significantly slower.  CI still measures and attaches
+    // the report as an artifact, but thresholds only apply when running locally.
+    const isCI = !!process.env.CI;
+    if (!isFirstRun && !isCI) {
       const warnings: string[] = [];
       const failures: string[] = [];
 
