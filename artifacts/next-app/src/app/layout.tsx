@@ -8,14 +8,14 @@ export const metadata: Metadata = {
   description: "Notes that get you, wherever you go.",
 };
 
-// Lock the layout viewport on iPad/iOS so the demo bar and editor can't drift
-// behind a partially-zoomed viewport, and so that focusing the editor doesn't
-// trigger Safari's "scroll the html element to make room" reflow.
+// Set initial scale so iPad/iOS opens at 1.0 zoom. We deliberately leave
+// user-scaling enabled and don't set maximumScale — locking those out blocked
+// users from recovering when iOS shifts the layout viewport on focus, and
+// also suppressed the soft keyboard from appearing on iPad touch input
+// because Safari needs the layout viewport to be free to scroll-to-focus.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
 };
 

@@ -60,30 +60,38 @@ export function ResizeHandle({ onResize, onResizeEnd, onResizeStart, className }
   return (
     <div
       ref={handleRef}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-      // touch-action: none stops the browser from interpreting the drag as a
-      // scroll/pan gesture on touch screens.
-      style={{ touchAction: "none" }}
       className={cn(
-        // w-1 visual + w-3 hit zone via padding on touch — gives finger room
-        // to grab without growing layout width.
-        "w-1 shrink-0 cursor-col-resize group relative z-10 select-none",
+        // The wrapper takes only 1px of layout width — the actual visible
+        // separator. The pointer hit zone lives in the absolute child below,
+        // which extends ±8px past the visible line so the user doesn't have
+        // to land within a single pixel column.
+        "w-px shrink-0 group relative z-10 select-none",
         className
       )}
     >
-      {/* Visible 1px separator — centered inside the 4px hit zone.
-          group-hover: fires whenever the 4px outer div is hovered (consistent),
-          not just the 1px inner line (inconsistent). */}
+      {/* Visible 1px separator. */}
       <div
         className={cn(
-          "absolute inset-y-0 left-1/2 -translate-x-1/2 w-px transition-colors duration-150",
+          "absolute inset-0 transition-colors duration-150 pointer-events-none",
           isDragging
             ? "bg-primary/50"
             : "bg-panel-border group-hover:bg-primary/40"
         )}
+      />
+      {/* Pointer hit zone — extends ±8px from the visible line so the handle
+          is comfortable to grab on touch and easy to land on with a cursor.
+          It sits in front of the separator (positive z-index relative to
+          siblings) and captures the drag, but stays narrow in layout terms
+          via -mx negative bleed and absolute positioning. */}
+      <div
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        // touch-action: none stops the browser from interpreting the drag as
+        // a scroll/pan gesture on touch screens.
+        style={{ touchAction: "none" }}
+        className="absolute inset-y-0 -left-2 -right-2 cursor-col-resize"
       />
     </div>
   );
