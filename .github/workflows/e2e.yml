@@ -197,3 +197,12 @@ jobs:
           path: artifacts/next-app/e2e/**/*-snapshots/
           retention-days: 30
           if-no-files-found: ignore
+
+      - name: Upload CI perf baseline
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-baseline-ci
+          path: artifacts/next-app/e2e/perf-baseline-ci.json
+          retention-days: 30
+          if-no-files-found: warn
