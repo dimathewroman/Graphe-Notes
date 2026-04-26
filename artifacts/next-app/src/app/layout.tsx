@@ -8,14 +8,16 @@ export const metadata: Metadata = {
   description: "Notes that get you, wherever you go.",
 };
 
-// Set initial scale so iPad/iOS opens at 1.0 zoom. We deliberately leave
-// user-scaling enabled and don't set maximumScale — locking those out blocked
-// users from recovering when iOS shifts the layout viewport on focus, and
-// also suppressed the soft keyboard from appearing on iPad touch input
-// because Safari needs the layout viewport to be free to scroll-to-focus.
+// initialScale + maximumScale: 1 stops iOS WebKit (Safari, Edge, Chrome on
+// iPad — all WebKit) from auto-zooming the page when the contenteditable
+// focuses. That auto-zoom was the cause of the "page shifts up behind the
+// demo banner" bug — zoom made the layout visually larger so the top went
+// off-screen. iOS 10+ ignores user-scalable: false for accessibility, so
+// pinch-zoom still works as a recovery for any other layout issue.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1,
   viewportFit: "cover",
 };
 

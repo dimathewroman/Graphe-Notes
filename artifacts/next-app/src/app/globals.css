@@ -236,6 +236,12 @@
 /* Tiptap Editor Styles */
 .ProseMirror {
   @apply outline-none min-h-[300px] md:min-h-[500px] pb-32;
+  /* Base font-size of 16px guarantees iOS WebKit (Safari/Edge/Chrome on
+     iPad — all WebKit) won't auto-zoom the page on contenteditable focus,
+     which was the cause of the "page shifts behind the demo banner" bug.
+     User-applied per-text sizes (via the toolbar widget) still override
+     this on the wrapping span. */
+  font-size: 16px;
   /* Suppress iOS long-press callout — our MobileSelectionMenu replaces it
      with one unified menu (cut/copy/paste/select-all + AI tools). */
   -webkit-touch-callout: none;
