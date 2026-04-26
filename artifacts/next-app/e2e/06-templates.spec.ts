@@ -115,10 +115,13 @@ test.describe("Template System", () => {
   test("category filter chips filter the template list", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
 
-    // Open template picker via store
-    await page.evaluate(() => {
-      (window as any).__ZUSTAND_STORE__.getState().openTemplatePicker("note");
-    });
+    // Open template picker via chevron menu
+    const btn = page.getByTestId("new-note-btn");
+    await btn.waitFor({ state: "visible" });
+    const box = await btn.boundingBox();
+    if (!box) throw new Error("+ button not found");
+    await page.mouse.click(box.x + box.width * 0.85, box.y + box.height / 2);
+    await page.getByTestId("from-template-btn").click();
 
     await expect(page.getByTestId("template-card").first()).toBeVisible({ timeout: 5000 });
 
@@ -264,12 +267,9 @@ test.describe("Template System", () => {
   test("minimal motion: template picker opens without scale animations", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
 
-    // Set motion to minimal
+    // Set motion to minimal by writing the data attribute directly (same effect as the store setter)
     await page.evaluate(() => {
-      try {
-        const store = (window as any).__ZUSTAND_STORE__;
-        if (store) store.getState().setMotionLevel("minimal");
-      } catch {}
+      document.documentElement.setAttribute("data-motion", "minimal");
     });
 
     const btn = page.getByTestId("new-note-btn");
