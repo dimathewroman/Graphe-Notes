@@ -1,6 +1,22 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Merriweather:ital,wght@0,400;0,700;1,400&family=Playfair+Display:wght@400;700&family=Lato:wght@400;700&family=Roboto:wght@400;700&display=swap');
 @import "tailwindcss";
 
+/* Override Tailwind v4's default `hover:` variant.
+   Default: `@media (hover: hover) { &:hover { ... } }` — gates on the PRIMARY
+   pointer being hover-capable. iPad with Magic Keyboard reports `(hover: hover)`
+   inconsistently — Safari evaluates it once on page load and may not refresh
+   when the trackpad is connected mid-session, so hover effects (toolbar tints,
+   row highlights, button colour changes) don't fire even with the cursor.
+   `any-hover: hover` matches when ANY connected pointer can hover, which is
+   reliably true on iPad+trackpad and on every mouse-bearing desktop. */
+@custom-variant hover {
+  @media (any-hover: hover) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
 @theme inline {
   --font-sans: var(--font-geist-sans), 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
@@ -141,8 +157,26 @@
 }
 
 @layer base {
+  /* Don't lock html with overflow:hidden — iOS Safari needs the layout
+     viewport to remain scrollable to position the soft keyboard. Locking it
+     suppressed soft-keyboard activation on iPad touch input entirely. Body's
+     overflow:hidden is enough for app-level scroll containment. */
+  html {
+    /* 100dvh (dynamic viewport height) shrinks when iOS chrome (URL bar,
+       form-assistant accessory bar) is visible. With 100% / 100vh the page
+       stays the maximum-chromeless height and Safari shifts the layout to
+       keep the focused editor in view, hiding the page top behind the demo
+       banner. dvh keeps the layout bounded to the visible area. */
+    height: 100dvh;
+    /* Prevent Safari pull-to-refresh / overscroll bounce from exposing the
+       background and making the demo bar appear detached from the layout. */
+    overscroll-behavior: none;
+  }
+
   body {
     @apply bg-background text-foreground antialiased font-sans overflow-hidden;
+    height: 100dvh;
+    overscroll-behavior: none;
   }
 
   /* Custom scrollbar for a premium feel — scoped to pointer-fine devices.
@@ -173,6 +207,16 @@
   scrollbar-width: none;
 }
 
+/* Touch-only reveal: a row's hover-revealed action buttons stay hidden on
+   hover-capable devices (desktop, iPad+trackpad) so they only appear on
+   hover, but become permanently visible on devices that have only a coarse,
+   non-hovering pointer (phones, iPad without a connected cursor). */
+@media (hover: none) and (pointer: coarse) {
+  .touch\:opacity-100 {
+    opacity: 1 !important;
+  }
+}
+
 /* Find/Replace highlight decorations */
 .find-highlight {
   background-color: rgba(253, 224, 71, 0.35);
@@ -192,6 +236,12 @@
 /* Tiptap Editor Styles */
 .ProseMirror {
   @apply outline-none min-h-[300px] md:min-h-[500px] pb-32;
+  /* Base font-size of 16px guarantees iOS WebKit (Safari/Edge/Chrome on
+     iPad — all WebKit) won't auto-zoom the page on contenteditable focus,
+     which was the cause of the "page shifts behind the demo banner" bug.
+     User-applied per-text sizes (via the toolbar widget) still override
+     this on the wrapping span. */
+  font-size: 16px;
   /* Suppress iOS long-press callout — our MobileSelectionMenu replaces it
      with one unified menu (cut/copy/paste/select-all + AI tools). */
   -webkit-touch-callout: none;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import ReactDOM from "react-dom";
 import posthog from "posthog-js";
 import { motion, AnimatePresence } from "framer-motion";
@@ -72,6 +72,30 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const [editingFolder, setEditingFolder] = useState<typeof folders[0] | null>(null);
   const [vaultModal, setVaultModal] = useState<"setup" | "unlock" | "change-password" | null>(null);
   const [vaultError, setVaultError] = useState("");
+
+  // Hold-to-reveal for folder action buttons on touch devices.
+  // Cursor/mouse uses standard `group-hover:opacity-100`; touch users press
+  // and hold for ~500ms to surface the same Edit / + / Delete row.
+  const [revealedFolderId, setRevealedFolderId] = useState<number | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // After a long-press fires, the synthetic click that follows the touchend
+  // would still trigger the row's onClick (= navigate into the folder). We
+  // raise this flag in the long-press handler and the click handler bails out
+  // and lowers it once.
+  const suppressNextRowClickRef = useRef(false);
+
+  // Dismiss the reveal when the user taps anywhere else on the page.
+  useEffect(() => {
+    if (revealedFolderId === null) return;
+    const handler = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest(`[data-folder-row="${revealedFolderId}"]`)) return;
+      setRevealedFolderId(null);
+    };
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
+  }, [revealedFolderId]);
 
   const toggleFolder = (id: number) => {
     const next = new Set(expandedFolders);
@@ -205,15 +229,45 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     const isActive = activeFilter === "folder" && activeFolderId === folder.id;
     const isSmart = folder.tagRules && folder.tagRules.length > 0;
 
+    const isRevealed = revealedFolderId === folder.id;
+
+    const startLongPress = (e: React.PointerEvent<HTMLDivElement>) => {
+      // Only arm the timer for touch — cursor/pen use the hover path.
+      if (e.pointerType !== "touch") return;
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = setTimeout(() => {
+        setRevealedFolderId(folder.id);
+        suppressNextRowClickRef.current = true;
+        longPressTimerRef.current = null;
+      }, 500);
+    };
+    const cancelLongPress = () => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    };
+
     return (
       <div key={folder.id}>
         <div
+          data-folder-row={folder.id}
           className={cn(
             "group flex items-center justify-between py-2 md:py-1.5 rounded-lg cursor-pointer transition-colors",
             isActive ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
           )}
           style={{ paddingLeft: `${depth * 12 + 22}px`, paddingRight: "12px" }}
-          onClick={() => handleNavClick("folder", folder.id)}
+          onPointerDown={startLongPress}
+          onPointerMove={cancelLongPress}
+          onPointerUp={cancelLongPress}
+          onPointerCancel={cancelLongPress}
+          onClick={() => {
+            if (suppressNextRowClickRef.current) {
+              suppressNextRowClickRef.current = false;
+              return;
+            }
+            handleNavClick("folder", folder.id);
+          }}
         >
           <div className="flex items-center gap-2 min-w-0">
             <button
@@ -236,7 +290,14 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             )}
           </div>
 
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+          {/* Hidden by default. Cursor/mouse: hover reveals via group-hover
+              (the project-wide `hover` variant uses `any-hover: hover` so
+              iPad+trackpad triggers it too). Touch: long-press the row to
+              reveal — see startLongPress / revealedFolderId above. */}
+          <div className={cn(
+            "flex items-center gap-0.5 transition-opacity",
+            isRevealed ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          )}>
             <button
               className="p-1.5 md:p-1 hover:bg-panel rounded-md transition-colors"
               onClick={e => { e.stopPropagation(); setEditingFolder(folder); }}
@@ -301,7 +362,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full pb-[env(safe-area-inset-bottom)]">
       {/* Logo + Settings */}
       <div className="p-4 pb-2 flex items-center justify-between">
         <div className="flex items-center gap-2 text-foreground font-semibold">

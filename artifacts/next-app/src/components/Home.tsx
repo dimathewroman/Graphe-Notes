@@ -23,6 +23,7 @@ import { useAnimationConfig } from "@/hooks/use-motion";
 import { Drawer, DrawerPortal, DrawerOverlay } from "@/components/ui/drawer";
 import { DrawerPrimitive } from "@/components/ui/drawer-left";
 import { useDemoMode } from "@/lib/demo-context";
+import { cn } from "@/lib/utils";
 
 // Mobile view stack animation variants — forward: list→editor, backward: editor→list
 const mobileViewVariants = {
@@ -137,6 +138,32 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setSettingsOpen]);
 
+  // iPad / iOS Safari sometimes shifts the layout viewport when an off-screen
+  // contenteditable receives focus (e.g. after selecting a note), pushing the
+  // demo bar and editor chrome behind the visible area. Body has overflow:
+  // hidden so the user can never scroll the page on purpose — any
+  // window.scrollY > 0 is a Safari side-effect we should undo. The previous
+  // version bailed out when an editable was focused, but that's exactly when
+  // iOS shifts; we now snap back unconditionally and rely on the editor's
+  // own scroll container (which IS allowed to scroll) for soft-keyboard
+  // scroll-into-view. Both window scroll and visualViewport scroll are
+  // monitored — iOS uses one or the other depending on iPad version.
+  useEffect(() => {
+    const snap = () => {
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+    window.addEventListener("scroll", snap, { passive: true });
+    window.visualViewport?.addEventListener("scroll", snap);
+    window.visualViewport?.addEventListener("resize", snap);
+    return () => {
+      window.removeEventListener("scroll", snap);
+      window.visualViewport?.removeEventListener("scroll", snap);
+      window.visualViewport?.removeEventListener("resize", snap);
+    };
+  }, []);
+
   const isCompact = bp === "mobile" || bp === "tablet";
   const isRecentlyDeleted = activeFilter === "recently-deleted";
   const isAttachments = activeFilter === "attachments";
@@ -154,8 +181,15 @@ export default function Home() {
       : (bp === "mobile" && mobileView === "list"));
   const showDeletedDetail = isRecentlyDeleted && !!selectedNoteId && (bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor"));
 
+  // h-[100dvh] (dynamic viewport height) — not h-screen / 100vh.
+  // On iPad iOS Safari, 100vh is the max viewport (URL bar hidden), so
+  // when the form-assistant chrome appears on focus the layout stays
+  // 100vh tall but the visible area shrinks, and Safari aligns the layout
+  // so the focused editor is in view — pushing the top of the page
+  // (sidebar header, editor chrome) off-screen behind the demo banner.
+  // 100dvh shrinks with the visible viewport so the layout stays bounded.
   return (
-    <div className="flex flex-col h-screen w-full bg-background overflow-hidden relative">
+    <div className="flex flex-col h-[100dvh] w-full bg-background overflow-hidden relative">
       {isDemo && (
         <div className="w-full bg-primary/10 border-b border-primary/20 px-4 py-2 flex items-center justify-between text-xs text-primary z-50">
           <span>👋 You're in demo mode — notes won't be saved.</span>

@@ -784,7 +784,7 @@ export function NoteShell() {
   return (
     <div
       className={cn(
-        "flex-1 flex flex-col bg-editor h-screen overflow-hidden relative transition-[padding] duration-200",
+        "flex-1 flex flex-col bg-editor h-[100dvh] overflow-hidden relative transition-[padding] duration-200",
         reservePanelSpace && "pr-[360px]",
       )}
     >
