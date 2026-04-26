@@ -192,6 +192,9 @@
 /* Tiptap Editor Styles */
 .ProseMirror {
   @apply outline-none min-h-[300px] md:min-h-[500px] pb-32;
+  /* Suppress iOS long-press callout — our MobileSelectionMenu replaces it
+     with one unified menu (cut/copy/paste/select-all + AI tools). */
+  -webkit-touch-callout: none;
 }
 
 /* Preserve text colour when text is selected. Android Chrome forces its own

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { useEditor } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
-import { Sparkles, ChevronRight, ArrowLeft, Copy, ClipboardPaste, Trash2, Type, Check } from "lucide-react";
+import { Sparkles, ChevronRight, ArrowLeft, Copy, ClipboardPaste, Trash2, Type, Check, Scissors } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { actionGroups } from "./ai-action-groups";
 
@@ -64,10 +64,17 @@ export function MobileSelectionMenu({
     editor.on("focus", update);
     editor.on("blur", handleBlur);
 
+    // Android Chrome's drag-handle text selection doesn't always fire
+    // ProseMirror's selectionUpdate, so the AI menu would never appear without
+    // an extra editor click. Listening to document.selectionchange catches the
+    // touch-handle drag and shows the menu on the first selection.
+    document.addEventListener("selectionchange", update);
+
     return () => {
       editor.off("selectionUpdate", update);
       editor.off("focus", update);
       editor.off("blur", handleBlur);
+      document.removeEventListener("selectionchange", update);
     };
   }, [editor, visible, onSelectionCapture]);
 
@@ -117,6 +124,15 @@ export function MobileSelectionMenu({
     const { from, to } = editor.state.selection;
     const text = editor.state.doc.textBetween(from, to);
     try { await navigator.clipboard.writeText(text); } catch {}
+    resetMenu();
+  };
+
+  const handleCut = async () => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    const text = editor.state.doc.textBetween(from, to);
+    try { await navigator.clipboard.writeText(text); } catch {}
+    editor.chain().focus().deleteSelection().run();
     resetMenu();
   };
 
@@ -290,20 +306,24 @@ export function MobileSelectionMenu({
       style={menuStyle}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <div className="bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 flex items-center gap-0.5 p-1 luminance-border-top">
-        <button onClick={handleCopy} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px]">
+      <div className="bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 flex items-center gap-0.5 p-1 luminance-border-top overflow-x-auto hide-scrollbar">
+        <button onClick={handleCut} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] shrink-0">
+          <Scissors className="w-3.5 h-3.5" />
+          Cut
+        </button>
+        <button onClick={handleCopy} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] shrink-0">
           <Copy className="w-3.5 h-3.5" />
           Copy
         </button>
-        <button onClick={handlePaste} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px]">
+        <button onClick={handlePaste} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] shrink-0">
           <ClipboardPaste className="w-3.5 h-3.5" />
           Paste
         </button>
-        <button onClick={handleDelete} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px]">
+        <button onClick={handleDelete} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] shrink-0">
           <Trash2 className="w-3.5 h-3.5" />
           Delete
         </button>
-        <button onClick={handleSelectAll} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] whitespace-nowrap">
+        <button onClick={handleSelectAll} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] whitespace-nowrap shrink-0">
           <Type className="w-3.5 h-3.5" />
           Select All
         </button>
