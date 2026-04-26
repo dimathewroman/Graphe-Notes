@@ -141,8 +141,21 @@
 }
 
 @layer base {
+  /* Lock html as well as body — without this, iPad Safari scrolls the
+     html element when the editor is focused, shifting the demo bar and
+     page content "behind" the viewport top. */
+  html {
+    @apply overflow-hidden;
+    height: 100%;
+    /* Prevent Safari pull-to-refresh / overscroll bounce from exposing the
+       background and making the demo bar appear detached from the layout. */
+    overscroll-behavior: none;
+  }
+
   body {
     @apply bg-background text-foreground antialiased font-sans overflow-hidden;
+    height: 100%;
+    overscroll-behavior: none;
   }
 
   /* Custom scrollbar for a premium feel — scoped to pointer-fine devices.

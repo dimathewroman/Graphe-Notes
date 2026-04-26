@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
@@ -6,6 +6,17 @@ import { Providers } from "@/components/Providers";
 export const metadata: Metadata = {
   title: "Graphe Notes",
   description: "Notes that get you, wherever you go.",
+};
+
+// Lock the layout viewport on iPad/iOS so the demo bar and editor can't drift
+// behind a partially-zoomed viewport, and so that focusing the editor doesn't
+// trigger Safari's "scroll the html element to make room" reflow.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 // Applies saved theme before first paint to avoid flash of wrong theme

@@ -702,7 +702,7 @@ export function NoteList() {
                       onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }}
                       className={cn(
                         "rounded-md hover:bg-panel-border transition-all shrink-0 self-start",
-                        bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-60 p-1"
+                        bp === "desktop" ? "opacity-0 group-hover:opacity-100 [@media(any-pointer:coarse)]:opacity-100 p-0.5" : "opacity-60 p-1"
                       )}
                     >
                       <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />

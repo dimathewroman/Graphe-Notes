@@ -11,47 +11,66 @@ interface ResizeHandleProps {
 export function ResizeHandle({ onResize, onResizeEnd, onResizeStart, className }: ResizeHandleProps) {
   const [isDragging, setIsDragging] = useState(false);
   const lastX = useRef(0);
+  const handleRef = useRef<HTMLDivElement>(null);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  // Pointer events unify mouse, touch, and stylus — fixes drag-to-resize on
+  // iPad (touch and Magic Keyboard trackpad) and any other touch-screen device
+  // that the previous mouse-only listeners ignored. setPointerCapture redirects
+  // every subsequent move/up event to this element so the drag survives even
+  // if the cursor leaves the handle, and stops the default text-selection /
+  // panning behavior that was selecting text across the page on iPad.
+  const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
     e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
     lastX.current = e.clientX;
     setIsDragging(true);
     onResizeStart?.();
   }, [onResizeStart]);
 
+  const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    const delta = e.clientX - lastX.current;
+    lastX.current = e.clientX;
+    onResize(delta);
+  }, [isDragging, onResize]);
+
+  const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    setIsDragging(false);
+    onResizeEnd?.();
+  }, [isDragging, onResizeEnd]);
+
+  // Suppress page-wide text selection only while dragging — the previous
+  // implementation set this from a useEffect that fired after the drag
+  // started, leaving a brief window where iPad selected text everywhere.
   useEffect(() => {
     if (!isDragging) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      const delta = e.clientX - lastX.current;
-      lastX.current = e.clientX;
-      onResize(delta);
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      onResizeEnd?.();
-    };
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
+    const prevCursor = document.body.style.cursor;
+    const prevSelect = document.body.style.userSelect;
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
-
     return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevSelect;
     };
-  }, [isDragging, onResize, onResizeEnd]);
+  }, [isDragging]);
 
   return (
     <div
-      onMouseDown={handleMouseDown}
+      ref={handleRef}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      // touch-action: none stops the browser from interpreting the drag as a
+      // scroll/pan gesture on touch screens.
+      style={{ touchAction: "none" }}
       className={cn(
-        // w-1 = 4px wide — gives a reliable hover target without eating layout space
-        "w-1 shrink-0 cursor-col-resize group relative z-10",
+        // w-1 visual + w-3 hit zone via padding on touch — gives finger room
+        // to grab without growing layout width.
+        "w-1 shrink-0 cursor-col-resize group relative z-10 select-none",
         className
       )}
     >
