@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAnimationConfig } from "@/hooks/use-motion";
 import {
@@ -42,6 +42,11 @@ const SORT_OPTIONS = [
   { label: "Title (A → Z)", sortBy: "title" as const, sortDir: "asc" as const },
   { label: "Title (Z → A)", sortBy: "title" as const, sortDir: "desc" as const },
 ];
+
+function getFirstImage(content: string) {
+  const match = content.match(/<img[^>]+src="([^"]+)"/);
+  return match ? match[1] : null;
+}
 
 export function NoteList() {
   // Fix 5: atomic Zustand selectors — each subscription only re-renders on its own value change
@@ -189,11 +194,6 @@ export function NoteList() {
     : apiNotes;
   const isLoading = isDemo ? false : apiLoading;
 
-  const getFirstImage = (content: string) => {
-    const match = content.match(/<img[^>]+src="([^"]+)"/);
-    return match ? match[1] : null;
-  };
-
   const notes = useMemo(() => {
     let list = rawNotes;
 
@@ -290,9 +290,49 @@ export function NoteList() {
       }
     }
   });
-  const pinMut = useToggleNotePin({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }) } });
-  const favMut = useToggleNoteFavorite({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }) } });
-  const vaultMut = useToggleNoteVault({ mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }) } });
+  const pinMut = useToggleNotePin({
+    mutation: {
+      onMutate: ({ id }) => {
+        const prev = queryClient.getQueryData<Note>(getGetNoteQueryKey(id));
+        const newPinned = !(prev?.pinned ?? false);
+        queryClient.setQueriesData({ queryKey: getGetNotesQueryKey() }, (old: unknown) =>
+          Array.isArray(old) ? (old as Note[]).map(n => n.id === id ? { ...n, pinned: newPinned } : n) : old
+        );
+        queryClient.setQueryData<Note>(getGetNoteQueryKey(id), (old) =>
+          old ? { ...old, pinned: newPinned } : old
+        );
+      },
+      onError: () => { queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }); },
+    },
+  });
+  const favMut = useToggleNoteFavorite({
+    mutation: {
+      onMutate: ({ id }) => {
+        const prev = queryClient.getQueryData<Note>(getGetNoteQueryKey(id));
+        const newFavorite = !(prev?.favorite ?? false);
+        queryClient.setQueriesData({ queryKey: getGetNotesQueryKey() }, (old: unknown) =>
+          Array.isArray(old) ? (old as Note[]).map(n => n.id === id ? { ...n, favorite: newFavorite } : n) : old
+        );
+        queryClient.setQueryData<Note>(getGetNoteQueryKey(id), (old) =>
+          old ? { ...old, favorite: newFavorite } : old
+        );
+      },
+      onError: () => { queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }); },
+    },
+  });
+  const vaultMut = useToggleNoteVault({
+    mutation: {
+      onMutate: ({ id, data }) => {
+        queryClient.setQueriesData({ queryKey: getGetNotesQueryKey() }, (old: unknown) =>
+          Array.isArray(old) ? (old as Note[]).map(n => n.id === id ? { ...n, vaulted: data.vaulted } : n) : old
+        );
+        queryClient.setQueryData<Note>(getGetNoteQueryKey(id), (old) =>
+          old ? { ...old, vaulted: data.vaulted } : old
+        );
+      },
+      onError: () => { queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() }); },
+    },
+  });
   const softDeleteMut = useSoftDeleteNote({
     mutation: {
       onSuccess: (_data, variables) => {
@@ -312,7 +352,7 @@ export function NoteList() {
     }
   });
 
-  const handleSelectNote = (id: number) => {
+  const handleSelectNote = useCallback((id: number) => {
     // PERF: temporary benchmark — marks start of note-switch latency
     performance.mark("note-switch-start");
     selectNote(id);
@@ -320,7 +360,7 @@ export function NoteList() {
       setMobileView("editor");
     }
     posthog.capture("note_opened", { note_id: id, timestamp: new Date().toISOString() });
-  };
+  }, [bp, selectNote, setMobileView]);
 
   const handleCreateNew = () => {
     if (isDemo) {
@@ -348,7 +388,7 @@ export function NoteList() {
     });
   };
 
-  const handleContextMenu = (e: React.MouseEvent, note: typeof notes[0]) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent, note: Note) => {
     e.preventDefault(); e.stopPropagation();
     setContextMenu({
       noteId: note.id, pinned: note.pinned, favorite: note.favorite,
@@ -357,7 +397,8 @@ export function NoteList() {
     setMoveMenuNoteId(null);
     setShowTagsPanel(false);
     setTagInput("");
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const closeContextMenu = () => {
     setContextMenu(null); setMoveMenuNoteId(null); setShowTagsPanel(false); setTagInput("");
@@ -663,127 +704,32 @@ export function NoteList() {
              share the same element with a definite height. */
           <div className="grid grid-cols-2 gap-2">
           <AnimatePresence initial={false}>
-          {notes.map(note => {
-            const img = getFirstImage(note.content);
-            return (
-              <motion.div
-                key={note.id}
-                data-testid="note-item"
-                layout
-                initial={anim.initialVariants}
-                animate={anim.enterVariants}
-                exit={anim.cardExitVariants}
-                transition={anim.fastTransition}
-                style={anim.cardExitStyle}
-                onClick={() => handleSelectNote(note.id)}
-                onContextMenu={e => handleContextMenu(e, note)}
-                className={cn(
-                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden",
-                  anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
-                  selectedNoteId === note.id
-                    ? "bg-primary/10 border-primary/30 shadow-sm"
-                    : "bg-card border-transparent hover:bg-panel-hover hover:border-panel-border"
-                )}
-              >
-                {img && (
-                  <div className="w-full h-24 overflow-hidden bg-panel">
-                    <img src={img} alt="" className="w-full h-full object-cover" />
-                  </div>
-                )}
-                <div className="p-2.5 flex flex-col">
-                  <div className="flex items-start justify-between mb-1 gap-1">
-                    <h3 className="font-semibold text-sm text-foreground/90 flex-1 min-w-0 line-clamp-2 leading-snug">
-                      {note.pinned && <Pin className="inline-block w-2.5 h-2.5 mr-0.5 text-primary fill-primary align-text-bottom" />}
-                      {note.vaulted && <ShieldCheck className="inline-block w-2.5 h-2.5 mr-0.5 text-indigo-400 align-text-bottom" />}
-                      {note.title || "Untitled Note"}
-                    </h3>
-                    {/* Smaller touch target in gallery cards — 44px is too large for a narrow card */}
-                    <button
-                      onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }}
-                      className={cn(
-                        "rounded-md hover:bg-panel-border transition-all shrink-0 self-start",
-                        bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-60 p-1"
-                      )}
-                    >
-                      <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-                    {note.vaulted ? "🔒 Vault note" : (note.contentText || "No content")}
-                  </p>
-                  <div className="flex items-center justify-between pt-1.5 gap-1">
-                    <span className="text-xs text-muted-foreground/70 font-mono">{formatDate(note.updatedAt)}</span>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {note.favorite && <Star className="w-3 h-3 fill-current text-yellow-500" />}
-                      {img && <ImageIcon className="w-2.5 h-2.5 text-muted-foreground opacity-60" />}
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
+          {notes.map(note => (
+            <NoteGalleryItem
+              key={note.id}
+              note={note}
+              isSelected={selectedNoteId === note.id}
+              anim={anim}
+              bp={bp}
+              onSelect={handleSelectNote}
+              onContextMenu={handleContextMenu}
+            />
+          ))}
           </AnimatePresence>
           </div>
         ) : (
           <div className="space-y-1">
           <AnimatePresence initial={false}>
           {notes.map(note => (
-            <motion.div
+            <NoteListItem
               key={note.id}
-              data-testid="note-item"
-              layout
-              initial={anim.initialVariants}
-              animate={anim.enterVariants}
-              exit={anim.cardExitVariants}
-              transition={anim.fastTransition}
-              style={anim.cardExitStyle}
-              onClick={() => handleSelectNote(note.id)}
-              onContextMenu={e => handleContextMenu(e, note)}
-              className={cn(
-                "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
-                anim.useScale && "hover:-translate-y-[1px] active:scale-[0.98]",
-                selectedNoteId === note.id
-                  ? "bg-primary/10 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"
-                  : "bg-card border-l-2 border-l-transparent border-y border-y-transparent border-r border-r-transparent hover:bg-panel-hover"
-              )}
-            >
-              <div className="flex items-start justify-between mb-1">
-                <h3 className={cn(
-                  "font-semibold truncate pr-2 text-sm flex items-center gap-1.5",
-                  selectedNoteId === note.id ? "text-foreground" : "text-foreground/90"
-                )}>
-                  {note.pinned && <Pin className="w-3 h-3 shrink-0 text-primary fill-primary" />}
-                  {note.vaulted && <ShieldCheck className="w-3 h-3 shrink-0 text-indigo-400" />}
-                  {note.title || "Untitled Note"}
-                </h3>
-                <div className="flex items-center gap-1 shrink-0">
-                  {note.favorite && <Star className="w-3 h-3 fill-current text-yellow-500 opacity-70" />}
-                  <button
-                    onClick={e => { e.stopPropagation(); handleContextMenu(e, note); }}
-                    className={cn("rounded-md hover:bg-panel-border transition-all", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}
-                    title="Options"
-                  >
-                    <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
-                  </button>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed flex-1">
-                {note.vaulted ? "🔒 Vault note" : (note.contentText || "No content")}
-              </p>
-              <div className="flex items-center justify-between mt-auto">
-                <span className="text-xs text-muted-foreground/70 font-mono">{formatDate(note.updatedAt)}</span>
-                {note.tags && note.tags.length > 0 && (
-                  <div className="flex gap-1 overflow-hidden">
-                    {note.tags.slice(0, 2).map(tag => (
-                      <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/8 text-primary border border-primary/15 truncate max-w-[60px]">
-                        #{tag}
-                      </span>
-                    ))}
-                    {note.tags.length > 2 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-panel text-muted-foreground">+{note.tags.length - 2}</span>}
-                  </div>
-                )}
-              </div>
-            </motion.div>
+              note={note}
+              isSelected={selectedNoteId === note.id}
+              anim={anim}
+              bp={bp}
+              onSelect={handleSelectNote}
+              onContextMenu={handleContextMenu}
+            />
           ))}
           </AnimatePresence>
           </div>
@@ -936,6 +882,136 @@ export function NoteList() {
     </div>
   );
 }
+
+interface NoteItemProps {
+  note: Note;
+  isSelected: boolean;
+  anim: ReturnType<typeof useAnimationConfig>;
+  bp: "mobile" | "tablet" | "desktop";
+  onSelect: (id: number) => void;
+  onContextMenu: (e: React.MouseEvent, note: Note) => void;
+}
+
+const NoteGalleryItem = memo(function NoteGalleryItem({
+  note, isSelected, anim, bp, onSelect, onContextMenu
+}: NoteItemProps) {
+  const img = getFirstImage(note.content);
+  return (
+    <motion.div
+      data-testid="note-item"
+      initial={anim.initialVariants}
+      animate={anim.enterVariants}
+      exit={anim.cardExitVariants}
+      transition={anim.fastTransition}
+      style={anim.cardExitStyle}
+      onClick={() => onSelect(note.id)}
+      onContextMenu={e => onContextMenu(e, note)}
+      className={cn(
+        "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden",
+        anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
+        isSelected
+          ? "bg-primary/10 border-primary/30 shadow-sm"
+          : "bg-card border-transparent hover:bg-panel-hover hover:border-panel-border"
+      )}
+    >
+      {img && (
+        <div className="w-full h-24 overflow-hidden bg-panel">
+          <img src={img} alt="" className="w-full h-full object-cover" />
+        </div>
+      )}
+      <div className="p-2.5 flex flex-col">
+        <div className="flex items-start justify-between mb-1 gap-1">
+          <h3 className="font-semibold text-sm text-foreground/90 flex-1 min-w-0 line-clamp-2 leading-snug">
+            {note.pinned && <Pin className="inline-block w-2.5 h-2.5 mr-0.5 text-primary fill-primary align-text-bottom" />}
+            {note.vaulted && <ShieldCheck className="inline-block w-2.5 h-2.5 mr-0.5 text-indigo-400 align-text-bottom" />}
+            {note.title || "Untitled Note"}
+          </h3>
+          {/* Smaller touch target in gallery cards — 44px is too large for a narrow card */}
+          <button
+            onClick={e => { e.stopPropagation(); onContextMenu(e, note); }}
+            className={cn(
+              "rounded-md hover:bg-panel-border transition-all shrink-0 self-start",
+              bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-60 p-1"
+            )}
+          >
+            <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+          {note.vaulted ? "🔒 Vault note" : (note.contentText || "No content")}
+        </p>
+        <div className="flex items-center justify-between pt-1.5 gap-1">
+          <span className="text-xs text-muted-foreground/70 font-mono">{formatDate(note.updatedAt)}</span>
+          <div className="flex items-center gap-1 shrink-0">
+            {note.favorite && <Star className="w-3 h-3 fill-current text-yellow-500" />}
+            {img && <ImageIcon className="w-2.5 h-2.5 text-muted-foreground opacity-60" />}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+});
+
+const NoteListItem = memo(function NoteListItem({
+  note, isSelected, anim, bp, onSelect, onContextMenu
+}: NoteItemProps) {
+  return (
+    <motion.div
+      data-testid="note-item"
+      initial={anim.initialVariants}
+      animate={anim.enterVariants}
+      exit={anim.cardExitVariants}
+      transition={anim.fastTransition}
+      style={anim.cardExitStyle}
+      onClick={() => onSelect(note.id)}
+      onContextMenu={e => onContextMenu(e, note)}
+      className={cn(
+        "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
+        anim.useScale && "hover:-translate-y-[1px] active:scale-[0.98]",
+        isSelected
+          ? "bg-primary/10 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"
+          : "bg-card border-l-2 border-l-transparent border-y border-y-transparent border-r border-r-transparent hover:bg-panel-hover"
+      )}
+    >
+      <div className="flex items-start justify-between mb-1">
+        <h3 className={cn(
+          "font-semibold truncate pr-2 text-sm flex items-center gap-1.5",
+          isSelected ? "text-foreground" : "text-foreground/90"
+        )}>
+          {note.pinned && <Pin className="w-3 h-3 shrink-0 text-primary fill-primary" />}
+          {note.vaulted && <ShieldCheck className="w-3 h-3 shrink-0 text-indigo-400" />}
+          {note.title || "Untitled Note"}
+        </h3>
+        <div className="flex items-center gap-1 shrink-0">
+          {note.favorite && <Star className="w-3 h-3 fill-current text-yellow-500 opacity-70" />}
+          <button
+            onClick={e => { e.stopPropagation(); onContextMenu(e, note); }}
+            className={cn("rounded-md hover:bg-panel-border transition-all", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}
+            title="Options"
+          >
+            <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed flex-1">
+        {note.vaulted ? "🔒 Vault note" : (note.contentText || "No content")}
+      </p>
+      <div className="flex items-center justify-between mt-auto">
+        <span className="text-xs text-muted-foreground/70 font-mono">{formatDate(note.updatedAt)}</span>
+        {note.tags && note.tags.length > 0 && (
+          <div className="flex gap-1 overflow-hidden">
+            {note.tags.slice(0, 2).map(tag => (
+              <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/8 text-primary border border-primary/15 truncate max-w-[60px]">
+                #{tag}
+              </span>
+            ))}
+            {note.tags.length > 2 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-panel text-muted-foreground">+{note.tags.length - 2}</span>}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+});
 
 function ContextMenuItem({
   icon, label, onClick, danger, chevron, active, testId
