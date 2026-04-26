@@ -3,12 +3,10 @@ import path from "path";
 import os from "os";
 import { execSync } from "child_process";
 
-const authFile = path.join(__dirname, "../playwright/.auth/user.json");
+// process.cwd() = artifacts/next-app/ when Playwright runs — more reliable
+// than __dirname which can resolve differently in Playwright's TS runner.
+const authFile = path.join(process.cwd(), "playwright", ".auth", "user.json");
 
-// Uses your real Chrome Default profile — 1Password is already installed.
-// Chrome must be fully quit before running this script because macOS Chrome
-// refuses to share a profile with another running instance.
-// Reopen Chrome normally after the session is saved.
 const chromeUserData = path.join(
   os.homedir(),
   "Library/Application Support/Google/Chrome"
@@ -23,9 +21,10 @@ function isChromeRunning(): boolean {
   }
 }
 
-setup("capture auth session", async () => {
-  // Override the global 60s test timeout — the user needs time to sign in
-  setup.setTimeout(300_000);
+// { timeout } as a test option is the reliable way to override the global
+// 60s cap — test.setTimeout() inside the body doesn't always take effect
+// before Playwright's internal timer starts counting.
+setup("capture auth session", { timeout: 300_000 }, async () => {
   if (isChromeRunning()) {
     throw new Error(
       "\n\n  Chrome is still running.\n" +
@@ -38,7 +37,6 @@ setup("capture auth session", async () => {
     channel: "chrome",
     args: ["--profile-directory=Default"],
     // Playwright adds --disable-extensions by default which hides 1Password.
-    // Explicitly remove that flag so the extension loads from the profile.
     ignoreDefaultArgs: ["--disable-extensions"],
   });
 
@@ -50,14 +48,13 @@ setup("capture auth session", async () => {
   console.log("  Chrome will close automatically once you're in.");
   console.log("──────────────────────────────────────────────────────\n");
 
-  // Wait up to 5 minutes for the app shell to confirm sign-in succeeded
   await expect(page.getByTestId("nav-all-notes")).toBeVisible({
-    timeout: 300_000,
+    timeout: 270_000,
   });
 
   await context.storageState({ path: authFile });
   await context.close();
 
   console.log("\n✓ Session saved. You can reopen Chrome now.");
-  console.log("  Run pnpm test:e2e:authenticated to use the session.\n");
+  console.log(`  Saved to: ${authFile}\n`);
 });
