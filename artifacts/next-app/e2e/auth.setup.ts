@@ -40,7 +40,9 @@ setup("capture auth session", async () => {
     ignoreDefaultArgs: ["--disable-extensions"],
   });
 
-  const page = context.pages()[0] ?? await context.newPage();
+  // Always open a new tab so session-restore tabs don't interfere.
+  const page = await context.newPage();
+  await page.bringToFront();
   await page.goto("http://localhost:3000");
 
   console.log("\n──────────────────────────────────────────────────────");
