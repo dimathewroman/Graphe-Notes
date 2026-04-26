@@ -190,21 +190,13 @@ export default function Home() {
   // 100dvh shrinks with the visible viewport so the layout stays bounded.
   return (
     <div className="flex flex-col h-[100dvh] w-full bg-background overflow-hidden relative">
-      {/* Demo banner: position: fixed (not a flex child) so iPad iOS Safari
-          can't shift it when an editor focuses. As a flex child it would
-          shrink/regrow during the focus reflow and Safari was using that
-          as a "distraction" trigger to push content up. The main row below
-          gets a top margin equal to the banner height (h-9 = 36px) to
-          leave room for it. */}
       {isDemo && (
-        <div
-          className="fixed top-0 left-0 right-0 h-9 bg-primary/10 border-b border-primary/20 px-4 flex items-center justify-between text-xs text-primary z-50"
-        >
+        <div className="w-full bg-primary/10 border-b border-primary/20 px-4 py-2 flex items-center justify-between text-xs text-primary z-50">
           <span>👋 You're in demo mode — notes won't be saved.</span>
           <a href="/" className="font-medium underline underline-offset-2 hover:opacity-80 transition-opacity">Sign up to keep your notes →</a>
         </div>
       )}
-      <div className={cn("flex flex-1 w-full overflow-hidden", isDemo && "mt-9")}>
+      <div className="flex flex-1 w-full overflow-hidden">
       {bp === "desktop" && <Sidebar />}
 
       {isCompact && (
