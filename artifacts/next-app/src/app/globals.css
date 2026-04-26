@@ -162,7 +162,12 @@
      suppressed soft-keyboard activation on iPad touch input entirely. Body's
      overflow:hidden is enough for app-level scroll containment. */
   html {
-    height: 100%;
+    /* 100dvh (dynamic viewport height) shrinks when iOS chrome (URL bar,
+       form-assistant accessory bar) is visible. With 100% / 100vh the page
+       stays the maximum-chromeless height and Safari shifts the layout to
+       keep the focused editor in view, hiding the page top behind the demo
+       banner. dvh keeps the layout bounded to the visible area. */
+    height: 100dvh;
     /* Prevent Safari pull-to-refresh / overscroll bounce from exposing the
        background and making the demo bar appear detached from the layout. */
     overscroll-behavior: none;
@@ -170,7 +175,7 @@
 
   body {
     @apply bg-background text-foreground antialiased font-sans overflow-hidden;
-    height: 100%;
+    height: 100dvh;
     overscroll-behavior: none;
   }
 

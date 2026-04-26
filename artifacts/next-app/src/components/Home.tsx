@@ -180,8 +180,15 @@ export default function Home() {
       : (bp === "mobile" && mobileView === "list"));
   const showDeletedDetail = isRecentlyDeleted && !!selectedNoteId && (bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor"));
 
+  // h-[100dvh] (dynamic viewport height) — not h-screen / 100vh.
+  // On iPad iOS Safari, 100vh is the max viewport (URL bar hidden), so
+  // when the form-assistant chrome appears on focus the layout stays
+  // 100vh tall but the visible area shrinks, and Safari aligns the layout
+  // so the focused editor is in view — pushing the top of the page
+  // (sidebar header, editor chrome) off-screen behind the demo banner.
+  // 100dvh shrinks with the visible viewport so the layout stays bounded.
   return (
-    <div className="flex flex-col h-screen w-full bg-background overflow-hidden relative">
+    <div className="flex flex-col h-[100dvh] w-full bg-background overflow-hidden relative">
       {isDemo && (
         <div className="w-full bg-primary/10 border-b border-primary/20 px-4 py-2 flex items-center justify-between text-xs text-primary z-50">
           <span>👋 You're in demo mode — notes won't be saved.</span>
