@@ -48,7 +48,11 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm --filter @workspace/next-app run dev",
+    // CI runs against a production build (next start) for realistic perf numbers.
+    // Local dev uses the hot-reloading dev server as before.
+    command: process.env.CI
+      ? "pnpm --filter @workspace/next-app run start"
+      : "pnpm --filter @workspace/next-app run dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

@@ -7,8 +7,12 @@
  *   - ≥ 1.5× baseline → warning annotation
  *   - ≥ 2.5× baseline → hard fail
  *
- * Baseline file: e2e/perf-baseline.json  (commit this once recorded)
- * Report artifacts: attached to each test run in the Playwright HTML report.
+ * Baseline files:
+ *   Local:  e2e/perf-baseline.json     (recorded on local dev server)
+ *   CI:     e2e/perf-baseline-ci.json  (recorded on Ubuntu + production build)
+ *
+ * In CI, set PERF_BASELINE_FILE to an absolute path of perf-baseline-ci.json.
+ * Report artifacts: attached to each test run and written to perf-results/.
  *
  * Runs in both the "chromium" (demo) and "authenticated" Playwright projects.
  */
@@ -19,7 +23,11 @@ import * as path from "path";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const BASELINE_FILE = path.join(__dirname, "perf-baseline.json");
+const BASELINE_FILE = process.env.PERF_BASELINE_FILE
+  ? path.resolve(process.env.PERF_BASELINE_FILE)
+  : path.join(__dirname, "perf-baseline.json");
+const REPORT_OUT_DIR = path.join(__dirname, "..", "perf-results");
+const REPORT_OUT_FILE = path.join(REPORT_OUT_DIR, "perf-report.json");
 const WARN_MULT = 1.5;
 const FAIL_MULT = 2.5;
 
@@ -329,6 +337,10 @@ test.describe("Performance", () => {
     await testInfo.attach("perf-report.txt", { body: textReport, contentType: "text/plain" });
     await testInfo.attach("perf-report.json", { body: jsonReport, contentType: "application/json" });
 
+    // Write JSON report to a fixed path so the CI workflow can pick it up for the PR comment
+    fs.mkdirSync(REPORT_OUT_DIR, { recursive: true });
+    fs.writeFileSync(REPORT_OUT_FILE, jsonReport);
+
     // ── Save baseline on first run ─────────────────────────────────────────
     if (isFirstRun) {
       const updated: PerformanceBaseline = {
@@ -342,11 +354,10 @@ test.describe("Performance", () => {
     }
 
     // ── Threshold assertions ───────────────────────────────────────────────
-    // Skip in CI — the baseline was recorded on a local machine and GitHub
-    // Actions runners are significantly slower.  CI still measures and attaches
-    // the report as an artifact, but thresholds only apply when running locally.
-    const isCI = !!process.env.CI;
-    if (!isFirstRun && !isCI) {
+    // In CI, PERF_BASELINE_FILE points to perf-baseline-ci.json (Ubuntu + prod build numbers).
+    // On first CI run that file is empty → isFirstRun is true → records without failing.
+    // Once the CI baseline is committed, subsequent PRs enforce the 2.5× threshold.
+    if (!isFirstRun) {
       const warnings: string[] = [];
       const failures: string[] = [];
 

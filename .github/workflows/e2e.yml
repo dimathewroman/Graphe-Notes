@@ -4,7 +4,22 @@ on:
   pull_request:
     branches: [master]
 
+# Shared env vars used by both the build and the test server.
+# Tests run in demo mode — no real credentials required.
+# Placeholders allow Next.js to start without crashing on missing vars.
+env:
+  NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+  SUPABASE_URL: https://placeholder.supabase.co
+  SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+  SUPABASE_DB_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+  NEXT_PUBLIC_POSTHOG_KEY: phc_placeholder
+  NEXT_PUBLIC_POSTHOG_HOST: https://app.posthog.com
+  AI_KEY_ENCRYPTION_SECRET: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
 jobs:
+  # ── Job 1: Typecheck ──────────────────────────────────────────────────────────
+  # Runs in parallel with Build. Fast — no build output needed.
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
@@ -31,23 +46,53 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
+  # ── Job 2: Build ─────────────────────────────────────────────────────────────
+  # Produces the production bundle used by the E2E job's next start server.
+  # Runs in parallel with Typecheck.
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Build
         run: pnpm --filter @workspace/next-app run build
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
-          SUPABASE_URL: https://placeholder.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
-          SUPABASE_DB_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
-          NEXT_PUBLIC_POSTHOG_KEY: phc_placeholder
-          NEXT_PUBLIC_POSTHOG_HOST: https://app.posthog.com
-          AI_KEY_ENCRYPTION_SECRET: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-build
+          path: artifacts/next-app/.next/
+          retention-days: 1
+
+  # ── Job 3: E2E Tests ─────────────────────────────────────────────────────────
+  # Waits for Typecheck and Build to succeed, then runs the full Playwright suite
+  # against the production build (next start) for realistic performance numbers.
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: typecheck
+    timeout-minutes: 30
+    needs: [typecheck, build]
+
+    permissions:
+      pull-requests: write  # Required to post the performance PR comment
 
     steps:
       - name: Checkout
@@ -70,26 +115,113 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter @workspace/next-app exec playwright install --with-deps chromium
 
-      - name: Copy env example
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: artifacts/next-app/.next/
+
+      - name: Copy env file
+        shell: bash
         run: cp .env.example .env
 
       - name: Run E2E tests
-        run: pnpm --filter @workspace/next-app run test:e2e
+        run: >-
+          pnpm --filter @workspace/next-app exec playwright test
+          --project=chromium
+          --update-snapshots=missing
         env:
-          # Tests run in demo mode — no real credentials required.
-          # These placeholders allow Next.js to start without crashing on missing vars.
-          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
-          SUPABASE_URL: https://placeholder.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
-          SUPABASE_DB_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
-          NEXT_PUBLIC_POSTHOG_KEY: phc_placeholder
-          NEXT_PUBLIC_POSTHOG_HOST: https://app.posthog.com
+          PERF_BASELINE_FILE: ${{ github.workspace }}/artifacts/next-app/e2e/perf-baseline-ci.json
 
-      - name: Upload test artifacts on failure
-        if: failure()
+      - name: Post performance PR comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'artifacts/next-app/perf-results/perf-report.json';
+
+            if (!fs.existsSync(reportPath)) {
+              console.log('No perf report found — tests may have failed before metrics were recorded.');
+              return;
+            }
+
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+
+            const icon = (s) => ({ fail: '❌', warn: '⚠️', pass: '✅', new: '🆕' })[s] ?? '—';
+
+            const rows = report.metrics.map((m) => {
+              const ratio = m.ratio != null ? `${m.ratio.toFixed(2)}×` : '—';
+              const baseline = m.baseline_ms != null ? `${m.baseline_ms}ms` : '—';
+              const status = `${icon(m.status)} ${m.status.toUpperCase()}`;
+              return `| ${m.label} | ${baseline} | ${m.current_ms}ms | ${ratio} | ${status} |`;
+            }).join('\n');
+
+            const modeNote = report.is_baseline_run
+              ? '> **Recording mode** — CI baseline was empty. Numbers saved as new baseline. Download the `perf-report` artifact and commit `perf-baseline-ci.json` to enable threshold enforcement on future PRs.'
+              : `> Compared against CI baseline recorded at \`${report.baseline_recorded_at ?? 'unknown'}\`.\n> Thresholds: ⚠️ warn ≥${report.warn_multiplier}×  ❌ fail ≥${report.fail_multiplier}×`;
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const body = [
+              '<!-- graphe-perf-report -->',
+              '## ⚡ Performance Report',
+              '',
+              modeNote,
+              '',
+              '| Metric | Baseline | Current | Ratio | Status |',
+              '|--------|----------|---------|-------|--------|',
+              rows,
+              '',
+              `*Project: \`${report.project}\` · [Run #${context.runNumber}](${runUrl})*`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find((c) => c.body && c.body.includes('<!-- graphe-perf-report -->'));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Upload Playwright HTML report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: artifacts/next-app/playwright-report/
           retention-days: 7
+
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report
+          path: artifacts/next-app/perf-results/perf-report.json
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload visual snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-snapshots
+          path: artifacts/next-app/e2e/**/*-snapshots/
+          retention-days: 30
+          if-no-files-found: ignore
