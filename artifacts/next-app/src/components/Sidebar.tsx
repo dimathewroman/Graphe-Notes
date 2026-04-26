@@ -28,10 +28,12 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
     activeFilter, activeFolderId, activeTag, setFilter,
     setSettingsOpen, setAIPanelOpen,
     isVaultUnlocked, setVaultUnlocked,
+    setSidebarOpen,
   } = useAppStore();
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
   const isDemo = useDemoMode();
+  const bp = useBreakpoint();
 
   const { data: foldersData, isLoading: foldersLoading } = useGetFolders();
   const folders = Array.isArray(foldersData) ? foldersData : [];
@@ -224,7 +226,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 isExpanded ? <FolderOpen className="w-4 h-4" style={folder.color ? { color: folder.color } : undefined} /> : <Folder className="w-4 h-4" style={folder.color ? { color: folder.color } : undefined} />
               ) : (
                 isSmart
-                  ? <Tag className="w-4 h-4 text-primary/60" />
+                  ? <Tag className={cn("w-4 h-4", !folder.color && "text-primary/60")} style={folder.color ? { color: folder.color } : undefined} />
                   : <Folder className="w-4 h-4 opacity-50" style={folder.color ? { color: folder.color, opacity: 1 } : undefined} />
               )}
             </button>
@@ -456,7 +458,17 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {editingFolder && (
         <FolderEditModal
           folder={editingFolder}
-          onClose={() => setEditingFolder(null)}
+          onClose={() => {
+            setEditingFolder(null);
+            // Mobile/tablet: closing the Dialog returns focus to the Edit
+            // button inside the Vaul drawer. Vaul sometimes interprets that
+            // focus shift as an outside-click and starts collapsing — leaving
+            // the drawer at a broken half-size in the top-left corner. Re-
+            // assert the open flag on the next tick to keep the drawer up.
+            if (bp !== "desktop") {
+              requestAnimationFrame(() => setSidebarOpen(true));
+            }
+          }}
         />
       )}
 
