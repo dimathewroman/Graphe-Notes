@@ -24,6 +24,8 @@ function isChromeRunning(): boolean {
 }
 
 setup("capture auth session", async () => {
+  // Override the global 60s test timeout — the user needs time to sign in
+  setup.setTimeout(300_000);
   if (isChromeRunning()) {
     throw new Error(
       "\n\n  Chrome is still running.\n" +
