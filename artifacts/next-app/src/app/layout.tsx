@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
@@ -6,15 +6,6 @@ import { Providers } from "@/components/Providers";
 export const metadata: Metadata = {
   title: "Graphe Notes",
   description: "Notes that get you, wherever you go.",
-};
-
-// initialScale: 1 only. maximumScale: 1 was tried for the iPad page-shift
-// bug but didn't fix it and made the UI render slightly enlarged on iPad,
-// clipping bottom-of-sidebar buttons. Leaving zoom unconstrained.
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  viewportFit: "cover",
 };
 
 // Applies saved theme before first paint to avoid flash of wrong theme

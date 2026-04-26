@@ -434,8 +434,8 @@ export function NoteList() {
   };
 
   const containerClass = bp === "mobile"
-    ? "flex-1 bg-background flex flex-col h-[100dvh]"
-    : "border-r border-panel-border bg-background flex flex-col h-[100dvh] w-full";
+    ? "flex-1 bg-background flex flex-col h-screen"
+    : "border-r border-panel-border bg-background flex flex-col h-screen w-full";
 
   return (
     <div data-testid="note-list" className={containerClass}>
