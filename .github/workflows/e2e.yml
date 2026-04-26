@@ -3,6 +3,7 @@ name: CI
 on:
   pull_request:
     branches: [master]
+  workflow_dispatch:
 
 # Shared env vars used by both build and the next start server.
 # Tests run in demo mode — no real credentials required.
