@@ -240,7 +240,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               hover-only desktops. On any touch-capable device (iPad with or
               without Magic Keyboard, phones) the buttons stay visible because
               hover discovery is unreliable there. */}
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 [@media(any-pointer:coarse)]:opacity-100">
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 touch:opacity-100">
             <button
               className="p-1.5 md:p-1 hover:bg-panel rounded-md transition-colors"
               onClick={e => { e.stopPropagation(); setEditingFolder(folder); }}

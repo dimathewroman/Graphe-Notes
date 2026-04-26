@@ -169,14 +169,8 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased font-sans;
-    /* position: fixed + inset: 0 is the iOS-recommended scroll lock — it
-       prevents the layout viewport from drifting when an editor focuses
-       (the iPad "page shifts up behind the demo bar" bug) without the
-       html { overflow: hidden } variant that suppresses the soft keyboard. */
-    position: fixed;
-    inset: 0;
-    overflow: hidden;
+    @apply bg-background text-foreground antialiased font-sans overflow-hidden;
+    height: 100%;
     overscroll-behavior: none;
   }
 
@@ -206,6 +200,16 @@
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Touch-only reveal: a row's hover-revealed action buttons stay hidden on
+   hover-capable devices (desktop, iPad+trackpad) so they only appear on
+   hover, but become permanently visible on devices that have only a coarse,
+   non-hovering pointer (phones, iPad without a connected cursor). */
+@media (hover: none) and (pointer: coarse) {
+  .touch\:opacity-100 {
+    opacity: 1 !important;
+  }
 }
 
 /* Find/Replace highlight decorations */

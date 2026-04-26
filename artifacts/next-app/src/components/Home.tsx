@@ -137,6 +137,25 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [setSettingsOpen]);
 
+  // iPad / iOS Safari sometimes auto-scrolls the layout viewport when an
+  // off-screen contenteditable receives focus (e.g. after selecting a note),
+  // shifting the demo bar and editor chrome behind the visible area. Body has
+  // overflow:hidden so the user can never scroll the page on purpose — any
+  // window.scrollY > 0 is a Safari side-effect we should undo. We only snap
+  // back when no text input is focused so we don't fight a legit
+  // scroll-into-view when the soft keyboard is actually opening.
+  useEffect(() => {
+    const onScroll = () => {
+      if (window.scrollY === 0 && window.scrollX === 0) return;
+      const a = document.activeElement as HTMLElement | null;
+      const isEditing =
+        a && (a.isContentEditable || a.tagName === "INPUT" || a.tagName === "TEXTAREA");
+      if (!isEditing) window.scrollTo(0, 0);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const isCompact = bp === "mobile" || bp === "tablet";
   const isRecentlyDeleted = activeFilter === "recently-deleted";
   const isAttachments = activeFilter === "attachments";
