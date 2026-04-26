@@ -7,12 +7,14 @@ export function ToolbarButton({
   icon,
   title,
   disabled,
+  testId,
 }: {
   command: () => void;
   active: boolean;
   icon: React.ReactNode;
   title?: string;
   disabled?: boolean;
+  testId?: string;
 }) {
   return (
     <Toggle
@@ -21,6 +23,7 @@ export function ToolbarButton({
       title={title}
       disabled={disabled}
       size="sm"
+      data-testid={testId}
       className={cn(
         "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground shrink-0",
         "transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:scale-[1.08] active:scale-[0.95]",

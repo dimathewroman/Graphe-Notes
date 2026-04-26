@@ -146,6 +146,7 @@ export const NoteHeader = memo(function NoteHeader({
               onClick={onVersionHistory}
               active={showVersionHistory}
               title="Version history"
+              data-testid="version-history-btn"
             >
               <Clock className="w-4 h-4" />
             </IconButton>
