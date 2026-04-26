@@ -21,10 +21,10 @@ function isChromeRunning(): boolean {
   }
 }
 
-// { timeout } as a test option is the reliable way to override the global
-// 60s cap — test.setTimeout() inside the body doesn't always take effect
-// before Playwright's internal timer starts counting.
-setup("capture auth session", { timeout: 300_000 }, async () => {
+setup("capture auth session", async () => {
+  // Must be the first line — overrides the global 60s cap before any awaits.
+  setup.setTimeout(300_000);
+
   if (isChromeRunning()) {
     throw new Error(
       "\n\n  Chrome is still running.\n" +
