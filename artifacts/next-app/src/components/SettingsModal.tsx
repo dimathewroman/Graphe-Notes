@@ -566,6 +566,7 @@ export function SettingsModal() {
                 aria-describedby={undefined}
                 onOpenAutoFocus={(e) => e.preventDefault()}>
                 <motion.div
+                  data-testid="settings-modal"
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1, transition: { type: "spring", stiffness: 380, damping: 30 } }}
                   exit={{ opacity: 0, transition: { duration: 0.15, ease: "easeOut" } }}

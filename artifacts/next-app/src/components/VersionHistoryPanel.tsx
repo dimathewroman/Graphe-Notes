@@ -161,6 +161,7 @@ export function VersionHistoryPanel({
           <DialogPrimitive.Overlay className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
         )}
         <DialogPrimitive.Content
+          data-testid="version-history-panel"
           aria-label="Version history"
           aria-describedby={undefined}
           onOpenAutoFocus={(e) => e.preventDefault()}
