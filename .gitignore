@@ -58,3 +58,7 @@ logs/
 # Claude Code local config
 .claude/
 artifacts/next-app/.claude/
+
+# Playwright saved auth sessions — contain live Supabase tokens, never commit
+artifacts/next-app/playwright/.auth/*.json
+artifacts/next-app/playwright/.auth/screenshots/
