@@ -616,7 +616,7 @@ export function QuickBitShell() {
   const reminderCount = notificationHours.length;
 
   return (
-    <div className="flex-1 flex flex-col bg-editor h-screen overflow-hidden relative">
+    <div className="flex-1 flex flex-col bg-editor h-[100dvh] overflow-hidden relative">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="h-14 border-b border-panel-border flex items-center px-2 md:px-4 shrink-0 bg-editor/80 backdrop-blur-md z-10 gap-2 md:gap-3 overflow-hidden">
         {bp === "mobile" && (

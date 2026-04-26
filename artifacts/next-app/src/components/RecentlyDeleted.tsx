@@ -152,9 +152,9 @@ export function RecentlyDeleted() {
 
   const containerClass =
     bp === "mobile"
-      ? "flex-1 bg-background flex flex-col h-screen"
+      ? "flex-1 bg-background flex flex-col h-[100dvh]"
       : cn(
-          "border-r border-panel-border bg-background flex flex-col h-screen shrink-0 transition-all",
+          "border-r border-panel-border bg-background flex flex-col h-[100dvh] shrink-0 transition-all",
           bp === "tablet" ? "w-72" : "w-80"
         );
 

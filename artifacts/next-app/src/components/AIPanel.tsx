@@ -166,7 +166,7 @@ export function AIPanel() {
     ? "fixed inset-0 z-50 bg-panel flex flex-col"
     : bp === "tablet"
     ? "fixed inset-y-0 right-0 z-50 w-[340px] bg-panel flex flex-col shadow-2xl border-l border-panel-border"
-    : "w-80 border-l border-panel-border bg-panel flex flex-col h-screen shrink-0 absolute right-0 top-0 z-20 shadow-2xl";
+    : "w-80 border-l border-panel-border bg-panel flex flex-col h-[100dvh] shrink-0 absolute right-0 top-0 z-20 shadow-2xl";
 
   const animationProps = bp === "mobile"
     ? { initial: { y: "100%", opacity: 0 }, animate: { y: 0, opacity: 1 }, exit: { y: "100%", opacity: 0 } }
