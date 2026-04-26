@@ -37,6 +37,9 @@ setup("capture auth session", async () => {
     headless: false,
     channel: "chrome",
     args: ["--profile-directory=Default"],
+    // Playwright adds --disable-extensions by default which hides 1Password.
+    // Explicitly remove that flag so the extension loads from the profile.
+    ignoreDefaultArgs: ["--disable-extensions"],
   });
 
   const page = context.pages()[0] ?? await context.newPage();
