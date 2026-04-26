@@ -19,6 +19,11 @@ import { useBreakpoint } from "@/hooks/use-mobile";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import { PinPad } from "./PinPad";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
+import { useDemoMode } from "@/lib/demo-context";
+
+// Demo mode reads/writes the vault PIN from sessionStorage under this key —
+// the same key the sidebar's vault flow uses, so the two stay in sync.
+const DEMO_VAULT_KEY = "demo_vault_hash";
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "./ui/select";
@@ -60,6 +65,7 @@ export function SettingsModal() {
   const { user, logout } = useAuth();
   const bp = useBreakpoint();
   const isMobile = bp === "mobile";
+  const isDemo = useDemoMode();
 
   const handleMotionChange = (level: MotionLevel) => {
     setMotionLevel(level);
@@ -244,17 +250,22 @@ export function SettingsModal() {
 
   useEffect(() => {
     if (activeTab === "security" && isSettingsOpen) {
-      authenticatedFetch("/api/vault/status")
-        .then(r => r.json())
-        .then((data: { isConfigured: boolean }) => setVaultConfigured(data.isConfigured))
-        .catch(() => {});
+      if (isDemo) {
+        // Demo mode shares the sessionStorage PIN with the sidebar vault flow.
+        setVaultConfigured(!!sessionStorage.getItem(DEMO_VAULT_KEY));
+      } else {
+        authenticatedFetch("/api/vault/status")
+          .then(r => r.json())
+          .then((data: { isConfigured: boolean }) => setVaultConfigured(data.isConfigured))
+          .catch(() => {});
+      }
       setSecurityMode("idle");
       setSecurityStep("current");
       setSecurityFirstPin("");
       setSecurityCurrentPin("");
       setSecurityError("");
     }
-  }, [activeTab, isSettingsOpen]);
+  }, [activeTab, isSettingsOpen, isDemo]);
 
   useEffect(() => {
     if (activeTab === "quickbits" && isSettingsOpen) {
@@ -422,20 +433,40 @@ export function SettingsModal() {
             setSecurityLoading(false);
             return;
           }
-          // Send plaintext PIN — hashing happens server-side with bcrypt
-          const res = await authenticatedFetch("/api/vault/setup", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pin }),
-          });
-          if (!res.ok) throw new Error("Setup failed");
-          setVaultConfigured(true);
-          setSecurityMode("idle");
+          if (isDemo) {
+            // Mirror the sidebar's demo vault flow — store the PIN in
+            // sessionStorage so both surfaces agree on the same value.
+            sessionStorage.setItem(DEMO_VAULT_KEY, pin);
+            setVaultConfigured(true);
+            setSecurityMode("idle");
+          } else {
+            // Send plaintext PIN — hashing happens server-side with bcrypt
+            const res = await authenticatedFetch("/api/vault/setup", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ pin }),
+            });
+            if (!res.ok) throw new Error("Setup failed");
+            setVaultConfigured(true);
+            setSecurityMode("idle");
+          }
         }
       }
 
       if (securityMode === "reset") {
         if (securityStep === "current") {
+          if (isDemo) {
+            const stored = sessionStorage.getItem(DEMO_VAULT_KEY);
+            if (!stored || stored !== pin) {
+              setSecurityError("Incorrect PIN. Please try again.");
+              setSecurityLoading(false);
+              return;
+            }
+            setSecurityCurrentPin(pin);
+            setSecurityStep("new");
+            setSecurityLoading(false);
+            return;
+          }
           // Verify the current PIN against the server immediately — don't let
           // the user type their new PIN only to find out the current one was wrong.
           const verifyRes = await authenticatedFetch("/api/vault/unlock", {
@@ -468,17 +499,22 @@ export function SettingsModal() {
             setSecurityLoading(false);
             return;
           }
-          // Send plaintext PINs — hashing happens server-side with bcrypt
-          const res = await authenticatedFetch("/api/vault/change-password", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ currentPin: securityCurrentPin, newPin: pin }),
-          });
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            throw new Error((data as { error?: string }).error || "Failed to change PIN");
+          if (isDemo) {
+            sessionStorage.setItem(DEMO_VAULT_KEY, pin);
+            setSecurityMode("idle");
+          } else {
+            // Send plaintext PINs — hashing happens server-side with bcrypt
+            const res = await authenticatedFetch("/api/vault/change-password", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ currentPin: securityCurrentPin, newPin: pin }),
+            });
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              throw new Error((data as { error?: string }).error || "Failed to change PIN");
+            }
+            setSecurityMode("idle");
           }
-          setSecurityMode("idle");
         }
       }
     } catch (err: unknown) {
@@ -486,7 +522,7 @@ export function SettingsModal() {
     } finally {
       setSecurityLoading(false);
     }
-  }, [securityMode, securityStep, securityFirstPin, securityCurrentPin]);
+  }, [securityMode, securityStep, securityFirstPin, securityCurrentPin, isDemo]);
 
   const getSecurityStepInfo = () => {
     if (securityMode === "setup") {
@@ -569,7 +605,10 @@ export function SettingsModal() {
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1, transition: { type: "spring", stiffness: 380, damping: 30 } }}
                   exit={{ opacity: 0, transition: { duration: 0.15, ease: "easeOut" } }}
-                  className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-[720px] md:h-[min(580px,80vh)] bg-panel border border-panel-border rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col md:flex-row luminance-border-top"
+                  // Height bumped from 580 to 680 so the PIN pad (4×56px keys
+                  // + title + dots + actions ≈ 500px content) is fully visible
+                  // without internal scrolling. 92vh keeps small laptops safe.
+                  className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-[720px] md:h-[min(680px,92vh)] bg-panel border border-panel-border rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col md:flex-row luminance-border-top"
                 >
                   <VisuallyHidden.Root asChild>
                     <DialogPrimitive.Title>Settings</DialogPrimitive.Title>

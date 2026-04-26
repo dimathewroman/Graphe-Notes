@@ -302,6 +302,22 @@ export default function Home() {
           {showEditor && <NoteShell />}
           {showQuickBitEditor && <QuickBitShell />}
           {showDeletedDetail && <RecentlyDeletedDetail />}
+          {/* Recently Deleted with no note selected — fill the right pane with
+              an empty-state instead of leaving a blank gap. Mirrors the editor
+              column's "no note selected" treatment. */}
+          {isRecentlyDeleted && !selectedNoteId && (
+            <div className="flex-1 flex items-center justify-center bg-background text-center px-8">
+              <div className="max-w-sm">
+                <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-muted-foreground/10 flex items-center justify-center text-muted-foreground">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>
+                </div>
+                <h2 className="text-base font-medium text-foreground mb-1">No note selected</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Pick a deleted note on the left to preview, restore, or permanently delete it.
+                </p>
+              </div>
+            </div>
+          )}
         </>
       )}
 
