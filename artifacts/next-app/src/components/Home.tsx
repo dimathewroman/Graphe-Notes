@@ -172,7 +172,9 @@ export default function Home() {
   const showEditor = !isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && (bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "editor"));
   const showQuickBitEditor = activeFilter === "quickbits" && (bp === "desktop" || bp === "tablet" || (bp === "mobile" && mobileView === "editor"));
   // Attachments renders its own full-width panel outside the list slot — don't show an empty list panel alongside it.
-  const showList = !isAttachments && (bp === "desktop"
+  // Recently Deleted renders outside the list panel (like Attachments) so the
+  // narrow fixed-width list column never shows when there's nothing selected.
+  const showList = !isAttachments && !isRecentlyDeleted && (bp === "desktop"
     ? isNoteListOpen
     : bp === "tablet"
       // On tablet the list is open by default but NoteShell may collapse it
@@ -247,9 +249,9 @@ export default function Home() {
               {mobileView === "list" && (
                 <>
                   {activeFilter === "quickbits" && <QuickBitList />}
-                  {isRecentlyDeleted && <RecentlyDeleted />}
                   {isAttachments && <AllAttachments />}
                   {!isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && <NoteList />}
+                  {isRecentlyDeleted && <RecentlyDeleted />}
                 </>
               )}
               {mobileView === "editor" && (
@@ -285,13 +287,13 @@ export default function Home() {
                   transition={panelSlideTransition}
                 >
                   {activeFilter === "quickbits" && <QuickBitList />}
-                  {isRecentlyDeleted && <RecentlyDeleted />}
                   {!isRecentlyDeleted && !isAttachments && activeFilter !== "quickbits" && <NoteList />}
                 </motion.div>
               </motion.div>
             )}
           </AnimatePresence>
           {isAttachments && <AllAttachments />}
+          {isRecentlyDeleted && <RecentlyDeleted />}
           {(bp === "desktop" || bp === "tablet") && showList && (
             <ResizeHandle
               onResize={handleNoteListResize}

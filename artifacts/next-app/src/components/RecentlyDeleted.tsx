@@ -150,13 +150,18 @@ export function RecentlyDeleted() {
   const regularCount = notes.filter((n) => (n as any).deletedReason !== "expired" && !(n as any)._isQuickBit).length;
   const qbCount = notes.filter((n) => (n as any).deletedReason === "expired" || (n as any)._isQuickBit).length;
 
+  // When a deleted note is selected the detail panel renders beside this list,
+  // so keep the fixed width with a separator. With no selection the list fills
+  // the full remaining width (like AllAttachments).
   const containerClass =
     bp === "mobile"
       ? "flex-1 bg-background flex flex-col h-[100dvh]"
-      : cn(
-          "border-r border-panel-border bg-background flex flex-col h-[100dvh] shrink-0 transition-all",
-          bp === "tablet" ? "w-72" : "w-80"
-        );
+      : selectedNoteId
+        ? cn(
+            "border-r border-panel-border bg-background flex flex-col h-[100dvh] shrink-0 transition-all",
+            bp === "tablet" ? "w-72" : "w-80"
+          )
+        : "flex-1 bg-background flex flex-col h-[100dvh]";
 
   return (
     <div className={containerClass}>

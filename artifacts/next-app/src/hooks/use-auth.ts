@@ -52,6 +52,16 @@ function hasStoredSession(): boolean {
   }
 }
 
+/** Returns true when the URL contains a Supabase OAuth callback code.
+ *  After Google/Apple OAuth, Supabase redirects back with ?code=... which the
+ *  client must exchange for a session. No stored token exists yet at this point,
+ *  so hasStoredSession() returns false — without this check the auth effect
+ *  would early-return and the exchange would never be observed. */
+function hasOAuthCallback(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).has("code");
+}
+
 export function useAuth(): AuthState {
   const [user, setUser] = useState<AuthUserWithDisplay | null>(null);
   // Start as false so the login screen (including the demo button) is visible
@@ -62,8 +72,8 @@ export function useAuth(): AuthState {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    // No stored token → nothing to validate; login screen already visible.
-    if (!hasStoredSession()) {
+    // No stored token and no OAuth callback code → nothing to validate.
+    if (!hasStoredSession() && !hasOAuthCallback()) {
       return;
     }
 
