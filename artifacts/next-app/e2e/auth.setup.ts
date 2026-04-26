@@ -1,25 +1,33 @@
 import { test as setup, expect, chromium } from "@playwright/test";
 import path from "path";
 import os from "os";
-import fs from "fs";
+import { execSync } from "child_process";
 
 const authFile = path.join(__dirname, "../playwright/.auth/user.json");
 
 // Uses your real Chrome Default profile — 1Password is already installed.
-// Chrome must be fully quit (Cmd+Q) before running this script because macOS
-// Chrome refuses to share a profile with another running instance.
+// Chrome must be fully quit before running this script because macOS Chrome
+// refuses to share a profile with another running instance.
 // Reopen Chrome normally after the session is saved.
 const chromeUserData = path.join(
   os.homedir(),
   "Library/Application Support/Google/Chrome"
 );
 
+function isChromeRunning(): boolean {
+  try {
+    execSync('pgrep -x "Google Chrome"', { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 setup("capture auth session", async () => {
-  // Warn early if Chrome's lock file is present (Chrome is still running)
-  const lockFile = path.join(chromeUserData, "Default", "LOCK");
-  if (fs.existsSync(lockFile)) {
+  if (isChromeRunning()) {
     throw new Error(
-      "\n\n  Chrome is still running. Quit Chrome completely (Cmd+Q) then re-run.\n"
+      "\n\n  Chrome is still running.\n" +
+      "  Run:  pkill -x 'Google Chrome'  then re-run this script.\n"
     );
   }
 
