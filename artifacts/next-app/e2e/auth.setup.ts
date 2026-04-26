@@ -35,9 +35,14 @@ setup("capture auth session", async () => {
   const context = await chromium.launchPersistentContext(chromeUserData, {
     headless: false,
     channel: "chrome",
-    args: ["--profile-directory=Default"],
-    // Playwright adds --disable-extensions by default which hides 1Password.
-    ignoreDefaultArgs: ["--disable-extensions"],
+    args: [
+      "--profile-directory=Default",
+      // Prevents Google OAuth "this browser may not be secure" warning.
+      "--disable-blink-features=AutomationControlled",
+    ],
+    // Playwright adds --disable-extensions (hides 1Password) and
+    // --enable-automation (triggers Google's automation warning).
+    ignoreDefaultArgs: ["--disable-extensions", "--enable-automation"],
   });
 
   // Always open a new tab so session-restore tabs don't interfere.
