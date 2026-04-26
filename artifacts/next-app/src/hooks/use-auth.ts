@@ -43,6 +43,7 @@ interface AuthState {
  *  loading spinner entirely and shows the login screen immediately. */
 function hasStoredSession(): boolean {
   if (typeof window === "undefined") return true; // SSR: assume loading
+  if (new URLSearchParams(window.location.search).has("code")) return true;
   try {
     return Object.keys(localStorage).some(
       (k) => k.startsWith("sb-") && k.endsWith("-auth-token"),
@@ -115,7 +116,7 @@ export function useAuth(): AuthState {
       .signInWithOAuth({
         provider,
         options: {
-          redirectTo: window.location.origin + "/",
+          redirectTo: window.location.origin + "/auth/callback",
         },
       })
       .catch((err: unknown) => {
