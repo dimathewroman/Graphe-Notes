@@ -1,6 +1,6 @@
 # Graphe Notes — Claude Code Guide
 
-<!-- Last audited: 2026-04-24 -->
+<!-- Last audited: 2026-04-26 -->
 
 ## Stack
 
@@ -19,6 +19,26 @@
 - **Analytics**: PostHog (`posthog-js`, `posthog-node`)
 - **UI primitives**: shadcn/ui (new-york style) wrapping Radix UI (`radix-ui` monorepo package), Vaul (drawers), Sonner (toasts), Lucide icons. Components live in `src/components/ui/` and the shadcn config is in `artifacts/next-app/components.json`.
 - **Other**: `jose` (JWT), `bcryptjs` (vault hashing), `html2pdf.js` (export), `turndown`/`turndown-plugin-gfm` (HTML-to-markdown), `date-fns`, `diff-match-patch` (version diffing), `katex` (math rendering), `lowlight` (code highlighting), `geist` (font), `next-themes`
+
+---
+
+## Documentation Map
+
+This file contains behavioral instructions for Claude Code. Detailed reference lives in dedicated files — only read them when your task requires it.
+
+| File | Contains | Read when... |
+|---|---|---|
+| [CLAUDE.md](CLAUDE.md) (this file) | Working conventions, PR checklist, session startup, branch strategy | Always (loaded automatically) |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Directory tree, database schema, API endpoints, auth flow, state management, component hierarchy, data fetching patterns | You need to find where something lives, understand data flow, or add new endpoints/tables |
+| [DESIGN.md](DESIGN.md) | Color system, typography scale, spacing tokens, component visual patterns, motion timing, border radii, dark mode specs | You're making any UI or visual change |
+| [PERFORMANCE.md](PERFORMANCE.md) | Performance baselines, thresholds, testing instructions, anti-patterns | You're working on performance-sensitive code or before submitting a PR with potential perf impact |
+| [TESTING.md](TESTING.md) | How to run tests, how to add tests, CI pipeline, visual regression, viewport testing | You're writing or modifying tests |
+| [SECURITY.md](SECURITY.md) | Security model, RLS policies, auth patterns, rate limiting, encryption, audit history | You're adding new endpoints, tables, or anything touching auth/data access |
+| [OBSERVABILITY.md](OBSERVABILITY.md) | Sentry setup, PostHog event schema, monitoring dashboards, what to check and when | You're adding error handling, analytics events, or debugging production issues |
+
+**Rule: Before making UI changes, read [DESIGN.md](DESIGN.md). Before making architectural changes, read [ARCHITECTURE.md](ARCHITECTURE.md). Before submitting any PR, run through the PR checklist below.**
+
+Note: ARCHITECTURE.md, DESIGN.md, PERFORMANCE.md, TESTING.md, SECURITY.md, and OBSERVABILITY.md don't exist yet. They will be created in a future session. The map is added now so the routing structure is in place.
 
 ---
 
@@ -47,6 +67,11 @@ A task is not done until all of the following are true:
 5. Sentry is checked for new unresolved issues before the PR is opened: resolve intentional test errors, fix any real errors caused by the branch, and resolve stale dev-build noise so the dashboard stays clean
 6. The Notion Active Work row is updated with branch name, preview URL, and Status set to QA Review
 7. A plain English summary is written of what was done and any follow-up tasks
+8. If any UI was changed: verify it renders correctly at mobile (390px), tablet (768px), and desktop (1280px+) widths. All interactive elements have touch targets of at least 44x44px. Tested in both light and dark mode.
+9. If adding interactive elements: verify they work with both pointer/mouse and touch input. No functionality gated behind hover.
+10. If adding CSS animations or visual effects: verify they work in Safari/WebKit, not just Chrome.
+11. If adding new API endpoints or database tables: verify RLS policies are in place, auth is validated in the handler, and no cross-user data access is possible.
+12. If changes touch auth, encryption, or rate limiting: verify no new security vectors are introduced.
 
 ---
 
@@ -85,6 +110,7 @@ scripts/
 
 ---
 
+<!-- TO EXTRACT: This section moves to ARCHITECTURE.md in the documentation restructure. CLAUDE.md will keep a 1-2 line summary with a pointer. -->
 ## Database Schema
 
 Tables defined in `lib/db/src/schema/`:
@@ -107,6 +133,7 @@ Soft-delete pattern: `notes.deletedAt` is set on soft-delete. Use `/notes/:id/de
 
 ---
 
+<!-- TO EXTRACT: This section moves to ARCHITECTURE.md in the documentation restructure. CLAUDE.md will keep a 1-2 line summary with a pointer. -->
 ## API Endpoints
 
 All endpoints live in `artifacts/next-app/src/app/api/` and are prefixed with `/api`:
@@ -247,6 +274,7 @@ Auth lives in `artifacts/next-app/src/hooks/use-auth.ts` and `artifacts/next-app
 
 ---
 
+<!-- TO EXTRACT: This section moves to ARCHITECTURE.md in the documentation restructure. CLAUDE.md will keep a 1-2 line summary with a pointer. -->
 ## Demo Mode Pattern
 
 `useDemoMode()` returns a boolean. Import from `@/lib/demo-context`.
@@ -260,6 +288,7 @@ Demo vault PIN is stored in sessionStorage under the key `"demo_vault_hash"`. Al
 
 ---
 
+<!-- TO EXTRACT: This section moves to ARCHITECTURE.md in the documentation restructure. CLAUDE.md will keep a 1-2 line summary with a pointer. -->
 ## State Management
 
 | Concern | Where |
@@ -288,6 +317,7 @@ Dark mode intensity levels (`soft`, `default`, `oled`) and colorblind modes (`no
 
 ---
 
+<!-- TO EXTRACT: This section moves to ARCHITECTURE.md in the documentation restructure. CLAUDE.md will keep a 1-2 line summary with a pointer. -->
 ## Editor Architecture
 
 The editor is split into two layers:
@@ -318,6 +348,7 @@ Do not add new editor UI directly into NoteShell.tsx — create sub-components i
 
 ---
 
+<!-- TO EXTRACT: This section moves to ARCHITECTURE.md in the documentation restructure. CLAUDE.md will keep a 1-2 line summary with a pointer. -->
 ## Templates System
 
 Preset and user-created templates stored in the `templates` table. Categories: capture, plan, reflect, create, mine.
@@ -329,6 +360,7 @@ Preset and user-created templates stored in the `templates` table. Categories: c
 
 ---
 
+<!-- TO EXTRACT: This section moves to ARCHITECTURE.md in the documentation restructure. CLAUDE.md will keep a 1-2 line summary with a pointer. -->
 ## Onboarding System
 
 4-step first-run onboarding flow for new users and demo mode.
@@ -340,6 +372,7 @@ Preset and user-created templates stored in the `templates` table. Categories: c
 
 ---
 
+<!-- TO EXTRACT: This section moves to ARCHITECTURE.md (conventions/anti-patterns) and DESIGN.md (visual patterns) in the documentation restructure. CLAUDE.md will keep a 1-2 line summary with a pointer. -->
 ## shadcn/ui Patterns
 
 All modals, dropdowns, popovers, and tooltips use shadcn/ui components (`src/components/ui/`) which wrap Radix primitives. Do NOT hand-roll new modal/popover code with `createPortal` + `getBoundingClientRect` + manual click-outside listeners — use the shadcn primitives instead.
@@ -422,13 +455,108 @@ This adds the component to `src/components/ui/`. After install, verify it doesn'
 
 ## Responsive Breakpoints
 
-`useBreakpoint()` from `src/hooks/use-mobile.tsx` returns `"mobile" | "tablet" | "desktop"`
+`useBreakpoint()` from `src/hooks/use-mobile.tsx` returns `"mobile" | "tablet" | "desktop"`.
 
-- Mobile: < 768px
-- Tablet: 768–1199px
-- Desktop: 1200px+
+Current hook thresholds: mobile < 768px, tablet 768-1199px, desktop 1200+. These may need updating to align with the design manifesto breakpoints below.
 
-The tablet threshold is 1200px (not 1024) so iPad Pro in portrait gets the 2-column tablet layout. Mobile is single-column with no persistent panels. Always ensure a back navigation button exists on every mobile screen including vault-locked notes.
+Supported viewport range (must not break at any width in this range):
+- Cover screen minimum: 344px (Galaxy Fold cover)
+- Mobile: < 600px — single-panel stack, 75% desktop spacing
+- Tablet portrait / foldable outer: 600-768px — single-panel with sheet overlays
+- Foldable inner: 700-900px near-square — two-panel, test 1:1-ish ratios
+- Tablet landscape: 768-1024px — two-panel, sidebar collapses
+- Desktop: > 1024px — three-panel, draggable dividers
+- Split-screen (macOS/iPadOS): first-class layout, must not break
+
+Always ensure a back navigation button exists on every mobile screen including vault-locked notes.
+
+---
+
+## Cross-Platform Requirements
+
+This app must work on:
+- Mobile: iOS Safari, Android Chrome
+- Tablet: iPad with both touch and keyboard+cursor input (simultaneously), Android tablets
+- Foldable: cover screen (344px) and inner screen, smooth reflow on fold transition
+- Desktop: Chrome, Firefox, Safari/WebKit
+- Split-screen / multitasking on macOS and iPadOS
+
+WebKit is non-negotiable — all iOS and iPadOS browsers use WebKit as their rendering engine. A feature that works in Chromium but breaks in WebKit is broken for all Apple device users.
+
+---
+
+## Touch & Input Requirements
+
+- All interactive elements must have a minimum touch target of 44x44px on touch devices. Hard minimum from Apple HIG.
+- Hover states are pointer-only. Never gate functionality behind hover — every action reachable via hover must be reachable by tap or keyboard.
+- On touch-only devices, hover effects either don't appear or translate to active/press states.
+- iPad supports keyboard+trackpad alongside touch simultaneously. Both must work at the same time.
+- Context menus: right-click (pointer) and long-press (touch).
+- Drag interactions must have touch equivalents or alternative flows.
+
+---
+
+## Browser Testing
+
+Target browsers: Chrome (desktop + Android), Safari/WebKit (iOS, iPadOS, macOS), Firefox (desktop).
+
+WebKit differences to watch: backdrop-filter rendering, scrollbar styling, CSS animation performance, ScrollArea behavior, date input formatting. Verify new CSS features and animations work in WebKit.
+
+---
+
+## Performance Guardrails
+
+- Animate only GPU-composited properties (transform, opacity). Never animate layout properties (width, height, top, left, margin, padding).
+- CSS-first motion. Framer Motion only for springs, gestures, or layout animations.
+- Self-host and preload all fonts. No CDN font dependency.
+- Performance-adaptive: default to lower motion on underpowered devices. Always let user override via motion level.
+
+---
+
+## Design Reference
+
+All visual decisions must align with [DESIGN.md](DESIGN.md) (once created) and the Design Philosophy Manifesto in Notion. Key specs: spacing on 8px base grid (4px half-step), Major Third type scale from 16px, border radii 6/8/12/16px (no sharp corners), four-level shadow system (warm-toned), motion timing by category. Three design principles: Calm, Crafted, Alive. Accent color usage is surgical — primary buttons, active nav, selected indicators, link text, focus rings. More accent ≠ better.
+
+---
+
+## Security Requirements
+
+Every API route must:
+- Validate the Supabase session and extract the user ID. No endpoint should trust client-provided user IDs.
+- Scope all database queries to the authenticated user's ID. Never return or modify another user's data.
+- Use parameterized queries (Drizzle handles this, but verify if writing raw SQL).
+- Have a try/catch with Sentry.captureException for error tracking.
+
+**Row Level Security (RLS):**
+- All Supabase tables must have RLS enabled with policies that restrict access to the owning user.
+- When adding new tables, always add RLS policies before the table is used.
+
+**AI endpoint protection:**
+- The `/api/ai/generate` endpoint uses the app's Gemini API key for free-tier users. Rate limiting must be enforced (check `ai_usage` table).
+- User-provided API keys are encrypted with AES-256-GCM (`lib/encryption.ts`). Never log, expose, or return decrypted keys to the client.
+
+**When adding new endpoints or tables:**
+- Verify RLS policies cover the new table
+- Verify the route handler validates auth
+- Verify no data can be accessed or modified across user boundaries
+- Check if the change introduces any new rate-limit-bypass vectors
+
+**Security vs. local dev:** If a security fix would break local development or testing, flag it in the PR description with the tradeoff explained. Never silently break local dev for security. Common safe patterns:
+- Rate limiting can be relaxed in `NODE_ENV=development`
+- Supabase redirect URLs must include localhost for local OAuth
+- Cookie secure flag should be false in development
+
+SECURITY.md must never contain details of unfixed vulnerabilities. Report those directly in the session. Once fixed, document the resolved issue and the pattern to avoid.
+
+---
+
+## Observability
+
+**Sentry:** Check the Sentry dashboard for unresolved errors before opening a PR. Fix errors caused by your changes. Resolve stale dev-build noise. When adding new components or API routes, add Sentry error boundaries or try/catch with `Sentry.captureException`.
+
+**PostHog:** Every new user-facing action gets a `posthog.capture()` call (noun_verb format). Performance marks (`perf_note_switch`, `perf_app_ready`) should be forwarded to PostHog for real-user monitoring. All events must include relevant properties (`note_id`, `user_id`, `timestamp`).
+
+When in doubt about whether something is tracked, check the PostHog section in this file for the baseline event list, and search the codebase for existing `posthog.capture` calls.
 
 ---
 
@@ -578,6 +706,8 @@ Use `data-testid` attributes for all selectors — never couple tests to CSS cla
 
 Tests run serially (`workers: 1`) because the Next.js dev server cannot reliably handle concurrent test workers.
 
+Playwright tests should cover multiple viewports. Visual regression testing is being expanded to mobile (390px), tablet (768px), and desktop (1280px) breakpoints — when adding new UI, add viewport-specific test cases where behavior differs.
+
 ---
 
 ## Codebase Caveats
@@ -585,6 +715,29 @@ Tests run serially (`workers: 1`) because the Next.js dev server cannot reliably
 FontSize is a named export from `@tiptap/extension-text-style`. Do not install `@tiptap/extension-font-size` — it is deprecated.
 
 AI provider keys are stored encrypted in the `user_api_keys` DB table. The encryption utility is in `lib/encryption.ts` (AES-256-GCM, imported via `@lib/encryption`). The active provider setting is in `user_settings`. Do not use localStorage for AI keys.
+
+---
+
+## Self-Maintenance
+
+These documentation files are living documents. They must stay accurate as the codebase evolves.
+
+**Before submitting every PR, check:**
+1. If files were added, removed, or renamed → update the directory tree in [ARCHITECTURE.md](ARCHITECTURE.md) (once it exists)
+2. If UI components were added or modified → verify they align with [DESIGN.md](DESIGN.md) and update it if new patterns were established
+3. If new API endpoints or database tables were added → update [ARCHITECTURE.md](ARCHITECTURE.md)
+4. If new environment variables were added → update `.env.example`
+5. If performance-sensitive changes were made → run performance tests and update [PERFORMANCE.md](PERFORMANCE.md) baselines if they shifted intentionally
+6. If any new features were added → add a [CHANGELOG.md](CHANGELOG.md) entry
+7. If any of the above files don't exist yet, note what needs updating in the PR description for a future documentation session.
+
+**Token efficiency rule:** CLAUDE.md must stay under 300 lines of substantive content (excluding the sections marked for extraction). When ARCHITECTURE.md and DESIGN.md are created, the marked sections will be extracted and replaced with 1-2 line summaries pointing to the right file. Do not add detailed reference content to CLAUDE.md — put it in the appropriate dedicated file instead.
+
+**File storage rules:**
+- All documentation files (.md) are committed to the repo and pushed to GitHub. They contain no secrets and are safe to be public.
+- `.env`, auth state files, and anything with real credentials stays gitignored. Never commit secrets.
+- Operational docs (active work tracking, decision log, rollback log) stay in Notion.
+- If a security audit finds unfixed vulnerabilities, report findings in the session output only. Do not commit vulnerability details until the fix is merged. Then update SECURITY.md with the resolved issue.
 
 ---
 
