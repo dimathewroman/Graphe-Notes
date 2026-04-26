@@ -1,0 +1,14 @@
+{
+  "recorded_at": "2026-04-26T22:58:55.897Z",
+  "demo": {
+    "app_initial_load": 382,
+    "mode_entry": 237,
+    "note_creation": 193,
+    "note_switch": 133,
+    "bold_toggle": 59,
+    "sidebar_nav_switch": 55,
+    "settings_open": 104,
+    "version_history_open": 81
+  },
+  "authenticated": {}
+}

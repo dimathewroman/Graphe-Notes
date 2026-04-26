@@ -3,12 +3,29 @@ name: CI
 on:
   pull_request:
     branches: [master]
+  workflow_dispatch:
+
+# Shared env vars used by both build and the next start server.
+# Tests run in demo mode — no real credentials required.
+# Placeholders allow Next.js to start without crashing on missing vars.
+env:
+  NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+  SUPABASE_URL: https://placeholder.supabase.co
+  SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
+  SUPABASE_DB_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+  NEXT_PUBLIC_POSTHOG_KEY: phc_placeholder
+  NEXT_PUBLIC_POSTHOG_HOST: https://app.posthog.com
+  AI_KEY_ENCRYPTION_SECRET: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 jobs:
+  # ── Job 1: Typecheck + Build verification ────────────────────────────────────
+  # Runs in parallel with E2E. Fast path for type/build errors — gives feedback
+  # before the slower E2E suite finishes.
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -33,21 +50,18 @@ jobs:
 
       - name: Build
         run: pnpm --filter @workspace/next-app run build
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
-          SUPABASE_URL: https://placeholder.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
-          SUPABASE_DB_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
-          NEXT_PUBLIC_POSTHOG_KEY: phc_placeholder
-          NEXT_PUBLIC_POSTHOG_HOST: https://app.posthog.com
-          AI_KEY_ENCRYPTION_SECRET: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
+  # ── Job 2: E2E Tests ─────────────────────────────────────────────────────────
+  # Runs in parallel with Typecheck. Builds the production bundle independently,
+  # starts next start, and runs the full Playwright suite including performance
+  # measurements and visual regression comparisons.
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    needs: typecheck
+    timeout-minutes: 35
+
+    permissions:
+      pull-requests: write  # Required to post the performance PR comment
 
     steps:
       - name: Checkout
@@ -70,26 +84,125 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter @workspace/next-app exec playwright install --with-deps chromium
 
-      - name: Copy env example
+      - name: Copy env file
+        shell: bash
         run: cp .env.example .env
 
-      - name: Run E2E tests
-        run: pnpm --filter @workspace/next-app run test:e2e
-        env:
-          # Tests run in demo mode — no real credentials required.
-          # These placeholders allow Next.js to start without crashing on missing vars.
-          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
-          SUPABASE_URL: https://placeholder.supabase.co
-          SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key
-          SUPABASE_DB_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
-          NEXT_PUBLIC_POSTHOG_KEY: phc_placeholder
-          NEXT_PUBLIC_POSTHOG_HOST: https://app.posthog.com
+      - name: Build production bundle
+        run: pnpm --filter @workspace/next-app run build
 
-      - name: Upload test artifacts on failure
-        if: failure()
+      - name: Run E2E tests
+        run: >-
+          pnpm --filter @workspace/next-app exec playwright test
+          --project=chromium
+          --update-snapshots=missing
+        env:
+          PERF_BASELINE_FILE: ${{ github.workspace }}/artifacts/next-app/e2e/perf-baseline-ci.json
+
+      - name: Post performance PR comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const reportPath = 'artifacts/next-app/perf-results/perf-report.json';
+
+            if (!fs.existsSync(reportPath)) {
+              console.log('No perf report found — tests may have failed before metrics were recorded.');
+              return;
+            }
+
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+
+            const icon = (s) => ({ fail: '❌', warn: '⚠️', pass: '✅', new: '🆕' })[s] ?? '—';
+
+            const rows = report.metrics.map((m) => {
+              const ratio = m.ratio != null ? `${m.ratio.toFixed(2)}×` : '—';
+              const baseline = m.baseline_ms != null ? `${m.baseline_ms}ms` : '—';
+              const status = `${icon(m.status)} ${m.status.toUpperCase()}`;
+              return `| ${m.label} | ${baseline} | ${m.current_ms}ms | ${ratio} | ${status} |`;
+            }).join('\n');
+
+            const modeNote = report.is_baseline_run
+              ? '> **Recording mode** — CI baseline was empty. Numbers saved as new baseline. Download the `perf-report` artifact and commit `perf-baseline-ci.json` to enable threshold enforcement on future PRs.'
+              : `> Compared against CI baseline recorded at \`${report.baseline_recorded_at ?? 'unknown'}\`.\n> Thresholds: ⚠️ warn ≥${report.warn_multiplier}×  ❌ fail ≥${report.fail_multiplier}×`;
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const body = [
+              '<!-- graphe-perf-report -->',
+              '## ⚡ Performance Report',
+              '',
+              modeNote,
+              '',
+              '| Metric | Baseline | Current | Ratio | Status |',
+              '|--------|----------|---------|-------|--------|',
+              rows,
+              '',
+              `*Project: \`${report.project}\` · [Run #${context.runNumber}](${runUrl})*`,
+            ].join('\n');
+
+            // Only post if this is a pull request event (not workflow_dispatch)
+            if (!context.issue || !context.issue.number) {
+              console.log('Not a pull request event — skipping PR comment.');
+              return;
+            }
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find((c) => c.body && c.body.includes('<!-- graphe-perf-report -->'));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Upload Playwright HTML report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: artifacts/next-app/playwright-report/
           retention-days: 7
+
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report
+          path: artifacts/next-app/perf-results/perf-report.json
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Upload visual snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-snapshots
+          path: artifacts/next-app/e2e/**/*-snapshots/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Upload CI perf baseline
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-baseline-ci
+          path: artifacts/next-app/e2e/perf-baseline-ci.json
+          retention-days: 30
+          if-no-files-found: warn
