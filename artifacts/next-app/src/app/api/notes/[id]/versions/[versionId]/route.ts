@@ -7,6 +7,7 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { db, noteVersionsTable, notesTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
+import * as Sentry from "@sentry/nextjs";
 
 const routeParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
@@ -26,25 +27,30 @@ export async function GET(
   }
   const { id: noteId, versionId: versionIdNum } = parsed.data;
 
-  const [note] = await db
-    .select({ id: notesTable.id })
-    .from(notesTable)
-    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
-    .limit(1);
-  if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
+  try {
+    const [note] = await db
+      .select({ id: notesTable.id })
+      .from(notesTable)
+      .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
+      .limit(1);
+    if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
-  const [version] = await db
-    .select()
-    .from(noteVersionsTable)
-    .where(
-      and(eq(noteVersionsTable.id, versionIdNum), eq(noteVersionsTable.noteId, noteId)),
-    );
+    const [version] = await db
+      .select()
+      .from(noteVersionsTable)
+      .where(
+        and(eq(noteVersionsTable.id, versionIdNum), eq(noteVersionsTable.noteId, noteId)),
+      );
 
-  if (!version) {
-    return NextResponse.json({ error: "Version not found" }, { status: 404 });
+    if (!version) {
+      return NextResponse.json({ error: "Version not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ version });
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-
-  return NextResponse.json({ version });
 }
 
 export async function PATCH(
@@ -59,13 +65,6 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
   const { id: noteId, versionId: versionIdNum } = parsed.data;
-
-  const [note] = await db
-    .select({ id: notesTable.id })
-    .from(notesTable)
-    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
-    .limit(1);
-  if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
   let body: { label?: string | null } = {};
   try {
@@ -83,19 +82,31 @@ export async function PATCH(
       ? body.label.trim().slice(0, 200)
       : null;
 
-  const [updated] = await db
-    .update(noteVersionsTable)
-    .set({ label: normalised })
-    .where(
-      and(eq(noteVersionsTable.id, versionIdNum), eq(noteVersionsTable.noteId, noteId)),
-    )
-    .returning();
+  try {
+    const [note] = await db
+      .select({ id: notesTable.id })
+      .from(notesTable)
+      .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
+      .limit(1);
+    if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
-  if (!updated) {
-    return NextResponse.json({ error: "Version not found" }, { status: 404 });
+    const [updated] = await db
+      .update(noteVersionsTable)
+      .set({ label: normalised })
+      .where(
+        and(eq(noteVersionsTable.id, versionIdNum), eq(noteVersionsTable.noteId, noteId)),
+      )
+      .returning();
+
+    if (!updated) {
+      return NextResponse.json({ error: "Version not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ version: updated });
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-
-  return NextResponse.json({ version: updated });
 }
 
 export async function DELETE(
@@ -111,18 +122,23 @@ export async function DELETE(
   }
   const { id: noteId, versionId: versionIdNum } = parsed.data;
 
-  const [note] = await db
-    .select({ id: notesTable.id })
-    .from(notesTable)
-    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
-    .limit(1);
-  if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
+  try {
+    const [note] = await db
+      .select({ id: notesTable.id })
+      .from(notesTable)
+      .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
+      .limit(1);
+    if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
-  await db
-    .delete(noteVersionsTable)
-    .where(
-      and(eq(noteVersionsTable.id, versionIdNum), eq(noteVersionsTable.noteId, noteId)),
-    );
+    await db
+      .delete(noteVersionsTable)
+      .where(
+        and(eq(noteVersionsTable.id, versionIdNum), eq(noteVersionsTable.noteId, noteId)),
+      );
 
-  return NextResponse.json({ deleted: true });
+    return NextResponse.json({ deleted: true });
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

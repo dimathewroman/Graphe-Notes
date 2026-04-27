@@ -121,7 +121,7 @@ Events captured from React components via `posthog.capture(event, properties)`.
 | `save_as_template_opened` | `NoteShell.tsx` | `note_id`, `timestamp` |
 | `template_saved` | `SaveAsTemplateDialog.tsx` | `template_id` (if available), `timestamp` |
 | `note_created_from_template` | `TemplatePickerModal.tsx` | `note_id`, `timestamp` |
-| `quickbit_created_from_template` | `TemplatePickerModal.tsx` | `quickbit_id`, `timestamp` |
+| `quick_bit_created_from_template` | `TemplatePickerModal.tsx` | `quick_bit_id`, `timestamp` |
 | `vault_unlock_attempted` | `NoteShell.tsx`, `Sidebar.tsx` | `success` (boolean), `source` (`"note"` \| `"sidebar"`), `timestamp` |
 | `promote_to_note_clicked` | `QuickBitShell.tsx` | `quick_bit_id`, `timestamp` |
 | `quick_bit_promoted_to_note` | `QuickBitShell.tsx` | `quick_bit_id`, `note_id` |
@@ -132,7 +132,10 @@ Events captured from React components via `posthog.capture(event, properties)`.
 | `folder_created` | `Sidebar.tsx` | `parent_folder_id` |
 | `search_performed` | `NoteList.tsx` | `query`, `timestamp` |
 | `panel_toggled` | `Home.tsx`, `NoteShell.tsx` | panel-specific properties |
-| `motion_level_changed` | `hooks/use-motion.ts`, `SettingsModal.tsx` | `level`, `timestamp` |
+| `motion_level_changed` | `hooks/use-motion.ts` | `level`, `timestamp` |
+| `perf_editor_init` | `NoteShell.tsx` | `duration_ms`, `timestamp` — production only |
+| `perf_note_switch` | `NoteShell.tsx` | `duration_ms`, `note_id`, `timestamp` — production only |
+| `perf_app_ready` | `NoteList.tsx` | `duration_ms`, `timestamp` — production only |
 | `dark_mode_level_changed` | `hooks/use-atmosphere.ts` | `level`, `timestamp` |
 | `colorblind_mode_changed` | `hooks/use-atmosphere.ts` | `mode`, `timestamp` |
 | `oauth_login_attempted` | `hooks/use-auth.ts` | `provider` |

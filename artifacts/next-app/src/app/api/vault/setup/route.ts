@@ -6,6 +6,7 @@ import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { vaultSetupLimiter } from "@/lib/rate-limit";
 import { hashPin } from "@/lib/vault-hash";
+import * as Sentry from "@sentry/nextjs";
 
 export async function POST(request: NextRequest) {
   const { user } = await getAuthUser(request);
@@ -20,29 +21,34 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = await request.json();
-  const parsed = SetupVaultBody.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+  try {
+    const body = await request.json();
+    const parsed = SetupVaultBody.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+    }
+
+    const [existing] = await db
+      .select()
+      .from(vaultSettingsTable)
+      .where(eq(vaultSettingsTable.userId, user.id))
+      .limit(1);
+
+    if (existing) {
+      return NextResponse.json({ error: "Vault is already configured" }, { status: 409 });
+    }
+
+    // Hash the PIN server-side before storing
+    const passwordHash = await hashPin(parsed.data.pin);
+
+    await db
+      .insert(vaultSettingsTable)
+      .values({ userId: user.id, passwordHash });
+
+    getPostHogClient().capture({ distinctId: user.id, event: "vault_setup_completed" });
+    return NextResponse.json(SetupVaultResponse.parse({ isConfigured: true }));
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-
-  const [existing] = await db
-    .select()
-    .from(vaultSettingsTable)
-    .where(eq(vaultSettingsTable.userId, user.id))
-    .limit(1);
-
-  if (existing) {
-    return NextResponse.json({ error: "Vault is already configured" }, { status: 409 });
-  }
-
-  // Hash the PIN server-side before storing
-  const passwordHash = await hashPin(parsed.data.pin);
-
-  await db
-    .insert(vaultSettingsTable)
-    .values({ userId: user.id, passwordHash });
-
-  getPostHogClient().capture({ distinctId: user.id, event: "vault_setup_completed" });
-  return NextResponse.json(SetupVaultResponse.parse({ isConfigured: true }));
 }

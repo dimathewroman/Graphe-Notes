@@ -236,7 +236,7 @@ export function QuickBitList() {
                       handleCreateNew();
                     }
                   }}
-                  className="flex items-center rounded-[10px] bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 overflow-hidden h-9 transition-colors"
+                  className="flex items-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 overflow-hidden h-9 transition-colors"
                   aria-label="New Quick Bit or choose from template"
                 >
                   <span className="flex items-center justify-center px-2.5 h-full">
@@ -246,7 +246,7 @@ export function QuickBitList() {
                   <span className="flex items-center justify-center px-2 h-full hover:bg-white/8">
                     <motion.span
                       animate={{ rotate: showPlusMenu ? 180 : 0 }}
-                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      transition={anim.fastTransition}
                     >
                       <ChevronDown className="w-2.5 h-2.5" />
                     </motion.span>
@@ -277,7 +277,7 @@ export function QuickBitList() {
                       longPressTimer.current = null;
                     }
                   }}
-                  className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 flex items-center justify-center transition-colors"
+                  className="p-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 flex items-center justify-center transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                 </button>

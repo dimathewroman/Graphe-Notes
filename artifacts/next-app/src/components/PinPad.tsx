@@ -53,7 +53,7 @@ export function PinPad({ title, subtitle, error, shakeKey = 0, filledDotClass = 
     if (anim.level !== "minimal") {
       shakeControls.start({
         x: [0, 10, -10, 6, -6, 3, -3, 0],
-        transition: { duration: 0.45, ease: "easeInOut" },
+        transition: { duration: anim.level === "reduced" ? 0.3 : 0.45, ease: "easeInOut" },
       });
     }
 

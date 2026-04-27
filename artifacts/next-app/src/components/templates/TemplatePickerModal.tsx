@@ -132,7 +132,7 @@ export function TemplatePickerModal() {
         queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
         selectQuickBit(newQb.id);
         if (bp === "mobile") setMobileView("editor");
-        posthog.capture("quickbit_created_from_template", { quickbit_id: newQb.id, timestamp: new Date().toISOString() });
+        posthog.capture("quick_bit_created_from_template", { quick_bit_id: newQb.id, timestamp: new Date().toISOString() });
         closeTemplatePicker();
       },
     },
@@ -294,7 +294,7 @@ export function TemplatePickerModal() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: anim.level === "minimal" ? 0 : anim.level === "reduced" ? 0.15 : 0.2 }}
+                  transition={anim.standardTransition}
                 />
               </DialogPrimitive.Overlay>
 
@@ -337,7 +337,7 @@ export function TemplatePickerModal() {
                   x: previewTemplate ? (anim.level === "minimal" ? 0 : "-100%") : 0,
                   opacity: previewTemplate ? (anim.level === "minimal" ? 0 : anim.level === "reduced" ? 0 : 1) : 1,
                 }}
-                transition={anim.level === "minimal" ? { duration: 0.1 } : anim.level === "reduced" ? { duration: 0.15, ease: "easeOut" } : { duration: 0.25, ease: "easeInOut" }}
+                transition={anim.standardTransition}
               >
                 {/* Header */}
                 <div className="px-5 pt-4 pb-3 shrink-0">
@@ -472,7 +472,7 @@ export function TemplatePickerModal() {
                   opacity: previewTemplate ? 1 : 0,
                   pointerEvents: previewTemplate ? "auto" : "none",
                 }}
-                transition={anim.level === "minimal" ? { duration: 0.1 } : anim.level === "reduced" ? { duration: 0.15, ease: "easeOut" } : { duration: 0.25, ease: "easeInOut" }}
+                transition={anim.standardTransition}
               >
                 {previewTemplate && (
                   <>
@@ -555,7 +555,7 @@ function TemplateCard({
 
   const cardVariants = {
     hidden: anim.level === "full" ? { opacity: 0, y: 8 } : { opacity: 0 },
-    visible: { opacity: 1, y: 0, transition: { delay: anim.level === "full" ? index * 0.04 : 0, duration: anim.level === "minimal" ? 0.1 : 0.2 } },
+    visible: { opacity: 1, y: 0, transition: { ...anim.standardTransition, delay: anim.level === "full" ? index * 0.04 : 0 } },
   };
 
   return (

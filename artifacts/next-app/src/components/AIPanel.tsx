@@ -7,6 +7,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBreakpoint } from "@/hooks/use-mobile";
+import { useAnimationConfig } from "@/hooks/use-motion";
 import { useDemoMode } from "@/lib/demo-context";
 import posthog from "posthog-js";
 import { ScrollArea } from "./ui/scroll-area";
@@ -24,6 +25,7 @@ interface AiSettingsResponse {
 
 export function AIPanel() {
   const { isAIPanelOpen, setAIPanelOpen, selectedNoteId, setAiSetupModalOpen, setPendingAiAction } = useAppStore();
+  const anim = useAnimationConfig();
   const queryClient = useQueryClient();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
@@ -177,7 +179,7 @@ export function AIPanel() {
       {isAIPanelOpen && (
         <motion.div
           {...animationProps}
-          transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+          transition={anim.spring}
           className={panelClass}
         >
           <div className="p-4 border-b border-panel-border flex items-center justify-between bg-background/50">

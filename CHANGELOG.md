@@ -6,6 +6,15 @@ All notable changes to Graphe Notes are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+### Fixed
+- Added `try/catch` + `Sentry.captureException` to all ~37 API route handlers that previously had no error tracking. Unhandled DB or Zod errors now surface in Sentry instead of returning silent 500s.
+- Replaced four `rounded-[10px]` arbitrary values in `NoteList.tsx` and `QuickBitList.tsx` with `rounded-xl` (12px design token).
+- Replaced all hardcoded Framer Motion durations with `useAnimationConfig()` tokens across `AIPanel`, `AISetupModal`, `SettingsModal`, `VaultModal`, `NoteShell`, `QuickBitShell`, `PinPad`, `NoteList`, `QuickBitList`, `TagRow`, `SlashCommandMenu`, `SaveAsTemplateDialog`, and `TemplatePickerModal`. Motion-level system now fully respected.
+- Removed duplicate `posthog.capture("motion_level_changed")` call from `SettingsModal.tsx`. Event now fires exactly once via `useSetMotionLevel()` in `hooks/use-motion.ts`.
+- Renamed PostHog event `quickbit_created_from_template` → `quick_bit_created_from_template` to match `noun_verb` convention.
+- Forwarded perf markers `perf_editor_init`, `perf_note_switch`, and `perf_app_ready` to PostHog in production builds (gated on `NODE_ENV !== "development"`).
+- Added `aria-label="Open settings"` to the settings button in `Sidebar.tsx`.
+
 ---
 
 ## [0.1.0] — 2026-04-26

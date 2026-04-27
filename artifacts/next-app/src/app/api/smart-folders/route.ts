@@ -6,34 +6,45 @@ import {
   CreateSmartFolderBody,
 } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
+import * as Sentry from "@sentry/nextjs";
 
 export async function GET(request: NextRequest) {
   const { user } = await getAuthUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const folders = await db
-    .select()
-    .from(smartFoldersTable)
-    .where(eq(smartFoldersTable.userId, user.id))
-    .orderBy(smartFoldersTable.sortOrder);
+  try {
+    const folders = await db
+      .select()
+      .from(smartFoldersTable)
+      .where(eq(smartFoldersTable.userId, user.id))
+      .orderBy(smartFoldersTable.sortOrder);
 
-  return NextResponse.json(GetSmartFoldersResponse.parse(folders));
+    return NextResponse.json(GetSmartFoldersResponse.parse(folders));
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
 
 export async function POST(request: NextRequest) {
   const { user } = await getAuthUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await request.json();
-  const parsed = CreateSmartFolderBody.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+  try {
+    const body = await request.json();
+    const parsed = CreateSmartFolderBody.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+    }
+
+    const [folder] = await db
+      .insert(smartFoldersTable)
+      .values({ ...parsed.data, userId: user.id, tagRules: parsed.data.tagRules ?? [] })
+      .returning();
+
+    return NextResponse.json(folder, { status: 201 });
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-
-  const [folder] = await db
-    .insert(smartFoldersTable)
-    .values({ ...parsed.data, userId: user.id, tagRules: parsed.data.tagRules ?? [] })
-    .returning();
-
-  return NextResponse.json(folder, { status: 201 });
 }

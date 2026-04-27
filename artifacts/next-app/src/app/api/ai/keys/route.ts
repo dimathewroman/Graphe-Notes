@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db, userApiKeysTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { encryptApiKey } from "@lib/encryption";
+import * as Sentry from "@sentry/nextjs";
 
 const VALID_PROVIDERS = [
   "graphe_free",
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
       })),
     );
   } catch (err) {
-    console.error("[ai/keys GET]", err);
+    Sentry.captureException(err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, provider });
   } catch (err) {
-    console.error("[ai/keys POST]", err);
+    Sentry.captureException(err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -146,7 +147,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("[ai/keys PATCH]", err);
+    Sentry.captureException(err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -178,7 +179,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("[ai/keys DELETE]", err);
+    Sentry.captureException(err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

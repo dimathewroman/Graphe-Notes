@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, aiUsageTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { HOURLY_LIMIT_PER_USER } from "@lib/ai-rate-limit";
+import * as Sentry from "@sentry/nextjs";
 
 // GET /api/ai/usage — returns the authenticated user's current usage against the free tier limits
 export async function GET(request: NextRequest) {
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
       resetInMs,
     });
   } catch (err) {
-    console.error("[ai/usage]", err);
+    Sentry.captureException(err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

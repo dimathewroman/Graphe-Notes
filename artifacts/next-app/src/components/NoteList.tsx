@@ -158,6 +158,9 @@ export function NoteList() {
       try {
         const measure = performance.measure("app-ready", "app-mount", "app-data-ready");
         console.log(`[perf] app-ready (mount → first data): ${measure.duration.toFixed(1)}ms`);
+        if (process.env.NODE_ENV !== "development") {
+          posthog.capture("perf_app_ready", { duration_ms: Math.round(measure.duration), timestamp: new Date().toISOString() });
+        }
       } catch {
         // app-mount mark may not exist if component remounted after hot reload
       }
@@ -549,7 +552,7 @@ export function NoteList() {
                       handleCreateNew();
                     }
                   }}
-                  className="flex items-center rounded-[10px] bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 overflow-hidden h-9 active-elevate-2 transition-colors"
+                  className="flex items-center rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 overflow-hidden h-9 active-elevate-2 transition-colors"
                   aria-label="New note or choose from template"
                 >
                   <span className="flex items-center justify-center px-2.5 h-full">
@@ -559,7 +562,7 @@ export function NoteList() {
                   <span className="flex items-center justify-center px-2 h-full hover:bg-white/8">
                     <motion.span
                       animate={{ rotate: showPlusMenu ? 180 : 0 }}
-                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      transition={anim.fastTransition}
                     >
                       <ChevronDown className="w-2.5 h-2.5" />
                     </motion.span>
@@ -591,7 +594,7 @@ export function NoteList() {
                       longPressTimer.current = null;
                     }
                   }}
-                  className="p-2 rounded-[10px] bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 flex items-center justify-center active-elevate-2 transition-colors"
+                  className="p-2 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm disabled:opacity-50 flex items-center justify-center active-elevate-2 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
