@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { checkAndIncrementUsage } from "@lib/ai-rate-limit";
@@ -336,7 +337,7 @@ export async function POST(request: NextRequest) {
     // Should never reach here given VALID_PROVIDERS check above.
     return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
   } catch (err) {
-    console.error("[ai/generate]", err);
+    Sentry.captureException(err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
