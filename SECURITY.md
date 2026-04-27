@@ -86,11 +86,7 @@ CREATE POLICY "table_delete" ON public.table_name
 
 **`templates`** — SELECT policy allows reading preset rows across users: `user_id = auth.uid()::text OR is_preset = true`. This allows the template picker to show global preset templates while still restricting access to other users' custom templates.
 
-**`note_versions`** — policies use an EXISTS subquery joining through the `notes` table (note_versions does not have a direct `user_id` column):
-
-```sql
-EXISTS (SELECT 1 FROM public.notes WHERE notes.id = note_versions.note_id AND notes.user_id = auth.uid()::text)
-```
+**`note_versions`** — has a denormalized `user_id varchar NOT NULL` column backfilled from `notes.user_id`. Policies use a direct equality check (same pattern as other tables). The index `note_versions_user_id_idx` keeps RLS scans fast.
 
 **`users`** — the UPDATE policy restricts `storage_tier` changes:
 
@@ -104,7 +100,8 @@ This prevents a user from self-promoting their storage tier via a direct PostgRE
 ### Migrations
 
 - `lib/db/drizzle/0001_enable_rls_all_tables.sql` — RLS + policies for 12 tables
-- `lib/db/drizzle/0003_templates_rls_policies.sql` — RLS policies for `templates` table (added in phase 6)
+- `lib/db/drizzle/0002_note_versions_user_id.sql` — adds denormalized `user_id` to `note_versions`, replaces JOIN-based policies with direct column check
+- `lib/db/drizzle/0003_templates_rls_policies.sql` — RLS + policies for `templates` table
 
 ### Adding new tables
 
