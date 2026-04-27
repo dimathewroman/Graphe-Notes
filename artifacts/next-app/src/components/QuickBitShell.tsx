@@ -370,9 +370,9 @@ export function QuickBitShell() {
         contentControls.set({ opacity: 0, y: a.level === "full" ? 12 : 0 });
         await contentControls.start({ opacity: 1, y: 0, transition: a.standardTransition });
       } else {
-        await contentControls.start({ opacity: 0, y: a.level === "full" ? 4 : 0, transition: { duration: 0.1, ease: "easeOut" as const } });
+        await contentControls.start({ opacity: 0, y: a.level === "full" ? 4 : 0, transition: a.microTransition });
         contentControls.set({ y: 0 });
-        await contentControls.start({ opacity: 1, y: 0, transition: a.level === "minimal" ? { duration: 0.1 } : a.fastTransition });
+        await contentControls.start({ opacity: 1, y: 0, transition: a.fastTransition });
       }
     };
     try { runAnim(); } catch (err) { Sentry.captureException(err); }
@@ -690,7 +690,7 @@ export function QuickBitShell() {
               boxShadow: "0 4px 16px rgba(91, 147, 232, 0.45)",
             } : undefined}
             whileTap={anim.level !== "minimal" ? { scale: 0.97 } : undefined}
-            transition={{ duration: 0.15, ease: "easeOut" }}
+            transition={anim.fastTransition}
           >
             <ArrowUpFromLine className="w-3.5 h-3.5" />
             <span className="hidden md:inline">Promote to Note</span>

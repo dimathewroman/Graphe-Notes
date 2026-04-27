@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
+import { useAnimationConfig } from "@/hooks/use-motion";
 import { X, ShieldCheck, Lock, KeyRound, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PinPad } from "./PinPad";
@@ -18,6 +19,7 @@ interface VaultModalProps {
 type PinStep = "enter" | "confirm" | "current" | "new" | "new-confirm";
 
 export function VaultModal({ mode, onConfirm, onCancel, error: externalError, onVerifyCurrentPin }: VaultModalProps) {
+  const anim = useAnimationConfig();
   const [step, setStep] = useState<PinStep>(mode === "change-password" ? "current" : "enter");
   const [firstPin, setFirstPin] = useState("");
   const [currentPin, setCurrentPin] = useState("");
@@ -139,7 +141,7 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
         <div className="flex items-center gap-3 mb-5">
           <motion.div
             animate={unlockSuccess ? { scale: [1, 1.2, 1] } : { scale: 1 }}
-            transition={{ type: "spring", stiffness: 400, damping: 15 }}
+            transition={anim.emphasisTransition}
             className={cn("w-10 h-10 rounded-xl flex items-center justify-center border", unlockSuccess ? "bg-emerald-500/10 border-emerald-500/20" : headerConfig.bg)}
           >
             {unlockSuccess

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ShieldOff, Sparkles, Key, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { useAnimationConfig } from "@/hooks/use-motion";
 import { useAppStore } from "@/store";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { Dialog, DialogClose } from "./ui/dialog";
@@ -17,6 +18,7 @@ export function AISetupModal() {
     setPendingAiAction,
     setSettingsOpen,
   } = useAppStore();
+  const anim = useAnimationConfig();
 
   const [saving, setSaving] = useState(false);
 
@@ -92,7 +94,7 @@ export function AISetupModal() {
                   initial={{ opacity: 0, scale: 0.96, y: 8 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.96, y: 8 }}
-                  transition={{ type: "spring", bounce: 0, duration: 0.35 }}
+                  transition={anim.spring}
                   className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md mx-4"
                 >
                   <div className="bg-panel border border-panel-border rounded-2xl shadow-2xl">

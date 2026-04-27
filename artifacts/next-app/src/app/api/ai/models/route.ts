@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db, userApiKeysTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { decryptApiKey } from "@lib/encryption";
+import * as Sentry from "@sentry/nextjs";
 
 const SUPPORTED_PROVIDERS = ["openai", "anthropic"] as const;
 type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number];
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ models });
   } catch (err) {
-    console.error("[ai/models]", err);
+    Sentry.captureException(err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

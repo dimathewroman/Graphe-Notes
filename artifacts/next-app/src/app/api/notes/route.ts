@@ -9,98 +9,109 @@ import {
 } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
+import * as Sentry from "@sentry/nextjs";
 
 export async function GET(request: NextRequest) {
   const { user } = await getAuthUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const query = GetNotesQueryParams.safeParse(
-    Object.fromEntries(request.nextUrl.searchParams),
-  );
-  if (!query.success) {
-    return NextResponse.json({ error: query.error.message }, { status: 400 });
-  }
-
-  const { folderId, search, pinned, favorite, tag, sortBy, sortDir, deleted } = query.data;
-
-  const conditions = [eq(notesTable.userId, user.id)];
-
-  // Soft-delete visibility gate — deleted=true returns only the bin; otherwise exclude deleted notes
-  if (deleted === true) {
-    conditions.push(isNotNull(notesTable.deletedAt));
-  } else {
-    conditions.push(isNull(notesTable.deletedAt));
-  }
-
-  if (folderId !== undefined && folderId !== null) {
-    conditions.push(eq(notesTable.folderId, folderId));
-  }
-  if (pinned !== undefined && pinned !== null) {
-    conditions.push(eq(notesTable.pinned, pinned));
-  }
-  if (favorite !== undefined && favorite !== null) {
-    conditions.push(eq(notesTable.favorite, favorite));
-  }
-  if (search) {
-    const escaped = search.replace(/[%_\\]/g, "\\$&");
-    conditions.push(
-      or(ilike(notesTable.title, `%${escaped}%`), ilike(notesTable.contentText, `%${escaped}%`))!,
+  try {
+    const query = GetNotesQueryParams.safeParse(
+      Object.fromEntries(request.nextUrl.searchParams),
     );
+    if (!query.success) {
+      return NextResponse.json({ error: query.error.message }, { status: 400 });
+    }
+
+    const { folderId, search, pinned, favorite, tag, sortBy, sortDir, deleted } = query.data;
+
+    const conditions = [eq(notesTable.userId, user.id)];
+
+    // Soft-delete visibility gate — deleted=true returns only the bin; otherwise exclude deleted notes
+    if (deleted === true) {
+      conditions.push(isNotNull(notesTable.deletedAt));
+    } else {
+      conditions.push(isNull(notesTable.deletedAt));
+    }
+
+    if (folderId !== undefined && folderId !== null) {
+      conditions.push(eq(notesTable.folderId, folderId));
+    }
+    if (pinned !== undefined && pinned !== null) {
+      conditions.push(eq(notesTable.pinned, pinned));
+    }
+    if (favorite !== undefined && favorite !== null) {
+      conditions.push(eq(notesTable.favorite, favorite));
+    }
+    if (search) {
+      const escaped = search.replace(/[%_\\]/g, "\\$&");
+      conditions.push(
+        or(ilike(notesTable.title, `%${escaped}%`), ilike(notesTable.contentText, `%${escaped}%`))!,
+      );
+    }
+    if (tag) {
+      conditions.push(sql`${notesTable.tags} @> ARRAY[${tag}]::text[]`);
+    }
+
+    const orderCol =
+      sortBy === "title"
+        ? notesTable.title
+        : sortBy === "createdAt"
+          ? notesTable.createdAt
+          : notesTable.updatedAt;
+    const orderDir = sortDir === "asc" ? asc(orderCol) : desc(orderCol);
+
+    // Exclude the large HTML content column from list queries — content can be hundreds of KB
+    // per note. Return an empty string to satisfy the Zod schema; full content is fetched by GET /notes/:id.
+    const notes = await db
+      .select({
+        id: notesTable.id,
+        title: notesTable.title,
+        content: sql<string>`''`,
+        contentText: notesTable.contentText,
+        folderId: notesTable.folderId,
+        tags: notesTable.tags,
+        pinned: notesTable.pinned,
+        favorite: notesTable.favorite,
+        coverImage: notesTable.coverImage,
+        vaulted: notesTable.vaulted,
+        deletedAt: notesTable.deletedAt,
+        autoDeleteAt: notesTable.autoDeleteAt,
+        deletedReason: notesTable.deletedReason,
+        createdAt: notesTable.createdAt,
+        updatedAt: notesTable.updatedAt,
+      })
+      .from(notesTable)
+      .where(and(...conditions))
+      .orderBy(orderDir);
+
+    return NextResponse.json(GetNotesResponse.parse(notes));
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-  if (tag) {
-    conditions.push(sql`${notesTable.tags} @> ARRAY[${tag}]::text[]`);
-  }
-
-  const orderCol =
-    sortBy === "title"
-      ? notesTable.title
-      : sortBy === "createdAt"
-        ? notesTable.createdAt
-        : notesTable.updatedAt;
-  const orderDir = sortDir === "asc" ? asc(orderCol) : desc(orderCol);
-
-  // Fix 2: exclude the large HTML content column from list queries — content can be hundreds of KB
-  // per note. Return an empty string to satisfy the Zod schema; full content is fetched by GET /notes/:id.
-  const notes = await db
-    .select({
-      id: notesTable.id,
-      title: notesTable.title,
-      content: sql<string>`''`,
-      contentText: notesTable.contentText,
-      folderId: notesTable.folderId,
-      tags: notesTable.tags,
-      pinned: notesTable.pinned,
-      favorite: notesTable.favorite,
-      coverImage: notesTable.coverImage,
-      vaulted: notesTable.vaulted,
-      deletedAt: notesTable.deletedAt,
-      autoDeleteAt: notesTable.autoDeleteAt,
-      deletedReason: notesTable.deletedReason,
-      createdAt: notesTable.createdAt,
-      updatedAt: notesTable.updatedAt,
-    })
-    .from(notesTable)
-    .where(and(...conditions))
-    .orderBy(orderDir);
-
-  return NextResponse.json(GetNotesResponse.parse(notes));
 }
 
 export async function POST(request: NextRequest) {
   const { user } = await getAuthUser(request);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await request.json();
-  const parsed = CreateNoteBody.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+  try {
+    const body = await request.json();
+    const parsed = CreateNoteBody.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+    }
+
+    const [note] = await db
+      .insert(notesTable)
+      .values({ ...parsed.data, userId: user.id })
+      .returning();
+
+    getPostHogClient().capture({ distinctId: user.id, event: "note_created", properties: { note_id: note.id } });
+    return NextResponse.json(GetNoteResponse.parse(note), { status: 201 });
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-
-  const [note] = await db
-    .insert(notesTable)
-    .values({ ...parsed.data, userId: user.id })
-    .returning();
-
-  getPostHogClient().capture({ distinctId: user.id, event: "note_created", properties: { note_id: note.id } });
-  return NextResponse.json(GetNoteResponse.parse(note), { status: 201 });
 }

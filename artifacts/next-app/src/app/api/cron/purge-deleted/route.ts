@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { and, isNotNull, lte } from "drizzle-orm";
 import { db, notesTable, attachmentsTable } from "@workspace/db";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import * as Sentry from "@sentry/nextjs";
 
 const ATTACHMENT_RETENTION_DAYS = 30;
 
@@ -11,36 +12,41 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const now = new Date();
+  try {
+    const now = new Date();
 
-  // 1. Hard-delete recently-deleted notes past their auto-delete date
-  const purgedNotes = await db
-    .delete(notesTable)
-    .where(and(isNotNull(notesTable.autoDeleteAt), lte(notesTable.autoDeleteAt, now)))
-    .returning({ id: notesTable.id });
+    // 1. Hard-delete recently-deleted notes past their auto-delete date
+    const purgedNotes = await db
+      .delete(notesTable)
+      .where(and(isNotNull(notesTable.autoDeleteAt), lte(notesTable.autoDeleteAt, now)))
+      .returning({ id: notesTable.id });
 
-  // 2. Hard-purge soft-deleted attachments older than 30 days
-  const cutoff = new Date(now.getTime() - ATTACHMENT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-  const expiredAttachments = await db
-    .delete(attachmentsTable)
-    .where(and(isNotNull(attachmentsTable.deletedAt), lte(attachmentsTable.deletedAt, cutoff)))
-    .returning({ id: attachmentsTable.id, storagePath: attachmentsTable.storagePath });
+    // 2. Hard-purge soft-deleted attachments older than 30 days
+    const cutoff = new Date(now.getTime() - ATTACHMENT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const expiredAttachments = await db
+      .delete(attachmentsTable)
+      .where(and(isNotNull(attachmentsTable.deletedAt), lte(attachmentsTable.deletedAt, cutoff)))
+      .returning({ id: attachmentsTable.id, storagePath: attachmentsTable.storagePath });
 
-  // Remove the actual files from Supabase Storage in batches of 100
-  let storageErrors = 0;
-  const paths = expiredAttachments.map(a => a.storagePath);
-  for (let i = 0; i < paths.length; i += 100) {
-    const batch = paths.slice(i, i + 100);
-    const { error } = await supabaseAdmin.storage.from("note-attachments").remove(batch);
-    if (error) {
-      console.error("[purge-deleted] Storage remove error:", error.message);
-      storageErrors++;
+    // Remove the actual files from Supabase Storage in batches of 100
+    let storageErrors = 0;
+    const paths = expiredAttachments.map(a => a.storagePath);
+    for (let i = 0; i < paths.length; i += 100) {
+      const batch = paths.slice(i, i + 100);
+      const { error } = await supabaseAdmin.storage.from("note-attachments").remove(batch);
+      if (error) {
+        Sentry.captureException(new Error(`[purge-deleted] Storage remove error: ${error.message}`));
+        storageErrors++;
+      }
     }
-  }
 
-  return NextResponse.json({
-    purgedNotes: purgedNotes.length,
-    purgedAttachments: expiredAttachments.length,
-    storageErrors,
-  });
+    return NextResponse.json({
+      purgedNotes: purgedNotes.length,
+      purgedAttachments: expiredAttachments.length,
+      storageErrors,
+    });
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

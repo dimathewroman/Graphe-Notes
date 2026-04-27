@@ -312,7 +312,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <IconButton onClick={toggleTheme} title={isDark ? "Switch to light mode" : "Switch to dark mode"}>
             {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </IconButton>
-          <IconButton onClick={() => { setSettingsOpen(true); onNavigate?.(); }} data-testid="settings-btn">
+          <IconButton onClick={() => { setSettingsOpen(true); onNavigate?.(); }} data-testid="settings-btn" aria-label="Open settings">
             <Settings className="w-4 h-4" />
           </IconButton>
         </div>

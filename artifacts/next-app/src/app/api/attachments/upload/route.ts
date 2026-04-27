@@ -5,6 +5,7 @@ import { getAuthUser } from "@/lib/auth-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { ALLOWED_MIME_TYPES, TIER_LIMITS, type StorageTier, formatBytes } from "@/lib/attachment-limits";
 import { randomUUID } from "crypto";
+import * as Sentry from "@sentry/nextjs";
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
@@ -32,103 +33,108 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid note_id" }, { status: 400 });
   }
 
-  // Verify note belongs to user
-  const [note] = await db
-    .select({ id: notesTable.id })
-    .from(notesTable)
-    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
-    .limit(1);
-  if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
-
-  // MIME type validation
+  // MIME type validation (before DB queries — fast reject)
   const mimeType = file.type || "application/octet-stream";
   if (!ALLOWED_MIME_TYPES.has(mimeType)) {
     return NextResponse.json({ error: "This file type isn't supported." }, { status: 422 });
   }
 
-  // Get user's storage tier
-  const [userRow] = await db
-    .select({ storageTier: usersTable.storageTier })
-    .from(usersTable)
-    .where(eq(usersTable.id, user.id))
-    .limit(1);
+  try {
+    // Verify note belongs to user
+    const [note] = await db
+      .select({ id: notesTable.id })
+      .from(notesTable)
+      .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
+      .limit(1);
+    if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
-  const tier = ((userRow?.storageTier ?? "free") as StorageTier);
-  const limits = TIER_LIMITS[tier] ?? TIER_LIMITS.free;
+    // Get user's storage tier
+    const [userRow] = await db
+      .select({ storageTier: usersTable.storageTier })
+      .from(usersTable)
+      .where(eq(usersTable.id, user.id))
+      .limit(1);
 
-  // Per-file size check
-  if (limits.maxFileSize !== Infinity && file.size > limits.maxFileSize) {
-    return NextResponse.json(
-      { error: `File exceeds the ${formatBytes(limits.maxFileSize)} limit` },
-      { status: 422 }
-    );
-  }
+    const tier = ((userRow?.storageTier ?? "free") as StorageTier);
+    const limits = TIER_LIMITS[tier] ?? TIER_LIMITS.free;
 
-  // Total storage check
-  if (limits.maxTotalStorage !== null) {
-    const [usageRow] = await db
-      .select({ total: sum(attachmentsTable.fileSize) })
-      .from(attachmentsTable)
-      .where(eq(attachmentsTable.userId, user.id));
-    const currentUsage = Number(usageRow?.total ?? 0);
-    if (currentUsage + file.size > limits.maxTotalStorage) {
-      const used = formatBytes(currentUsage);
-      const max = formatBytes(limits.maxTotalStorage);
+    // Per-file size check
+    if (limits.maxFileSize !== Infinity && file.size > limits.maxFileSize) {
       return NextResponse.json(
-        { error: `You've used ${used} of your ${max} storage` },
+        { error: `File exceeds the ${formatBytes(limits.maxFileSize)} limit` },
         { status: 422 }
       );
     }
+
+    // Total storage check
+    if (limits.maxTotalStorage !== null) {
+      const [usageRow] = await db
+        .select({ total: sum(attachmentsTable.fileSize) })
+        .from(attachmentsTable)
+        .where(eq(attachmentsTable.userId, user.id));
+      const currentUsage = Number(usageRow?.total ?? 0);
+      if (currentUsage + file.size > limits.maxTotalStorage) {
+        const used = formatBytes(currentUsage);
+        const max = formatBytes(limits.maxTotalStorage);
+        return NextResponse.json(
+          { error: `You've used ${used} of your ${max} storage` },
+          { status: 422 }
+        );
+      }
+    }
+
+    // Build storage path
+    const fileId = randomUUID();
+    const sanitized = sanitizeFilename(file.name);
+    const storagePath = `${user.id}/${noteId}/${fileId}-${sanitized}`;
+
+    // Upload to Supabase Storage
+    const arrayBuffer = await file.arrayBuffer();
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from("note-attachments")
+      .upload(storagePath, arrayBuffer, {
+        contentType: mimeType,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      Sentry.captureException(new Error(`[attachments] Storage upload error: ${uploadError.message}`));
+      return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    }
+
+    // Create DB record
+    const [attachment] = await db
+      .insert(attachmentsTable)
+      .values({
+        noteId,
+        userId: user.id,
+        fileName: file.name,
+        fileType: mimeType,
+        fileSize: file.size,
+        storagePath,
+      })
+      .returning();
+
+    // Generate signed URL (1 hour)
+    const { data: signedData } = await supabaseAdmin.storage
+      .from("note-attachments")
+      .createSignedUrl(storagePath, 3600);
+
+    return NextResponse.json(
+      {
+        id: attachment.id,
+        noteId: attachment.noteId,
+        fileName: attachment.fileName,
+        fileType: attachment.fileType,
+        fileSize: attachment.fileSize,
+        storagePath: attachment.storagePath,
+        createdAt: attachment.createdAt,
+        url: signedData?.signedUrl ?? null,
+      },
+      { status: 201 }
+    );
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-
-  // Build storage path
-  const fileId = randomUUID();
-  const sanitized = sanitizeFilename(file.name);
-  const storagePath = `${user.id}/${noteId}/${fileId}-${sanitized}`;
-
-  // Upload to Supabase Storage
-  const arrayBuffer = await file.arrayBuffer();
-  const { error: uploadError } = await supabaseAdmin.storage
-    .from("note-attachments")
-    .upload(storagePath, arrayBuffer, {
-      contentType: mimeType,
-      upsert: false,
-    });
-
-  if (uploadError) {
-    console.error("[attachments] Storage upload error:", uploadError.message);
-    return NextResponse.json({ error: "Upload failed" }, { status: 500 });
-  }
-
-  // Create DB record
-  const [attachment] = await db
-    .insert(attachmentsTable)
-    .values({
-      noteId,
-      userId: user.id,
-      fileName: file.name,
-      fileType: mimeType,
-      fileSize: file.size,
-      storagePath,
-    })
-    .returning();
-
-  // Generate signed URL (1 hour)
-  const { data: signedData } = await supabaseAdmin.storage
-    .from("note-attachments")
-    .createSignedUrl(storagePath, 3600);
-
-  return NextResponse.json(
-    {
-      id: attachment.id,
-      noteId: attachment.noteId,
-      fileName: attachment.fileName,
-      fileType: attachment.fileType,
-      fileSize: attachment.fileSize,
-      storagePath: attachment.storagePath,
-      createdAt: attachment.createdAt,
-      url: signedData?.signedUrl ?? null,
-    },
-    { status: 201 }
-  );
 }

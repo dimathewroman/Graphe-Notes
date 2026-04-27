@@ -11,6 +11,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { db, noteVersionsTable, notesTable, attachmentsTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
+import * as Sentry from "@sentry/nextjs";
 
 // Extract the storage path from a Supabase signed or public URL.
 // Signed URL: .../object/sign/note-attachments/<path>?token=...
@@ -44,57 +45,62 @@ export async function POST(
     return NextResponse.json({ error: "Invalid id" }, { status: 400 });
   }
 
-  // Verify the note belongs to this user
-  const [note] = await db
-    .select({ id: notesTable.id })
-    .from(notesTable)
-    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
-    .limit(1);
-  if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
-
-  // Fetch the version
-  const [version] = await db
-    .select()
-    .from(noteVersionsTable)
-    .where(and(eq(noteVersionsTable.id, versionIdNum), eq(noteVersionsTable.noteId, noteId)))
-    .limit(1);
-  if (!version) return NextResponse.json({ error: "Version not found" }, { status: 404 });
-
-  let content: string = version.content ?? "";
-
-  // Extract all <img src="..."> values from the HTML
-  const imgSrcRegex = /<img[^>]+src="([^"]+)"/gi;
-  const srcs: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = imgSrcRegex.exec(content)) !== null) {
-    srcs.push(m[1]);
-  }
-
-  for (const src of srcs) {
-    const storagePath = extractStoragePath(src);
-    if (!storagePath) continue; // URL-linked image, not a Supabase upload — skip
-
-    // Look up the attachment (including soft-deleted ones)
-    const [attachment] = await db
-      .select({ id: attachmentsTable.id, deletedAt: attachmentsTable.deletedAt })
-      .from(attachmentsTable)
-      .where(
-        and(eq(attachmentsTable.storagePath, storagePath), eq(attachmentsTable.userId, user.id))
-      )
+  try {
+    // Verify the note belongs to this user
+    const [note] = await db
+      .select({ id: notesTable.id })
+      .from(notesTable)
+      .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
       .limit(1);
+    if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
-    if (!attachment) {
-      // Hard-purged — replace with placeholder
-      content = replaceImgWithPlaceholder(content, src);
-    } else if (attachment.deletedAt !== null) {
-      // Soft-deleted but still within retention window — restore it
-      await db
-        .update(attachmentsTable)
-        .set({ deletedAt: null })
-        .where(eq(attachmentsTable.id, attachment.id));
+    // Fetch the version
+    const [version] = await db
+      .select()
+      .from(noteVersionsTable)
+      .where(and(eq(noteVersionsTable.id, versionIdNum), eq(noteVersionsTable.noteId, noteId)))
+      .limit(1);
+    if (!version) return NextResponse.json({ error: "Version not found" }, { status: 404 });
+
+    let content: string = version.content ?? "";
+
+    // Extract all <img src="..."> values from the HTML
+    const imgSrcRegex = /<img[^>]+src="([^"]+)"/gi;
+    const srcs: string[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = imgSrcRegex.exec(content)) !== null) {
+      srcs.push(m[1]);
     }
-    // else: active, nothing to do
-  }
 
-  return NextResponse.json({ content, title: version.title });
+    for (const src of srcs) {
+      const storagePath = extractStoragePath(src);
+      if (!storagePath) continue; // URL-linked image, not a Supabase upload — skip
+
+      // Look up the attachment (including soft-deleted ones)
+      const [attachment] = await db
+        .select({ id: attachmentsTable.id, deletedAt: attachmentsTable.deletedAt })
+        .from(attachmentsTable)
+        .where(
+          and(eq(attachmentsTable.storagePath, storagePath), eq(attachmentsTable.userId, user.id))
+        )
+        .limit(1);
+
+      if (!attachment) {
+        // Hard-purged — replace with placeholder
+        content = replaceImgWithPlaceholder(content, src);
+      } else if (attachment.deletedAt !== null) {
+        // Soft-deleted but still within retention window — restore it
+        await db
+          .update(attachmentsTable)
+          .set({ deletedAt: null })
+          .where(eq(attachmentsTable.id, attachment.id));
+      }
+      // else: active, nothing to do
+    }
+
+    return NextResponse.json({ content, title: version.title });
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

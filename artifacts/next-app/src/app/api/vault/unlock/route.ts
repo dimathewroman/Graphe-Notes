@@ -6,6 +6,7 @@ import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { vaultUnlockLimiter } from "@/lib/rate-limit";
 import { verifyPin, hashPin } from "@/lib/vault-hash";
+import * as Sentry from "@sentry/nextjs";
 
 export async function POST(request: NextRequest) {
   const { user } = await getAuthUser(request);
@@ -20,38 +21,43 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const body = await request.json();
-  const parsed = UnlockVaultBody.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+  try {
+    const body = await request.json();
+    const parsed = UnlockVaultBody.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+    }
+
+    const [settings] = await db
+      .select()
+      .from(vaultSettingsTable)
+      .where(eq(vaultSettingsTable.userId, user.id))
+      .limit(1);
+
+    if (!settings) {
+      return NextResponse.json({ error: "Vault not configured" }, { status: 404 });
+    }
+
+    const { valid, needsMigration } = await verifyPin(parsed.data.pin, settings.passwordHash);
+
+    if (!valid) {
+      return NextResponse.json({ error: "Wrong password" }, { status: 401 });
+    }
+
+    // Transparently migrate legacy SHA-256 hashes to bcrypt on the user's
+    // first successful unlock after the server-side hashing upgrade.
+    if (needsMigration) {
+      const newHash = await hashPin(parsed.data.pin);
+      await db
+        .update(vaultSettingsTable)
+        .set({ passwordHash: newHash, updatedAt: new Date() })
+        .where(eq(vaultSettingsTable.userId, user.id));
+    }
+
+    getPostHogClient().capture({ distinctId: user.id, event: "vault_unlocked" });
+    return NextResponse.json(UnlockVaultResponse.parse({ success: true }));
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-
-  const [settings] = await db
-    .select()
-    .from(vaultSettingsTable)
-    .where(eq(vaultSettingsTable.userId, user.id))
-    .limit(1);
-
-  if (!settings) {
-    return NextResponse.json({ error: "Vault not configured" }, { status: 404 });
-  }
-
-  const { valid, needsMigration } = await verifyPin(parsed.data.pin, settings.passwordHash);
-
-  if (!valid) {
-    return NextResponse.json({ error: "Wrong password" }, { status: 401 });
-  }
-
-  // Transparently migrate legacy SHA-256 hashes to bcrypt on the user's
-  // first successful unlock after the server-side hashing upgrade.
-  if (needsMigration) {
-    const newHash = await hashPin(parsed.data.pin);
-    await db
-      .update(vaultSettingsTable)
-      .set({ passwordHash: newHash, updatedAt: new Date() })
-      .where(eq(vaultSettingsTable.userId, user.id));
-  }
-
-  getPostHogClient().capture({ distinctId: user.id, event: "vault_unlocked" });
-  return NextResponse.json(UnlockVaultResponse.parse({ success: true }));
 }

@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { db, userSettingsTable, userApiKeysTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { decryptApiKey } from "@lib/encryption";
+import * as Sentry from "@sentry/nextjs";
 
 // GET /api/ai/settings — returns the user's active AI provider preference
 export async function GET(request: NextRequest) {
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (err) {
-    console.error("[ai/settings GET]", err);
+    Sentry.captureException(err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
@@ -112,7 +113,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("[ai/settings PATCH]", err);
+    Sentry.captureException(err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

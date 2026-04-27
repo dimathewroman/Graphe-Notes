@@ -127,15 +127,13 @@ export function NoteShell() {
         await contentControls.start({
           opacity: 0,
           y: a.level === "full" ? 4 : 0,
-          transition: { duration: 0.1, ease: "easeOut" as const },
+          transition: a.microTransition,
         });
         contentControls.set({ y: 0 });
         await contentControls.start({
           opacity: 1,
           y: 0,
-          transition: a.level === "minimal"
-            ? { duration: 0.1, ease: "linear" as const }
-            : a.fastTransition,
+          transition: a.fastTransition,
         });
       }
     };
@@ -212,6 +210,9 @@ export function NoteShell() {
       didLogEditorInit.current = true;
       const elapsed = performance.now() - editorInitStart.current;
       console.log(`[perf] editor-init: ${elapsed.toFixed(1)}ms`);
+      if (process.env.NODE_ENV !== "development") {
+        posthog.capture("perf_editor_init", { duration_ms: Math.round(elapsed), timestamp: new Date().toISOString() });
+      }
       posthog.capture("editor_opened", { timestamp: new Date().toISOString() });
     }
 
@@ -254,6 +255,9 @@ export function NoteShell() {
             queryToSetContent: queryToSetContent !== null ? `${queryToSetContent.toFixed(1)}ms` : "n/a",
             setContentToRendered: setContentToRendered !== null ? `${setContentToRendered.toFixed(1)}ms` : "n/a",
           });
+          if (process.env.NODE_ENV !== "development") {
+            posthog.capture("perf_note_switch", { duration_ms: Math.round(total), note_id: note.id, timestamp: new Date().toISOString() });
+          }
         } catch {
           // mark may not exist if note was loaded without a click (e.g. initial load)
         }

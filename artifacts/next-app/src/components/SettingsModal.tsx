@@ -8,10 +8,10 @@ import { NotificationCadenceEditor } from "./NotificationCadenceEditor";
 import { useAppStore } from "@/store";
 import type { MotionLevel, DarkModeLevel, ColorblindMode } from "@/store";
 import { applyDarkModeLevel, applyColorblindMode } from "@/hooks/use-atmosphere";
-import posthog from "posthog-js";
 import { useAuth } from "@/hooks/use-auth";
 import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAnimationConfig, useSetMotionLevel } from "@/hooks/use-motion";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogClose } from "./ui/dialog";
 import { Dialog as DialogPrimitive, VisuallyHidden } from "radix-ui";
@@ -60,13 +60,12 @@ export function SettingsModal() {
   const { user, logout } = useAuth();
   const bp = useBreakpoint();
   const isMobile = bp === "mobile";
+  const anim = useAnimationConfig();
+  const setMotionLevelWithTracking = useSetMotionLevel();
 
   const handleMotionChange = (level: MotionLevel) => {
-    setMotionLevel(level);
+    setMotionLevelWithTracking(level);
     localStorage.setItem("motion_level", level);
-    try {
-      posthog.capture("motion_level_changed", { level, timestamp: new Date().toISOString() });
-    } catch { /* PostHog may not be ready */ }
   };
 
   const handleDarkLevelChange = (level: DarkModeLevel) => {
@@ -569,7 +568,7 @@ export function SettingsModal() {
                   data-testid="settings-modal"
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1, transition: { type: "spring", stiffness: 380, damping: 30 } }}
-                  exit={{ opacity: 0, transition: { duration: 0.15, ease: "easeOut" } }}
+                  exit={{ opacity: 0, transition: anim.fastTransition }}
                   className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-[720px] md:h-[min(580px,80vh)] bg-panel border border-panel-border rounded-2xl shadow-2xl z-50 overflow-hidden flex flex-col md:flex-row luminance-border-top"
                 >
                   <VisuallyHidden.Root asChild>
@@ -675,7 +674,7 @@ export function SettingsModal() {
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.12, ease: "easeOut" }}
+                transition={anim.microTransition}
                 className="p-6 space-y-6"
               >
 

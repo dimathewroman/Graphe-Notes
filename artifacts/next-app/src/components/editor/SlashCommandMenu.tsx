@@ -363,7 +363,7 @@ export function SlashCommandMenu({ editor }: SlashCommandMenuProps) {
           key="slash-command-menu"
           initial={{ opacity: 0, y: anim.level === "full" ? -8 : 0 }}
           animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, transition: { duration: 0.1 } }}
+          exit={{ opacity: 0, transition: anim.exitTransition }}
           transition={anim.fastTransition}
           className="fixed z-50 w-64 bg-popover border border-panel-border rounded-xl shadow-2xl py-1.5 overflow-hidden luminance-border-top"
           style={{ top: position.top, left: position.left }}

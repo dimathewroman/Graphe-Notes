@@ -16,6 +16,7 @@ import { eq, and, desc, count } from "drizzle-orm";
 import { z } from "zod";
 import { db, noteVersionsTable, notesTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
+import * as Sentry from "@sentry/nextjs";
 
 const routeParamsSchema = z.object({
   id: z.coerce.number().int().positive(),
@@ -47,29 +48,34 @@ export async function GET(
   }
   const noteId = parsed.data.id;
 
-  const [note] = await db
-    .select({ id: notesTable.id })
-    .from(notesTable)
-    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
-    .limit(1);
-  if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
+  try {
+    const [note] = await db
+      .select({ id: notesTable.id })
+      .from(notesTable)
+      .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
+      .limit(1);
+    if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
-  const versions = await db
-    .select({
-      id: noteVersionsTable.id,
-      noteId: noteVersionsTable.noteId,
-      title: noteVersionsTable.title,
-      contentText: noteVersionsTable.contentText,
-      label: noteVersionsTable.label,
-      source: noteVersionsTable.source,
-      createdAt: noteVersionsTable.createdAt,
-    })
-    .from(noteVersionsTable)
-    .where(eq(noteVersionsTable.noteId, noteId))
-    .orderBy(desc(noteVersionsTable.createdAt))
-    .limit(MAX_VERSIONS);
+    const versions = await db
+      .select({
+        id: noteVersionsTable.id,
+        noteId: noteVersionsTable.noteId,
+        title: noteVersionsTable.title,
+        contentText: noteVersionsTable.contentText,
+        label: noteVersionsTable.label,
+        source: noteVersionsTable.source,
+        createdAt: noteVersionsTable.createdAt,
+      })
+      .from(noteVersionsTable)
+      .where(eq(noteVersionsTable.noteId, noteId))
+      .orderBy(desc(noteVersionsTable.createdAt))
+      .limit(MAX_VERSIONS);
 
-  return NextResponse.json({ versions });
+    return NextResponse.json({ versions });
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
 
 export async function POST(
@@ -101,70 +107,75 @@ export async function POST(
       ? body.label.trim().slice(0, 200)
       : null;
 
-  const [note] = await db
-    .select()
-    .from(notesTable)
-    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)));
-  if (!note) {
-    return NextResponse.json({ error: "Note not found" }, { status: 404 });
-  }
+  try {
+    const [note] = await db
+      .select()
+      .from(notesTable)
+      .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)));
+    if (!note) {
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    }
 
-  // Auto-save uses a meaningful-change threshold to avoid hundreds of trivial
-  // versions during an active editing session. All other sources bypass it.
-  if (source === "auto_save") {
-    const [latest] = await db
-      .select({
-        createdAt: noteVersionsTable.createdAt,
-        contentText: noteVersionsTable.contentText,
-      })
-      .from(noteVersionsTable)
-      .where(eq(noteVersionsTable.noteId, noteId))
-      .orderBy(desc(noteVersionsTable.createdAt))
-      .limit(1);
+    // Auto-save uses a meaningful-change threshold to avoid hundreds of trivial
+    // versions during an active editing session. All other sources bypass it.
+    if (source === "auto_save") {
+      const [latest] = await db
+        .select({
+          createdAt: noteVersionsTable.createdAt,
+          contentText: noteVersionsTable.contentText,
+        })
+        .from(noteVersionsTable)
+        .where(eq(noteVersionsTable.noteId, noteId))
+        .orderBy(desc(noteVersionsTable.createdAt))
+        .limit(1);
 
-    if (latest) {
-      const age = Date.now() - new Date(latest.createdAt).getTime();
-      const prevLen = latest.contentText?.length ?? 0;
-      const currLen = note.contentText?.length ?? 0;
-      const delta = Math.abs(currLen - prevLen);
-      const meetsThreshold =
-        age >= AUTO_SAVE_MIN_INTERVAL_MS || delta > AUTO_SAVE_CHAR_DELTA_THRESHOLD;
-      if (!meetsThreshold) {
-        return NextResponse.json({ created: false, reason: "below_threshold" });
+      if (latest) {
+        const age = Date.now() - new Date(latest.createdAt).getTime();
+        const prevLen = latest.contentText?.length ?? 0;
+        const currLen = note.contentText?.length ?? 0;
+        const delta = Math.abs(currLen - prevLen);
+        const meetsThreshold =
+          age >= AUTO_SAVE_MIN_INTERVAL_MS || delta > AUTO_SAVE_CHAR_DELTA_THRESHOLD;
+        if (!meetsThreshold) {
+          return NextResponse.json({ created: false, reason: "below_threshold" });
+        }
       }
     }
-  }
 
-  const [created] = await db
-    .insert(noteVersionsTable)
-    .values({
-      noteId,
-      userId: user.id,
-      title: note.title,
-      content: note.content,
-      contentText: note.contentText ?? null,
-      label,
-      source,
-    })
-    .returning();
+    const [created] = await db
+      .insert(noteVersionsTable)
+      .values({
+        noteId,
+        userId: user.id,
+        title: note.title,
+        content: note.content,
+        contentText: note.contentText ?? null,
+        label,
+        source,
+      })
+      .returning();
 
-  // Prune oldest beyond MAX_VERSIONS so each note keeps at most 50.
-  const [{ total }] = await db
-    .select({ total: count() })
-    .from(noteVersionsTable)
-    .where(eq(noteVersionsTable.noteId, noteId));
-
-  if (total > MAX_VERSIONS) {
-    const oldest = await db
-      .select({ id: noteVersionsTable.id })
+    // Prune oldest beyond MAX_VERSIONS so each note keeps at most 50.
+    const [{ total }] = await db
+      .select({ total: count() })
       .from(noteVersionsTable)
-      .where(eq(noteVersionsTable.noteId, noteId))
-      .orderBy(desc(noteVersionsTable.createdAt))
-      .offset(MAX_VERSIONS);
-    for (const row of oldest) {
-      await db.delete(noteVersionsTable).where(eq(noteVersionsTable.id, row.id));
-    }
-  }
+      .where(eq(noteVersionsTable.noteId, noteId));
 
-  return NextResponse.json({ created: true, version: created });
+    if (total > MAX_VERSIONS) {
+      const oldest = await db
+        .select({ id: noteVersionsTable.id })
+        .from(noteVersionsTable)
+        .where(eq(noteVersionsTable.noteId, noteId))
+        .orderBy(desc(noteVersionsTable.createdAt))
+        .offset(MAX_VERSIONS);
+      for (const row of oldest) {
+        await db.delete(noteVersionsTable).where(eq(noteVersionsTable.id, row.id));
+      }
+    }
+
+    return NextResponse.json({ created: true, version: created });
+  } catch (err) {
+    Sentry.captureException(err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

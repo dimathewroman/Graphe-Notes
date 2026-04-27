@@ -18,9 +18,9 @@ Graphe-Notes/
 │       │   │   ├── layout.tsx       Root layout (Providers, fonts, Sentry)
 │       │   │   └── page.tsx         Single-page app entry point
 │       │   ├── components/
-│       │   │   ├── editor/          Tiptap editor sub-components
+│       │   │   ├── editor/          Tiptap editor sub-components (includes ToolbarButton.tsx)
 │       │   │   ├── templates/       Template picker + save-as-template dialogs
-│       │   │   ├── ui/              shadcn/ui components + custom wrappers
+│       │   │   ├── ui/              shadcn/ui components + custom wrappers (IconButton.tsx lives here)
 │       │   │   ├── AIPanel.tsx
 │       │   │   ├── AISetupModal.tsx
 │       │   │   ├── AllAttachments.tsx
