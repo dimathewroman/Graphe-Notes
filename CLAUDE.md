@@ -38,8 +38,6 @@ This file contains behavioral instructions for Claude Code. Detailed reference l
 
 **Rule: Before making UI changes, read [DESIGN.md](DESIGN.md). Before making architectural changes, read [ARCHITECTURE.md](ARCHITECTURE.md). Before submitting any PR, run through the PR checklist below.**
 
-Note: ARCHITECTURE.md, DESIGN.md, PERFORMANCE.md, TESTING.md, SECURITY.md, and OBSERVABILITY.md don't exist yet. They will be created in a future session. The map is added now so the routing structure is in place.
-
 ---
 
 ## Agent Workspace
@@ -77,122 +75,21 @@ A task is not done until all of the following are true:
 
 ## Project Structure
 
-```
-artifacts/next-app/            -- Next.js app (frontend + API routes)
-  src/
-    app/                       -- App Router pages + API route handlers
-    components/                -- React components
-      editor/                  -- Tiptap editor sub-components
-      onboarding/              -- Onboarding modal
-      templates/               -- Template picker + save-as-template
-      ui/                      -- shadcn/ui components + custom wrappers (IconButton, ToolbarButton, drawer, drawer-left, sonner, empty, ResizeHandle)
-    hooks/                     -- Custom React hooks
-    lib/                       -- Utilities (auth, Supabase clients, AI prompts, demo data, etc.)
-    types/                     -- Type declarations
-  e2e/                         -- Playwright e2e tests
-  sentry.client.config.ts      -- Sentry client config
-  sentry.server.config.ts      -- Sentry server config
-  sentry.edge.config.ts        -- Sentry edge config
-  next.config.ts               -- Next.js config (CSP headers, Sentry plugin, PostHog rewrites)
-  playwright.config.ts         -- Playwright config
-
-lib/api-spec/                  -- OpenAPI spec (openapi.yaml) + Orval codegen config
-lib/api-client-react/          -- Generated React Query hooks + custom fetch
-lib/api-zod/                   -- Generated Zod schemas
-lib/db/                        -- Drizzle ORM schema + DB connection
-lib/encryption.ts              -- AES-256-GCM encryption for AI provider keys
-
-scripts/
-  post-merge.sh                -- Runs pnpm install + db push after git pull/merge
-  pre-push.sh                  -- Runs typecheck before every push
-  seed-templates.ts            -- Seeds preset templates into DB
-```
+Full annotated directory tree in [ARCHITECTURE.md](ARCHITECTURE.md). Key paths: `artifacts/next-app/src/` (frontend + API routes), `lib/` (shared utilities, DB, codegen), `scripts/` (git hooks, seed scripts).
 
 ---
 
-<!-- TO EXTRACT: This section moves to ARCHITECTURE.md in the documentation restructure. CLAUDE.md will keep a 1-2 line summary with a pointer. -->
 ## Database Schema
 
-Tables defined in `lib/db/src/schema/`:
+Full schema with column definitions, RLS status, and soft-delete patterns in [ARCHITECTURE.md](ARCHITECTURE.md). 13 tables defined in `lib/db/src/schema/`.
 
-- **users**: id, email, firstName, lastName, profileImageUrl, storageTier, createdAt, updatedAt
-- **folders**: id, userId, name, parentId, color, icon, tagRules (text[]), sortOrder, createdAt, updatedAt
-- **notes**: id, userId, title, content (HTML), contentText (plain), folderId, tags (text[]), pinned, favorite, vaulted, coverImage, deletedAt, autoDeleteAt, deletedReason, createdAt, updatedAt
-- **note_versions**: id, noteId, userId, title, content, contentText, label, source, createdAt
-- **vault_settings**: id, userId, passwordHash, createdAt, updatedAt
-- **templates**: id, userId, name, description, category (capture|plan|reflect|create|mine), content (JSONB), isPreset, createdAt, updatedAt
-- **attachments**: id, noteId, userId, fileName, fileType, fileSize, storagePath, displayMode, createdAt, deletedAt
-- **quick_bits**: id, userId, title, content, contentText, expiresAt, notificationHours (int[]), createdAt, updatedAt
-- **quick_bit_settings**: id, userId, defaultExpirationDays, defaultNotificationHours (int[]), createdAt, updatedAt
-- **smart_folders**: id, userId, name, tagRules (text[]), color, sortOrder, createdAt, updatedAt
-- **user_api_keys**: id, userId, provider, encryptedKey, endpointUrl, modelOverride, createdAt, updatedAt
-- **user_settings**: userId, activeAiProvider, hasCompletedAiSetup, onboardingCompleted, accentColor, motionLevel, updatedAt
-- **ai_usage**: id, userId, requestsThisHour, hourWindowStart, requestsThisMonth, monthWindowStart, totalTokensUsed, lastRequestAt, createdAt
-
-Soft-delete pattern: `notes.deletedAt` is set on soft-delete. Use `/notes/:id/delete`, `/notes/:id/restore`, and `/notes/:id/permanent` endpoints — not a plain DELETE.
+> **Important:** `user_settings` stores only `userId`, `activeAiProvider`, `hasCompletedAiSetup`, `updatedAt`. Motion level, dark mode level, colorblind mode, accent color, and onboarding state are **localStorage-only** — they are not in the database.
 
 ---
 
-<!-- TO EXTRACT: This section moves to ARCHITECTURE.md in the documentation restructure. CLAUDE.md will keep a 1-2 line summary with a pointer. -->
 ## API Endpoints
 
-All endpoints live in `artifacts/next-app/src/app/api/` and are prefixed with `/api`:
-
-**Notes**
-- GET/POST /notes (filters: folderId, search, pinned, favorite, tag, sortBy, sortDir)
-- GET/PATCH /notes/:id
-- PATCH /notes/:id/pin
-- PATCH /notes/:id/favorite
-- PATCH /notes/:id/move
-- PATCH /notes/:id/vault
-- POST /notes/:id/delete (soft-delete)
-- POST /notes/:id/restore
-- DELETE /notes/:id/permanent
-- GET /notes/:id/versions
-- GET/DELETE /notes/:id/versions/:versionId
-- POST /notes/:id/versions/:versionId/restore
-
-**Folders**
-- GET/POST /folders
-- PATCH/DELETE /folders/:id
-
-**Quick Bits**
-- GET/POST /quick-bits
-- GET/PATCH/DELETE /quick-bits/:id
-- DELETE /quick-bits/:id/soft-delete
-- GET/PATCH /quick-bits/settings
-- DELETE /quick-bits/expired
-
-**Templates**
-- GET/POST /templates
-- PATCH/DELETE /templates/:id
-
-**Attachments**
-- POST /attachments/upload
-- GET /attachments/all
-- GET /attachments/note/:noteId
-- GET/DELETE /attachments/:attachmentId
-
-**Vault**
-- GET /vault/status
-- POST /vault/setup
-- POST /vault/unlock
-- POST /vault/change-password
-
-**AI**
-- POST /ai/generate
-- GET/POST/PATCH/DELETE /ai/keys
-- GET/PATCH /ai/settings
-- GET /ai/usage
-- POST /ai/models
-
-**Other**
-- GET /tags
-- GET/POST /smart-folders
-- PATCH/DELETE /smart-folders/:id
-- POST /onboarding
-- GET /healthz
-- POST /cron/purge-deleted (Vercel cron, daily at 3 AM UTC)
+Full endpoint list in [ARCHITECTURE.md](ARCHITECTURE.md). All handlers live in `artifacts/next-app/src/app/api/` and are prefixed `/api`.
 
 ---
 
@@ -300,7 +197,7 @@ Demo vault PIN is stored in sessionStorage under the key `"demo_vault_hash"`. Al
 
 ## Motion Level System
 
-Three motion levels: `full`, `reduced`, `minimal`. Stored in Zustand and persisted to `user_settings.motionLevel`.
+Three motion levels: `full`, `reduced`, `minimal`. Stored in Zustand and persisted to `localStorage` (`motion_level` key).
 
 - `useMotionLevel()` — returns current level
 - `useSetMotionLevel()` — setter that also captures PostHog event
@@ -515,7 +412,7 @@ WebKit differences to watch: backdrop-filter rendering, scrollbar styling, CSS a
 
 ## Design Reference
 
-All visual decisions must align with [DESIGN.md](DESIGN.md) (once created) and the Design Philosophy Manifesto in Notion. Key specs: spacing on 8px base grid (4px half-step), Major Third type scale from 16px, border radii 6/8/12/16px (no sharp corners), four-level shadow system (warm-toned), motion timing by category. Three design principles: Calm, Crafted, Alive. Accent color usage is surgical — primary buttons, active nav, selected indicators, link text, focus rings. More accent ≠ better.
+All visual decisions must align with [DESIGN.md](DESIGN.md) and the Design Philosophy Manifesto in Notion. Key specs: spacing on 8px base grid (4px half-step), Major Third type scale from 16px, border radii 6/8/12/16px (no sharp corners), four-level shadow system (warm-toned), motion timing by category. Three design principles: Calm, Crafted, Alive. Accent color usage is surgical — primary buttons, active nav, selected indicators, link text, focus rings. More accent ≠ better.
 
 ---
 
@@ -576,20 +473,9 @@ Version 4 via `@tailwindcss/postcss`. Global styles in `artifacts/next-app/src/a
 
 ## PostHog
 
-PostHog is used for analytics. Import the `posthog-js` client from the PostHog provider. Server-side PostHog client in `lib/posthog-server.ts`.
+PostHog is used for analytics. Full event schema and instrumentation guide in [OBSERVABILITY.md](OBSERVABILITY.md).
 
-Event naming format: `noun_verb`
-
-Baseline events already instrumented:
-- note_created, note_opened, note_deleted
-- editor_opened, sync_triggered, search_performed
-- motion_level_changed
-
-All events must include a properties object with at minimum: `timestamp` and any relevant IDs (`note_id`, `user_id` where available).
-
-Adding a `posthog.capture()` call for every new user-facing action is part of the definition of done.
-
-PostHog requests are proxied through Next.js rewrites (`/ingest/*`) to avoid ad blockers.
+Event naming: `noun_verb`. All events include `timestamp` and relevant IDs. Adding `posthog.capture()` for every new user-facing action is part of the Definition of Done. Requests are proxied through `/ingest/*` rewrites.
 
 ---
 
@@ -681,32 +567,15 @@ One feature = one branch = one PR. Never put two features on the same branch.
 
 ## Testing
 
-Playwright e2e tests live in `artifacts/next-app/e2e/`. Tests run against the Next.js dev server on port 3000.
+Full testing guide in [TESTING.md](TESTING.md): how to run the suite, Playwright project configuration, CI pipeline, visual regression, and performance testing.
+
+Quick start (requires dev server on port 3000):
 
 ```bash
-# Run the full e2e suite (from repo root)
 pnpm --filter @workspace/next-app run test:e2e
-
-# Or from artifacts/next-app/
-npx playwright test
 ```
 
-Test files:
-- `e2e/01-app-loads.spec.ts` — login screen loads, demo mode boots
-- `e2e/02-notes.spec.ts` — create, open, delete, and search notes
-- `e2e/03-quick-bits.spec.ts` — Quick Bits list and navigation
-- `e2e/04-vault.spec.ts` — vault setup, PIN flow, and vaulting notes
-- `e2e/05-micro-interactions.spec.ts` — micro-interaction tests
-- `e2e/06-templates.spec.ts` — template picker and save-as-template
-- `e2e/07-onboarding.spec.ts` — onboarding flow
-
-All tests use demo mode (no auth credentials needed). The helper `e2e/helpers.ts` exports `enterDemoMode(page)` which lands on All Notes with demo data pre-seeded.
-
-Use `data-testid` attributes for all selectors — never couple tests to CSS classes.
-
-Tests run serially (`workers: 1`) because the Next.js dev server cannot reliably handle concurrent test workers.
-
-Playwright tests should cover multiple viewports. Visual regression testing is being expanded to mobile (390px), tablet (768px), and desktop (1280px) breakpoints — when adding new UI, add viewport-specific test cases where behavior differs.
+All tests use demo mode — no credentials needed. 9 spec files (01–09) covering app load, notes, quick bits, vault, micro-interactions, templates, onboarding, performance, and visual regression. Use `data-testid` attributes for all selectors.
 
 ---
 
@@ -723,21 +592,34 @@ AI provider keys are stored encrypted in the `user_api_keys` DB table. The encry
 These documentation files are living documents. They must stay accurate as the codebase evolves.
 
 **Before submitting every PR, check:**
-1. If files were added, removed, or renamed → update the directory tree in [ARCHITECTURE.md](ARCHITECTURE.md) (once it exists)
+1. If files were added, removed, or renamed → update the directory tree in [ARCHITECTURE.md](ARCHITECTURE.md)
 2. If UI components were added or modified → verify they align with [DESIGN.md](DESIGN.md) and update it if new patterns were established
 3. If new API endpoints or database tables were added → update [ARCHITECTURE.md](ARCHITECTURE.md)
 4. If new environment variables were added → update `.env.example`
 5. If performance-sensitive changes were made → run performance tests and update [PERFORMANCE.md](PERFORMANCE.md) baselines if they shifted intentionally
 6. If any new features were added → add a [CHANGELOG.md](CHANGELOG.md) entry
-7. If any of the above files don't exist yet, note what needs updating in the PR description for a future documentation session.
+7. If the change adds error handling or analytics → update [OBSERVABILITY.md](OBSERVABILITY.md)
+8. If the change touches auth, encryption, RLS, or rate limiting → update [SECURITY.md](SECURITY.md)
 
-**Token efficiency rule:** CLAUDE.md must stay under 300 lines of substantive content (excluding the sections marked for extraction). When ARCHITECTURE.md and DESIGN.md are created, the marked sections will be extracted and replaced with 1-2 line summaries pointing to the right file. Do not add detailed reference content to CLAUDE.md — put it in the appropriate dedicated file instead.
+**Token efficiency rule:** CLAUDE.md stays under 300 lines of substantive content. All detailed reference content belongs in the dedicated doc files. Do not add API lists, DB schemas, or event catalogs to CLAUDE.md.
 
 **File storage rules:**
 - All documentation files (.md) are committed to the repo and pushed to GitHub. They contain no secrets and are safe to be public.
 - `.env`, auth state files, and anything with real credentials stays gitignored. Never commit secrets.
 - Operational docs (active work tracking, decision log, rollback log) stay in Notion.
 - If a security audit finds unfixed vulnerabilities, report findings in the session output only. Do not commit vulnerability details until the fix is merged. Then update SECURITY.md with the resolved issue.
+
+---
+
+## Future-Proofing
+
+Before adding new features, be aware of these five architectural constraints. Full details in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+1. **Browser-only coupling** — Zustand store exposed on `window`, all preferences in `localStorage`, demo vault PIN in `sessionStorage`. A server-rendered or native port requires abstracting these.
+2. **Editor content architecture** — `GrapheEditor` is shared between notes and quick bits; `EditorToolbar` is rich-text-specific. New content types (canvas, spreadsheet) need a toolbar abstraction, not just a new shell.
+3. **Single-user assumptions** — no conflict resolution, no presence, preferences are client-only. Collaboration requires CRDTs, a sharing model, and server-authoritative preference sync.
+4. **Network dependency** — authenticated mode fails hard without network; there is no offline queue. Demo mode is fully offline. Adding offline-capable auth requires local-first storage.
+5. **Data layer portability** — Drizzle ORM is swappable; Supabase Auth is tightly coupled (JWKS endpoint, Admin API, session management). Replacing auth requires changes to middleware, `auth-server.ts`, and `auth/callback`.
 
 ---
 
