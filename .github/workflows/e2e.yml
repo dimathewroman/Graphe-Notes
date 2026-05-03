@@ -8,6 +8,12 @@ on:
 # Shared env vars used by both build and the next start server.
 # Tests run in demo mode — no real credentials required.
 # Placeholders allow Next.js to start without crashing on missing vars.
+#
+# ⚠️  PUBLIC REPO WARNING ⚠️
+# These values are intentionally fake placeholders for CI only.
+# If you fork this repo: regenerate AI_KEY_ENCRYPTION_SECRET with
+# `openssl rand -hex 32` and store production secrets in Vercel
+# environment variables — never as workflow `env:` values.
 env:
   NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
   NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
