@@ -479,7 +479,7 @@ export function NoteList() {
 
   const containerClass = bp === "mobile"
     ? "flex-1 bg-background flex flex-col h-screen"
-    : "border-r border-panel-border bg-background flex flex-col h-screen w-full";
+    : "bg-background flex flex-col h-screen w-full overflow-hidden";
 
   return (
     <div data-testid="note-list" className={containerClass}>
@@ -500,7 +500,7 @@ export function NoteList() {
                 <PanelLeft className="w-4 h-4" />
               </IconButton>
             )}
-            <h2 className="text-lg font-semibold tracking-tight whitespace-nowrap">{listTitle}</h2>
+            <h2 className="text-lg font-semibold tracking-tight truncate">{listTitle}</h2>
             {isFolderSmart && (
               <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">smart</span>
             )}
@@ -689,7 +689,7 @@ export function NoteList() {
       </div>
 
       {/* Notes */}
-      <ScrollArea className="flex-1 min-h-0">
+      <ScrollArea className="flex-1 min-h-0 [&_[data-slot=scroll-area-viewport]>div]:!block">
       <div className="p-2">
         {isLoading ? (
           <div className="flex justify-center p-4">
