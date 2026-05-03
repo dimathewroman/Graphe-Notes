@@ -51,7 +51,7 @@ export function ResizeHandle({ onResize, onResizeEnd, onResizeStart, className }
       onMouseDown={handleMouseDown}
       className={cn(
         // w-1 = 4px wide — gives a reliable hover target without eating layout space
-        "w-1 shrink-0 cursor-col-resize group relative z-10",
+        "w-1 shrink-0 cursor-col-resize group relative z-10 bg-editor",
         className
       )}
     >
@@ -60,7 +60,7 @@ export function ResizeHandle({ onResize, onResizeEnd, onResizeStart, className }
           not just the 1px inner line (inconsistent). */}
       <div
         className={cn(
-          "absolute inset-y-0 left-1/2 -translate-x-1/2 w-px transition-colors duration-150",
+          "absolute inset-y-0 left-0 w-px transition-colors duration-150",
           isDragging
             ? "bg-primary/50"
             : "bg-panel-border group-hover:bg-primary/40"

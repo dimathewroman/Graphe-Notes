@@ -153,7 +153,7 @@ export function RecentlyDeleted() {
   const containerClass =
     bp === "mobile"
       ? "flex-1 bg-background flex flex-col h-screen"
-      : "border-r border-panel-border bg-background flex flex-col h-screen w-full";
+      : "bg-background flex flex-col h-screen w-full overflow-hidden";
 
   return (
     <div className={containerClass}>
@@ -232,7 +232,7 @@ export function RecentlyDeleted() {
       </AlertDialog>
 
       {/* List */}
-      <ScrollArea className="flex-1 min-h-0">
+      <ScrollArea className="flex-1 min-h-0 [&_[data-slot=scroll-area-viewport]>div]:!block">
       <div className="p-2 space-y-1">
         {isLoading ? (
           <div className="flex justify-center p-4">
