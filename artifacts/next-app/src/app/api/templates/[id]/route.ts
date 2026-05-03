@@ -23,7 +23,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    await db.delete(templatesTable).where(eq(templatesTable.id, id));
+    await db.delete(templatesTable).where(and(eq(templatesTable.id, id), eq(templatesTable.userId, user.id)));
 
     return NextResponse.json({ success: true });
   } catch (err) {
