@@ -259,6 +259,9 @@ The `DELETE /api/templates/:id` handler verified template ownership via a SELECT
 **`rls_auto_enable` SECURITY DEFINER function callable via PostgREST RPC**
 The `public.rls_auto_enable()` function (an event trigger that auto-enables RLS on new tables) was callable by `anon` and `authenticated` roles via `/rest/v1/rpc/rls_auto_enable`. While the function only enables RLS (not destructive), exposing a SECURITY DEFINER function to unauthenticated callers violates least-privilege. Resolved in migration `0005_revoke_rls_auto_enable.sql` by revoking EXECUTE from `anon` and `authenticated`. The event trigger itself is unaffected.
 
+**Master branch had no required CI checks**
+The `master` branch protection allowed merges to proceed even with failing CI. Resolved by adding `Typecheck` and `E2E Tests` as required status checks (via GitHub branch protection API). PRs cannot now be merged until both pass. `enforce_admins` remains `false` so the repo owner can still bypass in emergencies.
+
 ---
 
 ## Documented Exceptions
@@ -288,9 +291,32 @@ As of the May 2026 security audit, there are 15 unresolved errors in Sentry, all
 4. Bulk-resolve them
 5. Consider adding `ignoreErrors` patterns to `sentry.client.config.ts` for known dev-only noise like hydration mismatches
 
+**Enable GitHub-native security features (free for public repos)**
+This repo is intentionally public (used as a portfolio for job applications). GitHub provides three free security features that should be enabled:
+
+1. **Secret scanning + push protection** — detects leaked tokens in commits and blocks pushes that contain known secret patterns
+   - Settings → Code security → Secret protection → Enable both "Secret scanning" and "Push protection"
+
+2. **Dependabot alerts + security updates** — flags vulnerable npm dependencies and auto-opens PRs to upgrade them
+   - Settings → Code security → Dependabot → Enable "Dependabot alerts" and "Dependabot security updates"
+
+3. **CodeQL default setup** — static analysis for SQL injection, XSS, hardcoded secrets, and other common vulnerabilities
+   - Settings → Code security → Code scanning → Set up → Default
+
+All three are zero-config, no infrastructure needed, and free for public repos.
+
+**Optional: clean up stale branch**
+The remote branch `fix/ipad-touch-cursor-input` has 12 unmerged commits dating back to early in the project. No secrets in the diff, but branches accumulating on a public repo are visible. Either open a PR to merge the work or delete the branch:
+```bash
+git push origin --delete fix/ipad-touch-cursor-input
+```
+
 ---
 
 ## Full Audit History
 
 **May 2026 — Full-stack security audit**
 Scope: all 39 API route handlers, middleware, auth-server, rate-limit, encryption, vault hashing, CSP/security headers, Supabase RLS (live-verified on all 13 tables and 52 policies), Supabase security advisors, storage bucket policies, Sentry error dashboard, PostHog event properties, and Vercel configuration. 16 attack scenarios tested. Findings: 2 code-level fixes (template DELETE, rls_auto_enable RPC), 1 documentation exception (local LLM key), 1 known limitation (leaked password protection), 1 housekeeping item (Sentry noise). No critical or high-severity vulnerabilities found.
+
+**May 2026 — GitHub-side security audit**
+Follow-up audit covering the GitHub repository itself: visibility, branch protection, commit history, secrets, workflows, branches, PRs, and issues. Scope was 420 commits across all branches grep'd for common secret patterns (JWT, OpenAI/Anthropic keys, GitHub tokens, Google API keys, PEM private keys) — zero hits. `.env*` properly gitignored throughout. Repo is intentionally public for portfolio purposes. Findings: 1 code change (added required CI status checks to master via branch protection API), 1 doc-only change (strengthened the placeholder-secret warning comment in `.github/workflows/e2e.yml`), 3 manual dashboard actions (enable secret scanning, Dependabot alerts, CodeQL — all free for public repos). Solo-developer trade-offs intentionally not changed: required PR reviewers stays at 0 (would block self-merge), required signed commits stays off (would block unsigned commits), stale `fix/ipad-touch-cursor-input` branch not deleted (may contain WIP).
