@@ -233,7 +233,7 @@ Before opening a PR that adds endpoints, tables, or authentication changes:
 - [ ] New tables have RLS enabled with CRUD policies in the migration file
 - [ ] RLS policies verified in the Supabase dashboard (not just the migration file)
 - [ ] No client-provided user ID is trusted — only `user.id` from `getAuthUser()`
-- [ ] No AI provider keys are returned to the client or logged server-side
+- [ ] No AI provider keys are returned to the client or logged server-side (exception: local LLM key — see below)
 - [ ] Rate limiting is in place for any endpoint that calls an external paid API
 - [ ] New external domains are added to the CSP `connect-src` directive
 - [ ] No secrets committed to the repo; `.env.example` uses placeholder names only
@@ -252,3 +252,45 @@ The `templates` table had RLS enabled (from migration 0001) but no CREATE POLICY
 
 **Missing Sentry instrumentation in ai/generate**
 The `/api/ai/generate` catch block only logged to `console.error`. Server errors were invisible in the Sentry dashboard. Resolved by adding `Sentry.captureException(err)` to the catch block in `artifacts/next-app/src/app/api/ai/generate/route.ts`.
+
+**Template DELETE missing userId filter**
+The `DELETE /api/templates/:id` handler verified template ownership via a SELECT query but then issued the DELETE with only `eq(templatesTable.id, id)` — no `userId` constraint. While the preceding SELECT prevented cross-user access in practice, the DELETE itself was unscoped. Resolved by adding `eq(templatesTable.userId, user.id)` to the DELETE WHERE clause, matching the defense-in-depth pattern used by every other DELETE route.
+
+**`rls_auto_enable` SECURITY DEFINER function callable via PostgREST RPC**
+The `public.rls_auto_enable()` function (an event trigger that auto-enables RLS on new tables) was callable by `anon` and `authenticated` roles via `/rest/v1/rpc/rls_auto_enable`. While the function only enables RLS (not destructive), exposing a SECURITY DEFINER function to unauthenticated callers violates least-privilege. Resolved in migration `0005_revoke_rls_auto_enable.sql` by revoking EXECUTE from `anon` and `authenticated`. The event trigger itself is unaffected.
+
+---
+
+## Documented Exceptions
+
+**Local LLM API key returned to client**
+`GET /api/ai/settings` decrypts and returns the local LLM API key when the active provider is `local_llm`. This is an intentional exception to the "decrypted keys are never returned to the client" rule. The browser must send the key directly to the user's local LLM server (which the backend cannot reach). The key is only returned to the authenticated user who stored it.
+
+---
+
+## Known Limitations
+
+**Leaked password protection (requires paid Supabase plan)**
+Supabase Auth can check new passwords against HaveIBeenPwned to prevent users from signing up with known-compromised passwords. This feature requires a paid Supabase plan and is not currently enabled. If the project upgrades to a paid plan, enable this in Supabase Dashboard → Authentication → Providers → Email → Leaked Password Protection.
+
+**CSP uses `unsafe-inline` and `unsafe-eval` in `script-src`**
+The Content Security Policy includes `unsafe-inline` and `unsafe-eval` in the `script-src` directive. This is a known trade-off with Next.js: `unsafe-inline` is required for Next.js inline scripts, and `unsafe-eval` is required by PostHog and some Next.js internals. Removing these would break the application. This can be improved in the future with nonce-based CSP using `next/headers` strict CSP support.
+
+---
+
+## Manual Action Required
+
+**Resolve Sentry dev-build noise**
+As of the May 2026 security audit, there are 15 unresolved errors in Sentry, all from dev builds (hydration errors, Framer Motion keyframe warnings, build-time CSS/component errors). None are security-relevant, but they clutter the dashboard and could mask real production errors. Steps:
+1. Go to the Sentry dashboard → Issues
+2. Filter by project `javascript-nextjs`
+3. Select all unresolved dev-build issues (hydration, motion keyframe, build errors)
+4. Bulk-resolve them
+5. Consider adding `ignoreErrors` patterns to `sentry.client.config.ts` for known dev-only noise like hydration mismatches
+
+---
+
+## Full Audit History
+
+**May 2026 — Full-stack security audit**
+Scope: all 39 API route handlers, middleware, auth-server, rate-limit, encryption, vault hashing, CSP/security headers, Supabase RLS (live-verified on all 13 tables and 52 policies), Supabase security advisors, storage bucket policies, Sentry error dashboard, PostHog event properties, and Vercel configuration. 16 attack scenarios tested. Findings: 2 code-level fixes (template DELETE, rls_auto_enable RPC), 1 documentation exception (local LLM key), 1 known limitation (leaked password protection), 1 housekeeping item (Sentry noise). No critical or high-severity vulnerabilities found.
