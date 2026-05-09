@@ -42,7 +42,7 @@ import { MobileSelectionMenu } from "./MobileSelectionMenu";
 import { AiStatusIndicator } from "./AiStatusIndicator";
 import { useAiAction } from "@/hooks/use-ai-action";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
-import { IMAGE_MIME_TYPES } from "@/lib/attachment-limits";
+import { IMAGE_MIME_TYPES, BROWSER_RENDERABLE_IMAGE_TYPES } from "@/lib/attachment-limits";
 import { isImageType } from "@/hooks/use-attachments";
 
 export interface GrapheEditorProps {
@@ -218,7 +218,11 @@ export function GrapheEditor({
   const handleAttachFile = useCallback(async (file: File) => {
     if (!onAttachFile) return;
     const result = await onAttachFile(file);
-    if (result?.url && isImageType(file.type)) {
+    // Blob URLs are demo-mode originals — HEIC/HEIF aren't browser-renderable without
+    // server conversion. Real uploads return an AVIF proxy URL so HEIC always works there.
+    const isBlobUrl = result?.url?.startsWith("blob:");
+    const canEmbed = isBlobUrl ? BROWSER_RENDERABLE_IMAGE_TYPES.has(file.type) : isImageType(file.type);
+    if (result?.url && canEmbed) {
       editor?.chain().focus().setImage({
         src: result.url,
         alt: file.name,

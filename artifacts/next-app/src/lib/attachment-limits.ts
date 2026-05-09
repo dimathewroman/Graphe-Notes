@@ -25,6 +25,12 @@ export const IMAGE_MIME_TYPES = new Set([
 // MIME types that identify HEIC/HEIF input that must be converted before storage
 export const HEIC_MIME_TYPES = new Set(["image/heic", "image/heif"]);
 
+// Image types browsers can render natively without server conversion.
+// Excludes HEIC/HEIF — those need sharp/heic-convert to produce a renderable format.
+export const BROWSER_RENDERABLE_IMAGE_TYPES = new Set([
+  "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif",
+]);
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
