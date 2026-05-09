@@ -732,7 +732,7 @@ export function NoteShell() {
 
   // Attach file: upload via shell, return result for GrapheEditor to insert image.
   // uploadAttachment returns AttachmentRecord | null; normalise to match the prop signature.
-  const handleAttachFile = useCallback(async (file: File): Promise<{ url?: string; id?: string; masterPath?: string | null; fileType?: string; downloadUrl?: string } | undefined> => {
+  const handleAttachFile = useCallback(async (file: File): Promise<{ url?: string; id?: string; masterPath?: string | null; fileType?: string; downloadUrl?: string; isAnimated?: boolean } | undefined> => {
     const result = await uploadAttachment(file);
     if (!result) return undefined;
     return {
@@ -742,6 +742,7 @@ export function NoteShell() {
       fileType: result.fileType,
       // masterUrl is the original file blob URL (demo HEIC) or undefined for real uploads
       downloadUrl: result.masterUrl ?? undefined,
+      isAnimated: result.isAnimated ?? undefined,
     };
   }, [uploadAttachment]);
 

@@ -18,7 +18,9 @@ export interface AttachmentRecord {
   storagePath: string | null;    // v1 legacy; null for v2 rows
   masterPath?: string | null;    // v2: path to master file in Supabase Storage
   proxyPath?: string | null;     // v2: path to AVIF proxy in Supabase Storage
-  masterFormat?: string | null;  // 'jpg' | 'png'
+  masterFormat?: string | null;  // 'jpg' | 'png' | 'gif'
+  proxyFormat?: string | null;   // 'avif' | 'gif' (fallback when AVIF encoding timed out)
+  isAnimated?: boolean | null;   // true for animated GIFs
   masterUrl?: string | null;     // v2: signed URL for master (download)
   width?: number | null;
   height?: number | null;
@@ -169,15 +171,22 @@ export function useUploadAttachment(noteId: number | null) {
         // HEIC/HEIF cannot be decoded by Chrome as a raw blob URL, so convert
         // via the 3-tier heicToPreviewUrl pipeline. We also keep a blob URL of
         // the original so the Download button serves the real HEIC file.
+        // Animated GIFs are natively renderable as blob: URLs in all browsers — no conversion.
         let objectUrl: string;
         let fileType = file.type;
         let masterUrl: string | undefined;
+        let isAnimated: boolean | undefined;
         if (isHeicFile(file)) {
           masterUrl = URL.createObjectURL(file); // original HEIC for download
           objectUrl = await heicToPreviewUrl(file); // JPEG or SVG for display
           fileType = "image/jpeg"; // heicToPreviewUrl always returns something renderable
         } else {
           objectUrl = URL.createObjectURL(file);
+          // Detect animated GIF: browsers render all frames from blob: URLs natively,
+          // but we need isAnimated=true so the editor uses unoptimized next/image.
+          if (file.type === "image/gif") {
+            isAnimated = true;
+          }
         }
         const record: AttachmentRecord = {
           id: `demo-${demoIdCounter++}`,
@@ -189,6 +198,7 @@ export function useUploadAttachment(noteId: number | null) {
           createdAt: new Date().toISOString(),
           url: objectUrl,
           masterUrl,
+          isAnimated,
         };
         demoAttachments.push(record);
         queryClient.invalidateQueries({ queryKey: ["/api/attachments"] });

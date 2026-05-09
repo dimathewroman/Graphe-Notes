@@ -194,6 +194,7 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
   const alt = node.attrs.alt as string ?? "";
   const attachmentId = node.attrs.attachmentId as string | null ?? null;
   const downloadUrl = node.attrs.downloadUrl as string | null ?? null;
+  const isAnimated = node.attrs.isAnimated as boolean ?? false;
 
   // Show toolbar when selected (keyboard or click)
   useEffect(() => {
@@ -238,7 +239,9 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
       style={{ verticalAlign: "bottom" }}
     >
       {isSupabaseSrc(src) ? (
-        // next/image for Supabase-hosted images: format negotiation, lazy loading, CDN caching
+        // next/image for Supabase-hosted images: format negotiation, lazy loading, CDN caching.
+        // Animated images (GIF proxy / animated AVIF) must use unoptimized={true} so the
+        // Next.js image optimizer doesn't strip animation frames from the output.
         <NextImage
           ref={imgRef as React.Ref<HTMLImageElement>}
           src={src}
@@ -250,7 +253,7 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
           onClick={handleClick}
           className={imageClass}
           style={{ width: "100%", height: "auto" }}
-          unoptimized={false}
+          unoptimized={isAnimated}
         />
       ) : (
         // blob: URLs during upload-in-progress, or external linked images

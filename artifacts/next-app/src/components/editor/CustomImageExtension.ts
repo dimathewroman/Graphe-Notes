@@ -37,6 +37,16 @@ export const CustomImage = Image.extend({
           return { "data-download-url": attributes.downloadUrl };
         },
       },
+      // True for animated GIFs — instructs next/image to use `unoptimized` so frames
+      // are preserved (the image optimizer would strip animation from AVIF/GIF output).
+      isAnimated: {
+        default: false,
+        parseHTML: element => element.getAttribute("data-is-animated") === "true",
+        renderHTML: attributes => {
+          if (!attributes.isAnimated) return {};
+          return { "data-is-animated": "true" };
+        },
+      },
     };
   },
   addNodeView() {
