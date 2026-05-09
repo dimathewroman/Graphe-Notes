@@ -3,10 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
-import { ExternalLink, Trash2, Link2, Upload, Check, X } from "lucide-react";
+import { ExternalLink, Trash2, Link2, Upload, Check, X, Download } from "lucide-react";
+import NextImage from "next/image";
+
+function isSupabaseSrc(src: string): boolean {
+  return src.includes("supabase.co") || src.includes("supabase.in");
+}
 
 function isUploadedSrc(src: string): boolean {
-  return src.startsWith("blob:") || src.includes("supabase.co") || src.includes("supabase.in");
+  return src.startsWith("blob:") || isSupabaseSrc(src);
 }
 
 function ImageToolbar({
@@ -57,6 +62,22 @@ function ImageToolbar({
   };
 
   const isUploaded = isUploadedSrc(src);
+  const isSupabase = isSupabaseSrc(src);
+
+  const handleDownload = async () => {
+    // For uploaded Supabase images, route through download endpoint for JPEG conversion.
+    // For other URLs, open directly.
+    if (isSupabase) {
+      // Extract the storage path suffix after /object/sign/ or /object/public/
+      const match = src.match(/\/object\/(?:sign|public)\/([^?]+)/);
+      if (match) {
+        const storagePath = match[1];
+        window.open(`/api/attachments/download?path=${encodeURIComponent(storagePath)}`, "_blank", "noopener,noreferrer");
+        return;
+      }
+    }
+    window.open(src, "_blank", "noopener,noreferrer");
+  };
 
   return createPortal(
     <div
@@ -126,6 +147,15 @@ function ImageToolbar({
           <Link2 className="w-3.5 h-3.5" />
           Copy URL
         </button>
+        {isUploaded && (
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-panel hover:text-foreground transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Download
+          </button>
+        )}
         <div className="flex-1" />
         <button
           onClick={onDelete}
@@ -171,30 +201,52 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
     };
   }, [showToolbar]);
 
+  const handleClick = () => {
+    const rect = imgRef.current?.getBoundingClientRect() ?? null;
+    setImgRect(rect);
+    setShowToolbar(v => !v);
+  };
+
+  const imageClass = [
+    "max-w-full rounded transition-all duration-150 cursor-pointer",
+    selected || showToolbar
+      ? "ring-2 ring-primary ring-offset-2 ring-offset-background"
+      : "hover:ring-1 hover:ring-primary/40 hover:ring-offset-1 hover:ring-offset-background",
+  ].join(" ");
+
   return (
     <NodeViewWrapper
       as="span"
       className="inline-block relative"
       style={{ verticalAlign: "bottom" }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        ref={imgRef}
-        src={src}
-        alt={alt}
-        draggable={false}
-        onClick={() => {
-          const rect = imgRef.current?.getBoundingClientRect() ?? null;
-          setImgRect(rect);
-          setShowToolbar(v => !v);
-        }}
-        className={[
-          "max-w-full rounded transition-all duration-150 cursor-pointer",
-          selected || showToolbar
-            ? "ring-2 ring-primary ring-offset-2 ring-offset-background"
-            : "hover:ring-1 hover:ring-primary/40 hover:ring-offset-1 hover:ring-offset-background",
-        ].join(" ")}
-      />
+      {isSupabaseSrc(src) ? (
+        // next/image for Supabase-hosted images: format negotiation, lazy loading, CDN caching
+        <NextImage
+          ref={imgRef as React.Ref<HTMLImageElement>}
+          src={src}
+          alt={alt}
+          width={0}
+          height={0}
+          sizes="(max-width: 768px) 100vw, 80vw"
+          draggable={false}
+          onClick={handleClick}
+          className={imageClass}
+          style={{ width: "100%", height: "auto" }}
+          unoptimized={false}
+        />
+      ) : (
+        // blob: URLs during upload-in-progress, or external linked images
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          ref={imgRef}
+          src={src}
+          alt={alt}
+          draggable={false}
+          onClick={handleClick}
+          className={imageClass}
+        />
+      )}
 
       {showToolbar && imgRect && (
         <ImageToolbar

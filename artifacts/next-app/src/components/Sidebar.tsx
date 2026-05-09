@@ -3,6 +3,7 @@ import ReactDOM from "react-dom";
 import posthog from "posthog-js";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAnimationConfig } from "@/hooks/use-motion";
+import NextImage from "next/image";
 const grapheLogo = "/graphe_minimalist_1773640203523.png";
 import {
   Folder, FolderOpen, FileText, Star, Sun, Moon,
@@ -305,7 +306,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {/* Logo + Settings */}
       <div className="p-4 pb-2 flex items-center justify-between">
         <div className="flex items-center gap-2 text-foreground font-semibold">
-          <img src={grapheLogo} alt="Graphe Notes" className="w-6 h-6 rounded-md" />
+          <NextImage src={grapheLogo} alt="Graphe Notes" width={24} height={24} className="rounded-md" />
           <span>Graphe Notes</span>
         </div>
         <div className="flex items-center gap-0.5">
@@ -433,7 +434,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         {user && (
           <div className="flex items-center gap-2 px-1">
             {user.profileImageUrl ? (
-              <img src={user.profileImageUrl} alt="" referrerPolicy="no-referrer" className="w-7 h-7 rounded-full object-cover shrink-0" />
+              <NextImage src={user.profileImageUrl} alt="" width={28} height={28} referrerPolicy="no-referrer" className="rounded-full object-cover shrink-0" />
             ) : (
               <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center shrink-0 text-xs font-medium text-primary">
                 {(user.firstName?.[0] ?? user.email?.[0] ?? "?").toUpperCase()}

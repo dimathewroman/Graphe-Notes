@@ -3,12 +3,60 @@ import { eq, and, sum } from "drizzle-orm";
 import { db, attachmentsTable, notesTable, usersTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { ALLOWED_MIME_TYPES, TIER_LIMITS, type StorageTier, formatBytes } from "@/lib/attachment-limits";
+import { ALLOWED_MIME_TYPES, HEIC_MIME_TYPES, IMAGE_MIME_TYPES, TIER_LIMITS, type StorageTier, formatBytes } from "@/lib/attachment-limits";
 import { randomUUID } from "crypto";
 import * as Sentry from "@sentry/nextjs";
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
+}
+
+/** Returns true if the buffer's magic bytes match HEIC/HEIF. */
+function hasHeicMagicBytes(buf: Buffer): boolean {
+  // HEIC/HEIF: bytes 4–7 are "ftyp"; brand at 8–11 is heic/heis/hevx/mif1/msf1 etc.
+  if (buf.length < 12) return false;
+  const ftyp = buf.toString("ascii", 4, 8);
+  if (ftyp !== "ftyp") return false;
+  const brand = buf.toString("ascii", 8, 12);
+  return ["heic", "heis", "hevx", "heim", "heix", "hevc", "hevs", "mif1", "msf1"].includes(brand);
+}
+
+function isHeicInput(mimeType: string, filename: string, buf: Buffer): boolean {
+  if (HEIC_MIME_TYPES.has(mimeType)) return true;
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "heic" || ext === "heif") return true;
+  return hasHeicMagicBytes(buf);
+}
+
+/**
+ * Convert any image buffer to AVIF.
+ * Primary path: sharp's native HEIC support (requires libheif on Vercel).
+ * Fallback: heic-convert → JPEG → sharp → AVIF (for environments without libheif).
+ */
+async function toAvif(buf: Buffer, isHeic: boolean): Promise<Buffer> {
+  const sharp = (await import("sharp")).default;
+
+  if (isHeic) {
+    try {
+      return await sharp(buf).avif({ quality: 80 }).toBuffer();
+    } catch (err) {
+      // libheif not available — fall back to heic-convert
+      const heicConvert = (await import("heic-convert")).default;
+      const jpegBuf = Buffer.from(
+        await heicConvert({ buffer: buf, format: "JPEG", quality: 0.9 })
+      );
+      return sharp(jpegBuf).avif({ quality: 80 }).toBuffer();
+    }
+  }
+
+  return sharp(buf).avif({ quality: 80 }).toBuffer();
+}
+
+/** Strip extension from sanitized filename and append .avif */
+function avifFilename(sanitized: string): string {
+  const dot = sanitized.lastIndexOf(".");
+  const base = dot !== -1 ? sanitized.slice(0, dot) : sanitized;
+  return `${base}.avif`;
 }
 
 export async function POST(request: NextRequest) {
@@ -58,7 +106,7 @@ export async function POST(request: NextRequest) {
     const tier = ((userRow?.storageTier ?? "free") as StorageTier);
     const limits = TIER_LIMITS[tier] ?? TIER_LIMITS.free;
 
-    // Per-file size check
+    // Per-file size check against original upload size
     if (limits.maxFileSize !== Infinity && file.size > limits.maxFileSize) {
       return NextResponse.json(
         { error: `File exceeds the ${formatBytes(limits.maxFileSize)} limit` },
@@ -66,7 +114,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Total storage check
+    // Total storage check against original upload size
     if (limits.maxTotalStorage !== null) {
       const [usageRow] = await db
         .select({ total: sum(attachmentsTable.fileSize) })
@@ -83,17 +131,34 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const arrayBuffer = await file.arrayBuffer();
+    // Declare as Buffer<ArrayBufferLike> so the AVIF result (also ArrayBufferLike) is assignable back
+    let uploadBuffer: Buffer<ArrayBufferLike> = Buffer.from(arrayBuffer);
+    let uploadMimeType = mimeType;
+    let uploadFilename = sanitizeFilename(file.name);
+
+    // Convert images to AVIF for canonical storage
+    if (IMAGE_MIME_TYPES.has(mimeType)) {
+      const heic = isHeicInput(mimeType, file.name, uploadBuffer);
+      try {
+        uploadBuffer = await toAvif(uploadBuffer, heic);
+        uploadMimeType = "image/avif";
+        uploadFilename = avifFilename(uploadFilename);
+      } catch (convErr) {
+        Sentry.captureException(convErr, { extra: { originalMimeType: mimeType } });
+        return NextResponse.json({ error: "Image conversion failed" }, { status: 422 });
+      }
+    }
+
     // Build storage path
     const fileId = randomUUID();
-    const sanitized = sanitizeFilename(file.name);
-    const storagePath = `${user.id}/${noteId}/${fileId}-${sanitized}`;
+    const storagePath = `${user.id}/${noteId}/${fileId}-${uploadFilename}`;
 
     // Upload to Supabase Storage
-    const arrayBuffer = await file.arrayBuffer();
     const { error: uploadError } = await supabaseAdmin.storage
       .from("note-attachments")
-      .upload(storagePath, arrayBuffer, {
-        contentType: mimeType,
+      .upload(storagePath, uploadBuffer, {
+        contentType: uploadMimeType,
         upsert: false,
       });
 
@@ -102,15 +167,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Upload failed" }, { status: 500 });
     }
 
-    // Create DB record
+    // Create DB record using the converted size
     const [attachment] = await db
       .insert(attachmentsTable)
       .values({
         noteId,
         userId: user.id,
         fileName: file.name,
-        fileType: mimeType,
-        fileSize: file.size,
+        fileType: uploadMimeType,
+        fileSize: uploadBuffer.length,
         storagePath,
       })
       .returning();

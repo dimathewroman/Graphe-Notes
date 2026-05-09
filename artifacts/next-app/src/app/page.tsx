@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import Home from "@/components/Home";
 import { Mail, Loader2 } from "lucide-react";
+import NextImage from "next/image";
 import { DEMO_NOTES, DEMO_FOLDERS, DEMO_TAGS, DEMO_QUICK_BITS, DEMO_NOTE_VERSIONS } from "@/lib/demo-data";
 import { DemoContext } from "@/lib/demo-context";
 import { seedDemoVersionIdCounter } from "@/hooks/use-note-versions";
@@ -96,7 +97,7 @@ function LoginScreen({ onDemo }: { onDemo: () => void }) {
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm flex flex-col items-center gap-6">
         <div className="flex flex-col items-center gap-3">
-          <img src={grapheLogo} alt="Graphe Notes" className="w-20 h-20 rounded-2xl shadow-lg" />
+          <NextImage src={grapheLogo} alt="Graphe Notes" width={80} height={80} className="rounded-2xl shadow-lg" />
           <h1 className="text-2xl font-semibold text-foreground">Graphe Notes</h1>
           <p className="text-sm text-muted-foreground text-center">
             Notes that get you, wherever you go.
