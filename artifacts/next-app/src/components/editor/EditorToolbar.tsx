@@ -460,7 +460,7 @@ export const EditorToolbar = memo(function EditorToolbar({
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
-                accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,text/markdown,application/json,application/zip"
+                accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif,image/svg+xml,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,text/markdown,application/json,application/zip"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) { onAttachFile(file); e.target.value = ""; }
@@ -483,7 +483,7 @@ export const EditorToolbar = memo(function EditorToolbar({
               ref={fileInputRef}
               type="file"
               className="hidden"
-              accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,text/markdown,application/json,application/zip"
+              accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif,.heic,.heif,image/svg+xml,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/csv,text/markdown,application/json,application/zip"
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file && onAttachFile) { onAttachFile(file); e.target.value = ""; }
