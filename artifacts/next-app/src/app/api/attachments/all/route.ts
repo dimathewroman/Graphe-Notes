@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
         // v2: proxy for display; v1: storagePath
         const displayPath = row.proxyPath ?? row.storagePath;
         const { data } = displayPath
-          ? await supabaseAdmin.storage.from("note-attachments").createSignedUrl(displayPath, 3600)
+          ? await supabaseAdmin.storage.from("note-attachments").createSignedUrl(displayPath, 604800)
           : { data: null };
         return { ...row, url: data?.signedUrl ?? null };
       })

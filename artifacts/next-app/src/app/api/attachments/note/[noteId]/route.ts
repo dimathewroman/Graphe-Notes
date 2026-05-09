@@ -46,10 +46,10 @@ export async function GET(
 
         const [displaySign, masterSign] = await Promise.all([
           displayPath
-            ? supabaseAdmin.storage.from("note-attachments").createSignedUrl(displayPath, 3600)
+            ? supabaseAdmin.storage.from("note-attachments").createSignedUrl(displayPath, 604800)
             : Promise.resolve({ data: null }),
           masterServePath && masterServePath !== displayPath
-            ? supabaseAdmin.storage.from("note-attachments").createSignedUrl(masterServePath, 3600)
+            ? supabaseAdmin.storage.from("note-attachments").createSignedUrl(masterServePath, 604800)
             : Promise.resolve({ data: null }),
         ]);
 
