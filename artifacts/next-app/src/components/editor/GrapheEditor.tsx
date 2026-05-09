@@ -63,7 +63,7 @@ export interface GrapheEditorProps {
    * The shell handles the upload and returns the resulting URL (if any).
    * GrapheEditor inserts the image into the editor if the file is an image type.
    */
-  onAttachFile?: (file: File) => Promise<{ url?: string; id?: string; masterPath?: string | null } | null | undefined>;
+  onAttachFile?: (file: File) => Promise<{ url?: string; id?: string; masterPath?: string | null; fileType?: string } | null | undefined>;
   /**
    * Called once the TipTap editor instance is ready (or null when destroyed).
    * Shells that need the editor ref (e.g. for undo/redo in the header on mobile)
@@ -218,10 +218,14 @@ export function GrapheEditor({
   const handleAttachFile = useCallback(async (file: File) => {
     if (!onAttachFile) return;
     const result = await onAttachFile(file);
-    // Blob URLs are demo-mode originals — HEIC/HEIF aren't browser-renderable without
-    // server conversion. Real uploads return an AVIF proxy URL so HEIC always works there.
+    // Use the effective type returned by the shell (e.g. "image/jpeg" after demo HEIC→JPEG
+    // conversion) rather than the original file.type — the shell knows what format the URL
+    // actually contains. Fall back to file.type for real (non-blob) uploads.
+    const effectiveType = result?.fileType ?? file.type;
     const isBlobUrl = result?.url?.startsWith("blob:");
-    const canEmbed = isBlobUrl ? BROWSER_RENDERABLE_IMAGE_TYPES.has(file.type) : isImageType(file.type);
+    const canEmbed = isBlobUrl
+      ? BROWSER_RENDERABLE_IMAGE_TYPES.has(effectiveType)
+      : isImageType(effectiveType);
     if (result?.url && canEmbed) {
       editor?.chain().focus().setImage({
         src: result.url,

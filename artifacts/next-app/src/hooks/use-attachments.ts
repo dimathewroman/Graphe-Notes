@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { getGetNoteQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
-import { IMAGE_MIME_TYPES, BROWSER_RENDERABLE_IMAGE_TYPES, formatBytes } from "@/lib/attachment-limits";
+import { IMAGE_MIME_TYPES, BROWSER_RENDERABLE_IMAGE_TYPES, HEIC_MIME_TYPES, formatBytes } from "@/lib/attachment-limits";
 import { useDemoMode } from "@/lib/demo-context";
 import { useAppStore } from "@/store";
 
@@ -109,16 +109,32 @@ export function useUploadAttachment(noteId: number | null) {
     try {
       if (isDemo) {
         // Demo: use object URL, store in memory.
-        // HEIC/HEIF can't render natively in browsers (no server conversion in demo),
-        // so store them as generic attachments so they appear in the attachment panel
-        // with a working download button rather than as a broken inline image.
-        const objectUrl = URL.createObjectURL(file);
+        // HEIC/HEIF need client-side conversion so the browser can render them.
+        let objectUrl: string;
+        let fileType = file.type;
+        let fileSize = file.size;
+        if (HEIC_MIME_TYPES.has(file.type)) {
+          try {
+            const heic2any = (await import("heic2any")).default;
+            const result = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
+            const jpeg = Array.isArray(result) ? result[0] : result;
+            objectUrl = URL.createObjectURL(jpeg);
+            fileType = "image/jpeg";
+            fileSize = jpeg.size;
+          } catch {
+            // Conversion failed — show as a downloadable attachment without preview
+            objectUrl = URL.createObjectURL(file);
+            fileType = "application/octet-stream";
+          }
+        } else {
+          objectUrl = URL.createObjectURL(file);
+        }
         const record: AttachmentRecord = {
           id: `demo-${demoIdCounter++}`,
           noteId,
           fileName: file.name,
-          fileType: BROWSER_RENDERABLE_IMAGE_TYPES.has(file.type) ? file.type : "application/octet-stream",
-          fileSize: file.size,
+          fileType,
+          fileSize,
           storagePath: null,
           createdAt: new Date().toISOString(),
           url: objectUrl,
