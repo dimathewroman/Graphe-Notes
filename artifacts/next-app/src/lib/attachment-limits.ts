@@ -7,7 +7,7 @@ export const TIER_LIMITS: Record<StorageTier, { maxFileSize: number; maxTotalSto
 };
 
 export const ALLOWED_MIME_TYPES = new Set([
-  "image/jpeg", "image/png", "image/gif", "image/webp",
+  "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif",
   "image/heic", "image/heif",
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -18,7 +18,7 @@ export const ALLOWED_MIME_TYPES = new Set([
 ]);
 
 export const IMAGE_MIME_TYPES = new Set([
-  "image/jpeg", "image/png", "image/gif", "image/webp",
+  "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif",
   "image/heic", "image/heif",
 ]);
 

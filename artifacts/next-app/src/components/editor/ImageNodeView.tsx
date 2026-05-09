@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
-import { ExternalLink, Trash2, Link2, Upload, Check, X, Download } from "lucide-react";
+import { ExternalLink, Trash2, Link2, Upload, Check, X, Download, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import NextImage from "next/image";
 
 function isSupabaseSrc(src: string): boolean {
@@ -64,15 +70,16 @@ function ImageToolbar({
   const isUploaded = isUploadedSrc(src);
   const isSupabase = isSupabaseSrc(src);
 
-  const handleDownload = async () => {
-    // For uploaded Supabase images, route through download endpoint for JPEG conversion.
-    // For other URLs, open directly.
+  const handleDownload = (format: "avif" | "jpeg" = "avif") => {
     if (isSupabase) {
-      // Extract the storage path suffix after /object/sign/ or /object/public/
       const match = src.match(/\/object\/(?:sign|public)\/([^?]+)/);
       if (match) {
         const storagePath = match[1];
-        window.open(`/api/attachments/download?path=${encodeURIComponent(storagePath)}`, "_blank", "noopener,noreferrer");
+        window.open(
+          `/api/attachments/download?path=${encodeURIComponent(storagePath)}&format=${format}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
         return;
       }
     }
@@ -147,9 +154,28 @@ function ImageToolbar({
           <Link2 className="w-3.5 h-3.5" />
           Copy URL
         </button>
-        {isUploaded && (
+        {isSupabase && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-panel hover:text-foreground transition-colors">
+                <Download className="w-3.5 h-3.5" />
+                Download
+                <ChevronDown className="w-3 h-3 opacity-60" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[172px]">
+              <DropdownMenuItem className="text-xs" onClick={() => handleDownload("avif")}>
+                AVIF <span className="ml-auto text-muted-foreground">best quality</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-xs" onClick={() => handleDownload("jpeg")}>
+                JPEG <span className="ml-auto text-muted-foreground">most compatible</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {isUploaded && !isSupabase && (
           <button
-            onClick={handleDownload}
+            onClick={() => handleDownload()}
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-panel hover:text-foreground transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
