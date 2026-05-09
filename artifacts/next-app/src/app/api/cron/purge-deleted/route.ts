@@ -26,11 +26,22 @@ export async function GET(request: NextRequest) {
     const expiredAttachments = await db
       .delete(attachmentsTable)
       .where(and(isNotNull(attachmentsTable.deletedAt), lte(attachmentsTable.deletedAt, cutoff)))
-      .returning({ id: attachmentsTable.id, storagePath: attachmentsTable.storagePath });
+      .returning({
+        id: attachmentsTable.id,
+        storagePath: attachmentsTable.storagePath,
+        masterPath: attachmentsTable.masterPath,
+        proxyPath: attachmentsTable.proxyPath,
+      });
+
+    // Collect all storage paths for each attachment:
+    // v1 rows have storagePath; v2 rows have masterPath + proxyPath.
+    const paths: string[] = expiredAttachments.flatMap(a => {
+      const p: Array<string | null | undefined> = [a.storagePath, a.masterPath, a.proxyPath];
+      return p.filter((x): x is string => x != null);
+    });
 
     // Remove the actual files from Supabase Storage in batches of 100
     let storageErrors = 0;
-    const paths = expiredAttachments.map(a => a.storagePath);
     for (let i = 0; i < paths.length; i += 100) {
       const batch = paths.slice(i, i + 100);
       const { error } = await supabaseAdmin.storage.from("note-attachments").remove(batch);

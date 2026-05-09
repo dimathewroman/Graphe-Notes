@@ -15,10 +15,16 @@ export interface AttachmentRecord {
   fileName: string;
   fileType: string;
   fileSize: number;
-  storagePath: string;
+  storagePath: string | null;    // v1 legacy; null for v2 rows
+  masterPath?: string | null;    // v2: path to master file in Supabase Storage
+  proxyPath?: string | null;     // v2: path to AVIF proxy in Supabase Storage
+  masterFormat?: string | null;  // 'jpg' | 'png'
+  masterUrl?: string | null;     // v2: signed URL for master (download)
+  width?: number | null;
+  height?: number | null;
   createdAt: string;
   deletedAt?: string | null;
-  url: string | null;
+  url: string | null;            // proxy signed URL for display (v2) or storagePath URL (v1)
   noteTitle?: string | null;
 }
 
@@ -110,7 +116,7 @@ export function useUploadAttachment(noteId: number | null) {
           fileName: file.name,
           fileType: file.type,
           fileSize: file.size,
-          storagePath: "",
+          storagePath: null,
           createdAt: new Date().toISOString(),
           url: objectUrl,
         };

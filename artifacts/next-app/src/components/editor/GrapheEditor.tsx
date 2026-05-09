@@ -63,7 +63,7 @@ export interface GrapheEditorProps {
    * The shell handles the upload and returns the resulting URL (if any).
    * GrapheEditor inserts the image into the editor if the file is an image type.
    */
-  onAttachFile?: (file: File) => Promise<{ url?: string } | undefined>;
+  onAttachFile?: (file: File) => Promise<{ url?: string; id?: string; masterPath?: string | null } | null | undefined>;
   /**
    * Called once the TipTap editor instance is ready (or null when destroyed).
    * Shells that need the editor ref (e.g. for undo/redo in the header on mobile)
@@ -219,7 +219,12 @@ export function GrapheEditor({
     if (!onAttachFile) return;
     const result = await onAttachFile(file);
     if (result?.url && isImageType(file.type)) {
-      editor?.chain().focus().setImage({ src: result.url, alt: file.name }).run();
+      editor?.chain().focus().setImage({
+        src: result.url,
+        alt: file.name,
+        ...(result.id ? { attachmentId: result.id } : {}),
+        ...(result.masterPath ? { masterPath: result.masterPath } : {}),
+      }).run();
     }
   }, [onAttachFile, editor]);
 
@@ -236,7 +241,12 @@ export function GrapheEditor({
       e.preventDefault();
       const result = await onAttachFile(file);
       if (result?.url) {
-        editor.chain().focus().setImage({ src: result.url, alt: file.name }).run();
+        editor.chain().focus().setImage({
+          src: result.url,
+          alt: file.name,
+          ...(result.id ? { attachmentId: result.id } : {}),
+          ...(result.masterPath ? { masterPath: result.masterPath } : {}),
+        }).run();
       }
     };
     document.addEventListener("paste", onPaste);

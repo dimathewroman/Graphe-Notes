@@ -36,7 +36,6 @@ export async function DELETE(
     const { attachmentId } = await params;
     if (!attachmentId) return NextResponse.json({ error: "Invalid attachment ID" }, { status: 400 });
 
-    // Find the attachment and verify ownership (only active attachments)
     const [attachment] = await db
       .select()
       .from(attachmentsTable)
@@ -51,27 +50,32 @@ export async function DELETE(
 
     if (!attachment) return NextResponse.json({ error: "Attachment not found" }, { status: 404 });
 
-    // Soft-delete — set deletedAt, leave Storage file in place for the 30-day window
     await db
       .update(attachmentsTable)
       .set({ deletedAt: new Date() })
       .where(and(eq(attachmentsTable.id, attachmentId), eq(attachmentsTable.userId, user.id)));
 
-    // For image attachments, strip the inline <img> node from the associated note content
+    // For image attachments, strip the inline <img> node from the note content.
+    // v2: the img src contains the proxyPath (not masterPath).
+    // v1: the img src contains storagePath.
     if (attachment.fileType.startsWith("image/")) {
-      const [note] = await db
-        .select({ id: notesTable.id, content: notesTable.content })
-        .from(notesTable)
-        .where(and(eq(notesTable.id, attachment.noteId), eq(notesTable.userId, user.id)))
-        .limit(1);
+      const pathToMatch = attachment.proxyPath ?? attachment.storagePath;
 
-      if (note?.content) {
-        const stripped = stripImageFromContent(note.content, attachment.storagePath);
-        if (stripped) {
-          await db
-            .update(notesTable)
-            .set({ content: stripped.content, contentText: stripped.contentText, updatedAt: new Date() })
-            .where(eq(notesTable.id, note.id));
+      if (pathToMatch) {
+        const [note] = await db
+          .select({ id: notesTable.id, content: notesTable.content })
+          .from(notesTable)
+          .where(and(eq(notesTable.id, attachment.noteId), eq(notesTable.userId, user.id)))
+          .limit(1);
+
+        if (note?.content) {
+          const stripped = stripImageFromContent(note.content, pathToMatch);
+          if (stripped) {
+            await db
+              .update(notesTable)
+              .set({ content: stripped.content, contentText: stripped.contentText, updatedAt: new Date() })
+              .where(eq(notesTable.id, note.id));
+          }
         }
       }
     }

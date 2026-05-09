@@ -49,7 +49,9 @@ function AttachmentCard({
     setDeleting(true);
     try {
       await deleteMut.mutateAsync({ id: attachment.id, noteId });
-      if (isImage) onDeleteImage?.(attachment.storagePath);
+      // v2 rows: proxyPath is embedded in the editor img src; v1 rows: storagePath
+      const pathForEditor = attachment.proxyPath ?? attachment.storagePath;
+      if (isImage && pathForEditor) onDeleteImage?.(pathForEditor);
       onDeleted();
     } catch {
       toast.error("Failed to delete attachment");

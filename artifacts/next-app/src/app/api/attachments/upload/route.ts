@@ -13,7 +13,6 @@ function sanitizeFilename(name: string): string {
 
 /** Returns true if the buffer's magic bytes match HEIC/HEIF. */
 function hasHeicMagicBytes(buf: Buffer): boolean {
-  // HEIC/HEIF: bytes 4–7 are "ftyp"; brand at 8–11 is heic/heis/hevx/mif1/msf1 etc.
   if (buf.length < 12) return false;
   const ftyp = buf.toString("ascii", 4, 8);
   if (ftyp !== "ftyp") return false;
@@ -28,35 +27,42 @@ function isHeicInput(mimeType: string, filename: string, buf: Buffer): boolean {
   return hasHeicMagicBytes(buf);
 }
 
+type MasterFormat = "jpg" | "png";
+
 /**
- * Convert any image buffer to AVIF.
- * Primary path: sharp's native HEIC support (requires libheif on Vercel).
- * Fallback: heic-convert → JPEG → sharp → AVIF (for environments without libheif).
+ * Produce the master buffer.
+ *
+ * JPEG / PNG → byte-identical (no re-encoding).
+ * HEIC / HEIF / GIF / WebP / AVIF → q=95 JPEG via sharp.
+ *   If sharp lacks libheif, fall back to heic-convert for HEIC/HEIF inputs.
  */
-async function toAvif(buf: Buffer, isHeic: boolean): Promise<Buffer> {
+async function toMaster(
+  buf: Buffer,
+  mimeType: string,
+  isHeic: boolean,
+): Promise<{ masterBuffer: Buffer; masterFormat: MasterFormat }> {
+  if (mimeType === "image/jpeg") return { masterBuffer: buf, masterFormat: "jpg" };
+  if (mimeType === "image/png") return { masterBuffer: buf, masterFormat: "png" };
+
   const sharp = (await import("sharp")).default;
 
   if (isHeic) {
     try {
-      return await sharp(buf).avif({ quality: 80 }).toBuffer();
-    } catch (err) {
-      // libheif not available — fall back to heic-convert
+      const masterBuffer = await sharp(buf).jpeg({ quality: 95 }).toBuffer();
+      return { masterBuffer, masterFormat: "jpg" };
+    } catch {
+      // libheif not available on this runtime — fall back to heic-convert
       const heicConvert = (await import("heic-convert")).default;
       const jpegBuf = Buffer.from(
-        await heicConvert({ buffer: buf, format: "JPEG", quality: 0.9 })
+        await heicConvert({ buffer: buf, format: "JPEG", quality: 0.95 })
       );
-      return sharp(jpegBuf).avif({ quality: 80 }).toBuffer();
+      return { masterBuffer: jpegBuf, masterFormat: "jpg" };
     }
   }
 
-  return sharp(buf).avif({ quality: 80 }).toBuffer();
-}
-
-/** Strip extension from sanitized filename and append .avif */
-function avifFilename(sanitized: string): string {
-  const dot = sanitized.lastIndexOf(".");
-  const base = dot !== -1 ? sanitized.slice(0, dot) : sanitized;
-  return `${base}.avif`;
+  // GIF, WebP, AVIF, or other — convert to JPEG master
+  const masterBuffer = await sharp(buf).jpeg({ quality: 95 }).toBuffer();
+  return { masterBuffer, masterFormat: "jpg" };
 }
 
 export async function POST(request: NextRequest) {
@@ -81,14 +87,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid note_id" }, { status: 400 });
   }
 
-  // MIME type validation (before DB queries — fast reject)
   const mimeType = file.type || "application/octet-stream";
   if (!ALLOWED_MIME_TYPES.has(mimeType)) {
     return NextResponse.json({ error: "This file type isn't supported." }, { status: 422 });
   }
 
   try {
-    // Verify note belongs to user
     const [note] = await db
       .select({ id: notesTable.id })
       .from(notesTable)
@@ -96,7 +100,6 @@ export async function POST(request: NextRequest) {
       .limit(1);
     if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
 
-    // Get user's storage tier
     const [userRow] = await db
       .select({ storageTier: usersTable.storageTier })
       .from(usersTable)
@@ -106,7 +109,7 @@ export async function POST(request: NextRequest) {
     const tier = ((userRow?.storageTier ?? "free") as StorageTier);
     const limits = TIER_LIMITS[tier] ?? TIER_LIMITS.free;
 
-    // Per-file size check against original upload size
+    // Size check against original upload size (pre-conversion)
     if (limits.maxFileSize !== Infinity && file.size > limits.maxFileSize) {
       return NextResponse.json(
         { error: `File exceeds the ${formatBytes(limits.maxFileSize)} limit` },
@@ -114,7 +117,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Total storage check against original upload size
     if (limits.maxTotalStorage !== null) {
       const [usageRow] = await db
         .select({ total: sum(attachmentsTable.fileSize) })
@@ -132,58 +134,137 @@ export async function POST(request: NextRequest) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    // Declare as Buffer<ArrayBufferLike> so the AVIF result (also ArrayBufferLike) is assignable back
-    let uploadBuffer: Buffer<ArrayBufferLike> = Buffer.from(arrayBuffer);
-    let uploadMimeType = mimeType;
-    let uploadFilename = sanitizeFilename(file.name);
+    const uploadBuffer = Buffer.from(arrayBuffer);
 
-    // Convert images to AVIF for canonical storage
-    if (IMAGE_MIME_TYPES.has(mimeType)) {
-      const heic = isHeicInput(mimeType, file.name, uploadBuffer);
-      try {
-        uploadBuffer = await toAvif(uploadBuffer, heic);
-        uploadMimeType = "image/avif";
-        uploadFilename = avifFilename(uploadFilename);
-      } catch (convErr) {
-        Sentry.captureException(convErr, { extra: { originalMimeType: mimeType } });
-        return NextResponse.json({ error: "Image conversion failed" }, { status: 422 });
+    // Non-image files: single-file upload, no master/proxy split
+    if (!IMAGE_MIME_TYPES.has(mimeType)) {
+      const sanitized = sanitizeFilename(file.name);
+      const fileId = randomUUID();
+      const storagePath = `${user.id}/${noteId}/${fileId}-${sanitized}`;
+
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from("note-attachments")
+        .upload(storagePath, uploadBuffer, { contentType: mimeType, upsert: false });
+
+      if (uploadError) {
+        Sentry.captureException(new Error(`[attachments] Storage upload error: ${uploadError.message}`));
+        return NextResponse.json({ error: "Upload failed" }, { status: 500 });
       }
+
+      const [attachment] = await db
+        .insert(attachmentsTable)
+        .values({
+          noteId,
+          userId: user.id,
+          fileName: file.name,
+          fileType: mimeType,
+          fileSize: uploadBuffer.length,
+          storagePath,
+        })
+        .returning();
+
+      const { data: signedData } = await supabaseAdmin.storage
+        .from("note-attachments")
+        .createSignedUrl(storagePath, 3600);
+
+      return NextResponse.json(
+        {
+          id: attachment.id,
+          noteId: attachment.noteId,
+          fileName: attachment.fileName,
+          fileType: attachment.fileType,
+          fileSize: attachment.fileSize,
+          storagePath: attachment.storagePath,
+          createdAt: attachment.createdAt,
+          url: signedData?.signedUrl ?? null,
+        },
+        { status: 201 }
+      );
     }
 
-    // Build storage path
+    // Image uploads — master + proxy strategy
+    const heic = isHeicInput(mimeType, file.name, uploadBuffer);
+
+    let masterBuffer: Buffer;
+    let masterFormat: MasterFormat;
+    try {
+      ({ masterBuffer, masterFormat } = await toMaster(uploadBuffer, mimeType, heic));
+    } catch (convErr) {
+      Sentry.captureException(convErr, { extra: { originalMimeType: mimeType } });
+      return NextResponse.json({ error: "Image conversion failed" }, { status: 422 });
+    }
+
+    // Generate AVIF proxy
+    const sharp = (await import("sharp")).default;
+    let proxyBuffer: Buffer;
+    let width: number | undefined;
+    let height: number | undefined;
+    try {
+      const sharpMaster = sharp(masterBuffer);
+      const [proxyBuf, metadata] = await Promise.all([
+        sharpMaster.clone().avif({ quality: 80 }).toBuffer(),
+        sharpMaster.clone().metadata(),
+      ]);
+      proxyBuffer = proxyBuf;
+      width = metadata.width;
+      height = metadata.height;
+    } catch (convErr) {
+      Sentry.captureException(convErr, { extra: { originalMimeType: mimeType } });
+      return NextResponse.json({ error: "Image conversion failed" }, { status: 422 });
+    }
+
     const fileId = randomUUID();
-    const storagePath = `${user.id}/${noteId}/${fileId}-${uploadFilename}`;
+    const masterPath = `${user.id}/${noteId}/${fileId}/master.${masterFormat}`;
+    const proxyPath = `${user.id}/${noteId}/${fileId}/proxy.avif`;
 
-    // Upload to Supabase Storage
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from("note-attachments")
-      .upload(storagePath, uploadBuffer, {
-        contentType: uploadMimeType,
-        upsert: false,
-      });
+    const masterMime = masterFormat === "png" ? "image/png" : "image/jpeg";
 
-    if (uploadError) {
-      Sentry.captureException(new Error(`[attachments] Storage upload error: ${uploadError.message}`));
+    // Upload master and proxy in parallel
+    const [masterUpload, proxyUpload] = await Promise.all([
+      supabaseAdmin.storage
+        .from("note-attachments")
+        .upload(masterPath, masterBuffer, { contentType: masterMime, upsert: false }),
+      supabaseAdmin.storage
+        .from("note-attachments")
+        .upload(proxyPath, proxyBuffer, { contentType: "image/avif", upsert: false }),
+    ]);
+
+    if (masterUpload.error || proxyUpload.error) {
+      const err = masterUpload.error ?? proxyUpload.error;
+      Sentry.captureException(new Error(`[attachments] Storage upload error: ${err!.message}`));
+      // Best-effort cleanup of whichever file succeeded
+      if (!masterUpload.error) await supabaseAdmin.storage.from("note-attachments").remove([masterPath]);
+      if (!proxyUpload.error) await supabaseAdmin.storage.from("note-attachments").remove([proxyPath]);
       return NextResponse.json({ error: "Upload failed" }, { status: 500 });
     }
 
-    // Create DB record using the converted size
+    const masterSizeBytes = masterBuffer.length;
+    const proxySizeBytes = proxyBuffer.length;
+
     const [attachment] = await db
       .insert(attachmentsTable)
       .values({
         noteId,
         userId: user.id,
         fileName: file.name,
-        fileType: uploadMimeType,
-        fileSize: uploadBuffer.length,
-        storagePath,
+        fileType: masterMime,
+        fileSize: masterSizeBytes + proxySizeBytes,
+        storagePath: null,
+        masterPath,
+        proxyPath,
+        masterFormat,
+        masterSizeBytes,
+        proxySizeBytes,
+        width: width ?? null,
+        height: height ?? null,
       })
       .returning();
 
-    // Generate signed URL (1 hour)
-    const { data: signedData } = await supabaseAdmin.storage
-      .from("note-attachments")
-      .createSignedUrl(storagePath, 3600);
+    // Generate signed URLs (1 hr) for proxy (display) and master (download)
+    const [proxySign, masterSign] = await Promise.all([
+      supabaseAdmin.storage.from("note-attachments").createSignedUrl(proxyPath, 3600),
+      supabaseAdmin.storage.from("note-attachments").createSignedUrl(masterPath, 3600),
+    ]);
 
     return NextResponse.json(
       {
@@ -192,9 +273,15 @@ export async function POST(request: NextRequest) {
         fileName: attachment.fileName,
         fileType: attachment.fileType,
         fileSize: attachment.fileSize,
-        storagePath: attachment.storagePath,
+        storagePath: null,
+        masterPath: attachment.masterPath,
+        proxyPath: attachment.proxyPath,
+        masterFormat: attachment.masterFormat,
+        width: attachment.width,
+        height: attachment.height,
         createdAt: attachment.createdAt,
-        url: signedData?.signedUrl ?? null,
+        url: proxySign.data?.signedUrl ?? null,       // proxy — for display
+        masterUrl: masterSign.data?.signedUrl ?? null, // master — for download
       },
       { status: 201 }
     );

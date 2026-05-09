@@ -37,13 +37,27 @@ export async function GET(
       ))
       .orderBy(asc(attachmentsTable.createdAt));
 
-    // Generate signed URLs for each attachment
     const withUrls = await Promise.all(
       attachments.map(async (a) => {
-        const { data } = await supabaseAdmin.storage
-          .from("note-attachments")
-          .createSignedUrl(a.storagePath, 3600);
-        return { ...a, url: data?.signedUrl ?? null };
+        // v2: use proxyPath for display; v1 fallback: storagePath
+        const displayPath = a.proxyPath ?? a.storagePath;
+        // v2: masterPath for download; v1 fallback: storagePath
+        const masterServePath = a.masterPath ?? a.storagePath;
+
+        const [displaySign, masterSign] = await Promise.all([
+          displayPath
+            ? supabaseAdmin.storage.from("note-attachments").createSignedUrl(displayPath, 3600)
+            : Promise.resolve({ data: null }),
+          masterServePath && masterServePath !== displayPath
+            ? supabaseAdmin.storage.from("note-attachments").createSignedUrl(masterServePath, 3600)
+            : Promise.resolve({ data: null }),
+        ]);
+
+        return {
+          ...a,
+          url: displaySign.data?.signedUrl ?? null,
+          masterUrl: masterSign.data?.signedUrl ?? (displaySign.data?.signedUrl ?? null),
+        };
       })
     );
 

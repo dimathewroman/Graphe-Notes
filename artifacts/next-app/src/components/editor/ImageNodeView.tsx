@@ -17,6 +17,7 @@ function isUploadedSrc(src: string): boolean {
 function ImageToolbar({
   src,
   alt,
+  attachmentId,
   onAltChange,
   onDelete,
   onClose,
@@ -24,6 +25,7 @@ function ImageToolbar({
 }: {
   src: string;
   alt: string;
+  attachmentId: string | null;
   onAltChange: (alt: string) => void;
   onDelete: () => void;
   onClose: () => void;
@@ -64,15 +66,17 @@ function ImageToolbar({
   const isUploaded = isUploadedSrc(src);
   const isSupabase = isSupabaseSrc(src);
 
-  const handleDownload = async () => {
-    // For uploaded Supabase images, route through download endpoint for JPEG conversion.
-    // For other URLs, open directly.
+  const handleDownload = () => {
+    // v2: use attachment ID for DB-backed download with original filename
+    if (attachmentId) {
+      window.open(`/api/attachments/download?id=${encodeURIComponent(attachmentId)}`, "_blank", "noopener,noreferrer");
+      return;
+    }
+    // v1 legacy: extract storagePath from signed URL, serve file directly
     if (isSupabase) {
-      // Extract the storage path suffix after /object/sign/ or /object/public/
       const match = src.match(/\/object\/(?:sign|public)\/([^?]+)/);
       if (match) {
-        const storagePath = match[1];
-        window.open(`/api/attachments/download?path=${encodeURIComponent(storagePath)}`, "_blank", "noopener,noreferrer");
+        window.open(`/api/attachments/download?path=${encodeURIComponent(match[1])}`, "_blank", "noopener,noreferrer");
         return;
       }
     }
@@ -177,6 +181,7 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
 
   const src = node.attrs.src as string ?? "";
   const alt = node.attrs.alt as string ?? "";
+  const attachmentId = node.attrs.attachmentId as string | null ?? null;
 
   // Show toolbar when selected (keyboard or click)
   useEffect(() => {
@@ -252,6 +257,7 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
         <ImageToolbar
           src={src}
           alt={alt}
+          attachmentId={attachmentId}
           onAltChange={(newAlt) => updateAttributes({ alt: newAlt })}
           onDelete={() => { setShowToolbar(false); deleteNode(); }}
           onClose={() => setShowToolbar(false)}
