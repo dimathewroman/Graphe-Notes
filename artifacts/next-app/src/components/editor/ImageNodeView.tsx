@@ -3,13 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
-import { ExternalLink, Trash2, Link2, Upload, Check, X, Download, ChevronDown } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { ExternalLink, Trash2, Link2, Upload, Check, X, Download } from "lucide-react";
 import NextImage from "next/image";
 
 function isSupabaseSrc(src: string): boolean {
@@ -23,6 +17,8 @@ function isUploadedSrc(src: string): boolean {
 function ImageToolbar({
   src,
   alt,
+  attachmentId,
+  downloadUrl,
   onAltChange,
   onDelete,
   onClose,
@@ -30,6 +26,8 @@ function ImageToolbar({
 }: {
   src: string;
   alt: string;
+  attachmentId: string | null;
+  downloadUrl: string | null;
   onAltChange: (alt: string) => void;
   onDelete: () => void;
   onClose: () => void;
@@ -70,16 +68,26 @@ function ImageToolbar({
   const isUploaded = isUploadedSrc(src);
   const isSupabase = isSupabaseSrc(src);
 
-  const handleDownload = (format: "avif" | "jpeg" = "avif") => {
+  const handleDownload = () => {
+    // Demo mode: downloadUrl holds the original file (e.g. HEIC); use it if present.
+    // Also covers blob src (plain JPEG/PNG demo uploads) and SVG placeholder fallback.
+    if (downloadUrl || src.startsWith("blob:") || src.startsWith("data:")) {
+      const a = document.createElement("a");
+      a.href = downloadUrl ?? src;
+      a.download = alt || "image";
+      a.click();
+      return;
+    }
+    // v2: use attachment ID for DB-backed download with original filename
+    if (attachmentId) {
+      window.open(`/api/attachments/download?id=${encodeURIComponent(attachmentId)}`, "_blank", "noopener,noreferrer");
+      return;
+    }
+    // v1 legacy: extract storagePath from signed URL, serve file directly
     if (isSupabase) {
       const match = src.match(/\/object\/(?:sign|public)\/([^?]+)/);
       if (match) {
-        const storagePath = match[1];
-        window.open(
-          `/api/attachments/download?path=${encodeURIComponent(storagePath)}&format=${format}`,
-          "_blank",
-          "noopener,noreferrer",
-        );
+        window.open(`/api/attachments/download?path=${encodeURIComponent(match[1])}`, "_blank", "noopener,noreferrer");
         return;
       }
     }
@@ -154,28 +162,9 @@ function ImageToolbar({
           <Link2 className="w-3.5 h-3.5" />
           Copy URL
         </button>
-        {isSupabase && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-panel hover:text-foreground transition-colors">
-                <Download className="w-3.5 h-3.5" />
-                Download
-                <ChevronDown className="w-3 h-3 opacity-60" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[172px]">
-              <DropdownMenuItem className="text-xs" onClick={() => handleDownload("avif")}>
-                AVIF <span className="ml-auto text-muted-foreground">best quality</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem className="text-xs" onClick={() => handleDownload("jpeg")}>
-                JPEG <span className="ml-auto text-muted-foreground">most compatible</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-        {isUploaded && !isSupabase && (
+        {isUploaded && (
           <button
-            onClick={() => handleDownload()}
+            onClick={handleDownload}
             className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-panel hover:text-foreground transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
@@ -203,6 +192,8 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
 
   const src = node.attrs.src as string ?? "";
   const alt = node.attrs.alt as string ?? "";
+  const attachmentId = node.attrs.attachmentId as string | null ?? null;
+  const downloadUrl = node.attrs.downloadUrl as string | null ?? null;
 
   // Show toolbar when selected (keyboard or click)
   useEffect(() => {
@@ -278,6 +269,8 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
         <ImageToolbar
           src={src}
           alt={alt}
+          attachmentId={attachmentId}
+          downloadUrl={downloadUrl}
           onAltChange={(newAlt) => updateAttributes({ alt: newAlt })}
           onDelete={() => { setShowToolbar(false); deleteNode(); }}
           onClose={() => setShowToolbar(false)}

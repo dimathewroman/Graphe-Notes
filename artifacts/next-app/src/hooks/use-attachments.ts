@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { getGetNoteQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
-import { HEIC_MIME_TYPES, IMAGE_MIME_TYPES, formatBytes } from "@/lib/attachment-limits";
+import { IMAGE_MIME_TYPES, BROWSER_RENDERABLE_IMAGE_TYPES, HEIC_MIME_TYPES, formatBytes } from "@/lib/attachment-limits";
 import { useDemoMode } from "@/lib/demo-context";
 import { useAppStore } from "@/store";
 
@@ -15,10 +15,16 @@ export interface AttachmentRecord {
   fileName: string;
   fileType: string;
   fileSize: number;
-  storagePath: string;
+  storagePath: string | null;    // v1 legacy; null for v2 rows
+  masterPath?: string | null;    // v2: path to master file in Supabase Storage
+  proxyPath?: string | null;     // v2: path to AVIF proxy in Supabase Storage
+  masterFormat?: string | null;  // 'jpg' | 'png'
+  masterUrl?: string | null;     // v2: signed URL for master (download)
+  width?: number | null;
+  height?: number | null;
   createdAt: string;
   deletedAt?: string | null;
-  url: string | null;
+  url: string | null;            // proxy signed URL for display (v2) or storagePath URL (v1)
   noteTitle?: string | null;
 }
 
@@ -161,19 +167,28 @@ export function useUploadAttachment(noteId: number | null) {
       if (isDemo) {
         // Demo: create a displayable URL for the file.
         // HEIC/HEIF cannot be decoded by Chrome as a raw blob URL, so convert
-        // via Canvas first (works in Safari); fall back to an SVG placeholder.
-        const objectUrl = isHeicFile(file)
-          ? await heicToPreviewUrl(file)
-          : URL.createObjectURL(file);
+        // via the 3-tier heicToPreviewUrl pipeline. We also keep a blob URL of
+        // the original so the Download button serves the real HEIC file.
+        let objectUrl: string;
+        let fileType = file.type;
+        let masterUrl: string | undefined;
+        if (isHeicFile(file)) {
+          masterUrl = URL.createObjectURL(file); // original HEIC for download
+          objectUrl = await heicToPreviewUrl(file); // JPEG or SVG for display
+          fileType = "image/jpeg"; // heicToPreviewUrl always returns something renderable
+        } else {
+          objectUrl = URL.createObjectURL(file);
+        }
         const record: AttachmentRecord = {
           id: `demo-${demoIdCounter++}`,
           noteId,
           fileName: file.name,
-          fileType: file.type,
+          fileType,
           fileSize: file.size,
-          storagePath: "",
+          storagePath: null,
           createdAt: new Date().toISOString(),
           url: objectUrl,
+          masterUrl,
         };
         demoAttachments.push(record);
         queryClient.invalidateQueries({ queryKey: ["/api/attachments"] });

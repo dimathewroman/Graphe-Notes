@@ -42,7 +42,7 @@ import { MobileSelectionMenu } from "./MobileSelectionMenu";
 import { AiStatusIndicator } from "./AiStatusIndicator";
 import { useAiAction } from "@/hooks/use-ai-action";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
-import { IMAGE_MIME_TYPES } from "@/lib/attachment-limits";
+import { IMAGE_MIME_TYPES, BROWSER_RENDERABLE_IMAGE_TYPES } from "@/lib/attachment-limits";
 import { isImageType } from "@/hooks/use-attachments";
 
 export interface GrapheEditorProps {
@@ -63,7 +63,7 @@ export interface GrapheEditorProps {
    * The shell handles the upload and returns the resulting URL (if any).
    * GrapheEditor inserts the image into the editor if the file is an image type.
    */
-  onAttachFile?: (file: File) => Promise<{ url?: string } | undefined>;
+  onAttachFile?: (file: File) => Promise<{ url?: string; id?: string; masterPath?: string | null; fileType?: string; downloadUrl?: string } | null | undefined>;
   /**
    * Called once the TipTap editor instance is ready (or null when destroyed).
    * Shells that need the editor ref (e.g. for undo/redo in the header on mobile)
@@ -218,8 +218,22 @@ export function GrapheEditor({
   const handleAttachFile = useCallback(async (file: File) => {
     if (!onAttachFile) return;
     const result = await onAttachFile(file);
-    if (result?.url && isImageType(file.type)) {
-      editor?.chain().focus().setImage({ src: result.url, alt: file.name }).run();
+    // Use the effective type returned by the shell (e.g. "image/jpeg" after demo HEIC→JPEG
+    // conversion) rather than the original file.type — the shell knows what format the URL
+    // actually contains. Fall back to file.type for real (non-blob) uploads.
+    const effectiveType = result?.fileType ?? file.type;
+    const isBlobUrl = result?.url?.startsWith("blob:");
+    const canEmbed = isBlobUrl
+      ? BROWSER_RENDERABLE_IMAGE_TYPES.has(effectiveType)
+      : isImageType(effectiveType);
+    if (result?.url && canEmbed) {
+      editor?.chain().focus().setImage({
+        src: result.url,
+        alt: file.name,
+        ...(result.id ? { attachmentId: result.id } : {}),
+        ...(result.masterPath ? { masterPath: result.masterPath } : {}),
+        ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
+      }).run();
     }
   }, [onAttachFile, editor]);
 
@@ -236,7 +250,13 @@ export function GrapheEditor({
       e.preventDefault();
       const result = await onAttachFile(file);
       if (result?.url) {
-        editor.chain().focus().setImage({ src: result.url, alt: file.name }).run();
+        editor.chain().focus().setImage({
+          src: result.url,
+          alt: file.name,
+          ...(result.id ? { attachmentId: result.id } : {}),
+          ...(result.masterPath ? { masterPath: result.masterPath } : {}),
+          ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
+        }).run();
       }
     };
     document.addEventListener("paste", onPaste);

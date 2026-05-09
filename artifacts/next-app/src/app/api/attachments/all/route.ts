@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
         fileType: attachmentsTable.fileType,
         fileSize: attachmentsTable.fileSize,
         storagePath: attachmentsTable.storagePath,
+        masterPath: attachmentsTable.masterPath,
+        proxyPath: attachmentsTable.proxyPath,
+        masterFormat: attachmentsTable.masterFormat,
         createdAt: attachmentsTable.createdAt,
         noteTitle: notesTable.title,
       })
@@ -27,14 +30,12 @@ export async function GET(request: NextRequest) {
         and(
           eq(attachmentsTable.userId, user.id),
           isNull(attachmentsTable.deletedAt),
-          // Exclude attachments from soft-deleted notes
           isNull(notesTable.deletedAt),
-          // For images: only show if the storage path is actually embedded in the note content.
-          // This filters out orphaned uploads (deleted from editor, old test data, duplicates).
-          // Non-image files (PDFs, etc.) are kept as long as the note is active.
+          // For images: only show if the proxy (v2) or storage (v1) path is
+          // embedded in the note content. Non-image files are always shown.
           or(
             sql`${attachmentsTable.fileType} NOT LIKE 'image/%'`,
-            sql`${notesTable.content} LIKE '%' || ${attachmentsTable.storagePath} || '%'`
+            sql`${notesTable.content} LIKE '%' || COALESCE(${attachmentsTable.proxyPath}, ${attachmentsTable.storagePath}) || '%'`
           )
         )
       )
@@ -42,9 +43,11 @@ export async function GET(request: NextRequest) {
 
     const withUrls = await Promise.all(
       rows.map(async (row) => {
-        const { data } = await supabaseAdmin.storage
-          .from("note-attachments")
-          .createSignedUrl(row.storagePath, 3600);
+        // v2: proxy for display; v1: storagePath
+        const displayPath = row.proxyPath ?? row.storagePath;
+        const { data } = displayPath
+          ? await supabaseAdmin.storage.from("note-attachments").createSignedUrl(displayPath, 3600)
+          : { data: null };
         return { ...row, url: data?.signedUrl ?? null };
       })
     );
