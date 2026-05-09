@@ -67,6 +67,14 @@ function ImageToolbar({
   const isSupabase = isSupabaseSrc(src);
 
   const handleDownload = () => {
+    // Demo mode: blob URL — trigger browser download directly, no API needed
+    if (src.startsWith("blob:")) {
+      const a = document.createElement("a");
+      a.href = src;
+      a.download = alt || "image";
+      a.click();
+      return;
+    }
     // v2: use attachment ID for DB-backed download with original filename
     if (attachmentId) {
       window.open(`/api/attachments/download?id=${encodeURIComponent(attachmentId)}`, "_blank", "noopener,noreferrer");
