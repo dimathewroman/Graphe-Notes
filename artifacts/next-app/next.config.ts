@@ -25,6 +25,15 @@ const cspDirectives = [
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@workspace/api-client-react", "@workspace/api-zod"],
+  images: {
+    formats: ["image/avif", "image/webp"],
+    remotePatterns: [
+      // Supabase Storage signed and public URLs
+      { protocol: "https", hostname: "*.supabase.co", pathname: "/storage/**" },
+      // Google OAuth profile images
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
+    ],
+  },
   async headers() {
     return [
       {

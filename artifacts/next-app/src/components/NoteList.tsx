@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from "react";
+import NextImage from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAnimationConfig } from "@/hooks/use-motion";
 import {
@@ -918,8 +919,15 @@ const NoteGalleryItem = memo(function NoteGalleryItem({
       )}
     >
       {img && (
-        <div className="w-full h-24 overflow-hidden bg-panel">
-          <img src={img} alt="" className="w-full h-full object-cover" />
+        <div className="relative w-full h-24 overflow-hidden bg-panel">
+          <NextImage
+            src={img}
+            alt=""
+            fill
+            sizes="(max-width: 768px) 50vw, 33vw"
+            className="object-cover"
+            unoptimized={!img.includes("supabase.co") && !img.includes("supabase.in")}
+          />
         </div>
       )}
       <div className="p-2.5 flex flex-col">

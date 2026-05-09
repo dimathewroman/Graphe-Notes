@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import NextImage from "next/image";
 import {
   X, Key, Cloud, Download, Server, Palette, Sun, Moon, Monitor,
   AlertCircle, CheckCircle2, Shield, ShieldCheck, KeyRound, LogOut, Zap, Eye, EyeOff,
@@ -601,7 +602,7 @@ export function SettingsModal() {
                 <div className="p-3 border-t border-panel-border mt-auto">
                   <div className="flex items-center gap-2">
                     {user.profileImageUrl ? (
-                      <img src={user.profileImageUrl} alt="" referrerPolicy="no-referrer" className="w-7 h-7 rounded-full shrink-0" />
+                      <NextImage src={user.profileImageUrl} alt="" width={28} height={28} referrerPolicy="no-referrer" className="rounded-full shrink-0" />
                     ) : (
                       <div className="w-7 h-7 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-medium shrink-0">
                         {(user.firstName || user.email || "U")[0].toUpperCase()}
@@ -1357,7 +1358,7 @@ export function SettingsModal() {
                   {user && (
                     <div className="p-4 rounded-xl bg-background border border-panel-border flex items-center gap-3">
                       {user.profileImageUrl ? (
-                        <img src={user.profileImageUrl} alt="" referrerPolicy="no-referrer" className="w-9 h-9 rounded-full shrink-0" />
+                        <NextImage src={user.profileImageUrl} alt="" width={36} height={36} referrerPolicy="no-referrer" className="rounded-full shrink-0" />
                       ) : (
                         <div className="w-9 h-9 rounded-full bg-primary/20 text-primary flex items-center justify-center text-sm font-medium shrink-0">
                           {(user.firstName || user.email || "U")[0].toUpperCase()}
