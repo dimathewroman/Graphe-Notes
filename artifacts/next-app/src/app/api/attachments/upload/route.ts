@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
 
       const { data: signedData } = await supabaseAdmin.storage
         .from("note-attachments")
-        .createSignedUrl(storagePath, 3600);
+        .createSignedUrl(storagePath, 604800);
 
       return NextResponse.json(
         {
@@ -310,8 +310,8 @@ export async function POST(request: NextRequest) {
           .returning();
 
         const [proxySign, masterSign] = await Promise.all([
-          supabaseAdmin.storage.from("note-attachments").createSignedUrl(proxyPath, 3600),
-          supabaseAdmin.storage.from("note-attachments").createSignedUrl(masterPath, 3600),
+          supabaseAdmin.storage.from("note-attachments").createSignedUrl(proxyPath, 604800),
+          supabaseAdmin.storage.from("note-attachments").createSignedUrl(masterPath, 604800),
         ]);
 
         return NextResponse.json(
@@ -457,8 +457,8 @@ export async function POST(request: NextRequest) {
 
     // Generate signed URLs (1 hr) for proxy (display) and master (download)
     const [proxySign, masterSign] = await Promise.all([
-      supabaseAdmin.storage.from("note-attachments").createSignedUrl(resolvedProxyPath, 3600),
-      supabaseAdmin.storage.from("note-attachments").createSignedUrl(masterPath, 3600),
+      supabaseAdmin.storage.from("note-attachments").createSignedUrl(resolvedProxyPath, 604800),
+      supabaseAdmin.storage.from("note-attachments").createSignedUrl(masterPath, 604800),
     ]);
 
     return NextResponse.json(
