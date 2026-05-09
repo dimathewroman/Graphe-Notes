@@ -547,3 +547,326 @@ Each item in the combined backlog is explicitly traced to a production-safe sour
 | Mentions | `@tiptap/extension-mention` (free TipTap, MIT) + original suggestion UI | No |
 
 **Confirmation:** No TipTap Pro extension code (`@tiptap-pro/*`) will enter `artifacts/next-app/src/` or any production-deployed path. The Pro packages installed at `study/tiptap-pro-trial/node_modules/` are for study reference only and will be deleted with this branch after the report is reviewed.
+
+---
+
+## Session 3 Supplement: Remaining Pro Extensions
+
+**Date:** 2026-05-09 (same branch, `chore/tiptap-pro-novel-audit`)  
+**Packages studied:** `extension-ai`, `extension-comments`, `extension-details` (+content +summary), `extension-node-range`, `extension-unique-id`, `extension-file-handler`, `extension-invisible-characters`, `extension-table-of-contents`  
+**Inaccessible (403, higher plan required):** `extension-collaboration`, `extension-history`  
+**Method:** compiled ESM/CJS source extracted and analyzed via Node.js parsing
+
+---
+
+### S3-Critical Finding: Three Pro Packages Are Now Free
+
+Three packages deprecated themselves during installation, pointing to free `@tiptap/*` equivalents:
+
+| Was Pro | Now Free | Notes |
+|---|---|---|
+| `@tiptap-pro/extension-file-handler` | `@tiptap/extension-file-handler` | Full source preserved, same API |
+| `@tiptap-pro/extension-unique-id` | `@tiptap/extension-unique-id` | Full source preserved, same API |
+| `@tiptap-pro/extension-details-content` | `@tiptap/extension-details-content` | Companion to details |
+
+`@tiptap-pro/extension-details` and `@tiptap-pro/extension-details-summary` did NOT emit deprecation warnings — their status is ambiguous, but the content/summary sub-packages being free suggests the full details kit may follow. The source for all three parts was readable; implementation is license-clear regardless.
+
+---
+
+### S3-Gap 1: AI Extension (`@tiptap-pro/extension-ai` v3.7.4)
+
+**What Pro does:**
+
+Full command surface extracted from compiled source:
+
+| Command | Action |
+|---|---|
+| `aiTextPrompt` | Custom text instruction |
+| `aiComplete` | Continue writing (`append: true`) |
+| `aiAdjustTone` | Tone adjustment with language param |
+| `aiBloggify` | Reformat as blog post |
+| `aiDeEmojify` / `aiEmojify` | Remove/add emoji |
+| `aiExtend` | Extend selection |
+| `aiFixSpellingAndGrammar` | Grammar fix |
+| `aiKeypoints` | Extract keypoints |
+| `aiRephrase` / `aiRestructure` | Rephrase/restructure |
+| `aiShorten` / `aiSimplify` | Shorten/simplify |
+| `aiSummarize` / `aiTldr` | Summary variants |
+| `aiTranslate` | Translate with `language` param |
+| `aiImagePrompt` / `aiImageResolver` | Image generation |
+| `aiAccept` | Insert/replace selection with generated content |
+| `aiReject` | Restore `initialContent` (with `type: "reset"`) |
+| `aiRegenerate` | Re-run last command |
+| `streamContent` | Lower-level streaming insert |
+
+**State machine:** `editor.storage.ai.state` — three values: `"idle"`, `"loading"`, `"error"`.
+
+**Two distinct decoration layers:**
+1. `aiDecoration` extension — `Decoration.inline(from, to, { class: "tiptap-ai-insertion" })` — marks the OUTPUT range (where content will be inserted/replaced). This is not the selection highlight; it's a preview marker on the target area.
+2. The AI highlight on the selected INPUT is a separate concern (Novel's `AIHighlight` pattern from S2).
+
+**Backend:** Calls TipTap Cloud at `fetch('/text/{action}?stream=1', { headers: { 'X-App-Id', 'Authorization: Bearer' } })`. Also `/image/prompt` for image generation. Completely incompatible with our BYOK Gemini stack — the extension requires TipTap Cloud backend.
+
+**Autocompletion:** `autocompletion: false` by default. When enabled: Tab-triggered (configurable), `inputLength: 4000` chars sent as context, `modelName` configurable.
+
+**What we do:** Our `AiSelectionMenu` + `use-ai-action.ts` + BYOK Gemini covers the same command surface. We have more AI actions than the Pro extension's default set.
+
+**Gap analysis:**
+1. **`aiDecoration` OUTPUT range marker** — we have no decoration on the target insertion range. When AI writes content, users can't see where it will land. Minor UX gap; easy to add (same 10-line Decoration.inline pattern as S2's `AIHighlight`).
+2. **Autocompletion** — Tab-triggered inline completion is absent from our implementation. Medium effort; requires a separate streaming plugin.
+3. **`aiImagePrompt`** — image generation from AI is not in our current scope.
+4. **`aiRegenerate`** — we have no "try again with same command" UX. Low effort: store last command + options in `editor.storage`.
+5. **`aiTranslate`** — we don't expose translate as a named command. It's a gap worth adding to the AI action menu.
+
+**Roadmap context:**
+- Yjs: `aiDecoration` is a view-only decoration; zero Yjs impact. `streamContent` dispatches standard transactions.
+- NTS: All text AI commands are universal across modalities. Image generation is modality-specific.
+
+**Priority:** nice-to-have-anytime (aiDecoration gap is Low, autocompletion is Medium)  
+**Implementation source:** All original work — cannot use Pro's extension, backend is incompatible
+
+---
+
+### S3-Gap 2: Comments (`@tiptap-pro/extension-comments` v3.7.4)
+
+**What Pro does:**
+
+Two comment thread types:
+- `inlineThread` — a **mark** applied to selected text, storing `data-thread-id`. Thread content lives in the provider.
+- `blockThread` — a **node** wrapping an entire block, also `data-thread-id`.
+
+**Thread data model** (extracted from compiled source):
+```
+{
+  id: string,
+  type: string,          // thread type
+  userId: string,
+  createdAt: string,
+  from: number,          // doc position at creation
+  to: number,
+  text: string,          // text content of marked range
+  isNode: boolean,
+  userMetadata: any,
+  markChanges: any,
+  ranges: SelectionRange[],
+  nodeRanges: any,
+  inlineRanges: any
+}
+```
+
+**Provider interface** (required): `provider.createThread({ data })`, `provider.addComment(threadId, { content, data })`. TipTap Cloud's Hocuspocus provider satisfies this. Custom provider must implement the same interface.
+
+**CSS states:** `tiptap-thread`, `tiptap-thread--block`, `tiptap-thread--hover`, `tiptap-thread--inline`, `tiptap-thread--resolved`, `tiptap-thread--selected`, `tiptap-thread--unresolved`.
+
+**Key observation:** The document only stores `data-thread-id`. All thread content (comment text, replies, author, timestamps) is in the external provider. This is the correct architecture — document doesn't bloat with comment data, and comments survive document rewrites.
+
+**Exported utilities:** `findThreadsInDocument`, `findThreadsInRange`, `findThreadByMetadata`, `softDeleteThread`, `restoreThread`, `subscribeToThreads`, `createThreadAt`, `cleanupThreads`, `deleteUnreferencedThreads`.
+
+**What we do:** Not implemented. No inline comment threads in the editor.
+
+**Gap:** Complete gap. Comments are a significant Phase 3+ feature.
+
+**Roadmap context:**
+- Yjs: `data-thread-id` is a string attribute — primitive, Yjs-safe. Thread position drifts under collaborative editing; Pro's `markChanges` field appears to track this. Build carefully.
+- Capacitor: Thread popover on touch selection works the same as mobile selection menus.
+- NTS: Relevant primarily for Notion-style and collaboration modalities.
+
+**Priority:** nice-to-have-anytime (Phase 3+)  
+**Effort:** High (requires a provider, thread storage in DB, UI for comment panels)  
+**Implementation source:** Cannot use Pro code. Architecture pattern (mark stores ID, content in provider) is the correct design to follow. Our Supabase DB would serve as the provider backend.
+
+---
+
+### S3-Gap 3: Details / Toggle Blocks (`@tiptap-pro/extension-details` v2.21.5)
+
+**What Pro does:**
+
+Three nodes: `details` (container), `detailsSummary` (always-visible title, `content: "text*"`, `isolating: true`), `detailsContent` (collapsible body, `content: "block+"`).
+
+- `open` attribute on `details` node stores collapsed/expanded state (boolean, default `false`). `persist: true` option makes it survive document re-renders.
+- NodeView renders as `<div data-type="details">` + `<button>` toggle + `<div>` content. The `hidden` attribute on `detailsContent` toggles visibility.
+- `setDetails()` command — wraps the current selection in a details block.
+- Keyboard: `Backspace` at start of summary calls `unsetDetails()` (removes the toggle block, restores content as plain blocks). `Enter` in summary likely moves focus to content.
+- Nesting: Not explicitly blocked by the schema (`content: "block+"` allows nested details).
+
+**Open-source status:** `detailsContent` and `detailsSummary` deprecated to `@tiptap/*`; `details` itself unclear — but source was fully readable and the pattern is straightforward to reimplement.
+
+**What we do:** Not implemented. No collapsible/toggle blocks.
+
+**Gap:** Complete gap. Toggle blocks (Notion-style expandable sections) are a common note-taking pattern.
+
+**Roadmap context:**
+- Yjs: `open` boolean attribute is a JSON primitive. Yjs-safe, but note: in a collaborative doc, all peers see the same collapsed/expanded state (it's in the document). This may be surprising — user A collapsing a block collapses it for user B too. Consider making `open` a local-only attribute (not synced via Yjs) using a custom view-local plugin state instead of a node attribute.
+- Excalidraw: Canvas blocks inside detailsContent would work but resize behavior may be unexpected when collapsed.
+- NTS: Toggle blocks are Notion-style modality. Hide `setDetails()` from other modalities' slash menus.
+
+**Priority:** should-have-before-Yjs (adds before schema freezes; `open` attr decision affects Yjs sync design)  
+**Effort:** Medium (3 nodes, custom NodeView for the toggle button, keyboard shortcuts)  
+**Implementation source:** `@tiptap/extension-details-content` and `@tiptap/extension-details-summary` are free. `details` itself: reimplement from the Pro pattern (source is clear). Or wait for TipTap to open-source the container node. Suggested branch: `feat/toggle-blocks`
+
+---
+
+### S3-Gap 4: Node Range Selection (`@tiptap-pro/extension-node-range` v2.21.5)
+
+**What Pro does:**
+
+`NodeRangeSelection` — a custom ProseMirror `Selection` subclass enabling multi-block selection:
+
+- `Shift-ArrowUp` / `Shift-ArrowDown` — expands selection to include whole blocks (not just characters within blocks).
+- `Mod-A` — selects all blocks at the shared depth.
+- Mouse: `Mod+drag` triggers NodeRangeSelection.
+- Visual: `ProseMirror-selectednoderange` class on selected block nodes (via `Decoration.node`).
+- `extendForwards()` / `extendBackwards()` — programmatic expansion.
+- `depth` option — controls which ancestor level the selection operates at.
+
+**How drag handle uses it:** The Pro `DragHandle` calls `NodeRangeSelection.create()` on `dragstart` to select the entire block being dragged (not just the cursor position), producing a visually complete block-level drag.
+
+**What we do:** Standard ProseMirror `TextSelection` / `NodeSelection` only. No multi-block selection.
+
+**Gap:** We can't select + operate on multiple blocks at once. This blocks bulk operations (delete 3 blocks, indent 3 blocks, etc.).
+
+**Roadmap context:**
+- Yjs: `NodeRangeSelection` produces standard `$from`/`$to` selection — any commands applied to it produce standard transactions. Yjs-safe.
+- Drag handle: The MIT `tiptap-extension-global-drag-handle` does NOT use `NodeRangeSelection`. This is one real capability gap vs Pro's drag handle. Single-block drag still works; multi-block drag requires this extension.
+
+**Priority:** nice-to-have-anytime  
+**Effort:** Low (the source is fully readable; straightforward to adapt as original work since it's pure ProseMirror Selection subclass with no TipTap-specific license entanglement in concept — but DO NOT copy Pro code; reimplement from the pattern)  
+**Implementation source:** Original work following the `NodeRangeSelection` pattern. Suggested branch: `feat/node-range-selection`
+
+---
+
+### S3-Gap 5: Unique ID (`@tiptap-pro/extension-unique-id` v2.21.5) — Now Free
+
+**What it does:**
+
+Adds a `data-id` attribute (configurable `attributeName`) to specified node types. IDs generated via `uuid.v4()`.
+
+**Critical Yjs handling** (from compiled source):
+```js
+const d = t.find(t => t.getMeta('y-sync$'));
+if (d) return; // skip ID generation for remote Yjs transactions
+```
+Remote Yjs transactions are not processed for new ID generation — only local transactions trigger `appendTransaction` for ID assignment. This prevents two peers from assigning different IDs to the same node on arrival.
+
+**Paste/drop deduplication:** On paste or drop, all existing IDs in the pasted content are stripped and regenerated. Prevents ID collisions when copying blocks between notes.
+
+**Collaboration sync:** On `onCreate`, if a collaboration provider is present, waits for `provider.on('synced')` before assigning IDs — prevents race condition where both peers assign IDs to same newly-created nodes before initial sync.
+
+**What we do:** No stable node IDs.
+
+**Gap:** Without stable node IDs, we cannot implement block-level deep links (link directly to a heading or block), version diffing at the block level, or stable comment thread anchoring (the Comments extension builds on node IDs for block thread anchoring).
+
+**Roadmap context:**
+- Yjs: This extension is Yjs-aware by design. The `y-sync$` check is exactly correct. Use `@tiptap/extension-unique-id` (free) when implementing.
+- Comments: Block threads (`blockThread`) use the wrapping node's position for anchoring. UniqueID would make anchors stable under document mutations.
+
+**Priority:** should-have-before-Yjs (adding post-Yjs requires careful migration of existing documents that have no IDs)  
+**Effort:** Low (single `pnpm add @tiptap/extension-unique-id` + config specifying which node types)  
+**Implementation source:** `@tiptap/extension-unique-id` (free, MIT). Suggested branch: bundle into `feat/image-upload-node` or a dedicated `feat/stable-node-ids`
+
+---
+
+### S3-Gap 6: File Handler (`@tiptap-pro/extension-file-handler` v2.21.5) — Now Free
+
+**What it does:**
+
+A ProseMirror plugin that intercepts paste and drop events containing files and routes them to callbacks:
+
+```ts
+FileHandler.configure({
+  allowedMimeTypes: ['image/png', 'image/jpeg', 'application/pdf'],
+  onPaste: (editor, files, htmlContent) => { /* upload files */ },
+  onDrop: (editor, files, pos) => { /* insert at pos */ },
+})
+```
+
+Compared to Novel's `handleImageDrop` / `handleImagePaste` (which are standalone functions you wire up manually), `FileHandler` is a proper TipTap Extension that owns the `handleDrop` / `handlePaste` editorProps — no manual wiring needed.
+
+**What we do:** Custom paste listener in `GrapheEditor.tsx` for images; separate attachment flow for non-image files.
+
+**Gap:** Our paste/drop handling is scattered. `FileHandler` would consolidate all file ingestion into one place, with MIME type routing (images → upload node, PDFs → attachment panel, etc.).
+
+**Priority:** nice-to-have-anytime (quality improvement, not blocking)  
+**Effort:** Low  
+**Implementation source:** `@tiptap/extension-file-handler` (free, MIT). Replace scattered paste listeners. Suggested branch: bundle into `feat/image-upload-node`
+
+---
+
+### S3-Gap 7: Invisible Characters (`@tiptap-pro/extension-invisible-characters` v2.21.5)
+
+Renders paragraph marks (`¶`), space dots, and hard-break arrows as visible glyphs via `Decoration.widget`. Used in professional word processors for authors who need to see whitespace structure.
+
+**Notes app relevance:** None. This is a power-user feature for technical writers. Do not adopt.
+
+**Priority:** skip
+
+---
+
+### S3-Gap 8: Table of Contents (`@tiptap-pro/extension-table-of-contents` v2.21.5)
+
+**What Pro does:**
+
+Extension that walks the document on every `docChanged` transaction and calls `onUpdate(items, isCreate)` with the current heading list. Items include: `{ id, level, text, pos }`.
+
+Key features:
+- `anchorTypes: ["heading"]` (configurable — can include custom block types)
+- `getId` function (defaults to a UUID generator) — each heading gets a stable ID (requires `UniqueID` extension)
+- `scrollParent` — configurable scroll container for smooth scroll
+- `getHierarchicalIndexes` / `getLinearIndexes` exported helpers for generating "1.", "1.1.", "1.1.1." numbering
+- `updateTableOfContents` command forces a refresh
+
+**What we do:** Our `TableOfContents.tsx` listens to `editor.on("update")` + `docChanged` transactions, calls `extractHeadings()`, renders a list with `scrollToHeading(pos)`. 
+
+**Gaps vs Pro:**
+1. **No active section tracking** — we don't highlight the currently-visible heading (scroll spy). Pro's `onUpdate` callback receives the current state each transaction, which enables active tracking if the consumer reads the `isActive` property (not confirmed in compiled source, but standard TOC pattern).
+2. **No hierarchical indexing** — our headings are flat; no "1.2.3." style numbering.
+3. **No `anchorTypes`** — we only track `heading` type nodes; Pro supports arbitrary anchor types (e.g. a custom `chapter` block).
+4. **IDs for deep links** — Pro integrates with `UniqueID`; each heading has a stable `data-id`. Our headings have no stable ID, making heading deep links fragile.
+
+**Priority:** nice-to-have-anytime  
+**Effort:** Low (add hierarchical indexing helper; active section tracking via IntersectionObserver)  
+**Implementation source:** Original work in `TableOfContents.tsx`. Use `@tiptap/extension-table-of-contents` (check if free — S3 did not confirm open-source status) or keep custom.
+
+---
+
+### S3 Combined Backlog Additions
+
+New items from S3 to add to the combined backlog:
+
+| Item | Source | Priority | Effort | Yjs notes | Excalidraw notes | Capacitor notes | Vibe notes | NTS notes | Implementation source | Suggested branch |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Toggle blocks (Details/Summary/Content) | S3 | should-have-before-Yjs | Medium | `open` attr: consider view-local state not synced via Yjs | Canvas inside toggle: resize edge case | Works in WebView ✓ | Toggle button fully themeable | Notion-style modality only | Reimplement from Pro pattern + free @tiptap/extension-details-content/summary | `feat/toggle-blocks` |
+| `@tiptap/extension-unique-id` (stable node IDs) | S3 | should-have-before-Yjs | Low | Yjs-aware (y-sync$ check in compiled source) ✓; must add before Yjs migration | N/A | N/A | N/A | Required for block deep links + comment anchoring | `@tiptap/extension-unique-id` (free) | `feat/stable-node-ids` |
+| `aiDecoration` output range marker | S3 | nice-to-have-anytime | Low | View-only decoration; zero Yjs impact | N/A | N/A | Use `--primary` at 20% | All modalities | Original work (10-line Decoration.inline pattern) | bundle into AI PR |
+| `aiRegenerate` — "try again" | S3 | nice-to-have-anytime | Low | N/A | N/A | N/A | N/A | All modalities | Store last command in editor.storage.ai | bundle into AI PR |
+| `aiTranslate` command | S3 | nice-to-have-anytime | Low | N/A | N/A | N/A | N/A | All modalities | Add to AI actions list in `use-ai-action.ts` | bundle into AI PR |
+| `@tiptap/extension-file-handler` (unified file ingestion) | S3 | nice-to-have-anytime | Low | N/A | N/A | Works in WebView ✓ | N/A | N/A | `@tiptap/extension-file-handler` (free) | bundle into `feat/image-upload-node` |
+| Active section tracking in TOC | S3 | nice-to-have-anytime | Low | N/A | N/A | N/A | N/A | All modalities | IntersectionObserver in `TableOfContents.tsx` | bundle into nearby PR |
+| Hierarchical heading numbering in TOC | S3 | nice-to-have-anytime | Low | N/A | N/A | N/A | N/A | All modalities | `getHierarchicalIndexes` helper — original impl | bundle into nearby PR |
+| Node Range multi-block selection | S3 | nice-to-have-anytime | Low-Med | Standard transactions ✓ | N/A | Touch: long-press-select replaces Mod+drag | N/A | All modalities | Reimplement NodeRangeSelection from Pro pattern (pure ProseMirror) | `feat/node-range-selection` |
+| Inline comment threads | S3 | nice-to-have-anytime (Phase 3+) | High | `data-thread-id` mark is Yjs-safe; position drift under collab needs care | N/A | Thread popover on touch selection | N/A | Notion-style + collab | Original work; architecture: mark stores ID, content in Supabase table | `feat/inline-comments` |
+
+---
+
+### S3 Inaccessible Extensions
+
+`@tiptap-pro/extension-collaboration` and `@tiptap-pro/extension-history` returned 403 on the current trial tier. These likely require a paid plan or are bundled with TipTap Cloud.
+
+**Collaboration** — `@tiptap/extension-collaboration` (free, MIT) is the Yjs wrapper and is what we'll use for the Yjs migration sprint. The Pro version likely adds richer cursor presence or permission controls. Not blocking — the free version covers our needs.
+
+**History (Version History)** — TipTap's version history is a Cloud product that stores snapshots via Hocuspocus. We've already built our own version history system in `use-note-versions.ts` + the `note_versions` DB table. Inspecting the Pro package would have been informative but not actionable given our existing implementation.
+
+---
+
+### S3 License Boundary Additions
+
+| Item | Production implementation source | Pro code used? |
+|---|---|---|
+| Toggle blocks | Reimplement from pattern; `@tiptap/extension-details-content` + `@tiptap/extension-details-summary` (free) | No |
+| Stable node IDs | `@tiptap/extension-unique-id` (free) | No |
+| `aiDecoration` range marker | Original work | No |
+| `aiRegenerate` | Original work | No |
+| `aiTranslate` | Original work | No |
+| File handler | `@tiptap/extension-file-handler` (free) | No |
+| Node Range Selection | Reimplement from pattern (pure ProseMirror Selection subclass) | No |
+| Inline comments | Original work following Pro's architecture pattern | No |
