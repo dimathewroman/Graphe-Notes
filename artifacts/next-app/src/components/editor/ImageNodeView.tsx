@@ -69,9 +69,9 @@ function ImageToolbar({
   const isSupabase = isSupabaseSrc(src);
 
   const handleDownload = () => {
-    // Demo mode: blob URL — trigger browser download directly, no API needed.
-    // downloadUrl holds the original file (e.g. HEIC); src is the display JPEG.
-    if (src.startsWith("blob:")) {
+    // Demo mode: downloadUrl holds the original file (e.g. HEIC); use it if present.
+    // Also covers blob src (plain JPEG/PNG demo uploads) and SVG placeholder fallback.
+    if (downloadUrl || src.startsWith("blob:") || src.startsWith("data:")) {
       const a = document.createElement("a");
       a.href = downloadUrl ?? src;
       a.download = alt || "image";
