@@ -31,14 +31,17 @@ function isHeicInput(mimeType: string, filename: string, buf: Buffer): boolean {
   return hasHeicMagicBytes(buf);
 }
 
-type MasterFormat = "jpg" | "png" | "gif";
+type MasterFormat = "jpg" | "png" | "gif" | "avif";
 
 /**
  * Produce the master buffer for non-GIF images.
  *
  * JPEG / PNG → byte-identical (no re-encoding).
- * HEIC / HEIF / WebP / AVIF → q=95 JPEG via sharp.
- *   If sharp lacks libheif, fall back to heic-convert for HEIC/HEIF inputs.
+ * HEIC / HEIF → q=95 JPEG via sharp; heic-convert fallback if libheif missing.
+ * WebP / other → q=95 JPEG via sharp.
+ * AVIF → try q=95 JPEG via sharp; if the AVIF codec isn't available on this
+ *         runtime (e.g. macOS dev with limited libheif), fall back to storing
+ *         the original AVIF byte-identical (it's already browser-renderable).
  */
 async function toMaster(
   buf: Buffer,
@@ -64,7 +67,20 @@ async function toMaster(
     }
   }
 
-  // WebP, AVIF, or other — convert to JPEG master
+  // AVIF: try JPEG conversion; fall back to storing as-is if codec unavailable
+  if (mimeType === "image/avif") {
+    try {
+      const masterBuffer = await sharp(buf).jpeg({ quality: 95 }).toBuffer();
+      return { masterBuffer, masterFormat: "jpg" };
+    } catch {
+      // AVIF decode not supported on this runtime — store byte-identical.
+      // The original AVIF is already compressed and browser-renderable; it
+      // will serve as both master (download) and proxy (display).
+      return { masterBuffer: buf, masterFormat: "avif" };
+    }
+  }
+
+  // WebP or other — convert to JPEG master
   const masterBuffer = await sharp(buf).jpeg({ quality: 95 }).toBuffer();
   return { masterBuffer, masterFormat: "jpg" };
 }
@@ -243,7 +259,8 @@ export async function POST(request: NextRequest) {
         const masterBuffer = uploadBuffer;
         const masterFormat: MasterFormat = "gif";
         const fileId = randomUUID();
-        const masterPath = `${user.id}/${noteId}/${fileId}/master.gif`;
+        const baseName = sanitizeFilename(file.name).replace(/\.[^.]+$/, ""); // strip extension
+        const masterPath = `${user.id}/${noteId}/${fileId}/${baseName}.gif`;
 
         // Proxy = animated AVIF (12s timeout) or GIF fallback
         const avifBuf = await toAnimatedAvifProxy(masterBuffer);
@@ -251,7 +268,7 @@ export async function POST(request: NextRequest) {
         const proxyBuffer = avifBuf ?? masterBuffer;
         const proxyFormat = proxyIsAvif ? "avif" : "gif";
         const proxyPath = proxyIsAvif
-          ? `${user.id}/${noteId}/${fileId}/proxy.avif`
+          ? `${user.id}/${noteId}/${fileId}/${baseName}.avif`
           : masterPath; // point to master — no separate upload needed
 
         // Dimensions from first frame
@@ -360,52 +377,83 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Image conversion failed" }, { status: 422 });
     }
 
-    // Generate AVIF proxy
     const sharp = (await import("sharp")).default;
+    const fileId = randomUUID();
+    const baseName = sanitizeFilename(file.name).replace(/\.[^.]+$/, ""); // strip extension, keep original name
+
     let proxyBuffer: Buffer;
     let width: number | undefined;
     let height: number | undefined;
-    try {
-      const sharpMaster = sharp(masterBuffer);
-      const [proxyBuf, metadata] = await Promise.all([
-        sharpMaster.clone().avif({ quality: 80 }).toBuffer(),
-        sharpMaster.clone().metadata(),
-      ]);
-      proxyBuffer = proxyBuf;
-      width = metadata.width;
-      height = metadata.height;
-    } catch (convErr) {
-      Sentry.captureException(convErr, { extra: { originalMimeType: mimeType } });
-      return NextResponse.json({ error: "Image conversion failed" }, { status: 422 });
+    let proxyPath: string;
+    let proxyFormat: string;
+    let sameFileForProxy = false;
+
+    if (masterFormat === "avif") {
+      // Input was AVIF and could not be transcoded — reuse master as proxy.
+      // AVIF is already browser-renderable and well-compressed; no re-encoding needed.
+      proxyBuffer = masterBuffer;
+      proxyPath = `${user.id}/${noteId}/${fileId}/${baseName}.avif`; // same name, set below as masterPath
+      proxyFormat = "avif";
+      sameFileForProxy = true;
+      try {
+        const meta = await sharp(masterBuffer).metadata();
+        width = meta.width;
+        height = meta.height;
+      } catch { /* non-critical */ }
+    } else {
+      // Generate AVIF proxy from JPEG/PNG master
+      try {
+        const sharpMaster = sharp(masterBuffer);
+        const [proxyBuf, metadata] = await Promise.all([
+          sharpMaster.clone().avif({ quality: 80 }).toBuffer(),
+          sharpMaster.clone().metadata(),
+        ]);
+        proxyBuffer = proxyBuf;
+        width = metadata.width;
+        height = metadata.height;
+      } catch (convErr) {
+        Sentry.captureException(convErr, { extra: { originalMimeType: mimeType } });
+        return NextResponse.json({ error: "Image conversion failed" }, { status: 422 });
+      }
+      proxyPath = `${user.id}/${noteId}/${fileId}/${baseName}.avif`;
+      proxyFormat = "avif";
     }
 
-    const fileId = randomUUID();
-    const masterPath = `${user.id}/${noteId}/${fileId}/master.${masterFormat}`;
-    const proxyPath = `${user.id}/${noteId}/${fileId}/proxy.avif`;
+    const masterPath = `${user.id}/${noteId}/${fileId}/${baseName}.${masterFormat}`;
+    // When AVIF is stored as-is, master and proxy share the same path
+    const resolvedProxyPath = sameFileForProxy ? masterPath : proxyPath;
 
-    const masterMime = masterFormat === "png" ? "image/png" : "image/jpeg";
+    const masterMime = masterFormat === "png" ? "image/png" : masterFormat === "avif" ? "image/avif" : "image/jpeg";
 
-    // Upload master and proxy in parallel
-    const [masterUpload, proxyUpload] = await Promise.all([
+    // Upload master (and proxy if it's a separate file)
+    const uploadTasks: Promise<{ error: { message: string } | null; which: string }>[] = [
       supabaseAdmin.storage
         .from("note-attachments")
-        .upload(masterPath, masterBuffer, { contentType: masterMime, upsert: false }),
-      supabaseAdmin.storage
-        .from("note-attachments")
-        .upload(proxyPath, proxyBuffer, { contentType: "image/avif", upsert: false }),
-    ]);
+        .upload(masterPath, masterBuffer, { contentType: masterMime, upsert: false })
+        .then(r => ({ error: r.error, which: "master" })),
+    ];
+    if (!sameFileForProxy) {
+      uploadTasks.push(
+        supabaseAdmin.storage
+          .from("note-attachments")
+          .upload(resolvedProxyPath, proxyBuffer, { contentType: "image/avif", upsert: false })
+          .then(r => ({ error: r.error, which: "proxy" }))
+      );
+    }
 
-    if (masterUpload.error || proxyUpload.error) {
-      const err = masterUpload.error ?? proxyUpload.error;
-      Sentry.captureException(new Error(`[attachments] Storage upload error: ${err!.message}`));
-      // Best-effort cleanup of whichever file succeeded
-      if (!masterUpload.error) await supabaseAdmin.storage.from("note-attachments").remove([masterPath]);
-      if (!proxyUpload.error) await supabaseAdmin.storage.from("note-attachments").remove([proxyPath]);
+    const uploadResults = await Promise.all(uploadTasks);
+    const failedUpload = uploadResults.find(r => r.error);
+    if (failedUpload) {
+      const err = failedUpload.error!;
+      Sentry.captureException(new Error(`[attachments] Storage upload error (${failedUpload.which}): ${err.message}`));
+      // Best-effort cleanup
+      const toRemove = uploadResults.filter(r => !r.error).map(r => r.which === "master" ? masterPath : resolvedProxyPath);
+      if (toRemove.length) await supabaseAdmin.storage.from("note-attachments").remove(toRemove);
       return NextResponse.json({ error: "Upload failed" }, { status: 500 });
     }
 
     const masterSizeBytes = masterBuffer.length;
-    const proxySizeBytes = proxyBuffer.length;
+    const proxySizeBytes = sameFileForProxy ? 0 : proxyBuffer.length;
 
     const [attachment] = await db
       .insert(attachmentsTable)
@@ -417,9 +465,9 @@ export async function POST(request: NextRequest) {
         fileSize: masterSizeBytes + proxySizeBytes,
         storagePath: null,
         masterPath,
-        proxyPath,
+        proxyPath: resolvedProxyPath,
         masterFormat,
-        proxyFormat: "avif",
+        proxyFormat,
         isAnimated: false,
         masterSizeBytes,
         proxySizeBytes,
@@ -430,7 +478,7 @@ export async function POST(request: NextRequest) {
 
     // Generate signed URLs (1 hr) for proxy (display) and master (download)
     const [proxySign, masterSign] = await Promise.all([
-      supabaseAdmin.storage.from("note-attachments").createSignedUrl(proxyPath, 3600),
+      supabaseAdmin.storage.from("note-attachments").createSignedUrl(resolvedProxyPath, 3600),
       supabaseAdmin.storage.from("note-attachments").createSignedUrl(masterPath, 3600),
     ]);
 
