@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { getGetNoteQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
-import { IMAGE_MIME_TYPES, formatBytes } from "@/lib/attachment-limits";
+import { HEIC_MIME_TYPES, IMAGE_MIME_TYPES, formatBytes } from "@/lib/attachment-limits";
 import { useDemoMode } from "@/lib/demo-context";
 import { useAppStore } from "@/store";
 
@@ -25,6 +25,44 @@ export interface AttachmentRecord {
 // Demo store for in-memory attachments during demo mode
 const demoAttachments: AttachmentRecord[] = [];
 let demoIdCounter = 1;
+
+function isHeicFile(file: File): boolean {
+  if (HEIC_MIME_TYPES.has(file.type)) return true;
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+  return ext === "heic" || ext === "heif";
+}
+
+/**
+ * Convert a HEIC/HEIF file to a JPEG object URL for browser preview.
+ * Uses createImageBitmap (Safari can decode HEIC) → Canvas → JPEG blob.
+ * Falls back to a small SVG data URL on browsers that can't decode HEIC (Chrome).
+ */
+async function heicToPreviewUrl(file: File): Promise<string> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0);
+    return await new Promise<string>((resolve, reject) => {
+      canvas.toBlob(
+        blob => (blob ? resolve(URL.createObjectURL(blob)) : reject()),
+        "image/jpeg",
+        0.9,
+      );
+    });
+  } catch {
+    // Browser cannot decode HEIC (e.g. Chrome) — return a legible SVG placeholder.
+    const name = file.name.replace(/"/g, "&quot;");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200">
+      <rect width="320" height="200" rx="8" fill="#f3f4f6"/>
+      <text x="160" y="88" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" fill="#6b7280">HEIC image</text>
+      <text x="160" y="112" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" fill="#9ca3af">${name}</text>
+      <text x="160" y="148" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#d1d5db">Uploads &amp; converts on sign-up</text>
+    </svg>`;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  }
+}
 
 export function getDemoAttachments() { return [...demoAttachments]; }
 
@@ -102,8 +140,12 @@ export function useUploadAttachment(noteId: number | null) {
     setUploading(prev => [...prev, file.name]);
     try {
       if (isDemo) {
-        // Demo: use object URL, store in memory
-        const objectUrl = URL.createObjectURL(file);
+        // Demo: create a displayable URL for the file.
+        // HEIC/HEIF cannot be decoded by Chrome as a raw blob URL, so convert
+        // via Canvas first (works in Safari); fall back to an SVG placeholder.
+        const objectUrl = isHeicFile(file)
+          ? await heicToPreviewUrl(file)
+          : URL.createObjectURL(file);
         const record: AttachmentRecord = {
           id: `demo-${demoIdCounter++}`,
           noteId,
