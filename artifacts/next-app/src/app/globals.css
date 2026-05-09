@@ -234,6 +234,13 @@
 .ProseMirror ol {
   @apply list-decimal;
 }
+
+/* Ordered list nesting cycle: decimal → lower-alpha → lower-roman → repeat */
+.ProseMirror ol ol { list-style-type: lower-alpha; }
+.ProseMirror ol ol ol { list-style-type: lower-roman; }
+.ProseMirror ol ol ol ol { list-style-type: decimal; }
+.ProseMirror ol ol ol ol ol { list-style-type: lower-alpha; }
+.ProseMirror ol ol ol ol ol ol { list-style-type: lower-roman; }
 .ProseMirror li > p {
   margin-top: 0;
   margin-bottom: 0;
