@@ -18,6 +18,7 @@ function ImageToolbar({
   src,
   alt,
   attachmentId,
+  downloadUrl,
   onAltChange,
   onDelete,
   onClose,
@@ -26,6 +27,7 @@ function ImageToolbar({
   src: string;
   alt: string;
   attachmentId: string | null;
+  downloadUrl: string | null;
   onAltChange: (alt: string) => void;
   onDelete: () => void;
   onClose: () => void;
@@ -67,10 +69,11 @@ function ImageToolbar({
   const isSupabase = isSupabaseSrc(src);
 
   const handleDownload = () => {
-    // Demo mode: blob URL — trigger browser download directly, no API needed
+    // Demo mode: blob URL — trigger browser download directly, no API needed.
+    // downloadUrl holds the original file (e.g. HEIC); src is the display JPEG.
     if (src.startsWith("blob:")) {
       const a = document.createElement("a");
-      a.href = src;
+      a.href = downloadUrl ?? src;
       a.download = alt || "image";
       a.click();
       return;
@@ -190,6 +193,7 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
   const src = node.attrs.src as string ?? "";
   const alt = node.attrs.alt as string ?? "";
   const attachmentId = node.attrs.attachmentId as string | null ?? null;
+  const downloadUrl = node.attrs.downloadUrl as string | null ?? null;
 
   // Show toolbar when selected (keyboard or click)
   useEffect(() => {
@@ -266,6 +270,7 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
           src={src}
           alt={alt}
           attachmentId={attachmentId}
+          downloadUrl={downloadUrl}
           onAltChange={(newAlt) => updateAttributes({ alt: newAlt })}
           onDelete={() => { setShowToolbar(false); deleteNode(); }}
           onClose={() => setShowToolbar(false)}

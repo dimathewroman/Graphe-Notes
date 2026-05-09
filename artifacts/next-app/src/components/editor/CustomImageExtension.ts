@@ -27,6 +27,16 @@ export const CustomImage = Image.extend({
           return { "data-attachment-id": attributes.attachmentId };
         },
       },
+      // Demo-mode only: blob URL of the original file (e.g. HEIC) so the download
+      // button serves the original while displaying a converted JPEG in the editor.
+      downloadUrl: {
+        default: null,
+        parseHTML: element => element.getAttribute("data-download-url"),
+        renderHTML: attributes => {
+          if (!attributes.downloadUrl) return {};
+          return { "data-download-url": attributes.downloadUrl };
+        },
+      },
     };
   },
   addNodeView() {

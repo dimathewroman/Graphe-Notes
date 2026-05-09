@@ -63,7 +63,7 @@ export interface GrapheEditorProps {
    * The shell handles the upload and returns the resulting URL (if any).
    * GrapheEditor inserts the image into the editor if the file is an image type.
    */
-  onAttachFile?: (file: File) => Promise<{ url?: string; id?: string; masterPath?: string | null; fileType?: string } | null | undefined>;
+  onAttachFile?: (file: File) => Promise<{ url?: string; id?: string; masterPath?: string | null; fileType?: string; downloadUrl?: string } | null | undefined>;
   /**
    * Called once the TipTap editor instance is ready (or null when destroyed).
    * Shells that need the editor ref (e.g. for undo/redo in the header on mobile)
@@ -232,6 +232,7 @@ export function GrapheEditor({
         alt: file.name,
         ...(result.id ? { attachmentId: result.id } : {}),
         ...(result.masterPath ? { masterPath: result.masterPath } : {}),
+        ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
       }).run();
     }
   }, [onAttachFile, editor]);
@@ -254,6 +255,7 @@ export function GrapheEditor({
           alt: file.name,
           ...(result.id ? { attachmentId: result.id } : {}),
           ...(result.masterPath ? { masterPath: result.masterPath } : {}),
+          ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
         }).run();
       }
     };

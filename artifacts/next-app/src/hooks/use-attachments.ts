@@ -113,7 +113,11 @@ export function useUploadAttachment(noteId: number | null) {
         let objectUrl: string;
         let fileType = file.type;
         let fileSize = file.size;
+        let masterUrl: string | undefined;
         if (HEIC_MIME_TYPES.has(file.type)) {
+          // Keep a blob URL of the original so the download button serves the
+          // real HEIC while the editor displays the converted JPEG.
+          masterUrl = URL.createObjectURL(file);
           try {
             const heic2any = (await import("heic2any")).default;
             const result = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.92 });
@@ -123,7 +127,8 @@ export function useUploadAttachment(noteId: number | null) {
             fileSize = jpeg.size;
           } catch {
             // Conversion failed — show as a downloadable attachment without preview
-            objectUrl = URL.createObjectURL(file);
+            objectUrl = masterUrl;
+            masterUrl = undefined;
             fileType = "application/octet-stream";
           }
         } else {
@@ -138,6 +143,7 @@ export function useUploadAttachment(noteId: number | null) {
           storagePath: null,
           createdAt: new Date().toISOString(),
           url: objectUrl,
+          masterUrl,
         };
         demoAttachments.push(record);
         queryClient.invalidateQueries({ queryKey: ["/api/attachments"] });
