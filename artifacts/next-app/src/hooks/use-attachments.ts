@@ -34,11 +34,14 @@ function isHeicFile(file: File): boolean {
 
 /**
  * Convert a HEIC/HEIF file to a JPEG object URL for browser preview.
- * Primary: createImageBitmap → Canvas (Safari, which has native HEIC support).
- * Fallback: heic2any (pure-JS decoder, works in Chrome). Dynamically imported
- * so the ~150 KB bundle only loads when a HEIC file is actually dropped.
+ *
+ * Tier 1 — Safari: createImageBitmap (native OS HEIC codec) → Canvas → JPEG blob URL.
+ * Tier 2 — Chrome/Firefox: heic2any pure-JS decoder. Dynamically imported so the
+ *           bundle only loads when a HEIC file is actually selected.
+ * Tier 3 — Final fallback: SVG placeholder. Guarantees no broken image icon.
  */
 async function heicToPreviewUrl(file: File): Promise<string> {
+  // Tier 1: Safari native decode
   try {
     const bitmap = await createImageBitmap(file);
     const canvas = document.createElement("canvas");
@@ -52,13 +55,32 @@ async function heicToPreviewUrl(file: File): Promise<string> {
         0.9,
       );
     });
-  } catch {
-    // createImageBitmap doesn't support HEIC in Chrome — use the JS decoder.
-    const heic2any = (await import("heic2any")).default;
-    const jpeg = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+  } catch { /* fall through to tier 2 */ }
+
+  // Tier 2: heic2any pure-JS decoder
+  // heic2any ships as CJS; webpack puts module.exports on both the namespace
+  // object and .default — try both so neither module format breaks us.
+  try {
+    const mod = await import("heic2any");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fn: (o: { blob: Blob; toType: string; quality: number }) => Promise<Blob | Blob[]> =
+      (mod as any).default ?? mod;
+    const jpeg = await fn({ blob: file, toType: "image/jpeg", quality: 0.9 });
     const out = Array.isArray(jpeg) ? jpeg[0] : jpeg;
     return URL.createObjectURL(out);
+  } catch (e) {
+    console.error("[heicToPreviewUrl] heic2any failed:", e);
   }
+
+  // Tier 3: SVG placeholder — always renderable, never a broken icon
+  const name = file.name.replace(/[<>&"]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c] ?? c));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200">
+    <rect width="320" height="200" rx="8" fill="#f3f4f6"/>
+    <text x="160" y="88" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" fill="#6b7280">HEIC image</text>
+    <text x="160" y="112" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" fill="#9ca3af">${name}</text>
+    <text x="160" y="148" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#d1d5db">Sign up to upload &amp; convert</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 export function getDemoAttachments() { return [...demoAttachments]; }
