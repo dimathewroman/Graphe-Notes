@@ -33,12 +33,17 @@ export async function GET(request: NextRequest) {
         proxyPath: attachmentsTable.proxyPath,
       });
 
-    // Collect all storage paths for each attachment:
+    // Collect all unique storage paths for each attachment:
     // v1 rows have storagePath; v2 rows have masterPath + proxyPath.
-    const paths: string[] = expiredAttachments.flatMap(a => {
-      const p: Array<string | null | undefined> = [a.storagePath, a.masterPath, a.proxyPath];
-      return p.filter((x): x is string => x != null);
-    });
+    // For animated GIF fallback, proxyPath === masterPath — use a Set to deduplicate.
+    const pathSet = new Set<string>();
+    for (const a of expiredAttachments) {
+      const candidates = [a.storagePath, a.masterPath, a.proxyPath];
+      for (const p of candidates) {
+        if (p) pathSet.add(p);
+      }
+    }
+    const paths = Array.from(pathSet);
 
     // Remove the actual files from Supabase Storage in batches of 100
     let storageErrors = 0;

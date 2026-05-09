@@ -4,7 +4,8 @@
 // note metadata, folders, tags, timers, or navigation.
 
 import { useEffect, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import { useEditor, type Editor } from "@tiptap/react";
+import type { Editor } from "@tiptap/react";
+import { useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import UnderlineExt from "@tiptap/extension-underline";
 import { TextStyle, FontSize } from "@tiptap/extension-text-style";
@@ -63,7 +64,7 @@ export interface GrapheEditorProps {
    * The shell handles the upload and returns the resulting URL (if any).
    * GrapheEditor inserts the image into the editor if the file is an image type.
    */
-  onAttachFile?: (file: File) => Promise<{ url?: string; id?: string; masterPath?: string | null; fileType?: string; downloadUrl?: string } | null | undefined>;
+  onAttachFile?: (file: File) => Promise<{ url?: string; id?: string; masterPath?: string | null; fileType?: string; downloadUrl?: string; isAnimated?: boolean } | null | undefined>;
   /**
    * Called once the TipTap editor instance is ready (or null when destroyed).
    * Shells that need the editor ref (e.g. for undo/redo in the header on mobile)
@@ -81,6 +82,46 @@ export interface GrapheEditorProps {
    * The shell is responsible for rendering its title input, tag rows, EditorContent, etc.
    */
   renderContent: (editor: Editor) => ReactNode;
+}
+
+type UploadResult = {
+  url: string;
+  id?: string;
+  masterPath?: string | null;
+  downloadUrl?: string;
+  isAnimated?: boolean;
+};
+
+/**
+ * Find an image node by its current `src` (typically a blob: URL inserted
+ * optimistically) and either swap it to the permanent signed URL (result ≠ null)
+ * or delete it entirely (result === null, upload failed).
+ */
+function swapImageNode(editor: Editor, blobUrl: string, result: UploadResult | null) {
+  if (editor.isDestroyed) return;
+  const { state } = editor.view;
+  let found = false;
+  const tr = state.tr;
+  state.doc.descendants((node, pos): boolean | void => {
+    if (found) return false; // skip children of already-visited nodes
+    if (node.type.name === "image" && node.attrs.src === blobUrl) {
+      found = true;
+      if (result) {
+        tr.setNodeMarkup(pos, undefined, {
+          ...node.attrs,
+          src: result.url,
+          ...(result.id ? { attachmentId: result.id } : {}),
+          ...(result.masterPath ? { masterPath: result.masterPath } : {}),
+          ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
+          ...(result.isAnimated ? { isAnimated: true } : {}),
+        });
+      } else {
+        tr.delete(pos, pos + node.nodeSize);
+      }
+      return false;
+    }
+  });
+  if (found) editor.view.dispatch(tr);
 }
 
 export function GrapheEditor({
@@ -152,7 +193,12 @@ export function GrapheEditor({
     content: "",
     editable,
     onUpdate: ({ editor }) => {
-      onContentChange(editor.getHTML(), editor.getText());
+      const raw = editor.getHTML();
+      // Strip images with blob: src — these are pending uploads not yet resolved
+      // to signed URLs. Prevents transient blob: URLs from being persisted to DB
+      // if autosave fires before the upload round-trip completes.
+      const clean = raw.replace(/<img\b[^>]*\bsrc="blob:[^"]*"[^>]*\/?>/gi, "");
+      onContentChange(clean, editor.getText());
     },
     editorProps: {
       attributes: {
@@ -214,30 +260,60 @@ export function GrapheEditor({
     onBeforeAiRewrite,
   });
 
-  // Attach-file wrapper: shell uploads → GrapheEditor inserts image into the editor
+  // Attach-file wrapper: shell uploads → GrapheEditor inserts image into the editor.
+  // Optimistic insert pattern: image appears instantly from a local blob: URL while
+  // the upload runs in the background. On completion the blob URL is swapped for the
+  // permanent signed URL (or removed on failure). blob: URLs are stripped from the
+  // HTML passed to onContentChange so they are never persisted to the database.
   const handleAttachFile = useCallback(async (file: File) => {
     if (!onAttachFile) return;
+
+    // Insert immediately from local memory for previewable types (JPEG, PNG, GIF, WebP).
+    // HEIC is excluded — Chrome cannot decode raw HEIC blobs, so we wait for the server
+    // to convert it and fall through to the non-preview path below.
+    const canPreview = BROWSER_RENDERABLE_IMAGE_TYPES.has(file.type);
+    let blobUrl: string | null = null;
+    if (canPreview && editor) {
+      blobUrl = URL.createObjectURL(file);
+      editor.chain().focus().setImage({ src: blobUrl, alt: file.name }).run();
+    }
+
     const result = await onAttachFile(file);
-    // Use the effective type returned by the shell (e.g. "image/jpeg" after demo HEIC→JPEG
-    // conversion) rather than the original file.type — the shell knows what format the URL
-    // actually contains. Fall back to file.type for real (non-blob) uploads.
-    const effectiveType = result?.fileType ?? file.type;
-    const isBlobUrl = result?.url?.startsWith("blob:");
-    const canEmbed = isBlobUrl
-      ? BROWSER_RENDERABLE_IMAGE_TYPES.has(effectiveType)
-      : isImageType(effectiveType);
-    if (result?.url && canEmbed) {
-      editor?.chain().focus().setImage({
-        src: result.url,
-        alt: file.name,
-        ...(result.id ? { attachmentId: result.id } : {}),
-        ...(result.masterPath ? { masterPath: result.masterPath } : {}),
-        ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
-      }).run();
+
+    if (!result?.url) {
+      // Upload failed — remove the optimistic placeholder (if any)
+      if (blobUrl && editor) {
+        swapImageNode(editor, blobUrl, null);
+        URL.revokeObjectURL(blobUrl);
+      }
+      return;
+    }
+
+    if (blobUrl && editor) {
+      // Swap blob URL → permanent URL (signed Supabase URL in auth mode,
+      // or a demo blob URL for HEIC conversion). isAnimated and other attrs
+      // are applied during the swap once the server confirms them.
+      // result.url is guaranteed string here — we returned early above if falsy.
+      swapImageNode(editor, blobUrl, result as UploadResult);
+      URL.revokeObjectURL(blobUrl);
+    } else {
+      // Non-previewable type (e.g. HEIC on Chrome) — insert now with server URL.
+      // Use effectiveType returned by shell (may differ from file.type after conversion).
+      const effectiveType = result.fileType ?? file.type;
+      if (isImageType(effectiveType)) {
+        editor?.chain().focus().setImage({
+          src: result.url,
+          alt: file.name,
+          ...(result.id ? { attachmentId: result.id } : {}),
+          ...(result.masterPath ? { masterPath: result.masterPath } : {}),
+          ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
+          ...(result.isAnimated ? { isAnimated: true } : {}),
+        }).run();
+      }
     }
   }, [onAttachFile, editor]);
 
-  // Clipboard paste: intercept image blobs and upload them
+  // Clipboard paste: intercept image blobs and upload them (same optimistic pattern)
   useEffect(() => {
     if (!onAttachFile) return;
     const onPaste = async (e: ClipboardEvent) => {
@@ -248,15 +324,40 @@ export function GrapheEditor({
       const file = imageItem.getAsFile();
       if (!file) return;
       e.preventDefault();
+
+      const canPreview = BROWSER_RENDERABLE_IMAGE_TYPES.has(file.type);
+      let blobUrl: string | null = null;
+      if (canPreview) {
+        blobUrl = URL.createObjectURL(file);
+        editor.chain().focus().setImage({ src: blobUrl, alt: file.name }).run();
+      }
+
       const result = await onAttachFile(file);
-      if (result?.url) {
-        editor.chain().focus().setImage({
-          src: result.url,
-          alt: file.name,
-          ...(result.id ? { attachmentId: result.id } : {}),
-          ...(result.masterPath ? { masterPath: result.masterPath } : {}),
-          ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
-        }).run();
+
+      if (!result?.url) {
+        if (blobUrl) {
+          swapImageNode(editor, blobUrl, null);
+          URL.revokeObjectURL(blobUrl);
+        }
+        return;
+      }
+
+      if (blobUrl) {
+        // result.url is guaranteed string here — we returned early above if falsy.
+        swapImageNode(editor, blobUrl, result as UploadResult);
+        URL.revokeObjectURL(blobUrl);
+      } else {
+        const effectiveType = result.fileType ?? file.type;
+        if (isImageType(effectiveType)) {
+          editor.chain().focus().setImage({
+            src: result.url,
+            alt: file.name,
+            ...(result.id ? { attachmentId: result.id } : {}),
+            ...(result.masterPath ? { masterPath: result.masterPath } : {}),
+            ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
+            ...(result.isAnimated ? { isAnimated: true } : {}),
+          }).run();
+        }
       }
     };
     document.addEventListener("paste", onPaste);

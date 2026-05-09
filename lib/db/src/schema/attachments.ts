@@ -1,4 +1,4 @@
-import { pgTable, text, integer, varchar, timestamp, uuid, index } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, varchar, timestamp, uuid, index, boolean } from "drizzle-orm/pg-core";
 
 export const attachmentsTable = pgTable("attachments", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -13,7 +13,9 @@ export const attachmentsTable = pgTable("attachments", {
   // v2 master + proxy paths
   masterPath: text("master_path"),
   proxyPath: text("proxy_path"),
-  masterFormat: text("master_format"),      // 'jpg' | 'png'
+  masterFormat: text("master_format"),      // 'jpg' | 'png' | 'gif'
+  proxyFormat: text("proxy_format").default("avif"),  // 'avif' | 'gif' (fallback)
+  isAnimated: boolean("is_animated").default(false),
   masterSizeBytes: integer("master_size_bytes"),
   proxySizeBytes: integer("proxy_size_bytes"),
   width: integer("width"),

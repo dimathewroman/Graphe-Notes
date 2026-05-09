@@ -31,6 +31,10 @@ export const BROWSER_RENDERABLE_IMAGE_TYPES = new Set([
   "image/jpeg", "image/png", "image/gif", "image/webp", "image/avif",
 ]);
 
+// Animated GIF caps enforced before encoding to protect server memory / timeout budget.
+export const ANIMATED_GIF_MAX_BYTES = 15 * 1024 * 1024; // 15 MB raw GIF
+export const ANIMATED_GIF_MAX_FRAMES = 600;              // ~20 s at 30 fps
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
