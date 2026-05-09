@@ -34,8 +34,9 @@ function isHeicFile(file: File): boolean {
 
 /**
  * Convert a HEIC/HEIF file to a JPEG object URL for browser preview.
- * Uses createImageBitmap (Safari can decode HEIC) → Canvas → JPEG blob.
- * Falls back to a small SVG data URL on browsers that can't decode HEIC (Chrome).
+ * Primary: createImageBitmap → Canvas (Safari, which has native HEIC support).
+ * Fallback: heic2any (pure-JS decoder, works in Chrome). Dynamically imported
+ * so the ~150 KB bundle only loads when a HEIC file is actually dropped.
  */
 async function heicToPreviewUrl(file: File): Promise<string> {
   try {
@@ -52,15 +53,11 @@ async function heicToPreviewUrl(file: File): Promise<string> {
       );
     });
   } catch {
-    // Browser cannot decode HEIC (e.g. Chrome) — return a legible SVG placeholder.
-    const name = file.name.replace(/"/g, "&quot;");
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200">
-      <rect width="320" height="200" rx="8" fill="#f3f4f6"/>
-      <text x="160" y="88" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" fill="#6b7280">HEIC image</text>
-      <text x="160" y="112" text-anchor="middle" font-family="system-ui,sans-serif" font-size="12" fill="#9ca3af">${name}</text>
-      <text x="160" y="148" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#d1d5db">Uploads &amp; converts on sign-up</text>
-    </svg>`;
-    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    // createImageBitmap doesn't support HEIC in Chrome — use the JS decoder.
+    const heic2any = (await import("heic2any")).default;
+    const jpeg = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+    const out = Array.isArray(jpeg) ? jpeg[0] : jpeg;
+    return URL.createObjectURL(out);
   }
 }
 
