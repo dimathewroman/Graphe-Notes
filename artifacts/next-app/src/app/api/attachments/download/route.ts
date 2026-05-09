@@ -4,11 +4,10 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import * as Sentry from "@sentry/nextjs";
 
 /**
- * GET /api/attachments/download?path=<storagePath>
+ * GET /api/attachments/download?path=<storagePath>&format=avif|jpeg
  *
- * Fetches an AVIF image from Supabase Storage, converts it to JPEG via sharp,
- * and serves it with a Content-Disposition: attachment header so the browser
- * saves it as a .jpg file instead of displaying the AVIF inline.
+ * format=avif (default) — streams the stored AVIF directly; no conversion.
+ * format=jpeg           — converts the AVIF to JPEG via sharp for maximum compatibility.
  */
 export async function GET(request: NextRequest) {
   const { user } = await getAuthUser(request);
@@ -16,6 +15,8 @@ export async function GET(request: NextRequest) {
 
   const storagePath = request.nextUrl.searchParams.get("path");
   if (!storagePath) return NextResponse.json({ error: "path is required" }, { status: 400 });
+
+  const format = request.nextUrl.searchParams.get("format") === "jpeg" ? "jpeg" : "avif";
 
   // Ensure the path belongs to the authenticated user (first segment is user ID)
   const [pathUserId] = storagePath.split("/");
@@ -38,24 +39,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch file" }, { status: 502 });
     }
 
-    const inputBuffer = Buffer.from(await response.arrayBuffer());
-    const sharp = (await import("sharp")).default;
-    const jpegBuffer = await sharp(inputBuffer).jpeg({ quality: 90 }).toBuffer();
-
     // Derive a human-readable filename from the storage path
     const rawName = storagePath.split("/").pop() ?? "image";
     // Strip the UUID prefix (36 chars + dash) if present
     const withoutUuid = rawName.replace(/^[0-9a-f-]{37}/, "");
-    // Strip .avif and append .jpg
     const baseName = withoutUuid.replace(/\.avif$/i, "") || "image";
-    const downloadName = `${baseName}.jpg`;
 
-    // Uint8Array satisfies BodyInit (ArrayBufferView); Buffer alone may not in strict TS
+    if (format === "avif") {
+      const avifBuffer = Buffer.from(await response.arrayBuffer());
+      return new NextResponse(new Uint8Array(avifBuffer), {
+        status: 200,
+        headers: {
+          "Content-Type": "image/avif",
+          "Content-Disposition": `attachment; filename="${baseName}.avif"`,
+          "Content-Length": String(avifBuffer.length),
+          "Cache-Control": "private, no-store",
+        },
+      });
+    }
+
+    // JPEG: convert via sharp
+    const inputBuffer = Buffer.from(await response.arrayBuffer());
+    const sharp = (await import("sharp")).default;
+    const jpegBuffer = await sharp(inputBuffer).jpeg({ quality: 90 }).toBuffer();
+
     return new NextResponse(new Uint8Array(jpegBuffer), {
       status: 200,
       headers: {
         "Content-Type": "image/jpeg",
-        "Content-Disposition": `attachment; filename="${downloadName}"`,
+        "Content-Disposition": `attachment; filename="${baseName}.jpg"`,
         "Content-Length": String(jpegBuffer.length),
         "Cache-Control": "private, no-store",
       },
