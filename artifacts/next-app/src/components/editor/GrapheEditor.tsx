@@ -162,10 +162,10 @@ export function GrapheEditor({
     // stale closure (editorExtensions has [] deps but handleAttachFile is a useCallback).
     FileHandler.configure({
       allowedMimeTypes: Array.from(IMAGE_MIME_TYPES),
-      onPaste(_editor, files) {
+      onPaste(_editor: Editor, files: File[]) {
         files.forEach(file => { handleAttachFileRef.current?.(file); });
       },
-      onDrop(_editor, files) {
+      onDrop(_editor: Editor, files: File[]) {
         files.forEach(file => { handleAttachFileRef.current?.(file); });
       },
     }),
