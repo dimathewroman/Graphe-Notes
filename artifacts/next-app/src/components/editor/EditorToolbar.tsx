@@ -5,7 +5,6 @@ import type { useEditor } from "@tiptap/react";
 import {
   Bold, Italic, Underline as UnderlineIcon, Strikethrough,
   AlignLeft, AlignCenter, AlignRight,
-  List, ListOrdered, ListTodo, Quote, Code, Heading1, Heading2, Heading3,
   Image as ImageIcon, Table as TableIcon, RowsIcon, Scissors, X,
   Undo2, Redo2, Minus, Highlighter, Paperclip,
   Superscript as SuperscriptIcon, Subscript as SubscriptIcon,
@@ -191,7 +190,6 @@ function OverflowButton({
           <div className="flex gap-0.5 mb-2">
             <ToolbarButton command={() => { editor.chain().focus().toggleSuperscript().run(); setOpen(false); }} active={editor.isActive("superscript")} icon={<SuperscriptIcon className="w-4 h-4" />} title="Superscript" />
             <ToolbarButton command={() => { editor.chain().focus().toggleSubscript().run(); setOpen(false); }} active={editor.isActive("subscript")} icon={<SubscriptIcon className="w-4 h-4" />} title="Subscript" />
-            <ToolbarButton command={() => { editor.chain().focus().toggleBlockquote().run(); setOpen(false); }} active={editor.isActive("blockquote")} icon={<Quote className="w-4 h-4" />} title="Blockquote" />
             <ToolbarButton command={() => { editor.chain().focus().setHorizontalRule().run(); setOpen(false); }} active={false} icon={<Minus className="w-4 h-4" />} title="Horizontal divider" />
           </div>
 
@@ -281,17 +279,6 @@ export const EditorToolbar = memo(function EditorToolbar({
   }, [editor]);
 
   if (!editor) return null;
-
-  // Heading toggle: if already at this level → back to paragraph; otherwise apply the heading.
-  // Always clears explicit fontSize so the heading's CSS default sizing takes over.
-  // After applying, the user can still change font size via the font size widget.
-  const handleHeading = (level: 1 | 2 | 3) => {
-    if (editor.isActive("heading", { level })) {
-      editor.chain().focus().setParagraph().unsetFontSize().run();
-    } else {
-      editor.chain().focus().setHeading({ level }).unsetFontSize().run();
-    }
-  };
 
   const activeTextColor: string | undefined = editor.getAttributes("textStyle").color;
   const activeHighlightColor: string | undefined = editor.getAttributes("highlight").color;
@@ -396,31 +383,20 @@ export const EditorToolbar = memo(function EditorToolbar({
 
       <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
-      <ToolbarButton command={() => handleHeading(1)} active={editor.isActive("heading", { level: 1 })} icon={<Heading1 className="w-4 h-4" />} />
-      <ToolbarButton command={() => handleHeading(2)} active={editor.isActive("heading", { level: 2 })} icon={<Heading2 className="w-4 h-4" />} />
-      <ToolbarButton command={() => handleHeading(3)} active={editor.isActive("heading", { level: 3 })} icon={<Heading3 className="w-4 h-4" />} />
-
-      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
-
       {/* Alignment: inline on desktop, overflow on tablet */}
       {!isTablet && (
         <>
+          <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
           <ToolbarButton command={() => editor.chain().focus().setTextAlign("left").run()} active={editor.isActive({ textAlign: "left" })} icon={<AlignLeft className="w-4 h-4" />} />
           <ToolbarButton command={() => editor.chain().focus().setTextAlign("center").run()} active={editor.isActive({ textAlign: "center" })} icon={<AlignCenter className="w-4 h-4" />} />
           <ToolbarButton command={() => editor.chain().focus().setTextAlign("right").run()} active={editor.isActive({ textAlign: "right" })} icon={<AlignRight className="w-4 h-4" />} />
-          <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
         </>
       )}
 
-      <ToolbarButton command={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive("bulletList")} icon={<List className="w-4 h-4" />} />
-      <ToolbarButton command={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} icon={<ListOrdered className="w-4 h-4" />} />
-      <ToolbarButton command={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive("taskList")} icon={<ListTodo className="w-4 h-4" />} title="Checklist" />
-      <ToolbarButton command={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive("codeBlock")} icon={<Code className="w-4 h-4" />} />
-
-      {/* Blockquote + divider: inline on desktop, overflow on tablet */}
+      {/* Divider + horizontal rule: inline on desktop, overflow on tablet */}
       {!isTablet && (
         <>
-          <ToolbarButton command={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive("blockquote")} icon={<Quote className="w-4 h-4" />} />
+          <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
           <ToolbarButton command={() => editor.chain().focus().setHorizontalRule().run()} active={false} icon={<Minus className="w-4 h-4" />} title="Horizontal divider" />
         </>
       )}

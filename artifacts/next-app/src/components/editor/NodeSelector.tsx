@@ -31,25 +31,25 @@ const BLOCK_TYPES: BlockType[] = [
       !e.isActive("blockquote") &&
       !e.isActive("codeBlock") &&
       !e.isActive("details"),
-    apply: (e) => e.chain().focus().clearNodes().setParagraph().run(),
+    apply: (e) => e.chain().focus().clearNodes().setParagraph().unsetFontSize().run(),
   },
   {
     label: "Heading 1",
     icon: <Heading1 className="w-3.5 h-3.5" />,
     isActive: (e) => e.isActive("heading", { level: 1 }),
-    apply: (e) => e.chain().focus().clearNodes().setHeading({ level: 1 }).run(),
+    apply: (e) => e.chain().focus().clearNodes().setHeading({ level: 1 }).unsetFontSize().run(),
   },
   {
     label: "Heading 2",
     icon: <Heading2 className="w-3.5 h-3.5" />,
     isActive: (e) => e.isActive("heading", { level: 2 }),
-    apply: (e) => e.chain().focus().clearNodes().setHeading({ level: 2 }).run(),
+    apply: (e) => e.chain().focus().clearNodes().setHeading({ level: 2 }).unsetFontSize().run(),
   },
   {
     label: "Heading 3",
     icon: <Heading3 className="w-3.5 h-3.5" />,
     isActive: (e) => e.isActive("heading", { level: 3 }),
-    apply: (e) => e.chain().focus().clearNodes().setHeading({ level: 3 }).run(),
+    apply: (e) => e.chain().focus().clearNodes().setHeading({ level: 3 }).unsetFontSize().run(),
   },
   {
     label: "Bullet list",

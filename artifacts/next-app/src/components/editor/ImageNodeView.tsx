@@ -232,13 +232,14 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
     e.stopPropagation();
 
     const target = e.currentTarget as HTMLElement;
-    // Pointer capture so move/up events arrive even if pointer leaves the element
     target.setPointerCapture(e.pointerId);
 
     const startX = e.clientX;
     const startWidth = widthAttr ?? (imgRef.current?.offsetWidth ?? 200);
     const maxWidth = (imgRef.current?.closest(".ProseMirror") as HTMLElement | null)?.clientWidth ?? 800;
     const MIN_WIDTH = 100;
+    let currentWidth = startWidth;
+    let rafId = 0;
 
     setIsResizing(true);
 
@@ -247,14 +248,25 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
         ? moveEvt.clientX - startX
         : startX - moveEvt.clientX;
       const clamped = Math.round(Math.min(maxWidth - 32, Math.max(MIN_WIDTH, startWidth + delta)));
-      updateAttributes({ width: clamped });
+      currentWidth = clamped;
+      // Direct DOM mutation throttled to rAF — bypasses React/TipTap for 60fps drag
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (imgRef.current) {
+          imgRef.current.style.width = `${clamped}px`;
+          imgRef.current.style.height = "auto";
+        }
+      });
     };
 
     const onPointerUp = () => {
+      cancelAnimationFrame(rafId);
       target.releasePointerCapture(e.pointerId);
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
       setIsResizing(false);
+      // Single transaction on release — commits the final width to the document
+      updateAttributes({ width: currentWidth });
     };
 
     document.addEventListener("pointermove", onPointerMove);
