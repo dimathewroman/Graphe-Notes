@@ -20,6 +20,7 @@ import { FontSizeWidget } from "./FontSizeWidget";
 import { LinkPopover } from "./LinkPopover";
 import { createPortal } from "react-dom";
 import { useBreakpoint } from "@/hooks/use-mobile";
+import { NodeSelector } from "./NodeSelector";
 
 // Inline image-URL popover — no window.prompt
 function ImageUrlButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
@@ -250,6 +251,7 @@ export const EditorToolbar = memo(function EditorToolbar({
 }) {
   const [colorPicker, setColorPicker] = useState<"text" | "highlight" | null>(null);
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
+  const [nodeSelectorOpen, setNodeSelectorOpen] = useState(false);
   const textColorBtnRef = useRef<HTMLButtonElement>(null);
   const highlightBtnRef = useRef<HTMLButtonElement>(null);
   const fontPickerBtnRef = useRef<HTMLButtonElement>(null);
@@ -315,6 +317,9 @@ export const EditorToolbar = memo(function EditorToolbar({
           <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
         </>
       )}
+
+      <NodeSelector editor={editor} open={nodeSelectorOpen} onOpenChange={setNodeSelectorOpen} />
+      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
       <ToolbarButton command={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} icon={<Bold className="w-4 h-4" />} testId="toolbar-bold-btn" />
       <ToolbarButton command={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} icon={<Italic className="w-4 h-4" />} />
