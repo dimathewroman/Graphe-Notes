@@ -14,6 +14,8 @@ import FontFamily from "@tiptap/extension-font-family";
 import { CustomImage } from "./CustomImageExtension";
 import { ImageUploadExtension } from "./ImageUploadExtension";
 import FileHandler from "@tiptap/extension-file-handler";
+import { Selection } from "@tiptap/extensions";
+import UniqueID from "@tiptap/extension-unique-id";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -138,6 +140,7 @@ export function GrapheEditor({
     TableCell,
     Link.configure({
       openOnClick: false,
+      enableClickSelection: true,
       HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" },
     }),
     TaskList,
@@ -169,6 +172,17 @@ export function GrapheEditor({
         files.forEach(file => { handleAttachFileRef.current?.(file); });
       },
     }),
+    // Selection: replaces browser's default ::selection with a themeable decoration
+    // so brand-color text selection works consistently cross-browser and in dark modes.
+    Selection,
+    // UniqueID: adds data-id (uuid) to each block node — required for Yjs stable IDs,
+    // block deep links, and future comment anchoring. Yjs-aware (skips y-sync$ txns).
+    UniqueID.configure({
+      types: [
+        "paragraph", "heading", "bulletList", "orderedList",
+        "taskList", "blockquote", "codeBlock", "details",
+      ],
+    }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], []);
 
@@ -196,6 +210,7 @@ export function GrapheEditor({
         // the AutoFill toolbar.
         autocomplete: "off",
         autocorrect: "off",
+        autocapitalize: "off",
         spellcheck: "true",
       },
     },

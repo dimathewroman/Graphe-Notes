@@ -206,6 +206,13 @@
   color: inherit;
 }
 
+/* @tiptap/extensions Selection — cross-browser selection decoration rendered as a
+   ProseMirror decoration (class "selection"). Complements the native ::selection above
+   for contexts where browser ::selection styling is overridden (e.g. Firefox dark mode). */
+.ProseMirror .selection {
+  background-color: hsl(var(--primary) / 0.25);
+}
+
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   @apply text-muted-foreground float-left h-0 pointer-events-none;
