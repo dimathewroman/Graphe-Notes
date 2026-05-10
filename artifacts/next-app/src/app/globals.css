@@ -207,10 +207,11 @@
 }
 
 /* @tiptap/extensions Selection — cross-browser selection decoration rendered as a
-   ProseMirror decoration (class "selection"). Complements the native ::selection above
-   for contexts where browser ::selection styling is overridden (e.g. Firefox dark mode). */
+   ProseMirror decoration (class "selection"). Kept at low opacity because it stacks
+   on top of the browser's native ::selection (0.25 above), and the two layers are
+   additive. A high value here causes the double-highlight on large text (e.g. H1). */
 .ProseMirror .selection {
-  background-color: hsl(var(--primary) / 0.25);
+  background-color: hsl(var(--primary) / 0.08);
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {

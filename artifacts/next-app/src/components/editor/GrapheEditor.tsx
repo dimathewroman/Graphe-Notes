@@ -6,6 +6,7 @@
 import { useEffect, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
+import { TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import UnderlineExt from "@tiptap/extension-underline";
 import { TextStyle, FontSize } from "@tiptap/extension-text-style";
@@ -303,9 +304,16 @@ export function GrapheEditor({
       ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
       ...(result.isAnimated ? { isAnimated: true } : {}),
     });
-    editor.view.dispatch(
-      state.tr.replaceWith(found.pos, found.pos + found.nodeSize, imageNode)
-    );
+    const insertTr = state.tr.replaceWith(found.pos, found.pos + found.nodeSize, imageNode);
+    // Move cursor just past the image so the node deselects — the ring won't linger
+    // after a drag/paste drop and the user can keep typing immediately.
+    try {
+      const $after = insertTr.doc.resolve(found.pos + imageNode.nodeSize);
+      insertTr.setSelection(TextSelection.near($after));
+    } catch {
+      // no text position nearby — leave default selection
+    }
+    editor.view.dispatch(insertTr);
   }, [onAttachFile, editor]);
 
   // Keep a stable ref so FileHandler (which is configured in the [] useMemo) can
