@@ -1,4 +1,4 @@
-// Custom TipTap image node view — selection ring, floating edit toolbar, source badge.
+// Custom TipTap image node view — selection ring, floating edit toolbar, source badge, resize handles.
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -189,12 +189,14 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
   const imgRef = useRef<HTMLImageElement>(null);
   const [showToolbar, setShowToolbar] = useState(false);
   const [imgRect, setImgRect] = useState<DOMRect | null>(null);
+  const [isResizing, setIsResizing] = useState(false);
 
   const src = node.attrs.src as string ?? "";
   const alt = node.attrs.alt as string ?? "";
   const attachmentId = node.attrs.attachmentId as string | null ?? null;
   const downloadUrl = node.attrs.downloadUrl as string | null ?? null;
   const isAnimated = node.attrs.isAnimated as boolean ?? false;
+  const widthAttr = node.attrs.width as number | null ?? null;
 
   // Show toolbar when selected (keyboard or click)
   useEffect(() => {
@@ -225,6 +227,53 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
     setShowToolbar(v => !v);
   };
 
+  const handleResizeStart = (e: React.PointerEvent, side: "left" | "right") => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const target = e.currentTarget as HTMLElement;
+    // Pointer capture so move/up events arrive even if pointer leaves the element
+    target.setPointerCapture(e.pointerId);
+
+    const startX = e.clientX;
+    const startWidth = widthAttr ?? (imgRef.current?.offsetWidth ?? 200);
+    const maxWidth = (imgRef.current?.closest(".ProseMirror") as HTMLElement | null)?.clientWidth ?? 800;
+    const MIN_WIDTH = 100;
+
+    setIsResizing(true);
+
+    const onPointerMove = (moveEvt: PointerEvent) => {
+      const delta = side === "right"
+        ? moveEvt.clientX - startX
+        : startX - moveEvt.clientX;
+      const clamped = Math.round(Math.min(maxWidth - 32, Math.max(MIN_WIDTH, startWidth + delta)));
+      updateAttributes({ width: clamped });
+    };
+
+    const onPointerUp = () => {
+      target.releasePointerCapture(e.pointerId);
+      document.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener("pointerup", onPointerUp);
+      setIsResizing(false);
+    };
+
+    document.addEventListener("pointermove", onPointerMove);
+    document.addEventListener("pointerup", onPointerUp);
+  };
+
+  const showHandles = selected || isResizing;
+
+  // NextImage (Supabase): needs explicit style to fill container or respect fixed width.
+  // Plain <img> (external/blob): when no widthAttr, let max-w-full handle natural sizing;
+  // setting width:100% on inline-block parent causes a circular 2×2px collapse.
+  const nextImageStyle: React.CSSProperties = widthAttr
+    ? { width: `${widthAttr}px`, height: "auto" }
+    : { width: "100%", height: "auto" };
+
+  const plainImageStyle: React.CSSProperties | undefined = widthAttr
+    ? { width: `${widthAttr}px`, height: "auto" }
+    : undefined;
+
   const imageClass = [
     "max-w-full rounded transition-all duration-150 cursor-pointer",
     selected || showToolbar
@@ -232,27 +281,36 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
       : "hover:ring-1 hover:ring-primary/40 hover:ring-offset-1 hover:ring-offset-background",
   ].join(" ");
 
+  const handleClass = (side: "left" | "right") => [
+    `absolute top-1/2 -translate-y-1/2 w-2 h-12 bg-primary/80 rounded cursor-ew-resize`,
+    `transition-opacity duration-150`,
+    side === "right" ? "right-0 rounded-l rounded-r-none" : "left-0 rounded-r rounded-l-none",
+    showHandles ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+  ].join(" ");
+
   return (
     <NodeViewWrapper
       as="span"
-      className="inline-block relative"
+      className="inline-block relative group"
       style={{ verticalAlign: "bottom" }}
     >
       {isSupabaseSrc(src) ? (
         // next/image for Supabase-hosted images: format negotiation, lazy loading, CDN caching.
         // Animated images (GIF proxy / animated AVIF) must use unoptimized={true} so the
         // Next.js image optimizer doesn't strip animation frames from the output.
+        // widthAttr guard: when null, pass width={0} + style width:100% (existing behaviour).
+        // When set, pass actual pixel width so the optimizer requests the right size.
         <NextImage
           ref={imgRef as React.Ref<HTMLImageElement>}
           src={src}
           alt={alt}
-          width={0}
+          width={widthAttr ?? 0}
           height={0}
           sizes="(max-width: 768px) 100vw, 80vw"
           draggable={false}
           onClick={handleClick}
           className={imageClass}
-          style={{ width: "100%", height: "auto" }}
+          style={nextImageStyle}
           unoptimized={isAnimated}
         />
       ) : (
@@ -265,8 +323,22 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
           draggable={false}
           onClick={handleClick}
           className={imageClass}
+          style={plainImageStyle}
         />
       )}
+
+      {/* Resize handle — left */}
+      <div
+        className={handleClass("left")}
+        data-testid="resize-handle-left"
+        onPointerDown={(e) => handleResizeStart(e, "left")}
+      />
+      {/* Resize handle — right */}
+      <div
+        className={handleClass("right")}
+        data-testid="resize-handle-right"
+        onPointerDown={(e) => handleResizeStart(e, "right")}
+      />
 
       {showToolbar && imgRect && (
         <ImageToolbar
