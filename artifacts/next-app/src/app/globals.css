@@ -196,14 +196,22 @@
   -webkit-touch-callout: none;
 }
 
-/* Preserve text colour when text is selected. Android Chrome forces its own
-   selection colour (black text on blue) which discards any applied colour.
-   Explicitly setting both properties restores a consistent highlight on all
-   platforms: a semi-transparent primary tint as background, the element's
-   own colour for the text. */
+/* Suppress the browser's native ::selection inside ProseMirror so it does not
+   stack with the TipTap Selection decoration below. The native rectangle covers
+   the full line-height box; the decoration only covers inline content — when both
+   are active simultaneously the inter-line leading zone receives a doubled
+   background, producing a visibly brighter band between adjacent selected lines. */
 .ProseMirror ::selection {
-  background-color: hsl(var(--primary) / 0.25);
+  background-color: transparent;
   color: inherit;
+}
+
+/* @tiptap/extensions Selection — sole source of selection highlighting in the
+   editor. Rendered as inline decoration spans on selected text nodes.
+   Because ::selection is suppressed above there is no stacking; 0.25 is the
+   full intended opacity for a single-layer brand-colour highlight. */
+.ProseMirror .selection {
+  background-color: hsl(var(--primary) / 0.25);
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {

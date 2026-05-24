@@ -6,12 +6,17 @@
 import { useEffect, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Editor } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
+import { TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import UnderlineExt from "@tiptap/extension-underline";
 import { TextStyle, FontSize } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import FontFamily from "@tiptap/extension-font-family";
 import { CustomImage } from "./CustomImageExtension";
+import { ImageUploadExtension } from "./ImageUploadExtension";
+import FileHandler from "@tiptap/extension-file-handler";
+import { Selection } from "@tiptap/extensions";
+import UniqueID from "@tiptap/extension-unique-id";
 import TextAlign from "@tiptap/extension-text-align";
 import Highlight from "@tiptap/extension-highlight";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -43,7 +48,8 @@ import { MobileSelectionMenu } from "./MobileSelectionMenu";
 import { AiStatusIndicator } from "./AiStatusIndicator";
 import { useAiAction } from "@/hooks/use-ai-action";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
-import { IMAGE_MIME_TYPES, BROWSER_RENDERABLE_IMAGE_TYPES } from "@/lib/attachment-limits";
+import { IMAGE_MIME_TYPES } from "@/lib/attachment-limits";
+import { toast } from "sonner";
 
 export interface GrapheEditorProps {
   /** HTML string to display. Set imperatively when contentKey changes. */
@@ -83,110 +89,17 @@ export interface GrapheEditorProps {
   renderContent: (editor: Editor) => ReactNode;
 }
 
-type UploadResult = {
-  url: string;
-  id?: string;
-  masterPath?: string | null;
-  downloadUrl?: string;
-  isAnimated?: boolean;
-};
-
-/** True if any part of the element is within the visible viewport. */
-function isElementInViewport(el: Element): boolean {
-  const { top, bottom, left, right } = el.getBoundingClientRect();
-  return bottom > 0 && top < window.innerHeight && right > 0 && left < window.innerWidth;
-}
-
-/**
- * Create a blob: URL containing an SVG "uploading…" placeholder.
- * Used for HEIC and other types the browser can't render from raw bytes.
- * Returns a blob: URL so the onContentChange blob-strip regex handles it automatically.
- */
-function makeUploadPlaceholder(fileName: string): string {
-  const safe = fileName.replace(/[<>&"]/g, c =>
-    ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c] ?? c)
-  );
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180">
-    <rect width="320" height="180" rx="8" fill="#111113"/>
-    <rect x="1" y="1" width="318" height="178" rx="7.5" fill="none" stroke="#27272a" stroke-width="1"/>
-    <text x="160" y="76" text-anchor="middle" font-family="system-ui,sans-serif" font-size="22" fill="#52525b">⬆</text>
-    <text x="160" y="104" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" fill="#a1a1aa">Uploading image…</text>
-    <text x="160" y="124" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" fill="#52525b">${safe}</text>
-  </svg>`;
-  return URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
-}
-
-/** Find an image node by its current src. Re-queries the live document state. */
-function findImageNode(editor: Editor, src: string): { pos: number; nodeSize: number; attrs: Record<string, unknown> } | null {
-  let result: { pos: number; nodeSize: number; attrs: Record<string, unknown> } | null = null;
+/** Find and return position of an imageUpload node by its UUID id attribute. */
+function findUploadNode(editor: Editor, uploadId: string): { pos: number; nodeSize: number } | null {
+  let result: { pos: number; nodeSize: number } | null = null;
   editor.view.state.doc.descendants((node, pos): boolean | void => {
     if (result) return false;
-    if (node.type.name === "image" && node.attrs.src === src) {
-      result = { pos, nodeSize: node.nodeSize, attrs: node.attrs as Record<string, unknown> };
+    if (node.type.name === "imageUpload" && node.attrs.id === uploadId) {
+      result = { pos, nodeSize: node.nodeSize };
       return false;
     }
   });
   return result;
-}
-
-/**
- * Find an image node by its placeholder src and either swap it to the permanent
- * signed URL (result ≠ null) or delete it entirely (result === null, upload failed).
- *
- * Swap strategy: if the image is currently visible, preload the new URL silently
- * and swap only once it's in the browser's cache — the user never sees a loading
- * state because both the old and new images render from memory. If the image is
- * off-screen, swap immediately.
- */
-function swapImageNode(editor: Editor, placeholderSrc: string, result: UploadResult | null) {
-  if (editor.isDestroyed) return;
-
-  const commit = () => {
-    if (editor.isDestroyed) return;
-    const found = findImageNode(editor, placeholderSrc);
-    if (!found) return; // node was deleted by the user while we were waiting
-    const { state } = editor.view;
-    if (result) {
-      editor.view.dispatch(state.tr.setNodeMarkup(found.pos, undefined, {
-        ...found.attrs,
-        src: result.url,
-        ...(result.id ? { attachmentId: result.id } : {}),
-        ...(result.masterPath ? { masterPath: result.masterPath } : {}),
-        ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
-        ...(result.isAnimated ? { isAnimated: true } : {}),
-      }));
-    } else {
-      editor.view.dispatch(state.tr.delete(found.pos, found.pos + found.nodeSize));
-    }
-  };
-
-  if (!result) {
-    commit();
-    return;
-  }
-
-  // Find the DOM element to check viewport visibility
-  const found = findImageNode(editor, placeholderSrc);
-  if (!found) return;
-  const domNode = editor.view.nodeDOM(found.pos);
-  const imgEl = domNode instanceof HTMLElement
-    ? (domNode.tagName === "IMG" ? domNode : domNode.querySelector("img"))
-    : null;
-
-  if (imgEl && isElementInViewport(imgEl)) {
-    // Image is visible — preload the new URL so the swap is cache-instant
-    const preload = new window.Image();
-    preload.src = result.url;
-    if (preload.complete) {
-      commit();
-    } else {
-      preload.onload = commit;
-      preload.onerror = commit; // swap anyway — don't leave placeholder forever
-    }
-  } else {
-    // Off-screen — swap immediately, no visible flash possible
-    commit();
-  }
 }
 
 export function GrapheEditor({
@@ -217,6 +130,8 @@ export function GrapheEditor({
     FontFamily,
     // CustomImage (NOT bare Image) — React NodeView with selection UI, alt-text, source badges
     CustomImage,
+    // ImageUploadExtension — atom placeholder during upload; no blob: URLs enter the document
+    ImageUploadExtension,
     TextAlign.configure({ types: ["heading", "paragraph"] }),
     Highlight.configure({ multicolor: true }),
     Placeholder.configure({ placeholder }),
@@ -226,6 +141,7 @@ export function GrapheEditor({
     TableCell,
     Link.configure({
       openOnClick: false,
+      enableClickSelection: true,
       HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" },
     }),
     TaskList,
@@ -246,11 +162,34 @@ export function GrapheEditor({
     Emoji,
     InlineMath,
     BlockMath,
+    // FileHandler replaces the manual paste listener; configured below via ref to avoid
+    // stale closure (editorExtensions has [] deps but handleAttachFile is a useCallback).
+    FileHandler.configure({
+      allowedMimeTypes: Array.from(IMAGE_MIME_TYPES),
+      onPaste(_editor: Editor, files: File[]) {
+        files.forEach(file => { handleAttachFileRef.current?.(file); });
+      },
+      onDrop(_editor: Editor, files: File[]) {
+        files.forEach(file => { handleAttachFileRef.current?.(file); });
+      },
+    }),
+    // Selection: replaces browser's default ::selection with a themeable decoration
+    // so brand-color text selection works consistently cross-browser and in dark modes.
+    Selection,
+    // UniqueID: adds data-id (uuid) to each block node — required for Yjs stable IDs,
+    // block deep links, and future comment anchoring. Yjs-aware (skips y-sync$ txns).
+    UniqueID.configure({
+      types: [
+        "paragraph", "heading", "bulletList", "orderedList",
+        "taskList", "blockquote", "codeBlock", "details",
+      ],
+    }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], []);
 
   const editor = useEditor({
     immediatelyRender: false,
+    shouldRerenderOnTransaction: false,
     extensions: editorExtensions,
     // Content intentionally omitted — TipTap v3 calls setOptions() on every render when
     // content changes, firing onUpdate (accidental save) and potentially recreating the editor.
@@ -258,12 +197,10 @@ export function GrapheEditor({
     content: "",
     editable,
     onUpdate: ({ editor }) => {
-      const raw = editor.getHTML();
-      // Strip images with blob: src — these are pending uploads not yet resolved
-      // to signed URLs. Prevents transient blob: URLs from being persisted to DB
-      // if autosave fires before the upload round-trip completes.
-      const clean = raw.replace(/<img\b[^>]*\bsrc="blob:[^"]*"[^>]*\/?>/gi, "");
-      onContentChange(clean, editor.getText());
+      // imageUpload nodes have no src — they render as <div data-type="imageUpload">
+      // and are excluded from getHTML() output automatically (atom nodes render their
+      // renderHTML() output, not their NodeView). No blob: stripping needed.
+      onContentChange(editor.getHTML(), editor.getText());
     },
     editorProps: {
       attributes: {
@@ -274,6 +211,7 @@ export function GrapheEditor({
         // the AutoFill toolbar.
         autocomplete: "off",
         autocorrect: "off",
+        autocapitalize: "off",
         spellcheck: "true",
       },
     },
@@ -325,80 +263,63 @@ export function GrapheEditor({
     onBeforeAiRewrite,
   });
 
-  // Attach-file wrapper: shell uploads → GrapheEditor inserts image into the editor.
-  //
-  // For previewable types (JPEG, PNG, GIF, WebP): insert a local blob: URL instantly so
-  // the image appears while the upload runs in the background, then swap to the signed URL.
-  //
-  // For non-previewable types (HEIC on Chrome): insert an SVG "Uploading…" placeholder
-  // so the user sees something immediately, then swap to the real image when ready.
-  //
-  // Swap strategy: if the image is visible in the viewport when the upload completes,
-  // preload the new URL first so the swap is cache-instant and invisible. Off-screen
-  // images are swapped immediately (no visible flash possible).
-  //
-  // blob: URLs (including SVG placeholder URLs) are stripped from the HTML passed to
-  // onContentChange so they are never persisted to the database.
+  // Attach-file: inserts an imageUpload atom node immediately (no blob: URL), then
+  // replaces it with a real image node once the upload round-trip completes.
+  // FileHandler extension (in editorExtensions) calls this for both paste and drop,
+  // replacing the former manual document.addEventListener("paste", ...) useEffect.
   const handleAttachFile = useCallback(async (file: File) => {
     if (!onAttachFile || !editor) return;
 
-    const canPreview = BROWSER_RENDERABLE_IMAGE_TYPES.has(file.type);
+    const uploadId = crypto.randomUUID();
 
-    // Insert a placeholder immediately — either the real image from local memory,
-    // or an SVG "uploading…" card for types the browser can't decode natively.
-    const placeholderSrc = canPreview
-      ? URL.createObjectURL(file)
-      : makeUploadPlaceholder(file.name);
+    // Insert placeholder atom node — no src, Yjs-serializable
+    editor.chain().focus().insertContent({
+      type: "imageUpload",
+      attrs: { id: uploadId, fileName: file.name },
+    }).run();
 
-    editor.chain().focus().setImage({ src: placeholderSrc, alt: file.name }).run();
+    let result: { url?: string; id?: string; masterPath?: string | null; downloadUrl?: string; isAnimated?: boolean } | null | undefined;
+    try {
+      result = await onAttachFile(file);
+    } catch {
+      result = null;
+    }
 
-    const result = await onAttachFile(file);
+    if (editor.isDestroyed) return;
+    const found = findUploadNode(editor, uploadId);
+    if (!found) return; // user deleted the placeholder while upload was in flight
 
+    const { state } = editor.view;
     if (!result?.url) {
-      // Upload failed — remove the placeholder
-      swapImageNode(editor, placeholderSrc, null);
-      URL.revokeObjectURL(placeholderSrc);
+      editor.view.dispatch(state.tr.delete(found.pos, found.pos + found.nodeSize));
+      toast.error("Couldn't upload that image. Check your connection and try again.");
       return;
     }
 
-    // Swap placeholder → permanent URL (preloads first if image is in view)
-    swapImageNode(editor, placeholderSrc, result as UploadResult);
-    URL.revokeObjectURL(placeholderSrc);
+    const imageNode = editor.schema.nodes.image!.create({
+      src: result.url,
+      alt: file.name,
+      ...(result.id ? { attachmentId: result.id } : {}),
+      ...(result.masterPath ? { masterPath: result.masterPath } : {}),
+      ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
+      ...(result.isAnimated ? { isAnimated: true } : {}),
+    });
+    const insertTr = state.tr.replaceWith(found.pos, found.pos + found.nodeSize, imageNode);
+    // Move cursor just past the image so the node deselects — the ring won't linger
+    // after a drag/paste drop and the user can keep typing immediately.
+    try {
+      const $after = insertTr.doc.resolve(found.pos + imageNode.nodeSize);
+      insertTr.setSelection(TextSelection.near($after));
+    } catch {
+      // no text position nearby — leave default selection
+    }
+    editor.view.dispatch(insertTr);
   }, [onAttachFile, editor]);
 
-  // Clipboard paste: intercept image blobs and upload them (same placeholder pattern)
-  useEffect(() => {
-    if (!onAttachFile) return;
-    const onPaste = async (e: ClipboardEvent) => {
-      if (!editor?.isFocused) return;
-      const items = Array.from(e.clipboardData?.items ?? []);
-      const imageItem = items.find(item => IMAGE_MIME_TYPES.has(item.type));
-      if (!imageItem) return;
-      const file = imageItem.getAsFile();
-      if (!file) return;
-      e.preventDefault();
-
-      const canPreview = BROWSER_RENDERABLE_IMAGE_TYPES.has(file.type);
-      const placeholderSrc = canPreview
-        ? URL.createObjectURL(file)
-        : makeUploadPlaceholder(file.name);
-
-      editor.chain().focus().setImage({ src: placeholderSrc, alt: file.name }).run();
-
-      const result = await onAttachFile(file);
-
-      if (!result?.url) {
-        swapImageNode(editor, placeholderSrc, null);
-        URL.revokeObjectURL(placeholderSrc);
-        return;
-      }
-
-      swapImageNode(editor, placeholderSrc, result as UploadResult);
-      URL.revokeObjectURL(placeholderSrc);
-    };
-    document.addEventListener("paste", onPaste);
-    return () => document.removeEventListener("paste", onPaste);
-  }, [editor, onAttachFile]);
+  // Keep a stable ref so FileHandler (which is configured in the [] useMemo) can
+  // always call the latest handleAttachFile without capturing a stale closure.
+  const handleAttachFileRef = useRef(handleAttachFile);
+  useEffect(() => { handleAttachFileRef.current = handleAttachFile; }, [handleAttachFile]);
 
   // Find/replace keyboard shortcut — only intercept when editor has focus
   useEffect(() => {

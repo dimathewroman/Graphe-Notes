@@ -29,6 +29,8 @@ export const SmartTaskItem = TaskItem.extend({
       new Plugin({
         key: smartChecklistKey,
         appendTransaction(transactions, oldState, newState) {
+          // Skip Yjs sync transactions — auto-sort must not run on remote ops
+          if (transactions.some(tr => tr.getMeta('y-sync$'))) return null;
           if (transactions.some((t) => t.getMeta(smartChecklistKey))) return null;
           const mainTr = transactions.find((t) => t.docChanged);
           if (!mainTr) return null;

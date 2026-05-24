@@ -47,6 +47,20 @@ export const CustomImage = Image.extend({
           return { "data-is-animated": "true" };
         },
       },
+      // Explicit pixel width set by drag-resize. null = 100% (default layout width).
+      width: {
+        default: null,
+        parseHTML: (element) => {
+          const styleMatch = (element.getAttribute("style") ?? "").match(/width:\s*(\d+)px/);
+          if (styleMatch) return parseInt(styleMatch[1], 10);
+          const w = element.getAttribute("width");
+          return w ? parseInt(w, 10) : null;
+        },
+        renderHTML: (attributes) => {
+          if (!attributes.width) return {};
+          return { style: `width: ${attributes.width}px` };
+        },
+      },
     };
   },
   addNodeView() {
