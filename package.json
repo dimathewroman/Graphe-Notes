@@ -11,7 +11,16 @@
   },
   "private": true,
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "sharp"]
+    "onlyBuiltDependencies": ["esbuild", "sharp"],
+    "overrides": {
+      "protobufjs": ">=8.0.2",
+      "@protobufjs/utf8": ">=1.1.1",
+      "fast-uri": ">=3.1.2",
+      "ws": ">=8.20.1",
+      "qs": ">=6.15.2",
+      "brace-expansion": ">=5.0.6",
+      "hono": ">=4.12.18"
+    }
   },
   "devDependencies": {
     "concurrently": "catalog:",
