@@ -119,23 +119,37 @@ export function GrapheEditor({
   const keyboardHeight = useKeyboardHeight();
   const [showFindReplace, setShowFindReplace] = useState(false);
 
-  // Visual viewport offsetTop: how far Chrome has panned the visual viewport DOWN within
-  // the layout viewport to keep the cursor visible after the keyboard opens.
-  // toolbarBottom must subtract this offset so the toolbar tracks the visual viewport
-  // bottom (= keyboard top) rather than landing in the middle of the visible area.
-  const [vvOffsetTop, setVvOffsetTop] = useState(0);
+  // Toolbar bottom position — computed atomically via rAF to avoid the resize→scroll race.
+  // Chrome fires vv.resize (height changes) then vv.scroll (offsetTop/pan changes) as two
+  // separate events when the keyboard opens. Reading them in separate handlers causes a
+  // brief intermediate render where kbH is correct but offsetTop is still 0 — the toolbar
+  // flashes at the wrong position for one frame. rAF debouncing ensures both events are
+  // consumed before we read the values, so the toolbar always jumps directly to the right spot.
+  const [toolbarBottom, setToolbarBottom] = useState(0);
   useEffect(() => {
+    if (bp !== "mobile") return;
     const vv = window.visualViewport;
     if (!vv) return;
-    const update = () => setVvOffsetTop(vv.offsetTop);
-    update();
-    vv.addEventListener("scroll", update);
-    vv.addEventListener("resize", update);
-    return () => {
-      vv.removeEventListener("scroll", update);
-      vv.removeEventListener("resize", update);
+    let rafId = 0;
+    const update = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const inset = window.innerHeight - vv.height;
+        const kbH = inset > 50 ? inset : 0;
+        setToolbarBottom(kbH > 0 ? Math.max(0, kbH - vv.offsetTop) : 0);
+      });
     };
-  }, []);
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    return () => {
+      cancelAnimationFrame(rafId);
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [bp]);
 
   // Fix 1: stable extensions reference — useMemo([]) ensures the same array instance is
   // reused for the lifetime of the component, preventing TipTap from re-calling setOptions()
@@ -497,7 +511,7 @@ export function GrapheEditor({
           editor={editor}
           showUndoRedo
           className="fixed left-0 right-0 z-40 border-t border-panel-border bg-editor/95 backdrop-blur-md"
-          style={{ bottom: keyboardHeight > 0 ? Math.max(0, keyboardHeight - vvOffsetTop) : 0 }}
+          style={{ bottom: toolbarBottom }}
           onAttachFile={attachFileHandler}
         />,
         document.body
