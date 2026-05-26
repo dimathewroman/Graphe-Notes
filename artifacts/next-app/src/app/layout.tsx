@@ -59,6 +59,19 @@ export const metadata: Metadata = {
   description: "Notes that get you, wherever you go.",
 };
 
+// `interactive-widget=resizes-visual` keeps the layout viewport (and window.innerHeight)
+// stable when the soft keyboard opens — only the visual viewport shrinks. This is the
+// default in Chromium 108+ but setting it explicitly ensures consistent behaviour across
+// older Android WebViews and prevents Vaul Drawer from misinterpreting the resize.
+// Our useKeyboardHeight hook derives keyboard height from window.innerHeight - vv.height,
+// which requires this mode to give a correct result on all Android targets.
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  interactiveWidget: "resizes-visual",
+};
+
 // Applies saved theme before first paint to avoid flash of wrong theme
 const themeInitScript = `
 (function() {

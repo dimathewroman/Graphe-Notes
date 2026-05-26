@@ -214,6 +214,18 @@
   background-color: hsl(var(--primary) / 0.25);
 }
 
+/* TipTap Highlight — ensure <mark> elements are visible in both themes.
+   Tailwind's preflight or Typography plugin may reset browser-default yellow;
+   TipTap multicolor applies background-color as an inline style (which wins
+   over this rule), so this only affects bare <mark> with no data-color. */
+.ProseMirror mark {
+  border-radius: 2px;
+  padding: 0.05em 0.1em;
+}
+.ProseMirror mark:not([data-color]) {
+  background-color: rgba(254, 240, 138, 0.55);
+}
+
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   @apply text-muted-foreground float-left h-0 pointer-events-none;

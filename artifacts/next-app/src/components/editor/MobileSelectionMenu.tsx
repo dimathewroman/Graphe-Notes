@@ -1,6 +1,6 @@
 // Native-style mobile selection menu with Copy/Paste/Delete/Select All + Writing Tools panel.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import type { useEditor } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
 import { Sparkles, ChevronRight, ArrowLeft, Copy, ClipboardPaste, Trash2, Type, Check, Scissors } from "lucide-react";
@@ -79,6 +79,18 @@ export function MobileSelectionMenu({
   }, [editor, visible, onSelectionCapture]);
 
   const [menuTop, setMenuTop] = useState<number>(0);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const toolbarScrollRef = useRef<HTMLDivElement>(null);
+
+  const checkToolbarScroll = useCallback(() => {
+    const el = toolbarScrollRef.current;
+    if (!el) return;
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 2);
+  }, []);
+
+  useEffect(() => {
+    checkToolbarScroll();
+  }, [checkToolbarScroll, rect]);
 
   const clampMenu = useCallback(() => {
     if (!rect || !menuRef.current) return;
@@ -306,35 +318,47 @@ export function MobileSelectionMenu({
       style={menuStyle}
       onMouseDown={(e) => e.preventDefault()}
     >
-      <div className="bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 flex items-center gap-0.5 p-1 luminance-border-top overflow-x-auto hide-scrollbar">
-        <button onClick={handleCut} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] shrink-0">
-          <Scissors className="w-3.5 h-3.5" />
-          Cut
-        </button>
-        <button onClick={handleCopy} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] shrink-0">
-          <Copy className="w-3.5 h-3.5" />
-          Copy
-        </button>
-        <button onClick={handlePaste} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] shrink-0">
-          <ClipboardPaste className="w-3.5 h-3.5" />
-          Paste
-        </button>
-        <button onClick={handleDelete} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] shrink-0">
-          <Trash2 className="w-3.5 h-3.5" />
-          Delete
-        </button>
-        <button onClick={handleSelectAll} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] whitespace-nowrap shrink-0">
-          <Type className="w-3.5 h-3.5" />
-          Select All
-        </button>
-        <div className="w-px h-5 bg-panel-border mx-0.5 shrink-0" />
-        <button
-          onClick={() => setShowWritingTools(true)}
-          className="flex items-center justify-center p-2 rounded-lg text-indigo-400 hover:bg-indigo-500/10 transition-colors min-h-[36px] min-w-[36px]"
-          title="Writing Tools"
+      <div className="relative bg-popover border border-panel-border rounded-xl shadow-xl shadow-black/30 luminance-border-top overflow-hidden">
+        <div
+          ref={toolbarScrollRef}
+          className="flex items-center gap-0.5 p-1 overflow-x-auto hide-scrollbar"
+          onScroll={(e: UIEvent<HTMLDivElement>) => {
+            const el = e.currentTarget;
+            setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 2);
+          }}
         >
-          <Sparkles className="w-4 h-4" />
-        </button>
+          <button onClick={handleCut} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] shrink-0">
+            <Scissors className="w-3.5 h-3.5" />
+            Cut
+          </button>
+          <button onClick={handleCopy} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] shrink-0">
+            <Copy className="w-3.5 h-3.5" />
+            Copy
+          </button>
+          <button onClick={handlePaste} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] shrink-0">
+            <ClipboardPaste className="w-3.5 h-3.5" />
+            Paste
+          </button>
+          <button onClick={handleDelete} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] shrink-0">
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete
+          </button>
+          <button onClick={handleSelectAll} className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-foreground hover:bg-panel transition-colors min-h-[36px] whitespace-nowrap shrink-0">
+            <Type className="w-3.5 h-3.5" />
+            Select All
+          </button>
+          <div className="w-px h-5 bg-panel-border mx-0.5 shrink-0" />
+          <button
+            onClick={() => setShowWritingTools(true)}
+            className="flex items-center justify-center p-2 rounded-lg text-indigo-400 hover:bg-indigo-500/10 transition-colors min-h-[36px] min-w-[36px] shrink-0"
+            title="Writing Tools"
+          >
+            <Sparkles className="w-4 h-4" />
+          </button>
+        </div>
+        {canScrollRight && (
+          <div className="absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-popover to-transparent pointer-events-none rounded-r-xl" />
+        )}
       </div>
     </div>
   );
