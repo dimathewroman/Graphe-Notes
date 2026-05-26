@@ -119,32 +119,33 @@ export function GrapheEditor({
   const keyboardHeight = useKeyboardHeight();
   const [showFindReplace, setShowFindReplace] = useState(false);
 
-  // Toolbar bottom position — computed atomically via rAF to avoid the resize→scroll race.
-  // Chrome fires vv.resize (height changes) then vv.scroll (offsetTop/pan changes) as two
-  // separate events when the keyboard opens. Reading them in separate handlers causes a
-  // brief intermediate render where kbH is correct but offsetTop is still 0 — the toolbar
-  // flashes at the wrong position for one frame. rAF debouncing ensures both events are
-  // consumed before we read the values, so the toolbar always jumps directly to the right spot.
+  // Toolbar bottom position — debounced via setTimeout to avoid the resize→scroll race.
+  // Chrome fires vv.resize (height changes) and vv.scroll (offsetTop/pan changes) as two
+  // separate browser tasks with a paint possible in between. requestAnimationFrame fires
+  // between these tasks, so it still reads a stale vv.offsetTop on the first render and
+  // the toolbar flashes at the wrong height. setTimeout(fn, 30) queues a macrotask that
+  // runs after both events have settled (~2 frames): both vv.height and vv.offsetTop are
+  // stable by then, so the toolbar renders exactly once at the correct position.
   const [toolbarBottom, setToolbarBottom] = useState(0);
   useEffect(() => {
     if (bp !== "mobile") return;
     const vv = window.visualViewport;
     if (!vv) return;
-    let rafId = 0;
+    let timerId = 0;
     const update = () => {
-      cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
+      clearTimeout(timerId);
+      timerId = window.setTimeout(() => {
         const inset = window.innerHeight - vv.height;
         const kbH = inset > 50 ? inset : 0;
         setToolbarBottom(kbH > 0 ? Math.max(0, kbH - vv.offsetTop) : 0);
-      });
+      }, 30);
     };
     update();
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);
     window.addEventListener("resize", update);
     return () => {
-      cancelAnimationFrame(rafId);
+      clearTimeout(timerId);
       vv.removeEventListener("resize", update);
       vv.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
