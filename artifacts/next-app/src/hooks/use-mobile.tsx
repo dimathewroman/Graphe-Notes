@@ -26,22 +26,20 @@ export function useBreakpoint() {
   return bp
 }
 
-// Returns the inset (in CSS px) from the bottom of the layout viewport to the
-// bottom of the currently visible area. When a soft keyboard is open this is
-// the keyboard height; when nothing is overlaying the page it is 0.
+// Returns the keyboard height (in CSS px). When a soft keyboard is open this
+// is the height of the keyboard; when nothing overlays the page it is 0.
 //
-// The formula `innerHeight - vv.height - vv.offsetTop` works across:
-//   - iOS Safari (layout viewport stays full-size; visual viewport shrinks)
-//   - Android Chrome with `interactive-widget=resizes-visual` (the modern
-//     default since Chromium 108 — same behavior as iOS)
-//   - Android Chrome with `interactive-widget=resizes-content` (legacy:
-//     layout viewport itself shrinks, so the inset stays at 0 and the toolbar
-//     uses bottom: 0 directly)
-//
-// `vv.offsetTop` matters because Android Chrome auto-scrolls the visual
-// viewport inside the layout viewport when an input near the bottom of the
-// page receives focus. Without subtracting it the toolbar drifts upward by
-// however much the visual viewport has scrolled.
+// Formula: `innerHeight - vv.height`
+//   - iOS Safari: layout viewport stays full-size; visual viewport shrinks by
+//     keyboard height. innerH - vv.h = keyboard height. ✓
+//   - Android Chrome with `interactive-widget=resizes-visual`: same as iOS.
+//     The keyboard height is the difference between the stable layout viewport
+//     and the shrinking visual viewport. vv.offsetTop (document scroll) must
+//     NOT be subtracted — it reflects the page scrolling to show the cursor,
+//     not the keyboard size. Subtracting it causes the toolbar to drift into
+//     the keyboard when the user taps mid-document.
+//   - Android Chrome `resizes-content` (legacy): layout viewport shrinks too,
+//     so innerH ≈ vv.h and the result is ~0 → toolbar uses bottom: 0 directly.
 export function useKeyboardHeight() {
   const [keyboardHeight, setKeyboardHeight] = React.useState(0)
 
@@ -50,7 +48,7 @@ export function useKeyboardHeight() {
     if (!vv) return
 
     const update = () => {
-      const inset = window.innerHeight - vv.height - vv.offsetTop
+      const inset = window.innerHeight - vv.height
       // Threshold filters out a few pixels of browser-chrome rounding so a
       // closed keyboard reads as exactly 0.
       setKeyboardHeight(inset > 50 ? inset : 0)
