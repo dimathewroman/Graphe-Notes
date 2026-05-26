@@ -185,7 +185,7 @@ export default function Home() {
           <DrawerPortal>
             <DrawerOverlay onClick={() => setSidebarOpen(false)} />
             <DrawerPrimitive
-              className="fixed top-0 left-0 z-50 w-[280px] h-[100lvh] bg-panel border-r border-panel-border shadow-2xl"
+              className="fixed top-0 left-0 z-50 w-[280px] min-h-[100lvh] bg-panel border-r border-panel-border shadow-2xl"
             >
               <SidebarContent onNavigate={() => setSidebarOpen(false)} />
             </DrawerPrimitive>

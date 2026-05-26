@@ -4,6 +4,7 @@
 // note metadata, folders, tags, timers, or navigation.
 
 import { useEffect, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
 import { TextSelection } from "@tiptap/pm/state";
@@ -117,6 +118,24 @@ export function GrapheEditor({
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const [showFindReplace, setShowFindReplace] = useState(false);
+
+  // Visual viewport offsetTop: how far Chrome has panned the visual viewport DOWN within
+  // the layout viewport to keep the cursor visible after the keyboard opens.
+  // toolbarBottom must subtract this offset so the toolbar tracks the visual viewport
+  // bottom (= keyboard top) rather than landing in the middle of the visible area.
+  const [vvOffsetTop, setVvOffsetTop] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setVvOffsetTop(vv.offsetTop);
+    update();
+    vv.addEventListener("scroll", update);
+    vv.addEventListener("resize", update);
+    return () => {
+      vv.removeEventListener("scroll", update);
+      vv.removeEventListener("resize", update);
+    };
+  }, []);
 
   // Fix 1: stable extensions reference — useMemo([]) ensures the same array instance is
   // reused for the lifetime of the component, preventing TipTap from re-calling setOptions()
@@ -466,15 +485,22 @@ export function GrapheEditor({
       <SlashCommandMenu editor={editor} />
 
       {/* Mobile bottom toolbar — keyboard-aware. showUndoRedo lives here (not in the top
-          bar) so the user can undo/redo without dismissing the keyboard. */}
-      {bp === "mobile" && (
+          bar) so the user can undo/redo without dismissing the keyboard.
+          Rendered via createPortal into document.body so position:fixed is relative to the
+          viewport, not a transformed motion.div ancestor (Framer Motion keeps transform:
+          translateX(0) active on animated divs, breaking fixed positioning for descendants).
+          toolbarBottom accounts for vv.offsetTop: when Chrome pans the visual viewport
+          downward to keep the cursor in view after the keyboard opens, we subtract that
+          offset so the toolbar tracks the visual viewport bottom (= keyboard top). */}
+      {bp === "mobile" && typeof document !== "undefined" && createPortal(
         <EditorToolbar
           editor={editor}
           showUndoRedo
           className="fixed left-0 right-0 z-40 border-t border-panel-border bg-editor/95 backdrop-blur-md"
-          style={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
+          style={{ bottom: keyboardHeight > 0 ? Math.max(0, keyboardHeight - vvOffsetTop) : 0 }}
           onAttachFile={attachFileHandler}
-        />
+        />,
+        document.body
       )}
 
       {/* Find/replace panel */}
