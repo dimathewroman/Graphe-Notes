@@ -302,6 +302,10 @@ Claims 9 specs 01–09 incl. 07-onboarding; actual: 10 files — 01–06, 08–1
 `Sidebar.tsx:65` and `SettingsModal.tsx:69,505-506` — motion and atmosphere have owning hooks; theme doesn't.
 *Fix:* `use-theme.ts`.
 
+### A10a. E2E suite has been red on master's merge path since ≥2026-05-24 — **High**
+Discovered while validating this audit's own PR: the same three tests in `e2e/11-editor-enhancements.spec.ts` (`:45` turn-into strict-mode violation — `.ProseMirror ul li` resolves to 7 elements; `:78` toggle-block click timeout; `:109` image-resize — `Insert` button resolves to 4 elements) failed on this doc-only PR **and** on the last CI runs before PRs #109/#110 were merged (verified via `gh run list`: every non-CodeQL CI run since 2026-05-10 concluded `failure`). The suite added with the image-resize/editor-enhancement work rotted immediately, and merges have been proceeding over red CI — which silently voids the "CI must pass before merge" convention and masks any *new* regressions the other 45 tests would catch.
+*Fix:* repair the three specs on a `test/fix-editor-enhancements-spec` branch (selectors need strict-mode-safe scoping, e.g. `.first()`/`getByRole` within the block), then make E2E a required status check so red CI blocks merges again.
+
 ### A10. 27 unmerged branches — mostly squash-merge leftovers, one live, one lost — **Low**
 Verified clusters: ~20 squash-merged leftovers safe to delete (RLS/security cluster → PRs #88/#93/#94; docs cluster; refactor/infra cluster; ~8 April mobile-fix branches). Genuinely pending: `fix/mobile-polish-and-toolbar-bugs` (2026-05-26, **newer than master's head** — contains the keyboard-flicker fixes, see M8). Genuinely lost: `feature/onboarding` (see A1). Abandoned: `claude/happy-lamport`.
 *Fix:* bulk-delete merged refs; land the mobile branch; decide onboarding.
