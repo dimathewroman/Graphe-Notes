@@ -1,7 +1,7 @@
 # Graphe Notes — Foundation Audit (Stage 1)
 
 **Date:** 2026-07-04 · **Branch audited:** `master` (via `chore/full-audit`, clean tree) · **Scope:** read-only code audit; app not run.
-**Method:** six parallel audit passes (mobile readiness, design/UI, efficiency, security, dead code/duplication, architecture & docs drift), with the load-bearing file:line claims independently re-verified against source before inclusion.
+**Method:** eight audit passes — six parallel (mobile readiness, design/UI, efficiency, security, dead code/duplication, architecture & docs drift) plus a second wave of two dedicated AI passes (architecture/plumbing vs the locked AI Provider Architecture v2 spec; prompt quality & AI UX) — with the load-bearing file:line claims independently re-verified against source before inclusion.
 
 **Grounding in the roadmap:** this audit is written against the locked Templates v2 era decisions (Notion: *Templates v2 Era — Foundation Architecture*, May 2026): **Capacitor** is the mobile path, **Yjs** is Phase 1, and a **Foundation Optimization Audit** is already a tracked parallel initiative. Findings are tagged accordingly:
 - **[CAP]** — blocks or degrades the Capacitor wrap; must be fixed web-side regardless of plugins
@@ -329,6 +329,92 @@ The four Medium items concern: vault enforcement depth, one HTML-rendering path,
 
 ---
 
+## §G. AI layer — architecture, prompts, and always-on readiness
+
+*Added in a second audit wave (two dedicated passes), grounded in the locked **AI Provider Architecture v2** spec (Notion): three paths (Graphe Free w/ self-healing model selection · unified 9-provider BYOK w/ `/v1/models` discovery · Local LLM), pure-code smart routing (light/primary/embedding by action + ~500-char threshold), a specified error-handling contract, and Phase 6 = the proactive always-on assistant.*
+
+**How a request flows today:** selection menu → `use-ai-action.ts` builds a plain-text prompt from `ai-prompts.ts` → fresh `GET /api/ai/settings` on *every* call → local LLM: browser POSTs directly to the user's endpoint; cloud: `POST /api/ai/generate` → per-provider if/else (Gemini/OpenAI/Anthropic) → blocking fetch, `maxOutputTokens: 1024` → full response → client replaces the selection. No streaming, no cancellation, no timeout. The AI panel duplicates this pipeline independently; the first-run setup queue duplicates it a third time.
+
+### Spec-vs-code gap table
+
+| Spec pillar | Status | Evidence |
+|---|---|---|
+| Free tier self-healing model selection | **Hardcoded** — literal `"gemini-2.5-flash-lite"` constants | `lib/ai-model-router.ts:1-3` |
+| BYOK 9-provider dropdown | **3 of 9** (Google AI Studio, OpenAI, Anthropic); no OpenRouter/Groq/Mistral/Together/Fireworks/custom | `api/ai/generate/route.ts:13-19` |
+| Model discovery = connection test | **Partial** — OpenAI + Anthropic only | `api/ai/models/route.ts:8` |
+| Local LLM `/v1/models` discovery + classification | **Missing** — manual URL + manual model-name field | `SettingsModal.tsx:1178-1191` |
+| Multi-provider storage, one active, tap-to-switch | **Implemented** ✓ | `SettingsModal.tsx:286-298` |
+| Smart routing (roles, char threshold, action table) | **Stub** — `taskType` plumbing exists, every call site hardcodes `"manual"` (verified) | `use-ai-action.ts:95`, `AIPanel.tsx:79` |
+| 429 → respect Retry-After, one auto-retry | **Dead code** (G1) | `use-ai-action.ts:255` |
+| Local-server-down toast w/ Retry + Switch | **Missing** — plain banner | `AiStatusIndicator.tsx` |
+| Token-limit friendly error | **Missing** — no finishReason check anywhere | `generate/route.ts` |
+| Free-tier usage meter | **Implemented** ✓ (stale after generate — G15) | `SettingsModal.tsx:922-946` |
+
+### Correctness bugs in the AI layer
+
+**G1. The 429 auto-retry provably never fires — High.** `use-ai-action.ts:255` branches on `data.reason === "rpm_limit"`, but the server's RPM-429 carries the value under a different field (`generate/route.ts:126-131`); `reason` only ever holds `hourly/monthly_limit_reached`. Verified. The dead branch means a real Gemini RPM 429 falls through to a second `res.json()` on a consumed body → TypeError → generic error. The server's `retryAfterMs` is ignored (client hardcodes a 65s sleep) — and the "AI is busy, retrying…" message is unreachable UI because `AiStatusIndicator.tsx:13` shows the loading branch whenever `aiLoading` is true. No cancel affordance exists during the 65s wait.
+
+**G2. "Continue writing" is a shipped no-op — High.** `AiSelectionMenu.tsx:329` fires `onAction("continue_writing")`; no such template exists in `ai-prompts.ts` (verified) → `buildAiPrompt` returns null → silent bail at `use-ai-action.ts:85`. Doubly dead: `callAI` requires a non-empty selection, contradicting continue-writing semantics.
+
+**G3. Stale-position replacement can corrupt unrelated text — High.** The editor stays editable during generation (`GrapheEditor.tsx:444-458` only hides the menu); saved selection positions are never mapped through subsequent transactions before `insertContentAt({from, to})` (`use-ai-action.ts:69-71, 304`). Typing during a multi-second (or 65-second, G1) request makes the result land on the wrong range.
+
+**G4. Silent truncation replaces the full selection — High.** All cloud providers capped at `maxOutputTokens: 1024` (`generate/route.ts:117,211,272,309`); no `finishReason` check server-side, no length sanity check client-side. `longer_50` on a long selection returns a cut-off tail that *replaces* the user's full text (recoverable only via the pre-AI snapshot).
+
+**G5. Generative actions destructively replace; "No action items found." overwrites user text — High.** No preview/accept step for any action; summarize deletes the selection and leaves the summary, and `extract_action_items`' literal "No action items found." sentinel replaces the selection (`ai-prompts.ts:24-28` + uniform apply path).
+
+**G6. AIPanel "Insert into note" is silently lost — High.** `AIPanel.tsx:150-158` appends to `note.content` via the API, but the open editor only reloads on `contentKey` change (`GrapheEditor.tsx:229-258`) — the insertion is invisible and the next autosave overwrites it. Also interpolates raw model output into stored HTML unescaped.
+
+**G7. AI panel drops the local-LLM auth key + think-tag stripping — High.** `AIPanel.tsx:60-68` sends no `Authorization` header (its settings type omits `localLlmApiKey`), skips `stripThinkTags`, uses `max_tokens: 1024` vs the toolbar's 4096 — same feature, four behavioral differences, because the pipeline is forked (G8).
+
+**G8. The request pipeline exists four times and has drifted — High.** (a) `use-ai-action.ts:192-313`, (b) the first-run queued-action closure `:114-177` (reimplemented inline, *without* 429 handling, error mapping, or analytics), (c) `AIPanel.tsx:41-148`, (d) three per-provider if/else blocks server-side (Gemini error block duplicated verbatim at `generate/route.ts:122-148` and `:216-242`; OpenAI/Anthropic errors leak under misnamed `geminiStatus`/`geminiMessage` keys). *Fix:* one shared `executeAiRequest()` client-side + provider-adapter map server-side.
+
+**G9. Demo mode AI is a guaranteed 401 dead end — Medium.** Demo skips the settings fetch but still POSTs to the authenticated route with no session (`use-ai-action.ts:102,244`; `AIPanel.tsx:76,103`) → "AI key invalid or missing. Check Settings." — settings demo users don't have. *Fix:* canned demo responses or a "Sign up to use AI" state.
+
+**G10. Settings UI offers a Google AI Studio model override the router deliberately ignores — Medium.** `SettingsModal.tsx:307,993-1003` shows and saves it; `ai-model-router.ts` `google_ai_studio` case has an explicit comment "User model override is not supported for this provider" (verified). One of the two is wrong — remove the field or honor it.
+
+**G11. Enter-key double-fire + uncapped whole-note context in the panel — Medium.** `AIPanel.tsx:248-251` checks only `prompt.trim()`, not `isPending` — mashing Enter fires concurrent duplicate requests, each burning quota. `AIPanel.tsx:47-50` prepends full `title + contentText` with no truncation.
+
+### Prompt quality (`lib/ai-prompts.ts` — 21 templates)
+
+Scorecard: **Consistency: strong** (one file, one voice, one "Return only…, no explanations" contract on all 21 — verified no duplication elsewhere) · **Output contract: adequate** (no post-processing if the model disobeys; chatter/markdown fences reach the document verbatim) · **Format safety: weak** · **Determinism: weak** · **Edge cases: weak** · **Injection: weak**.
+
+**G12. No role separation or data fencing — High.** Every prompt is `"<instruction>: \n\n${selectedText}"` as a single user message — no `systemInstruction`, no delimiters, no "the following is data, not instructions" (`ai-prompts.ts:9-28`, `generate/route.ts:116,271,310`). On a flash-lite-class model, note text that *reads* like an instruction ("TODO: rewrite this as bullets") gets executed instead of transformed. Mandatory before any always-on scanning of arbitrary note content.
+
+**G13. Plain-text in, HTML-parsed out — formatting destroyed both directions — High.** Selections extracted via `textBetween(from, to)` (all marks/structure invisible to the model, destroyed on replace) — and **with no block separator** (verified at `use-ai-action.ts:79`, `AiSelectionMenu.tsx:80`, `MobileSelectionMenu.tsx:54,125,133`): two selected paragraphs are sent as `…end of one.Start of two…`. Output goes through `insertContentAt(range, string)` which Tiptap parses as HTML: model newlines collapse to spaces (bulleted summaries become one run-on paragraph), `**bold**` lands as literal asterisks. *Fix:* HTML-in/HTML-out prompting with tag-preservation instructions, `blockSeparator: "\n\n"` at minimum.
+
+**G14. Zero generation config — proofread runs at Gemini default temperature 1.0 — Medium.** No `temperature`/`topP` anywhere (verified repo-wide): "Do not change wording or structure" (proofread) at temp 1.0 on flash-lite paraphrases; retries are non-reproducible. *Fix:* per-action config (~0-0.2 mechanical, ~0.7 creative) carried alongside each template.
+
+**G15. Unverifiable length targets, no output validation, no language preservation — Medium.** "approximately 25% shorter" (small models can't self-measure percentages; nothing validates the result); no "respond in the same language as the input" on any template — non-English proofreads can come back translated.
+
+### Efficiency & plug-and-play
+
+**G16. Fully blocking send/receive: no streaming, no cancel, no timeout, plus a settings round-trip per call — High.** `stream: false` explicit (`use-ai-action.ts:141,215`, `AIPanel.tsx:67`); zero `AbortController`; no upstream timeout (a hung provider holds the Vercel function to platform kill); every toolbar action first awaits `GET /api/ai/settings` (`use-ai-action.ts:104`). *Fix:* SSE streaming route + AbortController + `AbortSignal.timeout` + cache the active provider in React Query.
+
+**G17. Provider support is copy-paste if/else across ~7 files — provider #5 is a multi-file change — High.** Adding one provider touches `generate/route.ts` (~60-line bespoke block), `keys/route.ts:8`, `models/route.ts`, `ai-model-router.ts`, `SettingsModal.tsx` (OpenAI vs Anthropic already cost ~20 parallel useState hooks, `:112-129`), and possibly `use-ai-action.ts`. Since 6 of the 9 spec providers are OpenAI-compatible, a `{baseUrl, authHeader, parse}` adapter table collapses nearly all of this — the single highest-leverage refactor for the spec's Phase 2.
+
+**G18. No token accounting in the DB; BYOK usage invisible; rate limiter races — Medium.** `totalTokensUsed` column never written (TODO at `lib/ai-rate-limit.ts:115`); BYOK requests don't touch `ai_usage` at all; the free-tier limiter is a non-atomic read-check-update that also runs a full-table `SUM(requests_this_month)` per request and increments *before* the upstream call (failures still consume quota). Per-request tokens go to PostHog but without the action name — you can rank actions by trigger count but not by outcome or cost (`ai_selection_action_triggered` also skips the local-LLM path entirely).
+
+**G19. Free-tier model names hardcoded — no self-healing — Medium.** `ai-model-router.ts:1-3`; when Google retires 2.5-flash-lite every free-tier user breaks until a deploy. `parseGeminiError` already classifies `model_unavailable` (`ai-error-handler.ts:59-64`) but nothing acts on it. *Fix:* cached server-side models poll + pick-lightest + 404→rediscover.
+
+**G20. iOS selection-menu conflict is real and still open — Low.** `-webkit-touch-callout: none` + mobile `contextmenu` preventDefault exist (`globals.css:196`, `GrapheEditor.tsx:397-403`) but neither suppresses iOS Safari's text-selection edit menu in contenteditable — the native bar and `MobileSelectionMenu` will stack. Matches the roadmap's open "AI toolbar fix (iOS native copy/paste conflict)" item; nothing in code addresses it yet.
+
+### Phase 6 (always-on assistant) readiness
+
+**Essentially zero — by design gap, not bad code.** What's reusable: the `taskType` router skeleton (`background`→flash-lite / `manual`→flash / `deliberate`→pro) is genuinely the right cost-tiering shape — it's just never exercised. The prerequisites, in dependency order:
+1. **Message-array API with system/user separation** (G12) — the single-concatenated-string request shape makes injection isolation and multi-turn impossible.
+2. **Structured output contract** — a JSON suggestion schema (`{type, noteId, anchor, title, body, confidence}`) with zod validation server-side; zero zod in the AI route today, and Gemini's native `responseSchema`/JSON mode is unused. (Compare: the sibling app's zod-validated plan pass.)
+3. **Wire the routing table** — implement the action→role + ~500-char threshold mapping so a background scanner can actually reach the light model.
+4. **Rate-limit redesign** — 5/hr + global monthly circuit breaker cannot host background scanning; needs per-taskType budgets.
+5. **Context assembly layer** — today's only context builder is AIPanel's uncapped string concat; chunking, embeddings, pgvector (spec Phase 4) are a full subsystem away.
+6. **Suggestion hygiene** — dedupe keys, per-note scan cursors/hashes, cooldowns, per-user daily suggestion caps: none exist.
+7. **Resolve the local-LLM reachability constraint** — local models are client-called by design (`generate/route.ts:50-55`), so a *server-side* background worker can never reach them; Phase 6 needs a client-resident scheduler or a rethink.
+
+**Clean bills:** key handling is right where it matters (AES-256-GCM at rest, `/api/ai/keys` GET returns metadata only, BYOK keys never reach the client; the local-LLM key return is a documented, commented exception); multi-provider storage + tap-to-switch matches the spec, with a thoughtful only-commit-configured-providers guard; discovery-as-connection-test genuinely works for OpenAI/Anthropic; BYOK applies uniformly to both call sites (no silent free-tier fallback for authed users); undo is clean (single transaction + automatic `pre_ai_rewrite` version snapshot — genuinely good safety design); `stripThinkTags` shows real local-model awareness; error taxonomy in `ai-error-handler.ts` maps distinct causes to actionable messages; the deferred-action first-run setup queue is a sound UX pattern (its triplicated implementation is the problem, not the idea); empty-selection and image-node-selection cases are guarded; PostHog server client configured correctly for serverless.
+
+**Verdict:** the prompt *file* is disciplined and consistent, but it encodes a plain-text, single-message, fire-and-replace model that is the wrong substrate for the always-on assistant — and the request layer around it is the weakest part of the app: blocking, uncancellable, forked four ways with visible drift, with a dead retry path and several silent data-loss edges. The highest-leverage sequence: (1) unify the four pipelines behind one client module + server adapter table (G8/G17 — also delivers 6 more BYOK providers nearly free), (2) rebuild the prompt contract as system-role + fenced HTML + per-action generation config (G12-G14), (3) wire the dormant taskType routing. Do those three and both the "plug and play" goal and the Phase 6 foundation are real.
+
+---
+
 ## §F. Roadmap alignment — what to fix now vs. what Templates v2 absorbs
 
 | Finding cluster | Now or later? | Rationale |
@@ -342,6 +428,11 @@ The four Medium items concern: vault enforcement depth, one HTML-rendering path,
 | E4 bundle | **Half now** (lowlight subset, font preloads E10), half with Note Type System code-splitting | Roadmap explicitly plans per-modality splits |
 | R5/R6 Note↔QuickBit duplication | **Extract shared primitives now**; full unification via Note Type System ("cross-mode unification" is a tracked FOA item) | Don't build the Note Type System on top of two divergent copies |
 | D1-D6 token/motion/dark/focus | **Now** | The four-layer theme system (Decision 8) will sit on these tokens; Color Presets can't ship over 96 hardcoded palette colors and a second hardcoded accent |
+| G1-G11 AI correctness bugs | **Now** | Dead retry, no-op button, stale-position/truncation data loss — user-visible today |
+| G8/G17 pipeline unification + adapter table | **Now** — it *is* spec Phase 2 (BYOK consolidation) | One refactor delivers 6 more providers and kills the drift class |
+| G12-G15 prompt contract v2 | **Before Phase 6**, ideally now | System role + fenced HTML + per-action config; every prompt written on the old substrate is rework later |
+| G16 streaming/cancel/timeout | **Now** | The single biggest perceived-quality lever for AI UX; also required for always-on |
+| G19 self-healing model selection | **Spec Phase 3** — as planned | Cheap once the adapter table exists |
 | A1/A2 doc truth | **Now** | Docs drive agent sessions; every future Templates v2 session inherits the drift |
 | §S security items | **Now** | Small, and the vault item affects what "Capacitor secure storage" needs to mean |
 
@@ -360,6 +451,8 @@ The four Medium items concern: vault enforcement depth, one HTML-rendering path,
 
 **Security:** no Criticals; 4 Mediums reported in-session per policy (not in this file until fixed).
 
+**AI (added in the second wave, §G):** the request layer is the weakest part of the app — blocking and uncancellable, forked four ways with visible drift, a dead 429-retry path, and several silent data-loss edges (stale-position replacement, 1024-token truncation, the panel's lost inserts). The prompt file is disciplined but built on the wrong substrate for the planned always-on assistant (plain text, single user message, no fencing, no structured output, temp 1.0 on proofread). Plug-and-play is 3 of 9 spec providers via copy-paste if/else; one adapter-table refactor closes most of the gap. Always-on readiness: the taskType router skeleton is right and dormant; seven concrete prerequisites listed in §G.
+
 **Suggested phasing** (one branch per phase, PR each, aligned to the Templates v2 timeline):
 
 | Phase | Branch | Contents | Est. |
@@ -372,8 +465,11 @@ The four Medium items concern: vault enforcement depth, one HTML-rendering path,
 | 6 | `fix/design-tokens` | D1 semantic sweep, D2 accent decision, D3 dark variant, D6 motion tokens | 2-3 days |
 | 7 | `refactor/shared-primitives` | R3-R8 extractions + R9 SettingsModal split + R1/R10-R12 deletions | 2-3 days |
 | 8 | `chore/docs-truth` | A1 decision, A2 spec true-up + A3 migration, A5/A7 refresh, D13/D14 doc amendments | ~1 day |
+| 9 | `fix/ai-correctness` | G1-G7, G9-G11 (dead retry, no-op button, stale positions, truncation, lost inserts, demo dead end) | 1-2 days |
+| 10 | `refactor/ai-pipeline` | G8 unify pipelines + G17 provider adapter table (= spec Phase 2, delivers 6 more BYOK providers) + G16 streaming/cancel/timeout + G18 token accounting | 3-4 days |
+| 11 | `feat/prompt-contract-v2` | G12-G15: system role + fenced HTML-in/HTML-out + per-action generation config + wire taskType routing — the Phase 6 substrate | 2-3 days |
 
-Independent phases: 1, 5, 6 can run in any order; 3-4 before any Capacitor work; 7 before Templates v2 Phase 2; 8 before the next agent-driven feature session.
+Independent phases: 1, 5, 6, 9 can run in any order; 3-4 before any Capacitor work; 7 before Templates v2 Phase 2; 8 before the next agent-driven feature session; 10 before 11; 11 before any Phase 6 (always-on) work.
 
 ---
 
