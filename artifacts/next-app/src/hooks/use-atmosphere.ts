@@ -11,14 +11,6 @@ import posthog from "posthog-js";
 
 export type { DarkModeLevel, ColorblindMode };
 
-export function useDarkModeLevel(): DarkModeLevel {
-  return useAppStore((s) => s.darkModeLevel);
-}
-
-export function useColorblindMode(): ColorblindMode {
-  return useAppStore((s) => s.colorblindMode);
-}
-
 // Call once at the app root (inside Providers) to restore persisted
 // preferences and sync DOM attributes.
 export function useAtmosphereInit() {

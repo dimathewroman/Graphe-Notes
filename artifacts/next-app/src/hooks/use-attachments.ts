@@ -91,8 +91,6 @@ async function heicToPreviewUrl(file: File): Promise<string> {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-export function getDemoAttachments() { return [...demoAttachments]; }
-
 export function getNoteAttachmentsQueryKey(noteId: number) {
   return ["/api/attachments/note", noteId] as const;
 }

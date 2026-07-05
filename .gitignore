@@ -62,3 +62,15 @@ artifacts/next-app/.claude/
 # Playwright saved auth sessions — contain live Supabase tokens, never commit
 artifacts/next-app/playwright/.auth/*.json
 artifacts/next-app/playwright/.auth/screenshots/
+
+# Generated test/perf artifacts (R12)
+artifacts/next-app/playwright-report/
+artifacts/next-app/test-results/
+artifacts/next-app/perf-results/
+artifacts/next-app/public/test-images/
+
+# Local scan cache + personal working files (kept on disk, out of git)
+.cache_ggshield
+resize-image.mov
+reference images/
+study/
