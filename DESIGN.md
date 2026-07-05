@@ -156,7 +156,8 @@ Major Third scale (ratio: 1.25) from 16px base:
 | H3 | 20px (text-xl) | ProseMirror h3 |
 | Body | 16px (text-base) | Default prose |
 | UI Small | 14px (text-sm) | Labels, list items, metadata |
-| UI Tiny | 12px (text-xs) | Timestamps, badge counts |
+| UI Tiny | 12px (text-xs) | Timestamps, labels |
+| UI Micro | 11px (`text-2xs`) | Badge counts, category chips, dense metadata — the smallest permitted tier |
 
 Heading weights: 700 (h1), 600 (h2), 500 (h3). Body: 400. UI labels: 400/500. Letter spacing: `tracking-tight` on headings.
 
@@ -179,7 +180,9 @@ All spacing is on an **8px base grid** with a 4px half-step for tight contexts.
 32px  — section-level breathing room
 ```
 
-Deviating from the grid requires a written reason. Use Tailwind's spacing scale which maps directly: `p-1` = 4px, `p-2` = 8px, `p-3` = 12px, `p-4` = 16px, `p-6` = 24px, `p-8` = 32px.
+A **2px sub-step** (`0.5` in Tailwind: `gap-0.5`, `p-0.5`, `m-0.5`) is blessed for the tightest icon/badge internals only — e.g. gaps inside a pill or between adjacent icon buttons. It is not a general-purpose spacing value; prefer the 4px half-step and 8px grid everywhere else.
+
+Deviating from the grid otherwise requires a written reason. Use Tailwind's spacing scale which maps directly: `p-0.5` = 2px, `p-1` = 4px, `p-2` = 8px, `p-3` = 12px, `p-4` = 16px, `p-6` = 24px, `p-8` = 32px.
 
 ### Three-Panel Layout
 
@@ -230,6 +233,8 @@ In light mode, `.luminance-border-top` renders no shadow — light mode uses sta
 | 12px | `rounded-xl` | Cards, panels, images |
 | 16px | `rounded-2xl` | Modals, large panels |
 | 9999px | `rounded-full` | Pills, avatar circles, scrollbar thumb |
+
+The scale is anchored to `--radius: 0.75rem` (12px) in `globals.css`. Note the Tailwind v4 defaults: bare `rounded` is **4px**, `rounded-md` is 6px, `rounded-lg` is 8px, `rounded-xl` is 12px, `rounded-2xl` is 16px — so the "tight 6px" tier is `rounded-md`, not bare `rounded`. A documented **2px micro-radius** (`border-radius: 2px`) is used for hairline internals like the find-highlight and scrollbar corners.
 
 No sharp corners (0px radius). All interactive elements have at minimum `rounded`.
 

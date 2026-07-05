@@ -240,7 +240,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </button>
             <span className="text-sm truncate">{folder.name}</span>
             {isSmart && (
-              <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">
+              <span className="shrink-0 text-2xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">
                 smart
               </span>
             )}
@@ -355,7 +355,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               <ShieldCheck className={cn("w-4 h-4", isVaultUnlocked && "text-indigo-400")} />
               <span>Vault</span>
               {!vaultStatus?.isConfigured && (
-                <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-panel border border-panel-border text-muted-foreground">new</span>
+                <span className="ml-auto text-2xs px-1.5 py-0.5 rounded-full bg-panel border border-panel-border text-muted-foreground">new</span>
               )}
               {vaultStatus?.isConfigured && !isVaultUnlocked && (
                 <Lock className="ml-auto w-3 h-3 text-muted-foreground" />

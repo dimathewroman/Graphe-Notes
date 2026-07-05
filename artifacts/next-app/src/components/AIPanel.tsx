@@ -267,7 +267,7 @@ export function AIPanel() {
                 <Send className="w-4 h-4 md:w-3.5 md:h-3.5" />
               </button>
             </div>
-            <p className="text-[10px] text-center text-muted-foreground mt-2">
+            <p className="text-2xs text-center text-muted-foreground mt-2">
               AI can make mistakes. Verify information.
             </p>
           </div>

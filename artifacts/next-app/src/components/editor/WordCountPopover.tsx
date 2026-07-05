@@ -67,7 +67,7 @@ export function WordCountPopover({ editor }: { editor: Editor | null }) {
         sideOffset={6}
         className="w-48 p-3 bg-popover border-panel-border rounded-xl shadow-2xl luminance-border-top"
       >
-        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">
+        <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
           {counts.isSelection ? "Selection" : "Document"}
         </p>
         <div className="space-y-1.5">

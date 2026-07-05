@@ -253,7 +253,7 @@ export function VersionHistoryPanel({
                               {formatTimestamp(v.createdAt)}
                             </span>
                             {badge && (
-                              <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-muted-foreground bg-panel px-1.5 py-0.5 rounded">
+                              <span className="inline-flex items-center gap-0.5 text-2xs font-medium text-muted-foreground bg-panel px-1.5 py-0.5 rounded">
                                 {badge.icon}
                                 {badge.text}
                               </span>
@@ -323,13 +323,13 @@ export function VersionHistoryPanel({
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={(e) => { e.stopPropagation(); void handleDelete(v.id); }}
-                                className="text-[11px] font-medium px-2 py-0.5 rounded bg-destructive text-destructive-foreground hover:opacity-90"
+                                className="text-2xs font-medium px-2 py-0.5 rounded bg-destructive text-destructive-foreground hover:opacity-90"
                               >
                                 Delete
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
-                                className="text-[11px] text-muted-foreground hover:text-foreground"
+                                className="text-2xs text-muted-foreground hover:text-foreground"
                               >
                                 Cancel
                               </button>
@@ -350,7 +350,7 @@ export function VersionHistoryPanel({
                       </div>
 
                       {isSelected && (
-                        <div className="px-3 pb-2.5 -mt-1 flex items-center gap-1.5 text-[11px] text-primary">
+                        <div className="px-3 pb-2.5 -mt-1 flex items-center gap-1.5 text-2xs text-primary">
                           <RotateCcw className="w-3 h-3" />
                           Previewing in editor
                         </div>
@@ -363,7 +363,7 @@ export function VersionHistoryPanel({
           )}
         </div>
 
-        <div className="border-t border-panel-border p-3 text-[11px] text-muted-foreground text-center">
+        <div className="border-t border-panel-border p-3 text-2xs text-muted-foreground text-center">
           Up to 50 versions kept
         </div>
         </>

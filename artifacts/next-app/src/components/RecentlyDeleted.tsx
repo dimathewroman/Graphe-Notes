@@ -278,22 +278,22 @@ export function RecentlyDeleted() {
                     </h3>
                     {/* Badge / type indicator */}
                     {note.vaulted ? (
-                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] border border-indigo-400/30 text-indigo-400">
+                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs border border-indigo-400/30 text-indigo-400">
                         <Lock className="w-2.5 h-2.5" />
                         Vault
                       </span>
                     ) : isQb ? (
-                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-warning/10 border border-warning/30 text-warning">
+                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs bg-warning/10 border border-warning/30 text-warning">
                         <ZapOff className="w-2.5 h-2.5" />
                         Expired
                       </span>
                     ) : (
-                      <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] bg-muted text-muted-foreground border border-panel-border">
+                      <span className="shrink-0 px-1.5 py-0.5 rounded-full text-2xs bg-muted text-muted-foreground border border-panel-border">
                         Deleted
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] text-muted-foreground/70 font-mono">
+                  <p className="text-2xs text-muted-foreground/70 font-mono">
                     {days} day{days !== 1 ? "s" : ""} remaining
                   </p>
                 </div>

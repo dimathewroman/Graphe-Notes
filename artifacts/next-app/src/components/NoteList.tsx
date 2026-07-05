@@ -507,7 +507,7 @@ export function NoteList() {
             )}
             <h2 className="text-lg font-semibold tracking-tight truncate">{listTitle}</h2>
             {isFolderSmart && (
-              <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">smart</span>
+              <span className="shrink-0 text-2xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">smart</span>
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -521,7 +521,7 @@ export function NoteList() {
               </IconButton>
               {showSortMenu && (
                 <div className="absolute right-0 top-full mt-1 z-40 min-w-[210px] bg-popover border border-panel-border rounded-lg shadow-xl py-1">
-                  <p className="px-3 py-1.5 text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Sort by</p>
+                  <p className="px-3 py-1.5 text-2xs text-muted-foreground font-semibold uppercase tracking-wider">Sort by</p>
                   {SORT_OPTIONS.map(opt => (
                     <button
                       key={`${opt.sortBy}-${opt.sortDir}`}
@@ -792,7 +792,7 @@ export function NoteList() {
               {contextMenu.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {contextMenu.tags.map(tag => (
-                    <span key={tag} className="group/tag flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary border border-primary/20">
+                    <span key={tag} className="group/tag flex items-center gap-0.5 px-2 py-0.5 rounded-full text-2xs bg-primary/10 text-primary border border-primary/20">
                       <Hash className="w-2 h-2" />
                       {tag}
                       <button onClick={() => removeTagFromNote(tag)} className="ml-0.5 hover:text-destructive transition-colors">
@@ -1018,11 +1018,11 @@ const NoteListItem = memo(function NoteListItem({
         {note.tags && note.tags.length > 0 && (
           <div className="flex gap-1 overflow-hidden">
             {note.tags.slice(0, 2).map(tag => (
-              <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/8 text-primary border border-primary/15 truncate max-w-[60px]">
+              <span key={tag} className="text-2xs px-1.5 py-0.5 rounded-full bg-primary/8 text-primary border border-primary/15 truncate max-w-[60px]">
                 #{tag}
               </span>
             ))}
-            {note.tags.length > 2 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-panel text-muted-foreground">+{note.tags.length - 2}</span>}
+            {note.tags.length > 2 && <span className="text-2xs px-1.5 py-0.5 rounded-full bg-panel text-muted-foreground">+{note.tags.length - 2}</span>}
           </div>
         )}
       </div>

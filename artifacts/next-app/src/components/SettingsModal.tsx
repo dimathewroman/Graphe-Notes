@@ -594,7 +594,7 @@ export function SettingsModal() {
             <div className="hidden md:flex flex-col w-[200px] border-r border-panel-border bg-background/40 shrink-0">
               <div className="p-4 pb-2">
                 <p className="text-sm font-semibold text-foreground">Graphe Notes</p>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mt-0.5">Settings</p>
+                <p className="text-2xs uppercase tracking-wider text-muted-foreground font-medium mt-0.5">Settings</p>
               </div>
               <nav className="flex-1 px-2 py-2 space-y-0.5">
                 {tabs.map((tab) => (
@@ -625,7 +625,7 @@ export function SettingsModal() {
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-medium truncate">{[user.firstName, user.lastName].filter(Boolean).join(" ") || "User"}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+                      <p className="text-2xs text-muted-foreground truncate">{user.email}</p>
                     </div>
                   </div>
                 </div>
@@ -770,7 +770,7 @@ export function SettingsModal() {
                         >
                           <opt.icon className="w-4 h-4" />
                           <span>{opt.label}</span>
-                          <span className="text-[9px] font-normal opacity-70">{opt.desc}</span>
+                          <span className="text-2xs font-normal opacity-70">{opt.desc}</span>
                         </button>
                       ))}
                     </div>
@@ -785,7 +785,7 @@ export function SettingsModal() {
                       </div>
                       <p className="text-xs text-muted-foreground leading-relaxed">This is how your notes will look with the selected theme.</p>
                       <div className="flex gap-2">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary border border-primary/20">#tag</span>
+                        <span className="px-2 py-0.5 rounded-full text-2xs bg-primary/10 text-primary border border-primary/20">#tag</span>
                         <button className="px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-medium">Button</button>
                       </div>
                     </div>
@@ -814,7 +814,7 @@ export function SettingsModal() {
                           >
                             <span className="w-5 h-5 rounded-full border border-panel-border shrink-0" style={{ backgroundColor: opt.swatch }} />
                             <span>{opt.label}</span>
-                            <span className="text-[9px] font-normal opacity-70">{opt.desc}</span>
+                            <span className="text-2xs font-normal opacity-70">{opt.desc}</span>
                           </button>
                         ))}
                       </div>
@@ -843,11 +843,11 @@ export function SettingsModal() {
                         >
                           <Accessibility className="w-4 h-4" />
                           <span>{opt.label}</span>
-                          <span className="text-[9px] font-normal opacity-70">{opt.desc}</span>
+                          <span className="text-2xs font-normal opacity-70">{opt.desc}</span>
                         </button>
                       ))}
                     </div>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <p className="text-2xs text-muted-foreground leading-relaxed">
                       Remaps semantic colors (errors, success, warnings) for colorblind users. P/D = Protanopia &amp; Deuteranopia.
                     </p>
                   </section>
@@ -875,7 +875,7 @@ export function SettingsModal() {
                           <Zap className={cn("w-3.5 h-3.5", activeCard === "graphe_free" ? "text-primary" : "text-muted-foreground")} />
                           <span className={cn("text-sm font-medium", activeCard === "graphe_free" ? "text-primary" : "text-foreground")}>Graphe Free</span>
                         </div>
-                        <span className="text-[11px] text-muted-foreground">Built-in, no key needed</span>
+                        <span className="text-2xs text-muted-foreground">Built-in, no key needed</span>
                       </button>
 
                       {/* Google AI Studio */}
@@ -892,7 +892,7 @@ export function SettingsModal() {
                           <Key className={cn("w-3.5 h-3.5", activeCard === "google_ai_studio" ? "text-primary" : "text-muted-foreground")} />
                           <span className={cn("text-sm font-medium", activeCard === "google_ai_studio" ? "text-primary" : "text-foreground")}>Google AI Studio</span>
                         </div>
-                        <span className="text-[11px] text-muted-foreground">Your own Gemini key</span>
+                        <span className="text-2xs text-muted-foreground">Your own Gemini key</span>
                       </button>
 
                       {/* Custom BYOK */}
@@ -909,7 +909,7 @@ export function SettingsModal() {
                           <Key className={cn("w-3.5 h-3.5", activeCard === "byok" ? "text-primary" : "text-muted-foreground")} />
                           <span className={cn("text-sm font-medium", activeCard === "byok" ? "text-primary" : "text-foreground")}>OpenAI / Anthropic</span>
                         </div>
-                        <span className="text-[11px] text-muted-foreground">Your own API key</span>
+                        <span className="text-2xs text-muted-foreground">Your own API key</span>
                       </button>
 
                       {/* Local / Hosted LLM */}
@@ -926,7 +926,7 @@ export function SettingsModal() {
                           <Server className={cn("w-3.5 h-3.5", activeCard === "local_llm" ? "text-primary" : "text-muted-foreground")} />
                           <span className={cn("text-sm font-medium", activeCard === "local_llm" ? "text-primary" : "text-foreground")}>Local / Hosted LLM</span>
                         </div>
-                        <span className="text-[11px] text-muted-foreground">Ollama, LM Studio, etc.</span>
+                        <span className="text-2xs text-muted-foreground">Ollama, LM Studio, etc.</span>
                       </button>
                     </div>
                   </div>
@@ -951,11 +951,11 @@ export function SettingsModal() {
                         </div>
                       )}
                       {usageCountdown > 0 && usageData && usageData.hourlyUsed >= usageData.hourlyLimit && (
-                        <p className="text-[11px] text-warning">
+                        <p className="text-2xs text-warning">
                           Limit reached — resets in {Math.floor(usageCountdown / 60)}m {usageCountdown % 60}s
                         </p>
                       )}
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      <p className="text-2xs text-muted-foreground leading-relaxed">
                         Uses Gemini Flash Lite. Switch to a paid provider for higher limits and model choice.
                       </p>
                     </div>
@@ -1183,7 +1183,7 @@ export function SettingsModal() {
                             <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
                             <span className="text-sm text-foreground truncate">{savedKeys["local_llm"].endpointUrl}</span>
                             {savedKeys["local_llm"].hasKey && (
-                              <span className="text-[10px] text-success font-medium px-1.5 py-0.5 rounded bg-success/10 shrink-0">key set</span>
+                              <span className="text-2xs text-success font-medium px-1.5 py-0.5 rounded bg-success/10 shrink-0">key set</span>
                             )}
                           </div>
                           <button onClick={() => handleRemoveKey("local_llm")} className="text-xs text-destructive/80 hover:text-destructive transition-colors shrink-0 ml-3">Remove</button>
@@ -1243,8 +1243,8 @@ export function SettingsModal() {
                           </button>
                         </>
                       )}
-                      <p className="text-[11px] text-muted-foreground">
-                        Endpoint must expose an OpenAI-compatible <code className="text-[10px] bg-panel px-1 py-0.5 rounded">/v1/chat/completions</code> API.
+                      <p className="text-2xs text-muted-foreground">
+                        Endpoint must expose an OpenAI-compatible <code className="text-2xs bg-panel px-1 py-0.5 rounded">/v1/chat/completions</code> API.
                       </p>
                     </div>
                   )}

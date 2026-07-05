@@ -93,7 +93,7 @@ export function VersionPreviewArea({
       <div className="shrink-0 border-b border-panel-border bg-panel/60 backdrop-blur-sm">
         <div className={bannerInnerClass}>
           <div className="flex-1 min-w-0">
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
+            <div className="text-2xs uppercase tracking-wide text-muted-foreground font-medium">
               Viewing earlier version
             </div>
             <div className="mt-0.5 flex items-center gap-2 flex-wrap">

@@ -176,7 +176,7 @@ function OverflowButton({
           onMouseDown={e => e.preventDefault()}
         >
           {/* Alignment */}
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Alignment</p>
+          <p className="text-2xs uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Alignment</p>
           <div className="flex gap-0.5 mb-2">
             <ToolbarButton command={() => { editor.chain().focus().setTextAlign("left").run(); setOpen(false); }} active={editor.isActive({ textAlign: "left" })} icon={<AlignLeft className="w-4 h-4" />} title="Align left" />
             <ToolbarButton command={() => { editor.chain().focus().setTextAlign("center").run(); setOpen(false); }} active={editor.isActive({ textAlign: "center" })} icon={<AlignCenter className="w-4 h-4" />} title="Align center" />
@@ -186,7 +186,7 @@ function OverflowButton({
           <div className="h-px bg-panel-border mx-1 mb-2" />
 
           {/* Text style extras */}
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Extras</p>
+          <p className="text-2xs uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Extras</p>
           <div className="flex gap-0.5 mb-2">
             <ToolbarButton command={() => { editor.chain().focus().toggleSuperscript().run(); setOpen(false); }} active={editor.isActive("superscript")} icon={<SuperscriptIcon className="w-4 h-4" />} title="Superscript" />
             <ToolbarButton command={() => { editor.chain().focus().toggleSubscript().run(); setOpen(false); }} active={editor.isActive("subscript")} icon={<SubscriptIcon className="w-4 h-4" />} title="Subscript" />
@@ -196,7 +196,7 @@ function OverflowButton({
           <div className="h-px bg-panel-border mx-1 mb-2" />
 
           {/* Table */}
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Table</p>
+          <p className="text-2xs uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Table</p>
           <div className="flex gap-0.5 mb-2">
             <ToolbarButton
               command={() => { editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); setOpen(false); }}

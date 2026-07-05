@@ -138,7 +138,7 @@ export function AISetupModal() {
                         <div className="flex items-center gap-2">
                           <Sparkles className="w-4 h-4 text-primary" />
                           <span className="text-sm font-medium text-foreground">Smart</span>
-                          <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 rounded-full px-2 py-0.5 font-medium">
+                          <span className="text-2xs bg-primary/10 text-primary border border-primary/20 rounded-full px-2 py-0.5 font-medium">
                             Recommended
                           </span>
                         </div>

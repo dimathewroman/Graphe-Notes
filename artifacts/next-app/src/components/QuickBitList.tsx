@@ -213,7 +213,7 @@ export function QuickBitList() {
               </IconButton>
               {showSortMenu && (
                 <div className="absolute right-0 top-full mt-1 z-40 min-w-[210px] bg-popover border border-panel-border rounded-lg shadow-xl py-1">
-                  <p className="px-3 py-1.5 text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Sort by</p>
+                  <p className="px-3 py-1.5 text-2xs text-muted-foreground font-semibold uppercase tracking-wider">Sort by</p>
                   {QB_SORT_OPTIONS.map(opt => (
                     <button
                       key={`${opt.sortBy}-${opt.sortDir}`}
@@ -453,7 +453,7 @@ export function QuickBitList() {
                   </p>
                   <div className="flex items-center gap-1.5 mt-2">
                     <Clock className="w-3 h-3 text-muted-foreground/60 shrink-0" />
-                    <span className={cn("text-[10px] font-mono", expiry.className)}>{expiry.label}</span>
+                    <span className={cn("text-2xs font-mono", expiry.className)}>{expiry.label}</span>
                   </div>
                 </div>
               </motion.div>
@@ -494,7 +494,7 @@ export function QuickBitList() {
                 </p>
                 <div className="flex items-center gap-1.5 mt-auto">
                   <Clock className="w-3 h-3 text-muted-foreground/60 shrink-0" />
-                  <span className={cn("text-[10px] font-mono", expiry.className)}>{expiry.label}</span>
+                  <span className={cn("text-2xs font-mono", expiry.className)}>{expiry.label}</span>
                 </div>
               </motion.div>
             );
