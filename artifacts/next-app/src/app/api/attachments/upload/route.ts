@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { eq, and, sum } from "drizzle-orm";
+import { eq, and, sum, isNull } from "drizzle-orm";
 import { db, attachmentsTable, notesTable, usersTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -158,7 +158,9 @@ export async function POST(request: NextRequest) {
       const [usageRow] = await db
         .select({ total: sum(attachmentsTable.fileSize) })
         .from(attachmentsTable)
-        .where(eq(attachmentsTable.userId, user.id));
+        // X-A3: only live bytes count toward the quota — soft-deleted (and
+        // pending-purge) attachments must not permanently shrink the cap.
+        .where(and(eq(attachmentsTable.userId, user.id), isNull(attachmentsTable.deletedAt)));
       const currentUsage = Number(usageRow?.total ?? 0);
       if (currentUsage + file.size > limits.maxTotalStorage) {
         const used = formatBytes(currentUsage);
