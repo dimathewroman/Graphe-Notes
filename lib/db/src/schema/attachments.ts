@@ -1,8 +1,11 @@
 import { pgTable, text, integer, varchar, timestamp, uuid, index, boolean } from "drizzle-orm/pg-core";
+import { notesTable } from "./notes";
 
 export const attachmentsTable = pgTable("attachments", {
   id: uuid("id").primaryKey().defaultRandom(),
-  noteId: integer("note_id").notNull(),
+  // X-R1: FK to notes so attachment rows can't be orphaned by a note hard-delete.
+  // RESTRICT is a safety net — the delete paths clean children first.
+  noteId: integer("note_id").notNull().references(() => notesTable.id, { onDelete: "restrict" }),
   userId: varchar("user_id").notNull(),
   fileName: text("file_name").notNull(),
   fileType: text("file_type").notNull(),

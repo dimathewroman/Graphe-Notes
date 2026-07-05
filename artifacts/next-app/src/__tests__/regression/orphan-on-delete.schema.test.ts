@@ -6,12 +6,9 @@
 // safety net, so the permanent-delete route (which deletes only the note row)
 // leaves rows and storage objects behind.
 //
-// These tests assert the *structural* fix Phase 1.5 introduces: an FK from each
-// child table's noteId to notes.id. They are RED on current master (no FK) and
-// go GREEN once Phase 1.5 adds `.references(() => notesTable.id, { onDelete })`.
-//
-// TODO(phase-1.5): once the FKs are added, remove the `.fails` markers below so
-// these become hard regression gates.
+// These tests assert the *structural* fix Phase 1.5 introduced: an FK from each
+// child table's noteId to notes.id (ON DELETE RESTRICT), applied to the DB and
+// declared in the Drizzle schema.
 
 import { describe, it, expect } from "vitest";
 import { getTableConfig } from "drizzle-orm/pg-core";
@@ -31,17 +28,11 @@ describe("orphan-on-delete FK constraints (X-R1 / X-R2)", () => {
     expect(getTableConfig(noteVersionsTable).name).toBe("note_versions");
   });
 
-  it.fails(
-    "X-R1: attachments.noteId has a foreign key to notes.id (RED until Phase 1.5)",
-    () => {
-      expect(hasForeignKeyToNotes(attachmentsTable)).toBe(true);
-    },
-  );
+  it("X-R1: attachments.noteId has a foreign key to notes.id", () => {
+    expect(hasForeignKeyToNotes(attachmentsTable)).toBe(true);
+  });
 
-  it.fails(
-    "X-R2: note_versions.noteId has a foreign key to notes.id (RED until Phase 1.5)",
-    () => {
-      expect(hasForeignKeyToNotes(noteVersionsTable)).toBe(true);
-    },
-  );
+  it("X-R2: note_versions.noteId has a foreign key to notes.id", () => {
+    expect(hasForeignKeyToNotes(noteVersionsTable)).toBe(true);
+  });
 });

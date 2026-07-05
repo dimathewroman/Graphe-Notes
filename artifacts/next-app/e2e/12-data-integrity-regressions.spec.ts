@@ -33,7 +33,7 @@ test.describe("Data integrity regressions", () => {
   test("V1: undo right after switching notes must not wipe note B's content", async ({
     page,
   }) => {
-    test.fail(); // TODO(phase-1.1): remove once the undo stack is scoped per note
+    // Fixed in Phase 1.1 (GrapheEditor clears undo history on contentKey change).
 
     const notes = page.getByTestId("note-item");
     const editor = page.locator(".ProseMirror");
@@ -66,7 +66,7 @@ test.describe("Data integrity regressions", () => {
   test("V2: backgrounding the tab flushes a pending save within the debounce window", async ({
     page,
   }) => {
-    test.fail(); // TODO(phase-1.2): remove once a flush-on-hide handler exists
+    // Fixed in Phase 1.2 (NoteShell flushes pendingSaveRef on visibilitychange/pagehide).
 
     await page.getByTestId("note-item").nth(0).click();
     const editor = page.locator(".ProseMirror");

@@ -15,6 +15,7 @@ import {
   getGetNotesQueryKey, getGetNoteQueryKey, getGetTagsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { VersionPreviewArea } from "./VersionPreviewArea";
 import { VaultModal } from "./VaultModal";
@@ -32,6 +33,11 @@ import { EmptyEditorState } from "./editor/EmptyEditorState";
 import { VaultLockScreen } from "./editor/VaultLockScreen";
 import { GrapheEditor } from "./editor/GrapheEditor";
 import posthog from "posthog-js";
+
+// V2: hard ceiling on how long a continuously-edited note can sit unsaved. Once
+// the current debounce batch has been pending this long, the next change forces
+// an immediate save instead of resetting the 800ms trailing timer.
+const MAX_SAVE_WAIT_MS = 5000;
 
 export function NoteShell() {
   const selectedNoteId = useAppStore(s => s.selectedNoteId);
@@ -76,7 +82,7 @@ export function NoteShell() {
   const [demoVaultConfigured, setDemoVaultConfigured] = useState(false);
 
   const [title, setTitle] = useState("");
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showToc, setShowToc] = useState(false);
   const [previewVersion, setPreviewVersion] = useState<NoteVersionFull | null>(null);
@@ -179,6 +185,10 @@ export function NoteShell() {
   // to commit immediately on Cmd+S or note close.
   const pendingSaveRef = useRef<{ id: number; data: Record<string, unknown> } | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // V2: timestamp of the first un-flushed change in the current debounce batch.
+  // Continuous typing resets the 800ms timer forever, so we force a save once a
+  // batch has been pending past MAX_SAVE_WAIT_MS.
+  const pendingSinceRef = useRef<number | null>(null);
   // Track the previous selected note id so we can flush on navigation.
   const prevSelectedNoteId = useRef<number | null>(null);
   // Stable handle for flushSave so it can be called from effects that fire
@@ -315,33 +325,52 @@ export function NoteShell() {
         | "pre_ai_rewrite",
     ) => {
       const live = liveStateRef.current;
-      if (isDemoRef.current) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const existing = queryClient.getQueryData(getGetNoteQueryKey(id)) as any;
-        if (existing) {
-          queryClient.setQueryData(getGetNoteQueryKey(id), {
-            ...existing,
-            ...data,
-            updatedAt: new Date().toISOString(),
-          });
+      try {
+        if (isDemoRef.current) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const existing = queryClient.getQueryData(getGetNoteQueryKey(id)) as any;
+          if (existing) {
+            queryClient.setQueryData(getGetNoteQueryKey(id), {
+              ...existing,
+              ...data,
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        } else {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await updateNoteMut.mutateAsync({ id, data: data as any });
+          queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
         }
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await updateNoteMut.mutateAsync({ id, data: data as any });
-        queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+        setSaveStatus("saved");
+      } catch (err) {
+        // V4: surface the failure instead of dropping the payload. Show an error
+        // status and retain the failed payload (merged UNDER any newer pending
+        // edits so we don't clobber them) so the next debounced save or Cmd+S
+        // retries it.
+        Sentry.captureException(err);
+        setSaveStatus("error");
+        pendingSaveRef.current = {
+          id,
+          data: { ...data, ...(pendingSaveRef.current?.data ?? {}) },
+        };
+        return;
       }
-      setSaveStatus("saved");
 
       // Take the snapshot AFTER the save completes — in real mode the server
       // reads from the DB row we just updated, so the version reflects the
-      // current state.
-      await createVersion({
-        noteId: id,
-        source,
-        title: live.title,
-        content: live.content,
-        contentText: live.contentText,
-      });
+      // current state. A snapshot failure must not flip the (successful) save to
+      // an error state.
+      try {
+        await createVersion({
+          noteId: id,
+          source,
+          title: live.title,
+          content: live.content,
+          contentText: live.contentText,
+        });
+      } catch (err) {
+        Sentry.captureException(err);
+      }
     },
     [queryClient, updateNoteMut, createVersion],
   );
@@ -353,13 +382,24 @@ export function NoteShell() {
         id,
         data: { ...(pendingSaveRef.current?.data ?? {}), ...data },
       };
+      const now = Date.now();
+      if (pendingSinceRef.current === null) pendingSinceRef.current = now;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => {
+      const commit = () => {
         const pending = pendingSaveRef.current;
         pendingSaveRef.current = null;
+        pendingSinceRef.current = null;
         saveTimerRef.current = null;
         if (pending) void performSave(pending.id, pending.data, "auto_save");
-      }, 800);
+      };
+      // V2 max-wait: if edits have been streaming continuously past
+      // MAX_SAVE_WAIT_MS, force a save now instead of resetting the 800ms timer,
+      // so a long uninterrupted typing run can't sit unsaved indefinitely.
+      if (now - pendingSinceRef.current >= MAX_SAVE_WAIT_MS) {
+        commit();
+        return;
+      }
+      saveTimerRef.current = setTimeout(commit, 800);
     },
     [performSave],
   );
@@ -382,6 +422,7 @@ export function NoteShell() {
       }
       const pending = pendingSaveRef.current;
       pendingSaveRef.current = null;
+      pendingSinceRef.current = null;
       if (!pending) return false;
       await performSave(pending.id, pending.data, source);
       return true;
@@ -394,6 +435,61 @@ export function NoteShell() {
       source: "manual_save" | "auto_close" | "restore",
     ) => Promise<boolean>;
   }, [flushSave]);
+
+  // V2: flush a pending save when the tab is backgrounded or torn down. A pure
+  // 800ms trailing debounce loses the whole edit if the tab is hidden/killed
+  // (iOS especially freezes hidden tabs) before it fires. We commit immediately;
+  // in authenticated mode we use a keepalive PATCH so the request survives page
+  // teardown (a normal fetch would be cancelled). This is the sanctioned raw
+  // escape hatch — the generated mutation hook can't set `keepalive`.
+  const flushOnHideRef = useRef<() => void>(() => {});
+  flushOnHideRef.current = () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const pending = pendingSaveRef.current;
+    if (!pending) return;
+    pendingSaveRef.current = null;
+    pendingSinceRef.current = null;
+    if (isDemoRef.current) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const existing = queryClient.getQueryData(getGetNoteQueryKey(pending.id)) as any;
+      if (existing) {
+        queryClient.setQueryData(getGetNoteQueryKey(pending.id), {
+          ...existing,
+          ...pending.data,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      setSaveStatus("saved");
+      return;
+    }
+    try {
+      void authenticatedFetch(`/api/notes/${pending.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pending.data),
+        keepalive: true,
+      });
+      setSaveStatus("saved");
+    } catch (err) {
+      Sentry.captureException(err);
+    }
+  };
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flushOnHideRef.current();
+    };
+    const onPageHide = () => flushOnHideRef.current();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, []);
 
   // Take an explicit snapshot — used by Cmd+S and the AI rewrite pre-snapshot.
   // If there's a pending debounced save, flush it tagged with `source` so the
@@ -466,14 +562,41 @@ export function NoteShell() {
   const handleRestoreVersion = useCallback(
     async (version: NoteVersionFull) => {
       if (!editor || !selectedNoteId) return;
-      // 1. Snapshot the current draft as a labelled version so the restore
-      //    is reversible. flushSave() merges any pending unsaved changes.
+      // 1. Flush any pending unsaved edits to the note BEFORE snapshotting the
+      //    "Before restore" checkpoint. In real mode the version POST snapshots
+      //    the DB row (not client content), so without this flush the edits in
+      //    the debounce window are excluded from the reversible checkpoint and
+      //    then overwritten by the restore (V6). Previously this just nulled the
+      //    pending buffer — the "flushSave merges pending changes" comment was
+      //    aspirational, not real.
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
+      const pending = pendingSaveRef.current;
       pendingSaveRef.current = null;
+      pendingSinceRef.current = null;
       const live = liveStateRef.current;
+      if (pending) {
+        try {
+          if (isDemoRef.current) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
+            if (existing) {
+              queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
+                ...existing,
+                ...pending.data,
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          } else {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await updateNoteMut.mutateAsync({ id: selectedNoteId, data: pending.data as any });
+          }
+        } catch (err) {
+          Sentry.captureException(err);
+        }
+      }
       await createVersion({
         noteId: selectedNoteId,
         source: "restore",
@@ -508,7 +631,7 @@ export function NoteShell() {
       setPreviewVersion(null);
       posthog.capture("version_history_restored", { note_id: selectedNoteId });
     },
-    [editor, selectedNoteId, createVersion, performSave],
+    [editor, selectedNoteId, createVersion, performSave, updateNoteMut, queryClient],
   );
 
   // Take a snapshot before any AI rewrite so the user can always undo it.

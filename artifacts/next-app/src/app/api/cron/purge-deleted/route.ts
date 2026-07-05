@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { and, isNotNull, lte } from "drizzle-orm";
+import { and, isNotNull, lte, inArray } from "drizzle-orm";
 import { db, notesTable, attachmentsTable } from "@workspace/db";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { purgeNoteChildren } from "@/lib/note-cleanup";
 import * as Sentry from "@sentry/nextjs";
 
 const ATTACHMENT_RETENTION_DAYS = 30;
@@ -15,11 +16,25 @@ export async function GET(request: NextRequest) {
   try {
     const now = new Date();
 
-    // 1. Hard-delete recently-deleted notes past their auto-delete date
-    const purgedNotes = await db
-      .delete(notesTable)
-      .where(and(isNotNull(notesTable.autoDeleteAt), lte(notesTable.autoDeleteAt, now)))
-      .returning({ id: notesTable.id });
+    // 1. Hard-delete recently-deleted notes past their auto-delete date.
+    //    X-R1/X-R2: purge each note's attachments (rows + storage) and version
+    //    snapshots FIRST — the child FKs are ON DELETE RESTRICT, so deleting a
+    //    note that still has children would throw.
+    const notesToPurge = await db
+      .select({ id: notesTable.id })
+      .from(notesTable)
+      .where(and(isNotNull(notesTable.autoDeleteAt), lte(notesTable.autoDeleteAt, now)));
+    const purgeIds = notesToPurge.map((n) => n.id);
+
+    const childCleanup = await purgeNoteChildren(purgeIds);
+
+    const purgedNotes =
+      purgeIds.length > 0
+        ? await db
+            .delete(notesTable)
+            .where(inArray(notesTable.id, purgeIds))
+            .returning({ id: notesTable.id })
+        : [];
 
     // 2. Hard-purge soft-deleted attachments older than 30 days
     const cutoff = new Date(now.getTime() - ATTACHMENT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
@@ -46,7 +61,7 @@ export async function GET(request: NextRequest) {
     const paths = Array.from(pathSet);
 
     // Remove the actual files from Supabase Storage in batches of 100
-    let storageErrors = 0;
+    let storageErrors = childCleanup.storageErrors;
     for (let i = 0; i < paths.length; i += 100) {
       const batch = paths.slice(i, i + 100);
       const { error } = await supabaseAdmin.storage.from("note-attachments").remove(batch);
