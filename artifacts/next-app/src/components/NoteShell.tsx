@@ -562,14 +562,41 @@ export function NoteShell() {
   const handleRestoreVersion = useCallback(
     async (version: NoteVersionFull) => {
       if (!editor || !selectedNoteId) return;
-      // 1. Snapshot the current draft as a labelled version so the restore
-      //    is reversible. flushSave() merges any pending unsaved changes.
+      // 1. Flush any pending unsaved edits to the note BEFORE snapshotting the
+      //    "Before restore" checkpoint. In real mode the version POST snapshots
+      //    the DB row (not client content), so without this flush the edits in
+      //    the debounce window are excluded from the reversible checkpoint and
+      //    then overwritten by the restore (V6). Previously this just nulled the
+      //    pending buffer — the "flushSave merges pending changes" comment was
+      //    aspirational, not real.
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
+      const pending = pendingSaveRef.current;
       pendingSaveRef.current = null;
+      pendingSinceRef.current = null;
       const live = liveStateRef.current;
+      if (pending) {
+        try {
+          if (isDemoRef.current) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
+            if (existing) {
+              queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
+                ...existing,
+                ...pending.data,
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          } else {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await updateNoteMut.mutateAsync({ id: selectedNoteId, data: pending.data as any });
+          }
+        } catch (err) {
+          Sentry.captureException(err);
+        }
+      }
       await createVersion({
         noteId: selectedNoteId,
         source: "restore",
@@ -604,7 +631,7 @@ export function NoteShell() {
       setPreviewVersion(null);
       posthog.capture("version_history_restored", { note_id: selectedNoteId });
     },
-    [editor, selectedNoteId, createVersion, performSave],
+    [editor, selectedNoteId, createVersion, performSave, updateNoteMut, queryClient],
   );
 
   // Take a snapshot before any AI rewrite so the user can always undo it.
