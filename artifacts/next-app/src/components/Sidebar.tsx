@@ -345,7 +345,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               data-testid="nav-vault"
               className={cn(
                 "flex-1 flex items-center gap-3 px-3 py-2.5 md:py-2 rounded-lg text-sm",
-                "transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]",
+                "transition-all duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)]",
                 "active:scale-[0.97]",
                 activeFilter === "vault" && isVaultUnlocked
                   ? "bg-primary/10 text-primary font-medium"
@@ -547,7 +547,7 @@ function NavItem({ icon, label, active, onClick, testId }: { icon: React.ReactNo
       data-testid={testId}
       className={cn(
         "w-full flex items-center gap-3 py-2.5 md:py-2 px-3 rounded-lg text-sm relative",
-        "transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]",
+        "transition-colors duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)]",
         "active:scale-[0.97]",
         active ? "text-primary font-medium" : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
       )}

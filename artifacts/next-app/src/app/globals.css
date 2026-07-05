@@ -591,6 +591,17 @@ html[data-motion="minimal"] .active-elevate-2:active {
   transform: none;
 }
 
+/* D6: tactile hover/press scale for icon buttons, gated per motion level so the
+   Vibe system's Reduced/Minimal fallback removes component transforms. Applied via
+   the `.tactile-scale` class on IconButton/ToolbarButton instead of inline
+   hover:scale utilities (which couldn't respond to data-motion). */
+.tactile-scale:hover { transform: scale(1.08); }
+.tactile-scale:active { transform: scale(0.95); }
+html[data-motion="reduced"] .tactile-scale:hover { transform: none; }
+html[data-motion="reduced"] .tactile-scale:active { transform: scale(0.98); }
+html[data-motion="minimal"] .tactile-scale:hover,
+html[data-motion="minimal"] .tactile-scale:active { transform: none; }
+
 /* ── Checkbox check draw-in animation ─────────────────────────────────────── */
 @keyframes checkDraw {
   from { opacity: 0.3; transform: scale(0.7); }

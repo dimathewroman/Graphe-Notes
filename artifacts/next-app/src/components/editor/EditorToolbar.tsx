@@ -64,7 +64,7 @@ function ImageUrlButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
         ref={btnRef}
         onClick={() => { setOpen(v => !v); setUrl(""); }}
         title="Insert image from URL"
-        className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${open ? " bg-primary/10 text-primary" : ""}`}
+        className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--motion-duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${open ? " bg-primary/10 text-primary" : ""}`}
       >
         <ImageIcon className="w-4 h-4" />
       </button>
@@ -163,7 +163,7 @@ function OverflowButton({
         onClick={() => setOpen(v => !v)}
         title="More formatting"
         data-testid="toolbar-overflow-btn"
-        className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${open ? " bg-primary/10 text-primary" : ""}`}
+        className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--motion-duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${open ? " bg-primary/10 text-primary" : ""}`}
       >
         <MoreHorizontal className="w-4 h-4" />
       </button>
@@ -331,7 +331,7 @@ export const EditorToolbar = memo(function EditorToolbar({
           ref={fontPickerBtnRef}
           onClick={() => setFontPickerOpen((v) => !v)}
           title="Font family"
-          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center text-sm font-medium${fontPickerOpen ? " bg-primary/10 text-primary" : ""}`}
+          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--motion-duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center text-sm font-medium${fontPickerOpen ? " bg-primary/10 text-primary" : ""}`}
         >
           Aa
         </button>
@@ -355,7 +355,7 @@ export const EditorToolbar = memo(function EditorToolbar({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => setColorPicker(colorPicker === "text" ? null : "text")}
           title="Text color"
-          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex flex-col items-center justify-center gap-0.5 py-1${colorPicker === "text" ? " bg-primary/10 text-primary" : ""}`}
+          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--motion-duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex flex-col items-center justify-center gap-0.5 py-1${colorPicker === "text" ? " bg-primary/10 text-primary" : ""}`}
         >
           <span className="text-sm font-bold leading-none">A</span>
           <div
@@ -375,7 +375,7 @@ export const EditorToolbar = memo(function EditorToolbar({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => setColorPicker(colorPicker === "highlight" ? null : "highlight")}
           title="Highlight color"
-          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${colorPicker === "highlight" ? " bg-primary/10 text-primary" : ""}${activeHighlightColor ? " text-foreground" : ""}`}
+          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--motion-duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${colorPicker === "highlight" ? " bg-primary/10 text-primary" : ""}${activeHighlightColor ? " text-foreground" : ""}`}
           style={activeHighlightColor ? { color: activeHighlightColor } : undefined}
         >
           <Highlighter className="w-4 h-4" />

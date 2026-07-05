@@ -19,8 +19,9 @@ const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
           // Touch targets gate on pointer type, not viewport width — tablets with a
           // coarse pointer keep the 44px HIG minimum; fine-pointer (mouse) stays compact.
           "min-w-0 min-h-0 p-2 coarse:min-w-[44px] coarse:min-h-[44px] coarse:p-2.5 rounded-md",
-          "transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]",
-          "text-muted-foreground hover:text-foreground hover:bg-panel-hover hover:scale-[1.08] active:scale-[0.95]",
+          "transition-all duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)]",
+          // D6: tactile-scale is motion-level-gated in globals.css (no transform at minimal).
+          "text-muted-foreground hover:text-foreground hover:bg-panel-hover tactile-scale",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
           active && "bg-panel-hover text-primary",
           className

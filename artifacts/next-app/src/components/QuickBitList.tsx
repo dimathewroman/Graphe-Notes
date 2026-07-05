@@ -437,7 +437,7 @@ export function QuickBitList() {
                 style={anim.cardExitStyle}
                 onClick={() => { selectQuickBit(qb.id); if (bp === "mobile") setMobileView("editor"); }}
                 className={cn(
-                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px]",
+                  "rounded-lg cursor-pointer border transition-all duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px]",
                   anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
                   selectedQuickBitId === qb.id
                     ? "bg-primary/5 border-primary/30 shadow-sm"
@@ -476,7 +476,7 @@ export function QuickBitList() {
                 style={anim.cardExitStyle}
                 onClick={() => { selectQuickBit(qb.id); if (bp === "mobile") setMobileView("editor"); }}
                 className={cn(
-                  "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
+                  "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
                   anim.useScale && "hover:-translate-y-[1px] active:scale-[0.98]",
                   selectedQuickBitId === qb.id
                     ? "bg-primary/5 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"

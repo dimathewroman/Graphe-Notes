@@ -917,7 +917,7 @@ const NoteGalleryItem = memo(function NoteGalleryItem({
       onClick={() => onSelect(note.id)}
       onContextMenu={e => onContextMenu(e, note)}
       className={cn(
-        "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden",
+        "rounded-lg cursor-pointer border transition-all duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden",
         anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
         isSelected
           ? "bg-primary/10 border-primary/30 shadow-sm"
@@ -983,7 +983,7 @@ const NoteListItem = memo(function NoteListItem({
       onClick={() => onSelect(note.id)}
       onContextMenu={e => onContextMenu(e, note)}
       className={cn(
-        "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
+        "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
         anim.useScale && "hover:-translate-y-[1px] active:scale-[0.98]",
         isSelected
           ? "bg-primary/10 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"
