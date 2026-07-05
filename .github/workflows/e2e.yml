@@ -25,19 +25,18 @@ env:
   AI_KEY_ENCRYPTION_SECRET: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 jobs:
-  # ── Job 1: Check (typecheck + unit tests) + Build verification ───────────────
+  # ── Job 1: Typecheck + unit tests + Build verification ───────────────────────
   # Runs in parallel with E2E. Fast path for type/test/build errors — gives
   # feedback before the slower E2E suite finishes. `pnpm check` runs the
   # typecheck AND the Vitest unit suite, so a failing unit test fails the
   # workflow.
   #
-  # REQUIRED STATUS CHECKS: both this job ("Check (typecheck + unit tests)") and
-  # the E2E job ("E2E Tests") must be configured as required status checks in the
-  # master branch protection rules so red CI blocks merge. Merges had been
-  # proceeding over red CI (audit §A10a) — that gap is closed by marking these
-  # required (a one-time GitHub settings change by a repo admin).
+  # The job is named "Typecheck" to match the existing required-status-check
+  # context in master branch protection (it now also runs unit tests via
+  # `pnpm check`). Both this job ("Typecheck") and the E2E job ("E2E Tests") are
+  # required status checks so red CI blocks merge (closes audit §A10a).
   check:
-    name: Check (typecheck + unit tests)
+    name: Typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
