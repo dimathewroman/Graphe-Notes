@@ -916,6 +916,10 @@ const NoteGalleryItem = memo(function NoteGalleryItem({
       style={anim.cardExitStyle}
       onClick={() => onSelect(note.id)}
       onContextMenu={e => onContextMenu(e, note)}
+      // D4: keyboard-operable card — Tab reaches it, Enter/Space selects it.
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(note.id); } }}
+      role="button"
+      tabIndex={0}
       className={cn(
         "rounded-lg cursor-pointer border transition-all duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden",
         anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
@@ -948,7 +952,7 @@ const NoteGalleryItem = memo(function NoteGalleryItem({
             onClick={e => { e.stopPropagation(); onContextMenu(e, note); }}
             className={cn(
               "rounded-md hover:bg-panel-border transition-all shrink-0 self-start",
-              bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-60 p-1"
+              bp === "desktop" ? "opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5" : "opacity-60 p-1"
             )}
           >
             <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
@@ -982,6 +986,10 @@ const NoteListItem = memo(function NoteListItem({
       style={anim.cardExitStyle}
       onClick={() => onSelect(note.id)}
       onContextMenu={e => onContextMenu(e, note)}
+      // D4: keyboard-operable card — Tab reaches it, Enter/Space selects it.
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(note.id); } }}
+      role="button"
+      tabIndex={0}
       className={cn(
         "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
         anim.useScale && "hover:-translate-y-[1px] active:scale-[0.98]",
@@ -1003,7 +1011,7 @@ const NoteListItem = memo(function NoteListItem({
           {note.favorite && <Star className="w-3 h-3 fill-current text-yellow-500 opacity-70" />}
           <button
             onClick={e => { e.stopPropagation(); onContextMenu(e, note); }}
-            className={cn("rounded-md hover:bg-panel-border transition-all", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}
+            className={cn("rounded-md hover:bg-panel-border transition-all", bp === "desktop" ? "opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}
             title="Options"
           >
             <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />

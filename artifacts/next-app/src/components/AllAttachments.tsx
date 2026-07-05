@@ -94,7 +94,7 @@ function AttachmentRow({ attachment, onDeleted }: { attachment: AttachmentRecord
         </div>
       </div>
       {/* Touch: download/delete stay visible + 44px-tappable on coarse pointers. */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 coarse:opacity-100 transition-opacity shrink-0 mt-0.5">
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 coarse:opacity-100 transition-opacity shrink-0 mt-0.5">
         <button
           onClick={handleDownload}
           title="Download"

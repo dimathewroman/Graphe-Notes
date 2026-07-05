@@ -616,6 +616,20 @@ html[data-motion="reduced"] .tactile-scale:active { transform: scale(0.98); }
 html[data-motion="minimal"] .tactile-scale:hover,
 html[data-motion="minimal"] .tactile-scale:active { transform: none; }
 
+/* D4: default keyboard focus ring for raw interactive elements that don't define
+   their own. Components with a custom focus-visible ring (IconButton, shadcn Button,
+   inputs) set `outline-none`, whose class-level specificity wins over this element
+   rule — so they keep their own ring and only unstyled raw buttons/links get this.
+   :focus-visible = keyboard/AT focus only, never on mouse click. */
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 /* ── Checkbox check draw-in animation ─────────────────────────────────────── */
 @keyframes checkDraw {
   from { opacity: 0.3; transform: scale(0.7); }

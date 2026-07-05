@@ -46,7 +46,7 @@ export const TagRow = memo(function TagRow({
             {/* Touch: stay visible + enlarge hit area on coarse pointers. A full
                 44px target can't fit inside the pill, so expand via padding/negative
                 margin — the essential fix is that it's no longer hover-only/invisible. */}
-            <button onClick={() => onRemoveTag(tag)} className="opacity-0 group-hover:opacity-100 coarse:opacity-100 coarse:p-2 coarse:-m-1 hover:text-destructive transition-all ml-0.5">
+            <button onClick={() => onRemoveTag(tag)} className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 coarse:opacity-100 coarse:p-2 coarse:-m-1 hover:text-destructive transition-all ml-0.5">
               <X className="w-2.5 h-2.5" />
             </button>
           </motion.span>

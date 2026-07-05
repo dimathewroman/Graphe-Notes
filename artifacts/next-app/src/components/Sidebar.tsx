@@ -248,7 +248,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
           {/* Touch: folder actions stay visible and 44px-tappable on coarse
               pointers instead of being hover-only (invisible/unreachable on touch). */}
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 coarse:opacity-100">
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 coarse:opacity-100">
             <button
               className="p-1.5 md:p-1 coarse:min-w-[44px] coarse:min-h-[44px] inline-flex items-center justify-center hover:bg-panel rounded-md transition-colors"
               onClick={e => { e.stopPropagation(); setEditingFolder(folder); }}

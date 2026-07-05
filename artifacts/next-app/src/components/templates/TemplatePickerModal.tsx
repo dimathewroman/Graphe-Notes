@@ -620,7 +620,7 @@ function TemplateCard({
               onClick={(e) => { e.stopPropagation(); onDeleteRequest(); }}
               className={cn(
                 "absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors",
-                isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100"
               )}
               aria-label="Delete template"
             >

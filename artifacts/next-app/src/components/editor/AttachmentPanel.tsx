@@ -82,7 +82,7 @@ function AttachmentCard({
         <p className="text-xs text-muted-foreground">{formatBytes(attachment.fileSize)}</p>
       </div>
       {/* Touch: download/delete stay visible + 44px-tappable on coarse pointers. */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 coarse:opacity-100 transition-opacity shrink-0">
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 coarse:opacity-100 transition-opacity shrink-0">
         <button
           onClick={handleDownload}
           title="Download"

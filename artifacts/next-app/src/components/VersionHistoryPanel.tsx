@@ -292,7 +292,7 @@ export function VersionHistoryPanel({
                               </span>
                               <button
                                 onClick={(e) => { e.stopPropagation(); startEdit(v); }}
-                                className="opacity-0 group-hover:opacity-100 coarse:opacity-100 coarse:min-w-[44px] coarse:min-h-[44px] coarse:justify-center inline-flex items-center transition-opacity text-muted-foreground hover:text-foreground p-0.5"
+                                className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 coarse:opacity-100 coarse:min-w-[44px] coarse:min-h-[44px] coarse:justify-center inline-flex items-center transition-opacity text-muted-foreground hover:text-foreground p-0.5"
                                 title="Edit label"
                               >
                                 <Pencil className="w-3 h-3" />
@@ -301,7 +301,7 @@ export function VersionHistoryPanel({
                           ) : (
                             <button
                               onClick={(e) => { e.stopPropagation(); startEdit(v); }}
-                              className="mt-1 text-[12px] text-muted-foreground/70 hover:text-foreground inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 coarse:opacity-100 coarse:min-h-[44px] transition-opacity"
+                              className="mt-1 text-[12px] text-muted-foreground/70 hover:text-foreground inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 coarse:opacity-100 coarse:min-h-[44px] transition-opacity"
                             >
                               <Pencil className="w-3 h-3" />
                               Add label
@@ -339,7 +339,7 @@ export function VersionHistoryPanel({
                               onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(v.id); }}
                               className={cn(
                                 "p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-colors text-muted-foreground",
-                                isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                                isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100",
                               )}
                               title="Delete version"
                             >
