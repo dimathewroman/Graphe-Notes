@@ -88,6 +88,15 @@ Warm off-white and stone. Same primary accent; surfaces use warm beige instead o
 
 These are overridden by colorblind mode selectors (see below). Always use `text-destructive`, `text-success`, `text-warning` rather than hardcoded color classes — colorblind remapping only works if you use these tokens.
 
+**Justified raw-palette exceptions.** A small set of usages intentionally keep raw Tailwind palette colors because they encode *identity*, not a success/warning/error *state* (so they must not be colorblind-remapped). These are the only permitted raw-palette usages in `src/components`:
+
+- **File-type icons** (`fileIcon()` in `AllAttachments.tsx` / `AttachmentPanel.tsx`) — PDF red, spreadsheet green, presentation orange, zip yellow. File-type identity.
+- **Favorite stars** (`text-yellow-500` on the `Star` icon in `NoteList`, `NoteHeader`, `OverflowMenu`) — the conventional gold favorite star; not a warning.
+- **Template category swatches** (`CATEGORY_COLORS` in `TemplatePickerModal.tsx`) — per-category identity colors (capture/plan/reflect/create/mine), analogous to color-picker swatches.
+- **Color-picker swatches** (`ColorPickerDropdown`) — the user is literally choosing a raw color.
+
+Everything else that signals a state uses the semantic tokens above.
+
 ### Colorblind Modes
 
 Set via `data-colorblind` attribute on `<html>`.

@@ -35,17 +35,17 @@ function formatExpiry(expiresAt: string): { label: string; className: string } {
   const totalMinutes = msLeft / (1000 * 60);
   const totalHours = msLeft / (1000 * 60 * 60);
 
-  if (msLeft <= 0) return { label: "Expired", className: "text-red-500 font-medium" };
+  if (msLeft <= 0) return { label: "Expired", className: "text-destructive font-medium" };
   if (totalHours < 1) {
     const m = Math.ceil(totalMinutes);
-    return { label: `${m} minute${m !== 1 ? "s" : ""} left`, className: "text-red-500 font-medium" };
+    return { label: `${m} minute${m !== 1 ? "s" : ""} left`, className: "text-destructive font-medium" };
   }
   if (totalHours < 24) {
     const h = Math.ceil(totalHours);
-    return { label: `${h} hour${h !== 1 ? "s" : ""} left`, className: "text-red-500 font-medium" };
+    return { label: `${h} hour${h !== 1 ? "s" : ""} left`, className: "text-destructive font-medium" };
   }
   const d = Math.ceil(totalHours / 24);
-  const className = totalHours < 48 ? "text-amber-500" : "text-muted-foreground/70";
+  const className = totalHours < 48 ? "text-warning" : "text-muted-foreground/70";
   return { label: `${d} day${d !== 1 ? "s" : ""} left`, className };
 }
 

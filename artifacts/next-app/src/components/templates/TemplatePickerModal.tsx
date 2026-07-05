@@ -32,6 +32,9 @@ const CATEGORY_LABELS: Record<Category, string> = {
   mine: "Mine",
 };
 
+// Documented exception to the semantic-token sweep (D1): these are per-category
+// IDENTITY swatches (like the color picker), not success/warning/error states, so
+// they intentionally use raw palette colors and are not colorblind-remapped.
 const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
   capture: { bg: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-400" },
   plan: { bg: "bg-teal-500/10", text: "text-teal-600 dark:text-teal-400" },

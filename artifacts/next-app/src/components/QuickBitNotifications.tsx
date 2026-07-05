@@ -16,17 +16,17 @@ function formatExpiryLabel(expiresAt: string): { label: string; className: strin
   const msLeft = new Date(expiresAt).getTime() - Date.now();
   const totalMinutes = msLeft / (1000 * 60);
   const totalHours = msLeft / (1000 * 60 * 60);
-  if (msLeft <= 0) return { label: "Expired", className: "text-red-500" };
+  if (msLeft <= 0) return { label: "Expired", className: "text-destructive" };
   if (totalHours < 1) {
     const m = Math.ceil(totalMinutes);
-    return { label: `${m} minute${m !== 1 ? "s" : ""} left`, className: "text-red-500" };
+    return { label: `${m} minute${m !== 1 ? "s" : ""} left`, className: "text-destructive" };
   }
   if (totalHours < 24) {
     const h = Math.ceil(totalHours);
-    return { label: `${h} hour${h !== 1 ? "s" : ""} left`, className: "text-red-500" };
+    return { label: `${h} hour${h !== 1 ? "s" : ""} left`, className: "text-destructive" };
   }
   const d = Math.ceil(totalHours / 24);
-  const className = totalHours < 48 ? "text-amber-500" : "text-muted-foreground/70";
+  const className = totalHours < 48 ? "text-warning" : "text-muted-foreground/70";
   return { label: `${d} day${d !== 1 ? "s" : ""} left`, className };
 }
 
@@ -241,7 +241,7 @@ export function QuickBitNotifications() {
       {/* Expired banner */}
       {expiredCount !== null && (
         <div className="flex items-center gap-3 bg-panel border border-panel-border rounded-xl px-4 py-3 shadow-lg pointer-events-auto">
-          <Zap className="w-4 h-4 text-amber-500 shrink-0" />
+          <Zap className="w-4 h-4 text-warning shrink-0" />
           <span className="text-sm text-foreground flex-1">
             {expiredCount} Quick Bit{expiredCount !== 1 ? "s" : ""}{" "}
             expired and {expiredCount !== 1 ? "were" : "was"} removed.

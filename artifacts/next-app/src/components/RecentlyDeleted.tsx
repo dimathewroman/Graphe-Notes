@@ -283,7 +283,7 @@ export function RecentlyDeleted() {
                         Vault
                       </span>
                     ) : isQb ? (
-                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/10 border border-amber-500/30 text-amber-500">
+                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-warning/10 border border-warning/30 text-warning">
                         <ZapOff className="w-2.5 h-2.5" />
                         Expired
                       </span>
