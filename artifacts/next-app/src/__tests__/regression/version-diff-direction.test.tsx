@@ -7,11 +7,8 @@
 //
 // This renders the real component in diff mode and asserts that text unique to
 // the newer (current) note renders as an insertion (text-primary, not
-// line-through). RED on current master; GREEN once Phase 8.5 swaps the args to
-// computeDiff(version.contentText, currentContentText).
-//
-// TODO(phase-8.5): after the swap, remove the `.fails` marker so this becomes a
-// hard regression gate.
+// line-through). Fixed in Phase 8.5 by swapping the args to
+// computeDiff(version.contentText, currentContentText) — now a hard regression gate.
 
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
@@ -57,8 +54,8 @@ function segmentForAddedText(container: HTMLElement): HTMLElement | undefined {
 }
 
 describe("version diff direction (V11)", () => {
-  it.fails(
-    "text added since the version renders as an insertion, not a strikethrough deletion (RED until Phase 8.5)",
+  it(
+    "text added since the version renders as an insertion, not a strikethrough deletion",
     () => {
       const { container } = renderDiff();
       const seg = segmentForAddedText(container);
