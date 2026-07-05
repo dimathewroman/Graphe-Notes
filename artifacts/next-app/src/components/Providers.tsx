@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { TokenSync } from "@/lib/token-sync";
 import { PHProvider } from "@/components/PostHogProvider";
 import { useMotionInit } from "@/hooks/use-motion";
@@ -70,7 +71,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         <NetworkStatusInit />
         <TokenSync />
         <Toaster />
-        {children}
+        {/* delayDuration: tooltips are a desktop nicety; Radix never opens them on
+            touch, so this can't interfere with taps. 300ms feels intentional. */}
+        <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
       </QueryClientProvider>
     </PHProvider>
   );

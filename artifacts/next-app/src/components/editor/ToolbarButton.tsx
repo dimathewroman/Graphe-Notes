@@ -1,4 +1,5 @@
 import { Toggle } from "@/components/ui/toggle";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 export function ToolbarButton({
@@ -16,14 +17,16 @@ export function ToolbarButton({
   disabled?: boolean;
   testId?: string;
 }) {
-  return (
+  const toggle = (
     <Toggle
       pressed={active}
       onPressedChange={() => command()}
-      title={title}
       disabled={disabled}
       size="sm"
       data-testid={testId}
+      // No native `title` — the Radix tooltip below is the accessible label so we
+      // don't render two overlapping tooltips. aria-label keeps the name for AT.
+      aria-label={title}
       className={cn(
         // Touch targets gate on pointer type, not viewport width (coarse = 44px HIG min).
         "min-w-0 min-h-0 p-1.5 coarse:min-w-[44px] coarse:min-h-[44px] coarse:p-2.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground shrink-0",
@@ -34,5 +37,16 @@ export function ToolbarButton({
     >
       {icon}
     </Toggle>
+  );
+
+  // ToolbarButton is a leaf command button (never an asChild Radix trigger), so it's
+  // safe to wrap centrally in a tooltip — this replaces the native title= across the
+  // whole toolbar. Radix suppresses tooltips on touch, so taps are unaffected.
+  if (!title) return toggle;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{toggle}</TooltipTrigger>
+      <TooltipContent>{title}</TooltipContent>
+    </Tooltip>
   );
 }

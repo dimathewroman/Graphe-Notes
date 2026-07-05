@@ -490,6 +490,7 @@ export function GrapheEditor({
           editor={editor}
           showUndoRedo
           onAttachFile={attachFileHandler}
+          onFindReplace={() => setShowFindReplace(true)}
         />
       )}
 
@@ -536,6 +537,7 @@ export function GrapheEditor({
           className={`fixed left-0 right-0 z-40 border-t border-panel-border bg-editor/95 backdrop-blur-md${keyboardHeight > 0 ? "" : " pb-safe"}`}
           style={{ bottom: toolbarBottom }}
           onAttachFile={attachFileHandler}
+          onFindReplace={() => setShowFindReplace(true)}
         />,
         document.body
       )}

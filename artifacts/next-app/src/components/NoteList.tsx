@@ -18,6 +18,7 @@ import type { Note } from "@workspace/api-client-react";
 import { useQueryClient, useQueries } from "@tanstack/react-query";
 import { cn, formatDate } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
+import { Input } from "./ui/input";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { useDemoMode } from "@/lib/demo-context";
@@ -678,13 +679,15 @@ export function NoteList() {
 
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
+          {/* Shared ui/input primitive — centralizes the 16px-on-mobile anti-zoom
+              (text-base md:text-sm). Overrides tune it back to the search-box look. */}
+          <Input
             type="text"
             placeholder="Search notes..."
             value={localSearch}
             onChange={e => setLocalSearch(e.target.value)}
             data-testid="note-search-input"
-            className="w-full bg-panel border border-panel-border rounded-lg pl-9 pr-4 py-2 text-base md:text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-foreground placeholder:text-muted-foreground"
+            className="h-auto shadow-none bg-panel border-panel-border rounded-lg pl-9 pr-4 py-2 focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary"
           />
         </div>
       </div>
