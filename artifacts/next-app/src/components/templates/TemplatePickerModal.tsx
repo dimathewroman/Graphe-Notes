@@ -18,6 +18,7 @@ import type { Template } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDemoMode } from "@/lib/demo-context";
 import { cn } from "@/lib/utils";
+import { sanitizeNoteHtml } from "@/lib/sanitize-html";
 import posthog from "posthog-js";
 
 type Category = "all" | "capture" | "plan" | "reflect" | "create" | "mine";
@@ -501,7 +502,9 @@ export function TemplatePickerModal() {
                     <div className="flex-1 overflow-y-auto px-5 pb-2 relative">
                       <div
                         className="prose prose-sm max-w-none pointer-events-none select-none"
-                        dangerouslySetInnerHTML={{ __html: getContentHtml(previewTemplate) }}
+                        // Sanitize before rendering — templates (incl. user-created
+                        // and shared ones) can carry executable payloads (§S XSS).
+                        dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(getContentHtml(previewTemplate)) }}
                       />
                       {/* Bottom fade mask */}
                       <div className="sticky bottom-0 h-4 bg-gradient-to-t from-[var(--color-surface-3,var(--color-panel))] to-transparent pointer-events-none -mx-5" />
