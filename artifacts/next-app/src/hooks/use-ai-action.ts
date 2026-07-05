@@ -32,6 +32,18 @@ function stripThinkTags(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>\s*/gi, "").trimStart();
 }
 
+// G5: generative actions produce NEW content derived from the selection (a summary,
+// extracted tasks). Inserting them *after* the selection preserves the source;
+// replacing it would destroy the original text the summary was made from.
+const GENERATIVE_ACTIONS = new Set([
+  "summarize_short", "summarize_balanced", "summarize_detailed", "summarize_custom",
+  "extract_action_items",
+]);
+
+// G5: sentinel results the model may return that must never be written into the
+// document — surface them as a status message instead.
+const RESULT_SENTINELS = new Set(["No action items found."]);
+
 // Tester convenience: NEXT_PUBLIC_LOCAL_LLM_DEV_OVERRIDE in .env overrides the
 // saved local LLM endpoint at build time. NEXT_PUBLIC_* vars are inlined into
 // the bundle, so a Vercel build without it set falls through to the saved URL.
@@ -94,6 +106,41 @@ export function useAiAction(
     const prompt = buildAiPrompt(action, sel.text, customInstruction);
     if (!prompt) { setAiLoading(false); return; }
 
+    // G3/V9: while the (possibly long-waiting) request is in flight the user may
+    // keep typing. Compose each transaction's mapping onto the saved positions so
+    // we act on the ORIGINAL range, not whatever now sits at the stale offsets.
+    const trackSelection = () => {
+      let from = sel.from;
+      let to = sel.to;
+      const onTr = (props: { transaction: { mapping: { map: (pos: number, assoc?: number) => number } } }) => {
+        from = props.transaction.mapping.map(from, -1);
+        to = props.transaction.mapping.map(to, 1);
+      };
+      editor!.on("transaction", onTr as never);
+      return {
+        stop: () => editor!.off("transaction", onTr as never),
+        pos: () => ({ from, to }),
+      };
+    };
+
+    // Insert the AI result: rewrite actions replace the (mapped) selection;
+    // generative actions (summarize/extract) insert AFTER it; sentinel results are
+    // shown as a status, never written into the document (G5).
+    const applyAiResult = (raw: string, from: number, to: number) => {
+      const result = raw.trimEnd();
+      if (!result.trim()) return;
+      if (RESULT_SENTINELS.has(result.trim())) {
+        setAiError(result.trim());
+        setTimeout(() => setAiError(null), 4000);
+        return;
+      }
+      if (GENERATIVE_ACTIONS.has(action)) {
+        editor!.chain().focus().insertContentAt(to, `\n\n${result}`).run();
+      } else {
+        editor!.chain().focus().insertContentAt({ from, to }, result).run();
+      }
+    };
+
     // Take a "pre_ai_rewrite" snapshot of the current note state before we
     // touch anything. Failing the snapshot must NOT block the AI call — the
     // worst case is the user can't undo a single rewrite, which is no worse
@@ -155,7 +202,7 @@ export function useAiAction(
                   const data = await res.json() as LocalLlmChatResponse;
                   const result = stripThinkTags(data.choices[0]?.message?.content ?? "");
                   if (result && editor) {
-                    editor.chain().focus().insertContentAt({ from: capturedFrom, to: capturedTo }, result).run();
+                    applyAiResult(result, capturedFrom, capturedTo);
                   }
                   return;
                 }
@@ -174,7 +221,7 @@ export function useAiAction(
                 if (data.error) throw new Error(data.error);
                 const result = data.result || "";
                 if (result && editor) {
-                  editor.chain().focus().insertContentAt({ from: capturedFrom, to: capturedTo }, result).run();
+                  applyAiResult(result, capturedFrom, capturedTo);
                 }
               } catch (err) {
                 const msg = err instanceof Error ? err.message : "AI request failed";
@@ -212,6 +259,7 @@ export function useAiAction(
 
       setAiLoading(true);
       setAiError(null);
+      const tracker = trackSelection();
       try {
         const headers: Record<string, string> = { "Content-Type": "application/json" };
         if (localLlmApiKey) headers["Authorization"] = `Bearer ${localLlmApiKey}`;
@@ -229,7 +277,8 @@ export function useAiAction(
         const data = await res.json() as LocalLlmChatResponse;
         const result = stripThinkTags(data.choices[0]?.message?.content ?? "");
         if (result) {
-          editor.chain().focus().insertContentAt({ from: sel.from, to: sel.to }, result).run();
+          const { from, to } = tracker.pos();
+          applyAiResult(result, from, to);
         }
       } catch (err) {
         const isNetworkError = err instanceof TypeError;
@@ -239,6 +288,7 @@ export function useAiAction(
         setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
         setTimeout(() => setAiError(null), 5000);
       } finally {
+        tracker.stop();
         setAiLoading(false);
         savedAiSelection.current = null;
       }
@@ -252,6 +302,7 @@ export function useAiAction(
 
     const controller = new AbortController();
     abortRef.current = controller;
+    const tracker = trackSelection();
 
     const doRequest = async (): Promise<Response> => {
       return authenticatedFetch("/api/ai/generate", {
@@ -330,7 +381,8 @@ export function useAiAction(
       if (data.error) throw new Error(data.error);
       const result: string = data.result || "";
       if (result) {
-        editor.chain().focus().insertContentAt({ from: sel.from, to: sel.to }, result).run();
+        const { from, to } = tracker.pos();
+        applyAiResult(result, from, to);
       }
     } catch (err) {
       // User-initiated cancel — abort the flow silently, no error banner.
@@ -339,6 +391,7 @@ export function useAiAction(
       setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
       setTimeout(() => setAiError(null), 5000);
     } finally {
+      tracker.stop();
       setAiLoading(false);
       abortRef.current = null;
       savedAiSelection.current = null;

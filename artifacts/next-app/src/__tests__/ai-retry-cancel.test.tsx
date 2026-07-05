@@ -21,6 +21,8 @@ function makeEditor() {
   chain.insertContentAt = () => chain;
   chain.run = () => true;
   return {
+    on: () => {},
+    off: () => {},
     state: { selection: { from: 0, to: 5 }, doc: { textBetween: () => "hello" } },
     chain: () => chain,
   } as never;
