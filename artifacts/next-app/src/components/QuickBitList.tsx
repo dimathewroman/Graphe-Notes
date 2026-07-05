@@ -20,6 +20,7 @@ import { DEMO_QUICK_BITS } from "@/lib/demo-data";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "./ui/empty";
 import { useDebounce } from "@/hooks/use-debounce";
 import { ScrollArea } from "./ui/scroll-area";
+import { formatExpiry } from "@/lib/format-expiry";
 
 const QB_SORT_OPTIONS = [
   { label: "Expires soonest", sortBy: "expiresAt" as const, sortDir: "asc" as const },
@@ -29,25 +30,6 @@ const QB_SORT_OPTIONS = [
   { label: "Title (A → Z)", sortBy: "title" as const, sortDir: "asc" as const },
   { label: "Title (Z → A)", sortBy: "title" as const, sortDir: "desc" as const },
 ];
-
-function formatExpiry(expiresAt: string): { label: string; className: string } {
-  const msLeft = new Date(expiresAt).getTime() - Date.now();
-  const totalMinutes = msLeft / (1000 * 60);
-  const totalHours = msLeft / (1000 * 60 * 60);
-
-  if (msLeft <= 0) return { label: "Expired", className: "text-destructive font-medium" };
-  if (totalHours < 1) {
-    const m = Math.ceil(totalMinutes);
-    return { label: `${m} minute${m !== 1 ? "s" : ""} left`, className: "text-destructive font-medium" };
-  }
-  if (totalHours < 24) {
-    const h = Math.ceil(totalHours);
-    return { label: `${h} hour${h !== 1 ? "s" : ""} left`, className: "text-destructive font-medium" };
-  }
-  const d = Math.ceil(totalHours / 24);
-  const className = totalHours < 48 ? "text-warning" : "text-muted-foreground/70";
-  return { label: `${d} day${d !== 1 ? "s" : ""} left`, className };
-}
 
 export function QuickBitList() {
   // Atomic Zustand selectors (E1) — one subscription per value.
