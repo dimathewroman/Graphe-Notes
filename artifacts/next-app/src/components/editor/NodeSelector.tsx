@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useBreakpoint } from "@/hooks/use-mobile";
 
 type BlockType = {
   label: string;
@@ -98,6 +99,7 @@ export function NodeSelector({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const bp = useBreakpoint();
   if (!editor) return null;
 
   const activeType = BLOCK_TYPES.find((t) => t.isActive(editor)) ?? BLOCK_TYPES[0];
@@ -108,6 +110,7 @@ export function NodeSelector({
         <button
           data-testid="toolbar-node-selector-btn"
           title="Turn into…"
+          onMouseDown={(e) => e.preventDefault()}
           className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-1.5 md:px-1 py-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center gap-0.5${open ? " bg-primary/10 text-primary" : ""}`}
         >
           <span className="flex items-center justify-center w-4 h-4">
@@ -118,6 +121,7 @@ export function NodeSelector({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
+        side={bp === "mobile" ? "top" : "bottom"}
         sideOffset={6}
         className="w-44 p-1 bg-popover border-panel-border rounded-xl shadow-2xl luminance-border-top"
       >

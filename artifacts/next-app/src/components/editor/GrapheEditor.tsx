@@ -4,6 +4,7 @@
 // note metadata, folders, tags, timers, or navigation.
 
 import { useEffect, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
 import { TextSelection } from "@tiptap/pm/state";
@@ -117,6 +118,39 @@ export function GrapheEditor({
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const [showFindReplace, setShowFindReplace] = useState(false);
+
+  // Toolbar bottom position — debounced via setTimeout to avoid the resize→scroll race.
+  // Chrome fires vv.resize (height changes) and vv.scroll (offsetTop/pan changes) as two
+  // separate browser tasks with a paint possible in between. requestAnimationFrame fires
+  // between these tasks, so it still reads a stale vv.offsetTop on the first render and
+  // the toolbar flashes at the wrong height. setTimeout(fn, 30) queues a macrotask that
+  // runs after both events have settled (~2 frames): both vv.height and vv.offsetTop are
+  // stable by then, so the toolbar renders exactly once at the correct position.
+  const [toolbarBottom, setToolbarBottom] = useState(0);
+  useEffect(() => {
+    if (bp !== "mobile") return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let timerId = 0;
+    const update = () => {
+      clearTimeout(timerId);
+      timerId = window.setTimeout(() => {
+        const inset = window.innerHeight - vv.height;
+        const kbH = inset > 50 ? inset : 0;
+        setToolbarBottom(kbH > 0 ? Math.max(0, kbH - vv.offsetTop) : 0);
+      }, 30);
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
+    return () => {
+      clearTimeout(timerId);
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [bp]);
 
   // Fix 1: stable extensions reference — useMemo([]) ensures the same array instance is
   // reused for the lifetime of the component, preventing TipTap from re-calling setOptions()
@@ -466,15 +500,22 @@ export function GrapheEditor({
       <SlashCommandMenu editor={editor} />
 
       {/* Mobile bottom toolbar — keyboard-aware. showUndoRedo lives here (not in the top
-          bar) so the user can undo/redo without dismissing the keyboard. */}
-      {bp === "mobile" && (
+          bar) so the user can undo/redo without dismissing the keyboard.
+          Rendered via createPortal into document.body so position:fixed is relative to the
+          viewport, not a transformed motion.div ancestor (Framer Motion keeps transform:
+          translateX(0) active on animated divs, breaking fixed positioning for descendants).
+          toolbarBottom accounts for vv.offsetTop: when Chrome pans the visual viewport
+          downward to keep the cursor in view after the keyboard opens, we subtract that
+          offset so the toolbar tracks the visual viewport bottom (= keyboard top). */}
+      {bp === "mobile" && typeof document !== "undefined" && createPortal(
         <EditorToolbar
           editor={editor}
           showUndoRedo
           className="fixed left-0 right-0 z-40 border-t border-panel-border bg-editor/95 backdrop-blur-md"
-          style={{ bottom: keyboardHeight > 0 ? keyboardHeight : 0 }}
+          style={{ bottom: toolbarBottom }}
           onAttachFile={attachFileHandler}
-        />
+        />,
+        document.body
       )}
 
       {/* Find/replace panel */}
