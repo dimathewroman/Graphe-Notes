@@ -1,7 +1,7 @@
 # Graphe Notes — Foundation Audit (Stage 1)
 
 **Date:** 2026-07-04 · **Branch audited:** `master` (via `chore/full-audit`, clean tree) · **Scope:** read-only code audit; app not run.
-**Method:** eight audit passes — six parallel (mobile readiness, design/UI, efficiency, security, dead code/duplication, architecture & docs drift) plus a second wave of two dedicated AI passes (architecture/plumbing vs the locked AI Provider Architecture v2 spec; prompt quality & AI UX) — with the load-bearing file:line claims independently re-verified against source before inclusion.
+**Method:** ten audit passes in three waves — (1) six parallel (mobile readiness, design/UI, efficiency, security, dead code/duplication, architecture & docs drift); (2) two dedicated AI passes (architecture/plumbing vs the locked AI Provider Architecture v2 spec; prompt quality & AI UX); (3) two feature-vertical passes (version history/undo/save/editor correctness; demo isolation/recently-deleted/attachments/search). Load-bearing file:line claims — including the V1 undo chain and the missing-FK schema facts — independently re-verified against source before inclusion.
 
 **Grounding in the roadmap:** this audit is written against the locked Templates v2 era decisions (Notion: *Templates v2 Era — Foundation Architecture*, May 2026): **Capacitor** is the mobile path, **Yjs** is Phase 1, and a **Foundation Optimization Audit** is already a tracked parallel initiative. Findings are tagged accordingly:
 - **[CAP]** — blocks or degrades the Capacitor wrap; must be fixed web-side regardless of plugins
@@ -415,6 +415,109 @@ Scorecard: **Consistency: strong** (one file, one voice, one "Return only…, no
 
 ---
 
+## §V. Version history, save pipeline, undo/redo & editor correctness
+
+*Third-wave dedicated pass; the undo chain and the schema facts below were independently re-verified in source by the coordinator.*
+
+### V1. The undo stack is shared across every note; undo can write one note's content into another note's DB row — **Critical (needs one runtime confirmation)**
+One ProseMirror history stack lives for the whole session. Note switch calls `editor.commands.setContent(content, { emitUpdate: false })` (`GrapheEditor.tsx:247`) — which suppresses the update *event* but records the swap as a normal undoable full-document replacement (no `addToHistory: false`; Tiptap 3.20 `setContent` verified to not disable history). The transient `contentKey === undefined` while React Query loads adds a second empty-doc step. Undo transactions *do* fire `onUpdate` → `handleContentChange` → the 800ms autosave, so pressing Cmd+Z (or the always-enabled toolbar Undo, `EditorToolbar.tsx:288-303`) in note B restores note A's content and **persists it into note B's row**. Same mechanic for quick bits. This is the concrete meaning of the roadmap's "edit history (currently broken)." *Fix now:* clear history state on each `contentKey` change (re-create editor state, or run the swap with `addToHistory:false`) and skip the transient `undefined` contentKey. Yjs's per-document UndoManager fixes it structurally later.
+
+### V2. No save flush on tab-close / mobile backgrounding; debounce has no max-wait — **High**
+Pure trailing 800ms debounce (`NoteShell.tsx:349-365`), flushed only on Cmd+S and note switch; zero `beforeunload`/`pagehide`/`visibilitychange` handlers anywhere (verified grep). Continuous typing never pauses 800ms → nothing saves; close/refresh/iOS-tab-kill loses the whole run, not 800ms. *Fix:* flush on `visibilitychange`(hidden)/`pagehide` via `sendBeacon`/keepalive; add a max-wait.
+
+### V3. QuickBit save failure displays "Saved" — **High**
+`QuickBitShell.tsx:410-417`: the `catch` sets `setSaveStatus("saved")` — an explicit lie; failed PATCH shows the green dot, no retry, no Sentry. *Fix:* set an error status and capture.
+
+### V4. Notes have no save-error state; failed PATCH is an unhandled rejection — **High**
+`NoteShell.tsx:79` status union is only `"saved" | "saving"`; `performSave` has no try/catch and is called as `void performSave(...)` (`:361`) — a 500/network failure silently drops the payload (pending buffer already nulled) and the header pulses "Saving…" forever. Violates DoD "failed PATCH must surface." *Fix:* add error state + try/catch + Sentry + retain payload for retry.
+
+### V5. SmartTaskItem reacts to undo transactions and destroys the state undo just restored — **High**
+`SmartTaskItem.ts:31-35` skips y-sync and its own meta but not history/undo transactions; on a checked→unchecked transition it force-unchecks all checked descendants (`:99-119`). Undoing a "check parent" reverts the parent, the plugin then unchecks the children undo was preserving, and the appended step clobbers the redo stack. The happy path (check → auto-sort in one 500ms history group) is fine. *Fix:* bail out of `appendTransaction` when the transaction carries prosemirror-history meta.
+
+### V6. "Before restore" checkpoint drops the unsaved draft in real mode — **High**
+`handleRestoreVersion` (`NoteShell.tsx:466-484`) nulls the pending buffer **without flushing** (the comment claims a flush that doesn't exist), then creates the checkpoint — but real-mode version POST snapshots the DB row, not client content (`use-note-versions.ts:183-187`, `versions/route.ts:145-156`). Edits in the debounce window are excluded from the "reversible" checkpoint and then overwritten by the restore. *Fix:* flush the pending PATCH before creating the checkpoint.
+
+### V7. 50-version pruning deletes labeled and pre-AI checkpoints — **Medium**
+`versions/route.ts:158-174` prunes purely by `createdAt` offset — a user's named "Final draft" is hard-deleted once 50 newer autosaves accumulate; prune is also N sequential DELETEs. *Fix:* exclude labeled/`pre_ai_rewrite` rows; single `inArray` delete.
+
+### V8. Find/replace is keyboard-only — unreachable on mobile/touch — **Medium**
+Only trigger is Cmd/Ctrl+F/H (`GrapheEditor.tsx:325-338`); no toolbar/overflow entry (verified). Phone users can't open it. *Fix:* add a Find & Replace entry on all breakpoints.
+
+### V9. AI replace targets pre-round-trip selection positions — **Medium** *(= §G G3)*
+`use-ai-action.ts:69-71` captures `{from,to}`; no remapping before `insertContentAt` after a multi-second (or 65s) request. Single-undo and the `pre_ai_rewrite` snapshot are confirmed good. *Fix:* map positions through transactions or lock editing during AI.
+
+### V10. Promote-to-note uses stale cached QB content, then deletes the QB — **Medium**
+`QuickBitShell.tsx:537-541` builds the note from cache without flushing the debounce, then hard-deletes the QB — edits in the window are lost with the source gone; a create-succeeds/delete-fails path leaves a duplicate. *Fix:* flush before promoting.
+
+### V11. Version diff is inverted — your newest text renders as red strikethrough — **Medium**
+`VersionPreviewArea.tsx:51-56` calls `computeDiff(current, version)`, so under "Show changes vs current" insertions (green) are old text and deletions (red) are your recent additions. Diff runs on plaintext with `cleanupSemantic` (good — no tag artifacts); formatting-only changes show "no differences." *Fix:* swap the arguments.
+
+### V12. Concurrent tabs: last-write-wins, no conflict detection — **Medium** *(baseline Yjs fixes)*
+`notes/[id]/route.ts:45-91` applies PATCH with no version precondition. Noted for the record.
+
+### V13-V16 (Low). Client/server snapshot thresholds can disagree and snapshot failures are always silent (`use-note-versions.ts:143-157`); find/replace correctness edges — cross-mark phrases never match, self-overlapping needles corrupt, replace re-matches its own output (`FindReplace.tsx:23-33,174-195`; Replace-All is one undo step ✓); version panel label/delete controls hover-gated on touch tablets (`VersionHistoryPanel.tsx:295,304,342`); vaulted-note versions returned to any authenticated owner request (UI-gated; ties to the withheld §S vault item).
+
+**Clean bills:** crossfade animations are opacity-only and never touch the doc (no history pollution); note-switch flush ordering captures the old note's payload before reseeding; AI rewrite is a single undo step with a pre-AI snapshot; undo/redo affordances exist on both desktop and mobile toolbars with live enabled-state; `ListExitOnEnterExtension` and `SwipeIndentExtension` are well-engineered (proper direction-lock, thresholds, passive-listener discipline); diff uses plaintext + `cleanupSemantic`; all version routes validate auth and scope by userId with Sentry.
+
+**Verdict:** the version-history *feature* is well-architected (server-authoritative snapshots, sane thresholds, reversible-by-design restore), but the undo layer beneath it is critically broken (V1 cross-note corruption) and the save pipeline has four independent data-loss bugs (V2-V4, V6) that Yjs will **not** automatically fix. Patch V1-V6 now regardless of the migration timeline.
+
+---
+
+## §X. Feature verticals — demo isolation, recently deleted, attachments, search
+
+*Third-wave dedicated pass; the schema/cron/endpoint facts were independently re-verified by the coordinator.*
+
+### Demo mode (contract: "no account, wiped on refresh, never touches the server")
+Core loop is genuinely serverless and correctly guarded (see clean bills), and refresh does wipe content (both caches memory-only, no Zustand persist). Contract breaks at the edges:
+- **X-D1 (High):** SettingsModal has zero demo guards — in demo it fires GET `/api/ai/settings|keys|usage`, `/api/vault/status`, `/api/quick-bits/settings` (all 401, swallowed) and its vault-setup / PIN-reset / QB-settings **actions** 401 into dead-end states (`SettingsModal.tsx:201,210,229,247,261,426,441,534`). Directly violates "never connects to the server." *Fix:* gate all SettingsModal fetches/actions on `useDemoMode()`.
+- **X-D2 (High):** demo "Delete Forever" sets `_demoPermanentlyDeleted` but NoteList filters only `_demoDeleted` (`NoteList.tsx:206`) — the note reappears in All Notes and demo search.
+- **X-D3/D4 (Medium):** demo change-PIN calls the server and can never succeed (`Sidebar.tsx:472-479`, `VaultModal.tsx:91-96`); `demo_vault_hash` is sessionStorage (survives refresh — contract mismatch), stores the **raw PIN** not a hash, and `NoteShell` gates on local state instead of sessionStorage so re-vaulting re-prompts and overwrites it (`NoteShell.tsx:76,595,650-677`).
+- Low: appearance/QB-reminder localStorage writes persist across refresh (X-D5); demo→account discards demo content with no exit-demo control (X-D6); demo folder delete doesn't cascade (X-D7).
+
+### Recently Deleted
+Soft-delete core is solid (correct 30-day math, correct exclusion from lists/search/attachments, working attachment cron). The failures are around *hard* delete:
+- **X-R1 (High):** hard-deleting a note orphans its attachments — rows **and** storage files — forever. `attachments.noteId` has no FK (verified: plain `integer`, no `.references()`); permanent-delete and the cron note-purge delete only the note row; the cron's attachment purge only removes rows whose *own* `deletedAt` is >30 days, which these never get. Files persist, invisible, quota-counted.
+- **X-R2 (High):** "Delete Forever" retains up to 50 full-content version snapshots indefinitely — `note_versions.noteId` has no FK (verified) and neither delete path touches it. A "this cannot be undone" delete leaves the full title+HTML in the DB — a retention/privacy problem.
+- **X-R3/R4/R5 (Medium):** tag list includes tags from soft-deleted (and locked-vault) notes (`api/tags/route.ts:14` — no `deleted_at` filter); restore into a deleted folder dangles silently (no folderId nulling on folder delete); deleted/expired quick bits convert one-way into plain notes and user-deleted QBs are unlabeled in the bin.
+- Low: soft-deleted notes still writable via PATCH (race); deleted-note detail doesn't re-lock vaulted content if the vault is locked while open.
+
+### Attachments
+Upload/download/quota-gating/panel-deletion are well built (careful HEIC/GIF handling, ownership checks throughout). Two structural lifecycle leaks:
+- **X-A1 (High, needs runtime confirm):** in-body images break after 7 days — upload bakes a 604800s signed URL into the image `src` saved in `notes.content`; `GET /api/notes/:id` returns content verbatim with no re-signing (no client re-sign found). Day 8+, embedded images 400 while the attachment *panels* keep working (they mint fresh URLs per request). *Fix:* store the storage path, resolve to fresh signed URLs at render/GET.
+- **X-A2 (High):** removing an image from the note body orphans the file — editor deletion removes only the Tiptap node, never calls `DELETE /api/attachments/:id`; the row keeps `deletedAt=NULL` so the cron never purges it, AllAttachments hides it (no longer embedded), and it's quota-counted forever. (Panel-side delete does correctly strip the inline img — the reverse direction works.)
+- **X-A3 (Medium):** the tier/quota sum counts **all** rows with no `isNull(deletedAt)` filter (`upload/route.ts:158-161`) — deleted and orphaned bytes permanently shrink effective quota. **X-A4 (Low):** usage is visible only inside a rejected-upload error string; no Settings display.
+
+### Search
+- **X-S1 (informational, clean bill on your question):** confirmed pipeline — 300ms client debounce → server `ILIKE` on title+contentText with `%_\` escaping; quick-bit search is fully client-side; **zero AI/embedding/vector/semantic code anywhere** (verified repo-wide). Semantic search would be the spec's Phase 4/RAG, which doesn't exist yet.
+- **X-S2 (Medium):** locked vault notes' plaintext `contentText` is returned by the list/search endpoint and matched by search with no vault gating (`notes/route.ts:46-51,71`); the client hides them but the preview text is in every `/api/notes` response. Extends the withheld §S vault finding — the concrete leak path. *Fix:* blank `contentText` for vaulted notes server-side unless an unlock proof is presented.
+- Low: no relevance ranking or match highlighting (X-S3); can't search folder/tag *names* (X-S4).
+
+**Verdicts:** *Demo* — core loop meticulously serverless and wipe-on-refresh holds for content; broken at the edges (SettingsModal server calls, vault PIN survival, delete-forever resurrect). *Recently Deleted* — soft-delete core solid; everything around hard delete orphans (attachments + up to 50 full-content versions forever). *Attachments* — upload/download/quota well built; two lifecycle leaks (7-day URLs baked into HTML, editor-side removal never releases the file) — the two highest-value fixes here. *Search* — exactly as claimed, provably no AI; the one real issue is vaulted plaintext riding along in responses.
+
+---
+
+## §H. Planned-feature readiness — auditing the roadmap, not just the code
+
+*What each locked Templates v2 initiative needs to be true in the codebase first, and whether this audit found it true. Grounded in the Notion Foundation Architecture doc. This is the bridge from "what's wrong today" to "what to build next."*
+
+| Planned feature (roadmap) | Depends on / blocked by (this audit) | Ready? |
+|---|---|---|
+| **Yjs Phase 1** (CRDT storage, UndoManager, IndexedDB offline) | Fixes V1 (undo corruption) + V12 (concurrent tabs) structurally, and M3 (offline) partially. But migrating over the current save pipeline inherits V2/V3/V4/V6 unless those are fixed first; and the editor's imperative `setContent`-on-`contentKey` model (`GrapheEditor.tsx:247`) must be replaced by Yjs binding, not layered on. | **Fix V1-V6 + E2 save-path first**, then migrate — don't build Yjs on the broken save loop |
+| **Color Presets** (coordinated palette swap, Decision 8 tier 3) | Sits on the token layer — but D1 (96 raw palette colors bypass tokens) and D2 (66 hardcoded indigo AI/vault usages) mean a preset swap won't reach ~160 color sites. D3 (dark: keys off OS not app) breaks preset+dark combos. | **Blocked** — do §D D1/D2/D3 sweep first; a preset system over hardcoded colors ships visibly broken |
+| **Vibes** (motion curves + fonts + decoration + 5 named transitions) | Motion-level tokens don't reach components (D6 — components use non-remapped base duration tokens), so Vibe motion won't respect Reduced/Minimal. E10 (7 font families already eager-loaded) means Vibe fonts need the `preload:false` pattern. Framer configs forked 3 ways (D8). | **Partially blocked** — D6 is a hard prerequisite (the Vibe spec's Reduced/Minimal fallback grammar depends on it) |
+| **Decoration layer** (Pixi companion sprites, opt-in) | New subsystem; main risk is the render-hygiene baseline — E1 (14 whole-store subscriptions) and E3 (per-keystroke doc passes) already tax mid-range Android; adding a Pixi overlay onto that needs E1/E3 fixed or companions will stutter. Lazy-load/perf-budget discipline (roadmap) is sound. | **Gated on E1/E3** (the FOA render-hygiene work) |
+| **Note Type System / dynamic blocks** (Tier 1: block editing, slash menu, drag handles, multi-column) | Extends existing SlashCommandExtension (good). But the Note-vs-QuickBit duplication (R5/R6, ~190+ lines) means building block types twice unless the shells are unified first — the roadmap's own "cross-mode unification" item. Editor code-splitting (E4) is the vehicle for per-modality extension loading. | **Do R5/R6 shared-primitive extraction first**, then build once |
+| **Live collaboration (Phase 4)** | Built on Yjs Awareness — fully blocked on Phase 1. The single-user assumptions (CLAUDE.md constraint 3) and no-conflict-detection (V12) are exactly what it resolves. | Downstream of Yjs |
+| **Notification pipeline** (Resend + web/native push) | Observability gap A4 (attachments/find-replace/QB-create uncaptured) means you can't yet measure engagement to target notifications. Quick-bit notification cadence UI exists (`NotificationCadenceEditor`). Needs the Capacitor push plugins (M-wrap). | Post-Yjs, needs A4 telemetry |
+| **Inline audio** (Opus, severe caps, feature flag) | Attachment lifecycle leaks (X-A2 orphans, X-A3 quota-counts-dead-bytes, X-R1 purge orphans) would be *worse* for audio (bigger files, per-note caps) — fix the attachment lifecycle before adding a second binary type on the same broken storage-cleanup path. | **Blocked on X-A1/A2/R1** attachment fixes |
+| **Image pipeline (HEIF→AVIF)** — NOW priority | Independent of the above; the attachment upload path already does sharp/HEIC handling well (clean bill). X-A1 (7-day URL in HTML) should be fixed alongside so re-encoded images don't inherit the same break. | **Ready** — just fold in the X-A1 storage-path fix |
+| **Capacitor mobile wrap** | Blocked on the §M cluster: M1 safe-area, M2 back-stack, M3 offline, M16 storage/auth adapter. The locked plugin set (`@capacitor/keyboard`, `preferences`, `push`) maps directly onto M8/M16. | **Blocked on §M wrap-blockers** (the plan's phases 2-4) |
+| **Proactive always-on AI (Phase 6)** | The §G G16 seven prerequisites: message-array API, zod suggestion schema, wired taskType routing, rate-limit redesign, context/RAG layer, suggestion hygiene, local-LLM reachability. Prompt contract v2 (G12-G15) is the substrate. | **Blocked on §G phases 10-11** |
+
+**The through-line:** almost every marquee roadmap feature is gated on cleanup this audit already identified — Color Presets on the token sweep, Vibes on motion tokens, the Note Type System on shell unification, inline audio on the attachment lifecycle, always-on AI on the prompt/pipeline rebuild, and everything mobile on the wrap-blockers. The sequencing that falls out: **foundation cleanup (design tokens, render hygiene, save/undo, attachment lifecycle, AI pipeline) is not separate from the roadmap — it's Phase 0 of it.** Doing the marquee features first means building each one twice.
+
+---
+
 ## §F. Roadmap alignment — what to fix now vs. what Templates v2 absorbs
 
 | Finding cluster | Now or later? | Rationale |
@@ -451,6 +554,13 @@ Scorecard: **Consistency: strong** (one file, one voice, one "Return only…, no
 
 **Security:** no Criticals; 4 Mediums reported in-session per policy (not in this file until fixed).
 
+**Data integrity (third wave, §V/§X) — the most serious findings in the whole audit:**
+- **Undo corruption (V1, Critical):** one shared undo stack across all notes means Cmd+Z after a note switch can restore a *different* note's content and autosave it into the current note's row. This is what the roadmap's "edit history currently broken" refers to; patchable now, fixed structurally by Yjs.
+- **Silent data loss (V2-V4, V6, High):** no save flush on tab-close/mobile-backgrounding, QuickBit shows "Saved" after a failed save, notes have no save-error state, and the "before restore" checkpoint drops your unsaved draft.
+- **Orphaned data on delete (X-R1, X-R2, X-A2, High):** `attachments.noteId` and `note_versions.noteId` have **no foreign keys** (verified), so deleting a note orphans its attachment files and rows forever *and* retains up to 50 full-content version snapshots in the DB indefinitely — "Delete Forever" isn't. Editor-side image removal never releases the file either. All quota-counted forever.
+- **Vault content leak (X-S2, extends §S):** locked notes' plaintext ships in every list/search response.
+- **Images break after 7 days (X-A1):** signed URLs are baked into stored note HTML with no re-signing.
+
 **AI (added in the second wave, §G):** the request layer is the weakest part of the app — blocking and uncancellable, forked four ways with visible drift, a dead 429-retry path, and several silent data-loss edges (stale-position replacement, 1024-token truncation, the panel's lost inserts). The prompt file is disciplined but built on the wrong substrate for the planned always-on assistant (plain text, single user message, no fencing, no structured output, temp 1.0 on proofread). Plug-and-play is 3 of 9 spec providers via copy-paste if/else; one adapter-table refactor closes most of the gap. Always-on readiness: the taskType router skeleton is right and dormant; seven concrete prerequisites listed in §G.
 
 **Suggested phasing** (one branch per phase, PR each, aligned to the Templates v2 timeline):
@@ -468,8 +578,11 @@ Scorecard: **Consistency: strong** (one file, one voice, one "Return only…, no
 | 9 | `fix/ai-correctness` | G1-G7, G9-G11 (dead retry, no-op button, stale positions, truncation, lost inserts, demo dead end) | 1-2 days |
 | 10 | `refactor/ai-pipeline` | G8 unify pipelines + G17 provider adapter table (= spec Phase 2, delivers 6 more BYOK providers) + G16 streaming/cancel/timeout + G18 token accounting | 3-4 days |
 | 11 | `feat/prompt-contract-v2` | G12-G15: system role + fenced HTML-in/HTML-out + per-action generation config + wire taskType routing — the Phase 6 substrate | 2-3 days |
+| **0** | `fix/data-integrity` | **Do first.** V1 undo-corruption + V2-V4/V6 save-loss + X-R1/X-R2 orphan cleanup (add FKs + delete versions/attachments on note delete) + X-A2 image-orphan + X-A1 store-path-not-URL | 2-3 days |
+| 12 | `fix/vault-and-deleted-edges` | X-S2 vault content leak (with the §S vault item) + X-R3/R4/R5 tag ghosts/dangling folders/QB labels + V11 inverted diff | 1-2 days |
+| 13 | `fix/demo-isolation` | X-D1 SettingsModal guards + X-D2 resurrect + X-D3/D4 vault PIN | 1 day |
 
-Independent phases: 1, 5, 6, 9 can run in any order; 3-4 before any Capacitor work; 7 before Templates v2 Phase 2; 8 before the next agent-driven feature session; 10 before 11; 11 before any Phase 6 (always-on) work.
+Revised ordering: **Phase 0 (`fix/data-integrity`) is now the true first move** — the undo-corruption and orphan-on-delete bugs are actively losing/retaining user data, and Yjs (which fixes V1/V12) should be built *on top of* a correct save loop, not before it. Then: 1 (security), 9 (AI correctness), 5 (render hygiene) in any order → 6 (design tokens) before any Color Preset work → 3-4 (mobile) before Capacitor → 7 (dedup) before the Note Type System → 10-11 (AI pipeline/prompts) before always-on → 8/12/13 (truth-up + edges) as they fit. §H maps each roadmap feature to its blocking phase.
 
 ---
 
