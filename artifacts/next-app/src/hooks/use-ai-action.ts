@@ -106,6 +106,15 @@ export function useAiAction(
     const prompt = buildAiPrompt(action, sel.text, customInstruction);
     if (!prompt) { setAiLoading(false); return; }
 
+    // G9: demo mode has no authenticated AI backend — hitting /api/ai/generate
+    // would 401. Show a friendly upsell instead of a raw auth error.
+    if (isDemo) {
+      setAiLoading(false);
+      setAiError("Sign up to use AI features.");
+      setTimeout(() => setAiError(null), 4000);
+      return;
+    }
+
     // G3/V9: while the (possibly long-waiting) request is in flight the user may
     // keep typing. Compose each transaction's mapping onto the saved positions so
     // we act on the ORIGINAL range, not whatever now sits at the stale offsets.
@@ -217,8 +226,8 @@ export function useAiAction(
                   setTimeout(() => setAiError(null), 5000);
                   return;
                 }
-                const data = await res.json() as { result?: string; error?: string };
-                if (data.error) throw new Error(data.error);
+                const data = await res.json() as { result?: string; error?: string; userMessage?: string };
+                if (data.error) throw new Error(data.userMessage ?? data.error);
                 const result = data.result || "";
                 if (result && editor) {
                   applyAiResult(result, capturedFrom, capturedTo);
@@ -377,8 +386,8 @@ export function useAiAction(
         return;
       }
 
-      const data = await res.json() as { error?: string; result?: string };
-      if (data.error) throw new Error(data.error);
+      const data = await res.json() as { error?: string; result?: string; userMessage?: string };
+      if (data.error) throw new Error(data.userMessage ?? data.error);
       const result: string = data.result || "";
       if (result) {
         const { from, to } = tracker.pos();

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { Editor } from "@tiptap/react";
 import type { GetNotesSortBy, GetNotesSortDir } from "@workspace/api-client-react";
 
 type FilterType = "all" | "pinned" | "favorites" | "folder" | "tag" | "attachments" | "vault" | "quickbits" | "recently-deleted";
@@ -30,6 +31,12 @@ interface AppState {
   selectedNoteId: number | null;
   selectedQuickBitId: number | null;
   mobileView: MobileView;
+
+  // G6: the live Tiptap editor for the open note, so panels (e.g. AIPanel) can
+  // write through it rather than PATCHing stale DB content. Transient — never
+  // persisted. Set by NoteShell via onEditorReady.
+  activeEditor: Editor | null;
+  setActiveEditor: (editor: Editor | null) => void;
 
   isSidebarOpen: boolean;
   isNoteListOpen: boolean;
@@ -104,6 +111,9 @@ export const useAppStore = create<AppState>((set) => ({
   selectedNoteId: null,
   selectedQuickBitId: null,
   mobileView: "list",
+
+  activeEditor: null,
+  setActiveEditor: (editor) => set({ activeEditor: editor }),
 
   isSidebarOpen: true,
   isNoteListOpen: true,

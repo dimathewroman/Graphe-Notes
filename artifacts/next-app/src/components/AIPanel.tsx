@@ -28,6 +28,7 @@ export function AIPanel() {
   const isAIPanelOpen = useAppStore(s => s.isAIPanelOpen);
   const setAIPanelOpen = useAppStore(s => s.setAIPanelOpen);
   const selectedNoteId = useAppStore(s => s.selectedNoteId);
+  const activeEditor = useAppStore(s => s.activeEditor); // G6: write results through the live editor
   const setAiSetupModalOpen = useAppStore(s => s.setAiSetupModalOpen);
   const setPendingAiAction = useAppStore(s => s.setPendingAiAction);
   const anim = useAnimationConfig();
@@ -49,8 +50,11 @@ export function AIPanel() {
     capturedNote: typeof note,
     localLlmConfig?: { endpoint: string; model: string | null },
   ) => {
+    // G11: cap the note context so a long note doesn't blow the token budget
+    // (~8k chars ≈ 2k tokens). The prompt still gets the title + a leading slice.
+    const MAX_CONTEXT_CHARS = 8000;
     const noteContext = capturedNote
-      ? `Title: ${capturedNote.title}\nContent:\n${capturedNote.contentText}`
+      ? `Title: ${capturedNote.title}\nContent:\n${(capturedNote.contentText ?? "").slice(0, MAX_CONTEXT_CHARS)}`
       : undefined;
     const fullPrompt = noteContext ? `${capturedPrompt}\n\nNote context:\n${noteContext}` : capturedPrompt;
 
@@ -153,11 +157,21 @@ export function AIPanel() {
   };
 
   const insertIntoNote = async () => {
-    if (!selectedNoteId || !note || !result) return;
-    const newContent = note.content + `<br><p><strong>AI Suggestion:</strong></p><p>${result.replace(/\n/g, '<br>')}</p>`;
-    await updateNoteMut.mutateAsync({ id: selectedNoteId, data: { content: newContent } });
-    queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
-    posthog.capture("ai_result_inserted", { note_id: selectedNoteId });
+    if (!result) return;
+    const html = `<p><strong>AI Suggestion:</strong></p><p>${result.replace(/\n/g, '<br>')}</p>`;
+    // G6: write through the LIVE editor when the note is open, so the insertion
+    // appears immediately and rides the normal debounced save — instead of PATCHing
+    // stale DB content, which clobbered any unsaved editor edits.
+    if (activeEditor) {
+      activeEditor.chain().focus().insertContentAt(activeEditor.state.doc.content.size, html).run();
+    } else if (selectedNoteId && note) {
+      // Fallback: no live editor mounted — patch persisted content directly.
+      await updateNoteMut.mutateAsync({ id: selectedNoteId, data: { content: `${note.content}<br>${html}` } });
+      queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+    } else {
+      return;
+    }
+    posthog.capture("ai_result_inserted", { note_id: selectedNoteId ?? undefined });
     setResult("");
     setPrompt("");
   };
@@ -252,6 +266,9 @@ export function AIPanel() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
+                    // G7: ignore Enter while a request is in flight (or the box is
+                    // empty) so a double-Enter can't fire two requests.
+                    if (isPending || !prompt.trim()) return;
                     handleComplete();
                   }
                 }}
