@@ -36,10 +36,12 @@ function htmlToTiptapJson(html: string): Record<string, unknown> {
 
 export function SaveAsTemplateDialog({
   noteTitle,
-  noteContent,
+  getNoteContent,
 }: {
   noteTitle: string;
-  noteContent: string;
+  // E3/E13: a getter, not a value — so the parent no longer runs editor.getHTML()
+  // on every render (even while this dialog is closed). Serialized once, on save.
+  getNoteContent: () => string;
 }) {
   // Atomic Zustand selectors (E1) — one subscription per value.
   const isSaveAsTemplateOpen = useAppStore(s => s.isSaveAsTemplateOpen);
@@ -51,6 +53,8 @@ export function SaveAsTemplateDialog({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
+  // Captured at save time so the success toast can report it without re-serializing.
+  const hadImagesRef = useRef(false);
 
   useEffect(() => {
     if (isSaveAsTemplateOpen) {
@@ -65,7 +69,7 @@ export function SaveAsTemplateDialog({
         queryClient.invalidateQueries({ queryKey: getGetTemplatesQueryKey() });
         posthog.capture("template_saved", { template_id: template.id, timestamp: new Date().toISOString() });
         closeSaveAsTemplate();
-        const { hadImages } = stripImagesFromHtml(noteContent);
+        const hadImages = hadImagesRef.current;
         toast.success(hadImages ? "Template saved. Images were not included since templates are text only." : "Template saved", {
           duration: hadImages ? 4000 : 3000,
           icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
@@ -76,7 +80,8 @@ export function SaveAsTemplateDialog({
 
   const handleSave = () => {
     if (!name.trim()) return;
-    const { html: strippedHtml } = stripImagesFromHtml(noteContent);
+    const { html: strippedHtml, hadImages } = stripImagesFromHtml(getNoteContent());
+    hadImagesRef.current = hadImages;
     const content = htmlToTiptapJson(strippedHtml);
 
     if (isDemo) {

@@ -32,16 +32,19 @@ export function WordCountPopover({ editor }: { editor: Editor | null }) {
     setCounts(computeCounts(editor));
   }, [editor]);
 
+  // E9: only recompute counts while the popover is open. Previously this subscribed
+  // to every `update`/`selectionUpdate` and ran a full-doc textContent traversal on
+  // each keystroke even when closed — pure waste, since nothing displayed the result.
   useEffect(() => {
-    if (!editor) return;
+    if (!editor || !open) return;
+    refresh();
     editor.on("update", refresh);
     editor.on("selectionUpdate", refresh);
-    refresh();
     return () => {
       editor.off("update", refresh);
       editor.off("selectionUpdate", refresh);
     };
-  }, [editor, refresh]);
+  }, [editor, refresh, open]);
 
   if (!editor) return null;
 
