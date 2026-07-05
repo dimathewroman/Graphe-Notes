@@ -245,11 +245,17 @@ export function SettingsModal() {
   }, [activeTab, isSettingsOpen]);
 
   // ── Usage countdown timer ────────────────────────────────────────
+  // E13: depend on a derived boolean, not usageCountdown itself. Depending on the
+  // value re-ran this effect every tick (clearInterval + setInterval each second,
+  // ~1 GC-churning teardown/second). The functional updater means the interval
+  // never needs the live value, so it's created once when the countdown starts and
+  // cleared once when it reaches zero.
+  const isUsageCounting = usageCountdown > 0;
   useEffect(() => {
-    if (usageCountdown <= 0) return;
+    if (!isUsageCounting) return;
     const timer = setInterval(() => setUsageCountdown(prev => Math.max(0, prev - 1)), 1000);
     return () => clearInterval(timer);
-  }, [usageCountdown]);
+  }, [isUsageCounting]);
 
   useEffect(() => {
     if (activeTab === "security" && isSettingsOpen) {
