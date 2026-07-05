@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
-import { db, notesTable } from "@workspace/db";
+import { db, notesTable, foldersTable } from "@workspace/db";
 import { MoveNoteParams, MoveNoteBody, MoveNoteResponse } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
 import * as Sentry from "@sentry/nextjs";
@@ -23,6 +23,19 @@ export async function PATCH(
     const parsed = MoveNoteBody.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+    }
+
+    // Verify the target folder belongs to this user — otherwise a note could be
+    // moved into another user's folder (§S folderId ownership).
+    if (parsed.data.folderId != null) {
+      const [folder] = await db
+        .select({ id: foldersTable.id })
+        .from(foldersTable)
+        .where(and(eq(foldersTable.id, parsed.data.folderId), eq(foldersTable.userId, user.id)))
+        .limit(1);
+      if (!folder) {
+        return NextResponse.json({ error: "Folder not found" }, { status: 404 });
+      }
     }
 
     const [note] = await db

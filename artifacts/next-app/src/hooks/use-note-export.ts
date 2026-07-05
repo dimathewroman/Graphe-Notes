@@ -1,5 +1,6 @@
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
+import { sanitizeNoteHtml } from "@/lib/sanitize-html";
 
 function sanitizeFilename(title: string): string {
   return (title || "note").replace(/[/\\?%*:|"<>]/g, "-").trim() || "note";
@@ -48,6 +49,10 @@ export function exportAsMarkdown(title: string, html: string): void {
 
 export async function exportAsPdf(title: string, html: string): Promise<void> {
   const html2pdf = (await import("html2pdf.js")).default;
+
+  // The note HTML is injected into a live DOM node appended to <body> below, so
+  // an `<img onerror>` would execute during export — sanitize first (§S XSS).
+  html = sanitizeNoteHtml(html);
 
   const wrapper = document.createElement("div");
   wrapper.style.cssText = "position:absolute;left:-9999px;top:0;";

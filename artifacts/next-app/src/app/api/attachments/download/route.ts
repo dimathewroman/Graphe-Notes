@@ -94,6 +94,12 @@ export async function GET(request: NextRequest) {
 
   // ── v1 legacy: path-based auth ─────────────────────────────────────────────
   if (pathParam) {
+    // Reject traversal / percent-encoded segments before the prefix-ownership
+    // check — otherwise `${userId}/../otheruser/file` would pass the first-segment
+    // check yet resolve outside the user's prefix (§S).
+    if (pathParam.includes("..") || pathParam.includes("%")) {
+      return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+    }
     const [pathUserId] = pathParam.split("/");
     if (pathUserId !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

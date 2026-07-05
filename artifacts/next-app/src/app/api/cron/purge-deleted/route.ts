@@ -3,14 +3,15 @@ import { and, isNotNull, lte, inArray } from "drizzle-orm";
 import { db, notesTable, attachmentsTable } from "@workspace/db";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { purgeNoteChildren } from "@/lib/note-cleanup";
+import { verifyCronAuth } from "@/lib/cron-auth";
 import * as Sentry from "@sentry/nextjs";
 
 const ATTACHMENT_RETENTION_DAYS = 30;
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("Authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = verifyCronAuth(request.headers.get("Authorization"));
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   try {
