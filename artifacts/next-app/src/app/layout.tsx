@@ -70,6 +70,9 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   interactiveWidget: "resizes-visual",
+  // M1: extend the layout under the notch / home indicator so fixed chrome can
+  // pad itself with env(safe-area-inset-*). Without cover, those insets are 0.
+  viewportFit: "cover",
 };
 
 // Applies saved theme before first paint to avoid flash of wrong theme

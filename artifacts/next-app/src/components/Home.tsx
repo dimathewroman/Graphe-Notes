@@ -19,6 +19,7 @@ import { TemplatePickerModal } from "@/components/templates/TemplatePickerModal"
 import { QuickBitNotifications } from "@/components/QuickBitNotifications";
 import { useAppStore } from "@/store";
 import { useBreakpoint } from "@/hooks/use-mobile";
+import { useMobileHistoryNav } from "@/hooks/use-mobile-history-nav";
 import { useAnimationConfig } from "@/hooks/use-motion";
 import { Drawer, DrawerPortal, DrawerOverlay } from "@/components/ui/drawer";
 import { DrawerPrimitive } from "@/components/ui/drawer-left";
@@ -42,6 +43,9 @@ export default function Home() {
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
   const anim = useAnimationConfig();
+
+  // M2: keep the hardware/browser Back button tied to mobile list↔editor nav.
+  useMobileHistoryNav();
 
   // Track mobile transition direction synchronously during render (not in effect)
   const prevMobileViewRef = useRef(mobileView);
@@ -155,7 +159,7 @@ export default function Home() {
   const showDeletedDetail = isRecentlyDeleted && !!selectedNoteId && (bp === "desktop" || (bp === "tablet" && !!selectedNoteId) || (bp === "mobile" && mobileView === "editor"));
 
   return (
-    <div className="flex flex-col h-screen w-full bg-background overflow-hidden relative">
+    <div className="flex flex-col h-dvh w-full bg-background overflow-hidden relative">
       {isDemo && (
         <div className="w-full bg-primary/10 border-b border-primary/20 px-4 py-2 flex items-center justify-between text-xs text-primary z-50">
           <span>👋 You're in demo mode — notes won't be saved.</span>

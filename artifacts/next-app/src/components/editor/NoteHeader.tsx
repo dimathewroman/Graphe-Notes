@@ -61,7 +61,7 @@ export const NoteHeader = memo(function NoteHeader({
 
 
   return (
-    <header className="h-14 border-b border-panel-border flex items-center justify-between px-2 md:px-4 shrink-0 bg-editor/80 backdrop-blur-md z-10">
+    <header className="min-h-14 pt-safe border-b border-panel-border flex items-center justify-between px-2 md:px-4 shrink-0 bg-editor/80 backdrop-blur-md z-10">
       <div className="flex items-center gap-2">
         {bp === "mobile" && (
           <button onClick={onBack} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg hover:bg-panel transition-colors">

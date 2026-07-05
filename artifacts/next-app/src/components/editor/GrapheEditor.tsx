@@ -530,7 +530,10 @@ export function GrapheEditor({
         <EditorToolbar
           editor={editor}
           showUndoRedo
-          className="fixed left-0 right-0 z-40 border-t border-panel-border bg-editor/95 backdrop-blur-md"
+          // M1: pad above the home indicator only when docked at the bottom
+          // (keyboard closed). When the keyboard is open the toolbar sits above
+          // it, so no safe-area inset is needed.
+          className={`fixed left-0 right-0 z-40 border-t border-panel-border bg-editor/95 backdrop-blur-md${keyboardHeight > 0 ? "" : " pb-safe"}`}
           style={{ bottom: toolbarBottom }}
           onAttachFile={attachFileHandler}
         />,
