@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from "react";
 import type { useEditor } from "@tiptap/react";
-import { NodeSelection } from "@tiptap/pm/state";
 import { Sparkles, ChevronRight, ArrowLeft, Copy, ClipboardPaste, Trash2, Type, Check, Scissors } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { actionGroups } from "./ai-action-groups";
+import { useSelectionRect } from "@/hooks/use-selection-rect";
 
 export function MobileSelectionMenu({
   editor,
@@ -18,8 +18,11 @@ export function MobileSelectionMenu({
   onAction: (action: string, customInstruction?: string) => void;
   onSelectionCapture: (from: number, to: number, text: string) => void;
 }) {
-  const [rect, setRect] = useState<DOMRect | null>(null);
   const [showWritingTools, setShowWritingTools] = useState(false);
+  const rect = useSelectionRect(editor, visible, onSelectionCapture, {
+    onBlur: () => setShowWritingTools(false),
+    listenSelectionChange: true,
+  });
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [expandedAction, setExpandedAction] = useState<string | null>(null);
   const [customInputFor, setCustomInputFor] = useState<string | null>(null);
@@ -36,47 +39,6 @@ export function MobileSelectionMenu({
     }
   }, [visible]);
 
-  useEffect(() => {
-    if (!editor) return;
-
-    const update = () => {
-      if (!visible) { setRect(null); return; }
-      const { from, to } = editor.state.selection;
-      if (from === to) { setRect(null); return; }
-      // Suppress on node selections (e.g. image clicks) — no text to act on
-      if (editor.state.selection instanceof NodeSelection) { setRect(null); return; }
-
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) { setRect(null); return; }
-      const r = sel.getRangeAt(0).getBoundingClientRect();
-      if (r.width === 0) { setRect(null); return; }
-      setRect(r);
-      const text = editor.state.doc.textBetween(from, to);
-      onSelectionCapture(from, to, text);
-    };
-
-    const handleBlur = () => setTimeout(() => {
-      setRect(null);
-      setShowWritingTools(false);
-    }, 150);
-
-    editor.on("selectionUpdate", update);
-    editor.on("focus", update);
-    editor.on("blur", handleBlur);
-
-    // Android Chrome's drag-handle text selection doesn't always fire
-    // ProseMirror's selectionUpdate, so the AI menu would never appear without
-    // an extra editor click. Listening to document.selectionchange catches the
-    // touch-handle drag and shows the menu on the first selection.
-    document.addEventListener("selectionchange", update);
-
-    return () => {
-      editor.off("selectionUpdate", update);
-      editor.off("focus", update);
-      editor.off("blur", handleBlur);
-      document.removeEventListener("selectionchange", update);
-    };
-  }, [editor, visible, onSelectionCapture]);
 
   const [menuTop, setMenuTop] = useState<number>(0);
   const [canScrollRight, setCanScrollRight] = useState(false);

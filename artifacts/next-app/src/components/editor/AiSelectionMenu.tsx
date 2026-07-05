@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { useEditor } from "@tiptap/react";
-import { NodeSelection } from "@tiptap/pm/state";
 import { Sparkles, ChevronRight, Check, PenLine } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { actionGroups } from "./ai-action-groups";
+import { useSelectionRect } from "@/hooks/use-selection-rect";
 
 export function AiSelectionMenu({
   editor,
@@ -18,7 +18,7 @@ export function AiSelectionMenu({
   onAction: (action: string, customInstruction?: string) => void;
   onSelectionCapture: (from: number, to: number, text: string) => void;
 }) {
-  const [rect, setRect] = useState<DOMRect | null>(null);
+  const rect = useSelectionRect(editor, visible, onSelectionCapture);
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [expandedAction, setExpandedAction] = useState<string | null>(null);
   const [customInputFor, setCustomInputFor] = useState<string | null>(null);
@@ -61,38 +61,6 @@ export function AiSelectionMenu({
     return () => clearTimeout(interactiveTimer.current);
   }, [rect]);
 
-  useEffect(() => {
-    if (!editor) return;
-
-    const update = () => {
-      if (!visible) { setRect(null); return; }
-      const { from, to } = editor.state.selection;
-      if (from === to) { setRect(null); return; }
-      // Suppress on node selections (e.g. image clicks) — no text to act on
-      if (editor.state.selection instanceof NodeSelection) { setRect(null); return; }
-
-      const sel = window.getSelection();
-      if (!sel || sel.rangeCount === 0) { setRect(null); return; }
-      const r = sel.getRangeAt(0).getBoundingClientRect();
-      if (r.width === 0) { setRect(null); return; }
-      setRect(r);
-      // Capture the selection NOW — before any menu interaction disturbs it.
-      const text = editor.state.doc.textBetween(from, to);
-      onSelectionCapture(from, to, text);
-    };
-
-    const handleBlur = () => setTimeout(() => setRect(null), 150);
-
-    editor.on("selectionUpdate", update);
-    editor.on("focus", update);
-    editor.on("blur", handleBlur);
-
-    return () => {
-      editor.off("selectionUpdate", update);
-      editor.off("focus", update);
-      editor.off("blur", handleBlur);
-    };
-  }, [editor, visible, onSelectionCapture]);
 
   const isMobile = window.innerWidth < 768;
 
