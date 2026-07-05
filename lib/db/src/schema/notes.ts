@@ -26,7 +26,9 @@ export const notesTable = pgTable("notes", {
 
 export const noteVersionsTable = pgTable("note_versions", {
   id: serial("id").primaryKey(),
-  noteId: integer("note_id").notNull(),
+  // X-R2: FK to notes so version snapshots can't be retained after a note
+  // hard-delete. RESTRICT is a safety net — the delete paths clean children first.
+  noteId: integer("note_id").notNull().references(() => notesTable.id, { onDelete: "restrict" }),
   // Denormalised user_id so RLS can use a direct equality check instead of
   // joining through the notes table on every read/write.
   userId: varchar("user_id").notNull(),

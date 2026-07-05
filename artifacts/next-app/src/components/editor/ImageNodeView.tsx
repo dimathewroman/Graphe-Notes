@@ -5,6 +5,9 @@ import { createPortal } from "react-dom";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { ExternalLink, Trash2, Link2, Upload, Check, X, Download } from "lucide-react";
 import NextImage from "next/image";
+import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
+import { useDemoMode } from "@/lib/demo-context";
+import * as Sentry from "@sentry/nextjs";
 
 function isSupabaseSrc(src: string): boolean {
   return src.includes("supabase.co") || src.includes("supabase.in");
@@ -186,6 +189,7 @@ function ImageToolbar({
 }
 
 export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: NodeViewProps) {
+  const isDemo = useDemoMode();
   const imgRef = useRef<HTMLImageElement>(null);
   const [showToolbar, setShowToolbar] = useState(false);
   const [imgRect, setImgRect] = useState<DOMRect | null>(null);
@@ -359,7 +363,19 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
           attachmentId={attachmentId}
           downloadUrl={downloadUrl}
           onAltChange={(newAlt) => updateAttributes({ alt: newAlt })}
-          onDelete={() => { setShowToolbar(false); deleteNode(); }}
+          onDelete={() => {
+            setShowToolbar(false);
+            // X-A2: releasing the file on an EXPLICIT remove (this toolbar Trash
+            // action) — not on undo/cut — so the attachment is soft-deleted and
+            // no longer orphaned + quota-counted. Best-effort; the node is removed
+            // regardless. The DELETE route also strips the inline <img> server-side.
+            if (attachmentId && !isDemo) {
+              void authenticatedFetch(`/api/attachments/${attachmentId}`, {
+                method: "DELETE",
+              }).catch((err) => Sentry.captureException(err));
+            }
+            deleteNode();
+          }}
           onClose={() => setShowToolbar(false)}
           triggerRect={imgRect}
         />
