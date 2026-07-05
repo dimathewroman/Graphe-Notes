@@ -12,7 +12,7 @@ catalog:
   '@types/node': ^25.3.3
   '@types/react': ^19.2.0
   '@types/react-dom': ^19.2.0
-  '@vitejs/plugin-react': ^5.0.4
+  '@vitejs/plugin-react': ^5.2.0
   class-variance-authority: ^0.7.1
   clsx: 2.1.1
   concurrently: ^9.1.2
@@ -37,10 +37,10 @@ onlyBuiltDependencies:
   - unrs-resolver
 
 overrides:
-  esbuild: 0.27.3
-  protobufjs: ">=7.5.5"
-  picomatch: ">=4.0.4"
   brace-expansion: ">=2.0.3"
   dompurify: ">=3.4.0"
-  yaml: ">=2.8.3"
+  esbuild: 0.27.3
+  picomatch: ">=4.0.4"
+  protobufjs: ">=7.5.5"
   uuid: ">=14.0.0"
+  yaml: ">=2.8.3"
