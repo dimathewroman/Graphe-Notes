@@ -305,7 +305,7 @@ export function FindReplacePanel({ editor, onClose }: FindReplacePanelProps) {
             onChange={(e) => setSearchTerm(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder="Find"
-            className="flex-1 bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground min-w-0"
+            className="flex-1 bg-transparent outline-none text-base md:text-sm text-foreground placeholder:text-muted-foreground min-w-0"
           />
           {counterText && (
             <span className="text-xs text-muted-foreground shrink-0 select-none">{counterText}</span>
@@ -362,7 +362,7 @@ export function FindReplacePanel({ editor, onClose }: FindReplacePanelProps) {
             onChange={(e) => setReplaceTerm(e.target.value)}
             onKeyDown={handleReplaceKeyDown}
             placeholder="Replace"
-            className="flex-1 bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground min-w-0"
+            className="flex-1 bg-transparent outline-none text-base md:text-sm text-foreground placeholder:text-muted-foreground min-w-0"
           />
         </div>
         <button

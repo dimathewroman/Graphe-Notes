@@ -479,8 +479,8 @@ export function NoteList() {
   };
 
   const containerClass = bp === "mobile"
-    ? "flex-1 bg-background flex flex-col h-screen"
-    : "bg-background flex flex-col h-screen w-full overflow-hidden";
+    ? "flex-1 bg-background flex flex-col h-dvh"
+    : "bg-background flex flex-col h-dvh w-full overflow-hidden";
 
   return (
     <div data-testid="note-list" className={containerClass}>
@@ -684,7 +684,7 @@ export function NoteList() {
             value={localSearch}
             onChange={e => setLocalSearch(e.target.value)}
             data-testid="note-search-input"
-            className="w-full bg-panel border border-panel-border rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-foreground placeholder:text-muted-foreground"
+            className="w-full bg-panel border border-panel-border rounded-lg pl-9 pr-4 py-2 text-base md:text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all text-foreground placeholder:text-muted-foreground"
           />
         </div>
       </div>

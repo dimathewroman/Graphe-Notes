@@ -142,8 +142,35 @@
 @layer base {
   body {
     @apply bg-background text-foreground antialiased font-sans overflow-hidden;
+    /* M9: block pull-to-refresh / scroll-chaining that reloads the SPA and drops
+       unsaved editor state. M15: kill the grey tap-flash on iOS. */
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
   }
 
+  /* M15: treat taps on controls as immediate clicks (no 300ms double-tap-zoom
+     delay). Scoped to interactive chrome — the editor surface keeps default
+     touch-action for text selection and its own gestures. */
+  button,
+  a,
+  label,
+  summary,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+}
+
+/* M1: safe-area padding utilities for fixed chrome under the notch / home
+   indicator (require viewportFit:"cover", set in layout.tsx). */
+@layer utilities {
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pl-safe { padding-left: env(safe-area-inset-left); }
+  .pr-safe { padding-right: env(safe-area-inset-right); }
+  .mb-safe { margin-bottom: env(safe-area-inset-bottom); }
+}
+
+@layer base {
   /* Custom scrollbar for a premium feel — scoped to pointer-fine devices.
      Touch devices get the native overlay scrollbar, which doesn't reserve
      layout width and so doesn't shift editor content as you scroll. */

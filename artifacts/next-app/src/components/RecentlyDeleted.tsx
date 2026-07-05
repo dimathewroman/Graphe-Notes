@@ -152,8 +152,8 @@ export function RecentlyDeleted() {
 
   const containerClass =
     bp === "mobile"
-      ? "flex-1 bg-background flex flex-col h-screen"
-      : "bg-background flex flex-col h-screen w-full overflow-hidden";
+      ? "flex-1 bg-background flex flex-col h-dvh"
+      : "bg-background flex flex-col h-dvh w-full overflow-hidden";
 
   return (
     <div className={containerClass}>

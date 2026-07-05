@@ -62,7 +62,7 @@ export const TagRow = memo(function TagRow({
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck={false}
-            className="text-xs bg-background border border-primary/30 rounded-full px-2.5 py-1 outline-none focus:border-primary text-foreground w-24"
+            className="text-base md:text-xs bg-background border border-primary/30 rounded-full px-2.5 py-1 outline-none focus:border-primary text-foreground w-24"
           />
         </form>
       ) : (

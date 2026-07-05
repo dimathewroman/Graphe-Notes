@@ -297,7 +297,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleCreateFolder(e as any); } }}
                 onBlur={() => { if (!newFolderName) { setIsCreatingFolder(false); setNewFolderParentId(null); } }}
                 placeholder="Subfolder name..."
-                className="bg-transparent border-none outline-none text-sm w-full text-foreground placeholder:text-muted-foreground"
+                className="bg-transparent border-none outline-none text-base md:text-sm w-full text-foreground placeholder:text-muted-foreground"
               />
             </form>
           </div>
@@ -392,7 +392,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                 onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); handleCreateFolder(e as any); } }}
                 onBlur={() => { if (!newFolderName) setIsCreatingFolder(false); }}
                 placeholder="Folder name..."
-                className="bg-transparent border-none outline-none text-sm w-full text-foreground placeholder:text-muted-foreground"
+                className="bg-transparent border-none outline-none text-base md:text-sm w-full text-foreground placeholder:text-muted-foreground"
               />
             </form>
           </div>

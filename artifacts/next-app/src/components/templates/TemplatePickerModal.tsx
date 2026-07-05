@@ -313,7 +313,7 @@ export function TemplatePickerModal() {
                   className={cn(
                     "fixed z-50 flex flex-col bg-[var(--color-surface-3,var(--color-panel))] overflow-hidden",
                     isMobile
-                      ? "bottom-0 left-0 right-0 rounded-t-2xl h-[calc(100vh-48px)]"
+                      ? "bottom-0 left-0 right-0 rounded-t-2xl h-[calc(100dvh-48px)]"
                       : "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-[560px] h-[70vh] rounded-xl shadow-lg luminance-border-top"
                   )}
                   variants={modalVariants}
