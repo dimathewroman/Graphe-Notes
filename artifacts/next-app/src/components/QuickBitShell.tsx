@@ -418,7 +418,16 @@ export function QuickBitShell() {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await updateMut.mutateAsync({ id: pending.id, data: pending.data as any });
-          queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
+          // E2: patch the cached list in place instead of refetching on every
+          // debounced autosave. Reorder-by-sort settles on the next natural refetch.
+          {
+            const now = new Date().toISOString();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            queryClient.setQueriesData({ queryKey: getGetQuickBitsQueryKey() }, (old: any) =>
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              Array.isArray(old) ? old.map((qb: any) => qb.id === pending.id ? { ...qb, ...pending.data, updatedAt: now } : qb) : old
+            );
+          }
           setSaveStatus("saved");
         } catch (err) {
           // V3: previously set "saved" here — an outright lie on a failed PATCH.

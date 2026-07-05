@@ -219,7 +219,10 @@ export function NoteShell() {
     if (editor && !didLogEditorInit.current) {
       didLogEditorInit.current = true;
       const elapsed = performance.now() - editorInitStart.current;
-      console.log(`[perf] editor-init: ${elapsed.toFixed(1)}ms`);
+      // E12: dev-only console noise. Prod forwards the metric to PostHog instead.
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[perf] editor-init: ${elapsed.toFixed(1)}ms`);
+      }
       if (process.env.NODE_ENV !== "development") {
         posthog.capture("perf_editor_init", { duration_ms: Math.round(elapsed), timestamp: new Date().toISOString() });
       }
@@ -259,12 +262,15 @@ export function NoteShell() {
           const queryDuration = p.queryStartTime > 0 && p.queryEndTime > 0 ? p.queryEndTime - p.queryStartTime : null;
           const queryToSetContent = p.queryEndTime > 0 && p.setContentTime > 0 ? p.setContentTime - p.queryEndTime : null;
           const setContentToRendered = p.setContentTime > 0 ? performance.now() - p.setContentTime : null;
-          console.log(`[perf] note-switch (note ${note.id}): ${total.toFixed(1)}ms total`, {
-            clickToQueryStart: clickToQueryStart !== null ? `${clickToQueryStart.toFixed(1)}ms` : "(cache hit — no fetch)",
-            queryDuration: queryDuration !== null ? `${queryDuration.toFixed(1)}ms` : "(cache hit — no fetch)",
-            queryToSetContent: queryToSetContent !== null ? `${queryToSetContent.toFixed(1)}ms` : "n/a",
-            setContentToRendered: setContentToRendered !== null ? `${setContentToRendered.toFixed(1)}ms` : "n/a",
-          });
+          // E12: dev-only console noise. Prod forwards the metric to PostHog instead.
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[perf] note-switch (note ${note.id}): ${total.toFixed(1)}ms total`, {
+              clickToQueryStart: clickToQueryStart !== null ? `${clickToQueryStart.toFixed(1)}ms` : "(cache hit — no fetch)",
+              queryDuration: queryDuration !== null ? `${queryDuration.toFixed(1)}ms` : "(cache hit — no fetch)",
+              queryToSetContent: queryToSetContent !== null ? `${queryToSetContent.toFixed(1)}ms` : "n/a",
+              setContentToRendered: setContentToRendered !== null ? `${setContentToRendered.toFixed(1)}ms` : "n/a",
+            });
+          }
           if (process.env.NODE_ENV !== "development") {
             posthog.capture("perf_note_switch", { duration_ms: Math.round(total), note_id: note.id, timestamp: new Date().toISOString() });
           }
@@ -339,7 +345,19 @@ export function NoteShell() {
         } else {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await updateNoteMut.mutateAsync({ id, data: data as any });
-          queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+          // E2: patch the cached list in place instead of refetching. A debounced
+          // autosave is a hot path — invalidateQueries here fired a GET /api/notes
+          // on every save. Merge the saved fields (title/contentText/etc.) + a fresh
+          // updatedAt into the matching row across all cached list variants. Reorder
+          // by sort settles on the next natural refetch (create/delete/move/nav).
+          {
+            const now = new Date().toISOString();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            queryClient.setQueriesData({ queryKey: getGetNotesQueryKey() }, (old: any) =>
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              Array.isArray(old) ? old.map((n: any) => n.id === id ? { ...n, ...data, updatedAt: now } : n) : old
+            );
+          }
         }
         setSaveStatus("saved");
       } catch (err) {
@@ -1043,7 +1061,7 @@ export function NoteShell() {
 
       <SaveAsTemplateDialog
         noteTitle={title}
-        noteContent={editor?.getHTML() ?? note?.content ?? ""}
+        getNoteContent={() => editor?.getHTML() ?? note?.content ?? ""}
       />
     </div>
   );
