@@ -16,10 +16,12 @@ test.describe("Editor enhancements", () => {
     await page.getByTestId("new-note-btn").click();
     await expect(page.locator(".ProseMirror")).toBeVisible();
 
-    // Upload a minimal 1×1 PNG via the toolbar's Attach button.
+    // Upload a minimal 1×1 PNG via the toolbar's Attach button. Query by testid:
+    // ToolbarButton no longer renders a native title= (its label is now a Radix
+    // tooltip + aria-label), so getByTitle would match nothing.
     const [fileChooser] = await Promise.all([
       page.waitForEvent("filechooser"),
-      page.getByTitle("Attach file").click(),
+      page.getByTestId("toolbar-attach-file").click(),
     ]);
     await fileChooser.setFiles({
       name: "test.png",

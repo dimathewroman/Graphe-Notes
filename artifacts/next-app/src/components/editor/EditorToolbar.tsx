@@ -471,6 +471,7 @@ export const EditorToolbar = memo(function EditorToolbar({
                 active={false}
                 icon={<Paperclip className="w-4 h-4" />}
                 title="Attach file"
+                testId="toolbar-attach-file"
               />
             </>
           )}
