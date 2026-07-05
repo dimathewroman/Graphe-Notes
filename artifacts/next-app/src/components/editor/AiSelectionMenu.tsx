@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { useEditor } from "@tiptap/react";
-import { Sparkles, ChevronRight, Check, PenLine } from "lucide-react";
+import { Sparkles, ChevronRight, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { actionGroups } from "./ai-action-groups";
 import { useSelectionRect } from "@/hooks/use-selection-rect";
@@ -292,14 +292,6 @@ export function AiSelectionMenu({
             )}
           </div>
         ))}
-        <div className={cn("bg-panel-border", isMobile ? "w-full h-px my-0.5" : "w-px h-4")} />
-        <button
-          onClick={() => { onAction("continue_writing"); resetMenu(); }}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs whitespace-nowrap transition-colors min-h-[36px] text-muted-foreground hover:bg-ai-accent/10 hover:text-ai-accent"
-        >
-          <PenLine className="w-3 h-3" />
-          {!isMobile && "Continue"}
-        </button>
       </div>
     </div>
   );

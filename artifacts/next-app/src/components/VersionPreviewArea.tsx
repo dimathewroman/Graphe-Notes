@@ -68,8 +68,11 @@ export function VersionPreviewArea({
 
   const diffSegments = useMemo(
     () =>
+      // V11: the version is the OLD text, the current note is the NEW text — so
+      // text added since the version renders as a green insertion, not a red
+      // strikethrough deletion. (Was inverted: currentContentText passed as old.)
       showDiff
-        ? computeDiff(currentContentText ?? "", version.contentText ?? "")
+        ? computeDiff(version.contentText ?? "", currentContentText ?? "")
         : [],
     [showDiff, currentContentText, version.contentText],
   );

@@ -41,6 +41,7 @@ const MAX_SAVE_WAIT_MS = 5000;
 
 export function NoteShell() {
   const selectedNoteId = useAppStore(s => s.selectedNoteId);
+  const setActiveEditor = useAppStore(s => s.setActiveEditor); // G6: publish editor for AIPanel
   const selectNote = useAppStore(s => s.selectNote);
   const isSidebarOpen = useAppStore(s => s.isSidebarOpen);
   const toggleSidebar = useAppStore(s => s.toggleSidebar);
@@ -94,6 +95,9 @@ export function NoteShell() {
 
   // Editor instance — set via GrapheEditor's onEditorReady callback
   const [editor, setEditor] = useState<Editor | null>(null);
+
+  // G6: clear the shared editor reference when the notes view unmounts.
+  useEffect(() => () => setActiveEditor(null), [setActiveEditor]);
 
   const createVersion = useCreateNoteVersion();
 
@@ -974,7 +978,7 @@ export function NoteShell() {
           mode="note"
           isDemo={isDemo}
           onAttachFile={handleAttachFile}
-          onEditorReady={setEditor}
+          onEditorReady={(e) => { setEditor(e); setActiveEditor(e); }}
           onBeforeAiRewrite={handleBeforeAiRewrite}
           renderContent={(ed) => (
             <motion.div

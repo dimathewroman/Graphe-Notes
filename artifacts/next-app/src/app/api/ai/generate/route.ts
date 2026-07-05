@@ -26,6 +26,11 @@ function isValidModelId(model: string): boolean {
   return /^[a-zA-Z0-9._-]+$/.test(model);
 }
 
+// G4: surfaced (via userMessage) when the model hit its output-token cap
+// mid-response, so the client shows a friendly error instead of a silent cut.
+const TRUNCATION_MESSAGE =
+  "The AI response was too long and got cut off. Try selecting less text or asking for a shorter result.";
+
 export async function POST(request: NextRequest) {
   try {
     // --- Auth ---
@@ -161,11 +166,14 @@ export async function POST(request: NextRequest) {
       }
 
       const data = (await geminiResponse.json()) as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
         usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
       };
 
       const result = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      if (data.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+        return NextResponse.json({ error: "output_truncated", userMessage: TRUNCATION_MESSAGE }, { status: 200 });
+      }
       const inputTokens = data.usageMetadata?.promptTokenCount ?? null;
       const outputTokens = data.usageMetadata?.candidatesTokenCount ?? null;
 
@@ -259,11 +267,14 @@ export async function POST(request: NextRequest) {
       }
 
       const data = (await geminiResponse.json()) as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
         usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
       };
 
       const result = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      if (data.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+        return NextResponse.json({ error: "output_truncated", userMessage: TRUNCATION_MESSAGE }, { status: 200 });
+      }
       const inputTokens = data.usageMetadata?.promptTokenCount ?? null;
       const outputTokens = data.usageMetadata?.candidatesTokenCount ?? null;
 
@@ -299,10 +310,13 @@ export async function POST(request: NextRequest) {
       }
 
       const data = (await response.json()) as {
-        choices: Array<{ message: { content: string } }>;
+        choices: Array<{ message: { content: string }; finish_reason?: string }>;
         usage?: { prompt_tokens?: number; completion_tokens?: number };
       };
       const result = data.choices[0]?.message?.content ?? "";
+      if (data.choices[0]?.finish_reason === "length") {
+        return NextResponse.json({ error: "output_truncated", userMessage: TRUNCATION_MESSAGE }, { status: 200 });
+      }
       const tokensUsed = {
         inputTokens: data.usage?.prompt_tokens ?? null,
         outputTokens: data.usage?.completion_tokens ?? null,
@@ -338,9 +352,13 @@ export async function POST(request: NextRequest) {
 
       const data = (await response.json()) as {
         content: Array<{ text: string }>;
+        stop_reason?: string;
         usage?: { input_tokens?: number; output_tokens?: number };
       };
       const result = data.content[0]?.text ?? "";
+      if (data.stop_reason === "max_tokens") {
+        return NextResponse.json({ error: "output_truncated", userMessage: TRUNCATION_MESSAGE }, { status: 200 });
+      }
       const tokensUsed = {
         inputTokens: data.usage?.input_tokens ?? null,
         outputTokens: data.usage?.output_tokens ?? null,
