@@ -851,7 +851,7 @@ export function NoteList() {
             <>
               <div className="h-px bg-panel-border mx-2 my-1" />
               <ContextMenuItem
-                icon={<ShieldCheck className={cn("w-4 h-4", contextMenu.vaulted && "text-indigo-400")} />}
+                icon={<ShieldCheck className={cn("w-4 h-4", contextMenu.vaulted && "text-ai-accent")} />}
                 label={contextMenu.vaulted ? "Remove from Vault" : "Move to Vault"}
                 testId="context-menu-vault"
                 onClick={() => {
@@ -940,7 +940,7 @@ const NoteGalleryItem = memo(function NoteGalleryItem({
         <div className="flex items-start justify-between mb-1 gap-1">
           <h3 className="font-semibold text-sm text-foreground/90 flex-1 min-w-0 line-clamp-2 leading-snug">
             {note.pinned && <Pin className="inline-block w-2.5 h-2.5 mr-0.5 text-primary fill-primary align-text-bottom" />}
-            {note.vaulted && <ShieldCheck className="inline-block w-2.5 h-2.5 mr-0.5 text-indigo-400 align-text-bottom" />}
+            {note.vaulted && <ShieldCheck className="inline-block w-2.5 h-2.5 mr-0.5 text-ai-accent align-text-bottom" />}
             {note.title || "Untitled Note"}
           </h3>
           {/* Smaller touch target in gallery cards — 44px is too large for a narrow card */}
@@ -996,7 +996,7 @@ const NoteListItem = memo(function NoteListItem({
           isSelected ? "text-foreground" : "text-foreground/90"
         )}>
           {note.pinned && <Pin className="w-3 h-3 shrink-0 text-primary fill-primary" />}
-          {note.vaulted && <ShieldCheck className="w-3 h-3 shrink-0 text-indigo-400" />}
+          {note.vaulted && <ShieldCheck className="w-3 h-3 shrink-0 text-ai-accent" />}
           {note.title || "Untitled Note"}
         </h3>
         <div className="flex items-center gap-1 shrink-0">

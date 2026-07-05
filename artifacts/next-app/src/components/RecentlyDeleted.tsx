@@ -273,12 +273,12 @@ export function RecentlyDeleted() {
                 >
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <h3 className="font-medium truncate text-sm text-foreground/90 flex items-center gap-1.5">
-                      {note.vaulted && <ShieldCheck className="w-3 h-3 shrink-0 text-indigo-400" />}
+                      {note.vaulted && <ShieldCheck className="w-3 h-3 shrink-0 text-ai-accent" />}
                       {note.title || "Untitled Note"}
                     </h3>
                     {/* Badge / type indicator */}
                     {note.vaulted ? (
-                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs border border-indigo-400/30 text-indigo-400">
+                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs border border-ai-accent/30 text-ai-accent">
                         <Lock className="w-2.5 h-2.5" />
                         Vault
                       </span>

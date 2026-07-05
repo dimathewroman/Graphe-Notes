@@ -49,14 +49,14 @@ export function VaultLockScreen({
         )}
       </div>
       <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-          <ShieldCheck className="w-8 h-8 text-indigo-500" />
+        <div className="w-16 h-16 rounded-2xl bg-ai-accent/10 border border-ai-accent/20 flex items-center justify-center">
+          <ShieldCheck className="w-8 h-8 text-ai-accent" />
         </div>
         <h2 className="text-xl font-medium text-foreground/80">This note is in the vault</h2>
         <p className="text-sm text-center max-w-xs">Unlock the vault to view this note.</p>
         <button
           onClick={onRequestUnlock}
-          className="mt-2 px-4 py-2 rounded-lg bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium transition-colors"
+          className="mt-2 px-4 py-2 rounded-lg bg-ai-accent hover:bg-ai-accent-hover text-white text-sm font-medium transition-colors"
         >
           Unlock Vault
         </button>

@@ -352,7 +352,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
                   : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
               )}
             >
-              <ShieldCheck className={cn("w-4 h-4", isVaultUnlocked && "text-indigo-400")} />
+              <ShieldCheck className={cn("w-4 h-4", isVaultUnlocked && "text-ai-accent")} />
               <span>Vault</span>
               {!vaultStatus?.isConfigured && (
                 <span className="ml-auto text-2xs px-1.5 py-0.5 rounded-full bg-panel border border-panel-border text-muted-foreground">new</span>

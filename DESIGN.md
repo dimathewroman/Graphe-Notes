@@ -123,6 +123,8 @@ Accent (`--primary`, `#5B93E8`) is used surgically:
 
 More accent ≠ better. A single accent element per view is the target. The accent gradient (`bg-accent-gradient`) — `#5B93E8 → #9067EE` — is for covers and promotional surfaces only, not UI chrome.
 
+**Secondary AI/vault accent (`--ai-accent`, `#6366F1` indigo).** AI surfaces (the AI panel, selection menus, status indicator) and vault surfaces (vault icons, lock screen, setup) use a dedicated `--ai-accent` token so they read as their own "space", distinct from the primary periwinkle. Use `text-ai-accent` / `bg-ai-accent` (+ `/opacity` variants) and `bg-ai-accent-hover` for solid-button hovers — never a raw `indigo-*`/`violet-*` class. Because it's a token, a future Color Preset can recolor AI chrome intentionally rather than leaving a hardcoded indigo. (Exception: the `reflect` template-category swatch is decorative identity, not an AI surface.)
+
 ---
 
 ## Typography

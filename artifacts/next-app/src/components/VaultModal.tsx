@@ -118,7 +118,7 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
   }, [mode, step, firstPin, currentPin, onConfirm, onVerifyCurrentPin]);
 
   const headerConfig = {
-    setup: { icon: <ShieldCheck className="w-5 h-5 text-indigo-500" />, bg: "bg-indigo-500/10 border-indigo-500/20", dotClass: "bg-indigo-500 border-indigo-500" },
+    setup: { icon: <ShieldCheck className="w-5 h-5 text-ai-accent" />, bg: "bg-ai-accent/10 border-ai-accent/20", dotClass: "bg-ai-accent border-ai-accent" },
     unlock: { icon: <Lock className="w-5 h-5 text-warning" />, bg: "bg-warning/10 border-warning/20", dotClass: "bg-warning border-warning" },
     "change-password": { icon: <KeyRound className="w-5 h-5 text-warning" />, bg: "bg-warning/10 border-warning/20", dotClass: "bg-warning border-warning" },
   }[mode];

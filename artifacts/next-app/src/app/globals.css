@@ -44,6 +44,12 @@
   --color-primary-foreground: hsl(var(--primary-foreground));
   --color-primary-hover: hsl(var(--primary-hover));
 
+  /* D2: dedicated AI/vault accent — distinct from --primary so AI surfaces keep
+     their own identity, but theme-responsive (a Color Preset can recolor it). */
+  --color-ai-accent: hsl(var(--ai-accent));
+  --color-ai-accent-hover: hsl(var(--ai-accent-hover));
+  --color-ai-accent-foreground: hsl(var(--ai-accent-foreground));
+
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
 
@@ -99,6 +105,10 @@
   --primary-hover: 216 78% 68%;
   --primary-foreground: 0 0% 100%;
 
+  --ai-accent: 239 84% 67%; /* #6366F1 — indigo; AI + vault surfaces */
+  --ai-accent-hover: 239 84% 72%;
+  --ai-accent-foreground: 0 0% 100%;
+
   --muted: 228 14% 18%;
   --muted-foreground: 249 3% 49%; /* #7B7A82 */
 
@@ -142,6 +152,10 @@
   --primary: 216 78% 63%; /* #5B93E8 */
   --primary-hover: 216 78% 58%;
   --primary-foreground: 0 0% 100%;
+
+  --ai-accent: 239 84% 63%; /* indigo, slightly deeper for light-bg contrast */
+  --ai-accent-hover: 239 84% 58%;
+  --ai-accent-foreground: 0 0% 100%;
 
   --muted: 36 10% 92%;
   --muted-foreground: 249 3% 49%; /* #7B7A82 */

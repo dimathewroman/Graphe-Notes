@@ -1314,7 +1314,7 @@ export function SettingsModal() {
                       ) : (
                         <button
                           onClick={() => { setSecurityMode("setup"); setSecurityStep("new"); setSecurityError(""); setSecurityFirstPin(""); }}
-                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 text-sm font-medium transition-colors"
+                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-ai-accent/10 border border-ai-accent/20 text-ai-accent hover:bg-ai-accent/20 text-sm font-medium transition-colors"
                         >
                           <ShieldCheck className="w-4 h-4" />
                           Set Vault PIN

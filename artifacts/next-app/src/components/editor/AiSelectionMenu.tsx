@@ -175,7 +175,7 @@ export function AiSelectionMenu({
         isMobile ? "flex flex-wrap items-center gap-0.5" : "flex items-center gap-0.5"
       )}>
         <span className="text-xs text-muted-foreground px-2 font-medium flex items-center gap-1">
-          <Sparkles className="w-3 h-3 text-indigo-400" />
+          <Sparkles className="w-3 h-3 text-ai-accent" />
           AI
         </span>
         <div className={cn("bg-panel-border", isMobile ? "w-full h-px my-0.5" : "w-px h-4")} />
@@ -204,8 +204,8 @@ export function AiSelectionMenu({
               className={cn(
                 "flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs whitespace-nowrap transition-colors min-h-[36px]",
                 expandedGroup === group.label
-                  ? "bg-indigo-500/10 text-indigo-400"
-                  : "text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400"
+                  ? "bg-ai-accent/10 text-ai-accent"
+                  : "text-muted-foreground hover:bg-ai-accent/10 hover:text-ai-accent"
               )}
             >
               {group.icon}
@@ -250,8 +250,8 @@ export function AiSelectionMenu({
                           className={cn(
                             "flex items-center justify-between w-full px-2 py-1.5 rounded-lg text-xs transition-colors min-h-[36px]",
                             expandedAction === action.id
-                              ? "bg-indigo-500/10 text-indigo-400"
-                              : "text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400"
+                              ? "bg-ai-accent/10 text-ai-accent"
+                              : "text-muted-foreground hover:bg-ai-accent/10 hover:text-ai-accent"
                           )}
                         >
                           <span className="flex items-center gap-1.5">
@@ -283,12 +283,12 @@ export function AiSelectionMenu({
                                       onChange={(e) => setCustomText(e.target.value)}
                                       onKeyDown={(e) => { if (e.key === "Enter") handleCustomSubmit(preset.id); }}
                                       placeholder="Type instruction..."
-                                      className="flex-1 bg-transparent border border-panel-border rounded px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-indigo-500 min-w-[120px]"
+                                      className="flex-1 bg-transparent border border-panel-border rounded px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ai-accent min-w-[120px]"
                                       autoFocus
                                     />
                                     <button
                                       onClick={() => handleCustomSubmit(preset.id)}
-                                      className="p-1 rounded hover:bg-indigo-500/10 text-indigo-400"
+                                      className="p-1 rounded hover:bg-ai-accent/10 text-ai-accent"
                                     >
                                       <Check className="w-3 h-3" />
                                     </button>
@@ -296,7 +296,7 @@ export function AiSelectionMenu({
                                 ) : (
                                   <button
                                     onClick={() => handlePresetClick(preset.id)}
-                                    className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400 transition-colors whitespace-nowrap min-h-[36px]"
+                                    className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-ai-accent/10 hover:text-ai-accent transition-colors whitespace-nowrap min-h-[36px]"
                                   >
                                     {preset.label}
                                   </button>
@@ -312,7 +312,7 @@ export function AiSelectionMenu({
                           onAction(action.id);
                           resetMenu();
                         }}
-                        className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400 transition-colors whitespace-nowrap min-h-[36px]"
+                        className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-lg text-xs text-muted-foreground hover:bg-ai-accent/10 hover:text-ai-accent transition-colors whitespace-nowrap min-h-[36px]"
                       >
                         {action.icon}
                         {action.label}
@@ -327,7 +327,7 @@ export function AiSelectionMenu({
         <div className={cn("bg-panel-border", isMobile ? "w-full h-px my-0.5" : "w-px h-4")} />
         <button
           onClick={() => { onAction("continue_writing"); resetMenu(); }}
-          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs whitespace-nowrap transition-colors min-h-[36px] text-muted-foreground hover:bg-indigo-500/10 hover:text-indigo-400"
+          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs whitespace-nowrap transition-colors min-h-[36px] text-muted-foreground hover:bg-ai-accent/10 hover:text-ai-accent"
         >
           <PenLine className="w-3 h-3" />
           {!isMobile && "Continue"}

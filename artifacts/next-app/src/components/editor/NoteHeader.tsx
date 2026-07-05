@@ -139,7 +139,7 @@ export const NoteHeader = memo(function NoteHeader({
               onClick={onVaultToggle}
               active={note?.vaulted ?? false}
               title={note?.vaulted ? "Remove from vault" : "Move to vault"}
-              className={note?.vaulted ? "text-indigo-400" : ""}
+              className={note?.vaulted ? "text-ai-accent" : ""}
             >
               <ShieldCheck className={cn("w-4 h-4", note?.vaulted && "fill-current")} />
             </IconButton>

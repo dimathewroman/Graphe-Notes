@@ -188,7 +188,7 @@ export function AIPanel() {
           className={panelClass}
         >
           <div className="p-4 border-b border-panel-border flex items-center justify-between bg-background/50">
-            <div className="flex items-center gap-2 font-semibold text-indigo-400">
+            <div className="flex items-center gap-2 font-semibold text-ai-accent">
               <Sparkles className="w-4 h-4" />
               <span>AI Assistant</span>
             </div>
@@ -215,7 +215,7 @@ export function AIPanel() {
             )}
 
             {isPending && (
-              <div className="flex flex-col items-center justify-center py-12 text-indigo-400 gap-3">
+              <div className="flex flex-col items-center justify-center py-12 text-ai-accent gap-3">
                 <Loader2 className="w-8 h-8 animate-spin" />
                 <p className="text-sm font-medium animate-pulse">Thinking...</p>
               </div>
@@ -223,8 +223,8 @@ export function AIPanel() {
 
             {result && !isPending && (
               <div className="flex flex-col gap-3">
-                <div className="bg-background rounded-xl p-4 border border-indigo-500/20 shadow-inner">
-                  <div className="flex items-center gap-2 mb-2 text-indigo-400 font-medium text-sm">
+                <div className="bg-background rounded-xl p-4 border border-ai-accent/20 shadow-inner">
+                  <div className="flex items-center gap-2 mb-2 text-ai-accent font-medium text-sm">
                     <Bot className="w-4 h-4" />
                     Response
                   </div>
@@ -234,7 +234,7 @@ export function AIPanel() {
                 </div>
                 <button
                   onClick={insertIntoNote}
-                  className="w-full flex items-center justify-center gap-2 py-3 md:py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-3 md:py-2 bg-ai-accent hover:bg-ai-accent-hover text-white rounded-lg text-sm font-medium transition-colors"
                 >
                   <CheckCheck className="w-4 h-4" />
                   Insert into note
@@ -256,13 +256,13 @@ export function AIPanel() {
                   }
                 }}
                 placeholder={note ? "Ask about this note..." : "Ask AI..."}
-                className="w-full bg-background border border-panel-border rounded-xl pl-3 pr-10 py-3 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all resize-none max-h-32 min-h-[44px]"
+                className="w-full bg-background border border-panel-border rounded-xl pl-3 pr-10 py-3 text-sm focus:outline-none focus:border-ai-accent focus:ring-1 focus:ring-ai-accent transition-all resize-none max-h-32 min-h-[44px]"
                 rows={1}
               />
               <button
                 onClick={handleComplete}
                 disabled={isPending || !prompt.trim()}
-                className="absolute right-2 bottom-2 p-2 md:p-1.5 rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="absolute right-2 bottom-2 p-2 md:p-1.5 rounded-lg bg-ai-accent text-white hover:bg-ai-accent-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Send className="w-4 h-4 md:w-3.5 md:h-3.5" />
               </button>
