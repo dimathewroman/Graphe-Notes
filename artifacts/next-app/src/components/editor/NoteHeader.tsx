@@ -38,7 +38,7 @@ export const NoteHeader = memo(function NoteHeader({
 }: {
   bp: "mobile" | "tablet" | "desktop";
   note: { vaulted?: boolean | null; pinned?: boolean | null; favorite?: boolean | null; updatedAt?: string } | null | undefined;
-  saveStatus: "saved" | "saving";
+  saveStatus: "saved" | "saving" | "error";
   isSidebarOpen: boolean;
   isNoteListOpen: boolean;
   editor: ReturnType<typeof useEditor> | null;
@@ -107,8 +107,8 @@ export const NoteHeader = memo(function NoteHeader({
           }
           className="flex items-center gap-2 text-xs font-mono text-muted-foreground"
         >
-          <span className={cn("inline-block w-1.5 h-1.5 rounded-full", saveStatus === "saved" ? "bg-emerald-500" : "bg-amber-500 animate-pulse")} />
-          {saveStatus === "saved" ? "Saved" : "Saving..."}
+          <span className={cn("inline-block w-1.5 h-1.5 rounded-full", saveStatus === "saved" ? "bg-emerald-500" : saveStatus === "error" ? "bg-destructive" : "bg-amber-500 animate-pulse")} />
+          {saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Saving..."}
           {bp === "desktop" && note && <span className="ml-2 border-l border-panel-border pl-2">Updated {formatDate(note.updatedAt ?? "")}</span>}
         </motion.div>
       </div>

@@ -82,7 +82,7 @@ export function NoteShell() {
   const [demoVaultConfigured, setDemoVaultConfigured] = useState(false);
 
   const [title, setTitle] = useState("");
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showToc, setShowToc] = useState(false);
   const [previewVersion, setPreviewVersion] = useState<NoteVersionFull | null>(null);
@@ -325,33 +325,52 @@ export function NoteShell() {
         | "pre_ai_rewrite",
     ) => {
       const live = liveStateRef.current;
-      if (isDemoRef.current) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const existing = queryClient.getQueryData(getGetNoteQueryKey(id)) as any;
-        if (existing) {
-          queryClient.setQueryData(getGetNoteQueryKey(id), {
-            ...existing,
-            ...data,
-            updatedAt: new Date().toISOString(),
-          });
+      try {
+        if (isDemoRef.current) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const existing = queryClient.getQueryData(getGetNoteQueryKey(id)) as any;
+          if (existing) {
+            queryClient.setQueryData(getGetNoteQueryKey(id), {
+              ...existing,
+              ...data,
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        } else {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await updateNoteMut.mutateAsync({ id, data: data as any });
+          queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
         }
-      } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await updateNoteMut.mutateAsync({ id, data: data as any });
-        queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+        setSaveStatus("saved");
+      } catch (err) {
+        // V4: surface the failure instead of dropping the payload. Show an error
+        // status and retain the failed payload (merged UNDER any newer pending
+        // edits so we don't clobber them) so the next debounced save or Cmd+S
+        // retries it.
+        Sentry.captureException(err);
+        setSaveStatus("error");
+        pendingSaveRef.current = {
+          id,
+          data: { ...data, ...(pendingSaveRef.current?.data ?? {}) },
+        };
+        return;
       }
-      setSaveStatus("saved");
 
       // Take the snapshot AFTER the save completes — in real mode the server
       // reads from the DB row we just updated, so the version reflects the
-      // current state.
-      await createVersion({
-        noteId: id,
-        source,
-        title: live.title,
-        content: live.content,
-        contentText: live.contentText,
-      });
+      // current state. A snapshot failure must not flip the (successful) save to
+      // an error state.
+      try {
+        await createVersion({
+          noteId: id,
+          source,
+          title: live.title,
+          content: live.content,
+          contentText: live.contentText,
+        });
+      } catch (err) {
+        Sentry.captureException(err);
+      }
     },
     [queryClient, updateNoteMut, createVersion],
   );

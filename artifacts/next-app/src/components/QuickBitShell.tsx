@@ -330,7 +330,7 @@ export function QuickBitShell() {
   const createNoteMut = useCreateNote();
 
   const [title, setTitle] = useState("");
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
   // V2: component-level pending-save handle so a flush-on-hide handler can commit
   // an in-flight debounced save when the tab is backgrounded/torn down.
   const qbPendingSaveRef = useRef<{ id: number; data: Record<string, unknown> } | null>(null);
@@ -421,9 +421,23 @@ export function QuickBitShell() {
           await updateMut.mutateAsync({ id: pending.id, data: pending.data as any });
           queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
           setSaveStatus("saved");
-        } catch {
-          // V3: this lies "saved" on failure — fixed in Phase 1.3.
-          setSaveStatus("saved");
+        } catch (err) {
+          // V3: previously set "saved" here — an outright lie on a failed PATCH.
+          // Surface the error, capture it, and retain the payload (under any
+          // newer pending edits) so the next edit retries instead of dropping it.
+          Sentry.captureException(err);
+          setSaveStatus("error");
+          // A newer edit may have re-populated the ref during the await; merge the
+          // failed payload UNDER it so we retry without clobbering newer content.
+          // (Cast: TS narrows the ref to null after we cleared it above and can't
+          // see the concurrent mutation.)
+          const newer = qbPendingSaveRef.current as
+            | { id: number; data: Record<string, unknown> }
+            | null;
+          qbPendingSaveRef.current = {
+            id: pending.id,
+            data: { ...pending.data, ...(newer?.data ?? {}) },
+          };
         }
       }, 800);
     },
@@ -692,8 +706,8 @@ export function QuickBitShell() {
 
         {/* Save status — icon-only on mobile */}
         <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground shrink-0">
-          <span className={cn("inline-block w-1.5 h-1.5 rounded-full shrink-0", saveStatus === "saved" ? "bg-emerald-500" : "bg-amber-500 animate-pulse")} />
-          <span className="hidden md:inline">{saveStatus === "saved" ? "Saved" : "Saving..."}</span>
+          <span className={cn("inline-block w-1.5 h-1.5 rounded-full shrink-0", saveStatus === "saved" ? "bg-emerald-500" : saveStatus === "error" ? "bg-destructive" : "bg-amber-500 animate-pulse")} />
+          <span className="hidden md:inline">{saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Saving..."}</span>
         </div>
 
         {/* Expiration */}
