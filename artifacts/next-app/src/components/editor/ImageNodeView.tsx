@@ -202,6 +202,27 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
   const isAnimated = node.attrs.isAnimated as boolean ?? false;
   const widthAttr = node.attrs.width as number | null ?? null;
 
+  // X-A1: the signed URL baked into notes.content was minted for only 7 days, so
+  // inline images 400 after it expires. Re-resolve a fresh signed URL at render
+  // time via the attachmentId (only for Supabase-hosted images that carry one;
+  // external images and demo mode use their src as-is). This fixes both new and
+  // existing (baked-URL) notes without persisting a long-lived URL forever.
+  const [resolvedSrc, setResolvedSrc] = useState(src);
+  useEffect(() => {
+    setResolvedSrc(src);
+    if (isDemo || !attachmentId || !isSupabaseSrc(src)) return;
+    let cancelled = false;
+    authenticatedFetch(`/api/attachments/sign?id=${encodeURIComponent(attachmentId)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { url?: string } | null) => {
+        if (!cancelled && data?.url) setResolvedSrc(data.url);
+      })
+      .catch((err) => Sentry.captureException(err));
+    return () => {
+      cancelled = true;
+    };
+  }, [src, attachmentId, isDemo]);
+
   // Show toolbar when selected (keyboard or click)
   useEffect(() => {
     if (selected) {
@@ -318,7 +339,7 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
         // When set, pass actual pixel width so the optimizer requests the right size.
         <NextImage
           ref={imgRef as React.Ref<HTMLImageElement>}
-          src={src}
+          src={resolvedSrc}
           alt={alt}
           width={widthAttr ?? 0}
           height={0}
@@ -334,7 +355,7 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
         // eslint-disable-next-line @next/next/no-img-element
         <img
           ref={imgRef}
-          src={src}
+          src={resolvedSrc}
           alt={alt}
           draggable={false}
           onClick={handleClick}
