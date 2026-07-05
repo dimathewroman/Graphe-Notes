@@ -12,6 +12,13 @@
   }
 }
 
+/* Phase 6 (D3): key `dark:` off the APP theme, not the OS. This app is dark by
+   default (`:root`) and toggles light via a `.light` class on <html> (set by
+   next-themes / useAtmosphere). Tailwind's built-in `dark:` uses
+   `@media (prefers-color-scheme)`, so on OS-light + app-dark every `dark:` utility
+   silently failed to apply. Override it to match "html is not .light". */
+@custom-variant dark (&:where(:root:not(.light) *));
+
 @theme inline {
   --font-sans: var(--font-geist-sans), var(--font-inter), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), monospace;
