@@ -108,10 +108,12 @@ export async function POST(request: NextRequest) {
       }
 
       const geminiResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${routing.model}:generateContent?key=${apiKey}`,
+        // Key goes in the x-goog-api-key header, never the URL — URLs land in
+        // logs, Sentry breadcrumbs, and proxies (§S key-in-URL).
+        `https://generativelanguage.googleapis.com/v1beta/models/${routing.model}:generateContent`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
           body: JSON.stringify({
             contents: [{ parts: [{ text: combinedPrompt }] }],
             generationConfig: { maxOutputTokens: 1024 },
@@ -202,10 +204,11 @@ export async function POST(request: NextRequest) {
     // --- google_ai_studio ---
     if (provider === "google_ai_studio") {
       const geminiResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${routing.model}:generateContent?key=${decryptedKey}`,
+        // Key goes in the x-goog-api-key header, never the URL (§S key-in-URL).
+        `https://generativelanguage.googleapis.com/v1beta/models/${routing.model}:generateContent`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-goog-api-key": decryptedKey },
           body: JSON.stringify({
             contents: [{ parts: [{ text: combinedPrompt }] }],
             generationConfig: { maxOutputTokens: 1024 },
