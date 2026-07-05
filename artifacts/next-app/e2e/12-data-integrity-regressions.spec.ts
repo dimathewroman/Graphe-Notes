@@ -66,7 +66,7 @@ test.describe("Data integrity regressions", () => {
   test("V2: backgrounding the tab flushes a pending save within the debounce window", async ({
     page,
   }) => {
-    test.fail(); // TODO(phase-1.2): remove once a flush-on-hide handler exists
+    // Fixed in Phase 1.2 (NoteShell flushes pendingSaveRef on visibilitychange/pagehide).
 
     await page.getByTestId("note-item").nth(0).click();
     const editor = page.locator(".ProseMirror");

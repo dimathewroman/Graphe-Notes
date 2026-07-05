@@ -25,6 +25,7 @@ import {
 } from "@workspace/api-client-react";
 import type { QuickBit } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import {
   ArrowLeft, PanelLeft, PanelLeftClose, Trash2, FileText, Menu,
   Clock, Bell, Zap, ArrowUpFromLine,
@@ -330,6 +331,10 @@ export function QuickBitShell() {
 
   const [title, setTitle] = useState("");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
+  // V2: component-level pending-save handle so a flush-on-hide handler can commit
+  // an in-flight debounced save when the tab is backgrounded/torn down.
+  const qbPendingSaveRef = useRef<{ id: number; data: Record<string, unknown> } | null>(null);
+  const qbSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Expiry state
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
@@ -401,25 +406,68 @@ export function QuickBitShell() {
   }, [expiresAt]);
 
   const debouncedSave = useCallback(
-    (() => {
-      let timeout: ReturnType<typeof setTimeout>;
-      return (id: number, data: Partial<{ title: string; content: string; contentText: string }>) => {
-        if (isDemoRef.current) return;
-        setSaveStatus("saving");
-        clearTimeout(timeout);
-        timeout = setTimeout(async () => {
-          try {
-            await updateMut.mutateAsync({ id, data });
-            queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
-            setSaveStatus("saved");
-          } catch {
-            setSaveStatus("saved");
-          }
-        }, 800);
-      };
-    })(),
-    []
+    (id: number, data: Partial<{ title: string; content: string; contentText: string }>) => {
+      if (isDemoRef.current) return; // demo quick bits are never persisted
+      setSaveStatus("saving");
+      qbPendingSaveRef.current = { id, data };
+      if (qbSaveTimerRef.current) clearTimeout(qbSaveTimerRef.current);
+      qbSaveTimerRef.current = setTimeout(async () => {
+        const pending = qbPendingSaveRef.current;
+        qbPendingSaveRef.current = null;
+        qbSaveTimerRef.current = null;
+        if (!pending) return;
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await updateMut.mutateAsync({ id: pending.id, data: pending.data as any });
+          queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
+          setSaveStatus("saved");
+        } catch {
+          // V3: this lies "saved" on failure — fixed in Phase 1.3.
+          setSaveStatus("saved");
+        }
+      }, 800);
+    },
+    [updateMut, queryClient],
   );
+
+  // V2: flush a pending quick-bit save when the tab is backgrounded/torn down,
+  // using a keepalive PATCH so it survives page teardown. Demo quick bits are
+  // never persisted (debouncedSave returns early), so this only fires in
+  // authenticated mode.
+  const qbFlushOnHideRef = useRef<() => void>(() => {});
+  qbFlushOnHideRef.current = () => {
+    if (qbSaveTimerRef.current) {
+      clearTimeout(qbSaveTimerRef.current);
+      qbSaveTimerRef.current = null;
+    }
+    const pending = qbPendingSaveRef.current;
+    if (!pending) return;
+    qbPendingSaveRef.current = null;
+    try {
+      void authenticatedFetch(`/api/quick-bits/${pending.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pending.data),
+        keepalive: true,
+      });
+      setSaveStatus("saved");
+    } catch (err) {
+      Sentry.captureException(err);
+    }
+  };
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") qbFlushOnHideRef.current();
+    };
+    const onPageHide = () => qbFlushOnHideRef.current();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+    };
+  }, []);
 
   const handleContentChange = useCallback((html: string, text: string) => {
     if (selectedQuickBitId) debouncedSave(selectedQuickBitId, { content: html, contentText: text });
