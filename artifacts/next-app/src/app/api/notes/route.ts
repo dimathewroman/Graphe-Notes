@@ -9,6 +9,7 @@ import {
 } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
+import { hasValidVaultProof } from "@/lib/vault-proof";
 import * as Sentry from "@sentry/nextjs";
 
 export async function GET(request: NextRequest) {
@@ -85,7 +86,14 @@ export async function GET(request: NextRequest) {
       .where(and(...conditions))
       .orderBy(orderDir);
 
-    return NextResponse.json(GetNotesResponse.parse(notes));
+    // X-S2: never leak a vaulted note's plaintext preview to a locked client.
+    // Blank contentText for vaulted notes unless a valid unlock proof is present.
+    const unlocked = await hasValidVaultProof(request.headers.get("x-vault-proof"), user.id);
+    const gated = unlocked
+      ? notes
+      : notes.map((n) => (n.vaulted ? { ...n, contentText: "" } : n));
+
+    return NextResponse.json(GetNotesResponse.parse(gated));
   } catch (err) {
     Sentry.captureException(err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

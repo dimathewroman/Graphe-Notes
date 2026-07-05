@@ -7,6 +7,7 @@ import {
   ToggleNoteVaultResponse,
 } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
+import { hasValidVaultProof } from "@/lib/vault-proof";
 import * as Sentry from "@sentry/nextjs";
 
 export async function PATCH(
@@ -27,6 +28,19 @@ export async function PATCH(
     const parsed = ToggleNoteVaultBody.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+    }
+
+    // Unvaulting exposes the note's content — require the vault to be unlocked
+    // (a valid proof), so a locked client can't strip protection off a note
+    // (§S / X-S2). Vaulting (adding protection) needs no proof.
+    if (parsed.data.vaulted === false) {
+      const unlocked = await hasValidVaultProof(request.headers.get("x-vault-proof"), user.id);
+      if (!unlocked) {
+        return NextResponse.json(
+          { error: "Unlock the vault to remove a note from it" },
+          { status: 403 },
+        );
+      }
     }
 
     const [note] = await db

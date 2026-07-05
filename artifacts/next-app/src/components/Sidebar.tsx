@@ -15,7 +15,9 @@ import { useAppStore } from "@/store";
 import {
   useGetFolders, useCreateFolder, useDeleteFolder, getGetFoldersQueryKey, useGetTags,
   useGetVaultStatus, useSetupVault, useUnlockVault, useChangeVaultPassword,
+  getGetNotesQueryKey,
 } from "@workspace/api-client-react";
+import { setVaultProof } from "@workspace/api-client-react/custom-fetch";
 import { VaultModal } from "./VaultModal";
 import { useQueryClient } from "@tanstack/react-query";
 import { IconButton } from "./ui/IconButton";
@@ -175,10 +177,13 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         setVaultModal(null);
         queryClient.invalidateQueries({ queryKey: ["/api/vault/status"] });
       } else if (vaultModal === "unlock") {
-        await unlockVaultMut.mutateAsync({ data: { pin } });
+        const res = await unlockVaultMut.mutateAsync({ data: { pin } });
+        // Store the unlock proof + refetch vaulted notes (§S / X-S2).
+        setVaultProof((res as { proof?: string })?.proof ?? null);
         posthog.capture("vault_unlock_attempted", { success: true, source: "sidebar", timestamp: new Date().toISOString() });
         setVaultUnlocked(true);
         setVaultModal(null);
+        queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
       } else if (vaultModal === "change-password" && newPin) {
         await changePasswordMut.mutateAsync({ data: { currentPin: pin, newPin } });
         setVaultModal(null);

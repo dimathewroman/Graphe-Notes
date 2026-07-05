@@ -6,6 +6,7 @@ import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { vaultUnlockLimiter } from "@/lib/rate-limit";
 import { verifyPin, hashPin } from "@/lib/vault-hash";
+import { issueVaultProof } from "@/lib/vault-proof";
 import * as Sentry from "@sentry/nextjs";
 
 export async function POST(request: NextRequest) {
@@ -55,7 +56,11 @@ export async function POST(request: NextRequest) {
     }
 
     getPostHogClient().capture({ distinctId: user.id, event: "vault_unlocked" });
-    return NextResponse.json(UnlockVaultResponse.parse({ success: true }));
+    // Issue a short-lived proof the client attaches (x-vault-proof) so the note
+    // routes will return vaulted content (§S / X-S2). Returned alongside the
+    // schema-validated body — the client reads `proof` off the raw response.
+    const proof = await issueVaultProof(user.id);
+    return NextResponse.json({ ...UnlockVaultResponse.parse({ success: true }), proof });
   } catch (err) {
     Sentry.captureException(err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

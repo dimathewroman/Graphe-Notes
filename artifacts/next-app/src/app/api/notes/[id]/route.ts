@@ -10,6 +10,7 @@ import {
   DeleteNoteParams,
 } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
+import { hasValidVaultProof } from "@/lib/vault-proof";
 import * as Sentry from "@sentry/nextjs";
 
 export async function GET(
@@ -33,6 +34,18 @@ export async function GET(
 
     if (!note) {
       return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    }
+
+    // X-S2: don't return a vaulted note's content to a locked client. Keep the
+    // metadata (incl. vaulted:true) so the client can render the lock screen,
+    // but blank the content until a valid unlock proof is presented.
+    if (note.vaulted) {
+      const unlocked = await hasValidVaultProof(request.headers.get("x-vault-proof"), user.id);
+      if (!unlocked) {
+        return NextResponse.json(
+          GetNoteResponse.parse({ ...note, content: "", contentText: "" }),
+        );
+      }
     }
 
     return NextResponse.json(GetNoteResponse.parse(note));
