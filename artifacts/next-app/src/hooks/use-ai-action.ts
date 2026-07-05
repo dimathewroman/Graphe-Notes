@@ -53,6 +53,7 @@ export function useAiAction(
   }
 ): {
   callAI: (action: string, customInstruction?: string) => Promise<void>;
+  cancelAI: () => void;
   aiLoading: boolean;
   aiError: string | null;
   savedAiSelection: MutableRefObject<{ from: number; to: number; text: string } | null>;
@@ -67,9 +68,16 @@ export function useAiAction(
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const savedAiSelection = useRef<{ from: number; to: number; text: string } | null>(null);
+  // G1/V9: controller for the in-flight AI request so the user can cancel it
+  // (including while waiting out an RPM-429 retry).
+  const abortRef = useRef<AbortController | null>(null);
 
   const captureSelection = (from: number, to: number, text: string) => {
     savedAiSelection.current = { from, to, text };
+  };
+
+  const cancelAI = () => {
+    abortRef.current?.abort();
   };
 
   const callAI = async (action: string, customInstruction?: string) => {
@@ -242,29 +250,48 @@ export function useAiAction(
     setAiLoading(true);
     setAiError(null);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     const doRequest = async (): Promise<Response> => {
       return authenticatedFetch("/api/ai/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ provider, taskType, prompt }),
+        signal: controller.signal,
       });
     };
+
+    // Abortable wait — rejects with an AbortError if the user cancels mid-retry.
+    const abortableDelay = (ms: number) => new Promise<void>((resolve, reject) => {
+      const t = setTimeout(resolve, ms);
+      controller.signal.addEventListener("abort", () => {
+        clearTimeout(t);
+        reject(new DOMException("Aborted", "AbortError"));
+      }, { once: true });
+    });
 
     try {
       let res = await doRequest();
 
       if (res.status === 429) {
-        const data = await res.json() as { reason?: string; resetInMs?: number };
-        if (data.reason === "rpm_limit") {
-          setAiError("AI is busy, retrying...");
-          await new Promise((resolve) => setTimeout(resolve, 65000));
+        const data = await res.json() as { error?: string; reason?: string; resetInMs?: number; retryAfterMs?: number };
+        // G1: the upstream RPM-429 arrives as `error: "rpm_limit"` + retryAfterMs;
+        // the app-key rate limits arrive as `reason` + resetInMs. Branch on either.
+        const kind = data.error ?? data.reason;
+        if (kind === "rpm_limit") {
+          // Sleep the server-provided delay (was a hardcoded 65s), then retry ONCE.
+          const delayMs = data.retryAfterMs ?? data.resetInMs ?? 60000;
+          setAiError(`AI is busy — retrying in ${Math.ceil(delayMs / 1000)}s… (tap ✕ to cancel)`);
+          await abortableDelay(delayMs);
+          setAiError("Retrying…");
           res = await doRequest();
           if (res.status === 429) {
             setAiError("AI is still busy. Please try again in a moment.");
             setTimeout(() => setAiError(null), 5000);
             return;
           }
-        } else if (data.reason === "hourly_limit_reached") {
+        } else if (kind === "hourly_limit_reached") {
           posthog.capture("ai_rate_limit_reached", { reason: "hourly_limit_reached", reset_in_ms: data.resetInMs });
           const resetMins = Math.ceil((data.resetInMs ?? 0) / 60000);
           setAiError(`You've reached your hourly AI limit. Resets in ${resetMins} minutes.`);
@@ -306,14 +333,17 @@ export function useAiAction(
         editor.chain().focus().insertContentAt({ from: sel.from, to: sel.to }, result).run();
       }
     } catch (err) {
+      // User-initiated cancel — abort the flow silently, no error banner.
+      if (err instanceof DOMException && err.name === "AbortError") return;
       const msg = err instanceof Error ? err.message : "AI request failed";
       setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
       setTimeout(() => setAiError(null), 5000);
     } finally {
       setAiLoading(false);
+      abortRef.current = null;
       savedAiSelection.current = null;
     }
   };
 
-  return { callAI, aiLoading, aiError, savedAiSelection, captureSelection };
+  return { callAI, cancelAI, aiLoading, aiError, savedAiSelection, captureSelection };
 }

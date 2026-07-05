@@ -311,7 +311,7 @@ export function GrapheEditor({
   }, [contentKey, editor]);
 
   // AI actions
-  const { callAI, aiLoading, aiError, captureSelection } = useAiAction(editor, {
+  const { callAI, cancelAI, aiLoading, aiError, captureSelection } = useAiAction(editor, {
     isDemo,
     onBeforeAiRewrite,
   });
@@ -511,7 +511,7 @@ export function GrapheEditor({
         />
       )}
 
-      <AiStatusIndicator aiLoading={aiLoading} aiError={aiError} />
+      <AiStatusIndicator aiLoading={aiLoading} aiError={aiError} onCancel={cancelAI} />
 
       {/* Content area — injected by shell (scrollable region with title, tags, EditorContent) */}
       {renderContent(editor)}
