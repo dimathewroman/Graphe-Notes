@@ -25,8 +25,12 @@ export function resolveModel(
     }
 
     case "google_ai_studio": {
-      // Google AI Studio uses automatic multi-model routing based on taskType.
-      // User model override is not supported for this provider.
+      // G10: honor an explicit user model override (set in Settings, saved to the
+      // key row) — previously ignored, making the Settings field a silent no-op.
+      // With no override, auto-route by taskType.
+      if (modelOverride) {
+        return { model: modelOverride, provider, taskType, isAutoRouted: false };
+      }
       const model =
         taskType === "background"
           ? GEMINI_FLASH_LITE
