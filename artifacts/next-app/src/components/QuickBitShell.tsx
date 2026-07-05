@@ -5,7 +5,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, useAnimation } from "framer-motion";
 import * as Sentry from "@sentry/nextjs";
-import { createPortal } from "react-dom";
+import { Popover, PopoverAnchor, PopoverContent } from "./ui/popover";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "./ui/dialog";
@@ -62,38 +62,6 @@ function ExpiryPicker({
 }) {
   const [showCustom, setShowCustom] = useState(false);
   const [customDays, setCustomDays] = useState("");
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-
-  useEffect(() => {
-    if (!anchorRef.current) return;
-    const rect = anchorRef.current.getBoundingClientRect();
-    const menuW = 200;
-    const menuH = 240;
-    const pad = 8;
-    let left = rect.left;
-    let top = rect.bottom + 4;
-    if (left + menuW > window.innerWidth - pad) left = window.innerWidth - menuW - pad;
-    if (left < pad) left = pad;
-    if (top + menuH > window.innerHeight - pad) top = rect.top - menuH - 4;
-    setPos({ top, left });
-  }, []);
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node) &&
-          anchorRef.current && !anchorRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [onClose]);
 
   const selectPreset = (days: number) => {
     const d = new Date();
@@ -107,12 +75,15 @@ function ExpiryPicker({
     selectPreset(n);
   };
 
-  return createPortal(
-    <div
-      ref={menuRef}
-      style={{ top: pos.top, left: pos.left, width: 200 }}
-      className="fixed z-50 bg-panel border border-panel-border rounded-xl shadow-xl overflow-hidden"
-    >
+  return (
+    <Popover open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <PopoverAnchor virtualRef={anchorRef as React.RefObject<HTMLElement>} />
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="w-[200px] p-0 bg-panel border-panel-border rounded-xl shadow-xl overflow-hidden"
+      >
       {!showCustom ? (
         <div className="py-1">
           {EXPIRY_PRESETS.map((p) => (
@@ -164,12 +135,12 @@ function ExpiryPicker({
           </div>
         </div>
       )}
-    </div>,
-    document.body
+      </PopoverContent>
+    </Popover>
   );
 }
 
-// ─── Notification Popover (portaled) ─────────────────────────────────────────
+// ─── Notification Popover ────────────────────────────────────────────────────
 
 function NotificationPopover({
   anchorRef,
@@ -182,49 +153,19 @@ function NotificationPopover({
   onChange: (hours: number[]) => void;
   onClose: () => void;
 }) {
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-
-  useEffect(() => {
-    if (!anchorRef.current) return;
-    const rect = anchorRef.current.getBoundingClientRect();
-    const menuW = 280;
-    const menuH = 300;
-    const pad = 8;
-    let left = rect.left;
-    let top = rect.bottom + 4;
-    if (left + menuW > window.innerWidth - pad) left = window.innerWidth - menuW - pad;
-    if (left < pad) left = pad;
-    if (top + menuH > window.innerHeight - pad) top = rect.top - menuH - 4;
-    setPos({ top, left });
-  }, []);
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node) &&
-          anchorRef.current && !anchorRef.current.contains(e.target as Node)) {
-        onClose();
-      }
-    };
-    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("mousedown", handleClick);
-    document.addEventListener("keydown", handleKey);
-    return () => {
-      document.removeEventListener("mousedown", handleClick);
-      document.removeEventListener("keydown", handleKey);
-    };
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      ref={menuRef}
-      style={{ top: pos.top, left: pos.left, width: 280 }}
-      className="fixed z-50 bg-panel border border-panel-border rounded-xl shadow-xl p-3"
-    >
-      <p className="text-xs font-medium text-muted-foreground mb-2">Notification reminders</p>
-      <NotificationCadenceEditor value={value} onChange={onChange} />
-    </div>,
-    document.body
+  return (
+    <Popover open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <PopoverAnchor virtualRef={anchorRef as React.RefObject<HTMLElement>} />
+      <PopoverContent
+        align="start"
+        sideOffset={4}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="w-[280px] bg-panel border-panel-border rounded-xl shadow-xl p-3"
+      >
+        <p className="text-xs font-medium text-muted-foreground mb-2">Notification reminders</p>
+        <NotificationCadenceEditor value={value} onChange={onChange} />
+      </PopoverContent>
+    </Popover>
   );
 }
 
