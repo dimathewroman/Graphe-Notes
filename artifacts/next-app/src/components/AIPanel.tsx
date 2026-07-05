@@ -24,7 +24,12 @@ interface AiSettingsResponse {
 }
 
 export function AIPanel() {
-  const { isAIPanelOpen, setAIPanelOpen, selectedNoteId, setAiSetupModalOpen, setPendingAiAction } = useAppStore();
+  // Atomic Zustand selectors (E1) — one subscription per value.
+  const isAIPanelOpen = useAppStore(s => s.isAIPanelOpen);
+  const setAIPanelOpen = useAppStore(s => s.setAIPanelOpen);
+  const selectedNoteId = useAppStore(s => s.selectedNoteId);
+  const setAiSetupModalOpen = useAppStore(s => s.setAiSetupModalOpen);
+  const setPendingAiAction = useAppStore(s => s.setPendingAiAction);
   const anim = useAnimationConfig();
   const queryClient = useQueryClient();
   const bp = useBreakpoint();

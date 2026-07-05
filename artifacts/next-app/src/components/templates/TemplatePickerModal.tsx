@@ -84,7 +84,15 @@ function tiptapToHtml(content: Record<string, unknown>): string {
 }
 
 export function TemplatePickerModal() {
-  const { isTemplatePickerOpen, templatePickerContext, closeTemplatePicker, selectNote, selectQuickBit, setMobileView, addDemoNoteId, addDemoQbId } = useAppStore();
+  // Atomic Zustand selectors (E1) — one subscription per value.
+  const isTemplatePickerOpen = useAppStore(s => s.isTemplatePickerOpen);
+  const templatePickerContext = useAppStore(s => s.templatePickerContext);
+  const closeTemplatePicker = useAppStore(s => s.closeTemplatePicker);
+  const selectNote = useAppStore(s => s.selectNote);
+  const selectQuickBit = useAppStore(s => s.selectQuickBit);
+  const setMobileView = useAppStore(s => s.setMobileView);
+  const addDemoNoteId = useAppStore(s => s.addDemoNoteId);
+  const addDemoQbId = useAppStore(s => s.addDemoQbId);
   const anim = useAnimationConfig();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();

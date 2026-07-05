@@ -41,7 +41,9 @@ export function SaveAsTemplateDialog({
   noteTitle: string;
   noteContent: string;
 }) {
-  const { isSaveAsTemplateOpen, closeSaveAsTemplate } = useAppStore();
+  // Atomic Zustand selectors (E1) — one subscription per value.
+  const isSaveAsTemplateOpen = useAppStore(s => s.isSaveAsTemplateOpen);
+  const closeSaveAsTemplate = useAppStore(s => s.closeSaveAsTemplate);
   const anim = useAnimationConfig();
   const bp = useBreakpoint();
   const isDemo = useDemoMode();

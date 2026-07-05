@@ -298,18 +298,17 @@ function ExpiredModal({
 // ─── QuickBitShell ────────────────────────────────────────────────────────────
 
 export function QuickBitShell() {
-  const {
-    selectedQuickBitId,
-    selectQuickBit,
-    isSidebarOpen,
-    toggleSidebar,
-    isNoteListOpen,
-    toggleNoteList,
-    setMobileView,
-    setFilter,
-    selectNote,
-    addDemoNoteId,
-  } = useAppStore();
+  // Atomic Zustand selectors (E1) — one subscription per value.
+  const selectedQuickBitId = useAppStore(s => s.selectedQuickBitId);
+  const selectQuickBit = useAppStore(s => s.selectQuickBit);
+  const isSidebarOpen = useAppStore(s => s.isSidebarOpen);
+  const toggleSidebar = useAppStore(s => s.toggleSidebar);
+  const isNoteListOpen = useAppStore(s => s.isNoteListOpen);
+  const toggleNoteList = useAppStore(s => s.toggleNoteList);
+  const setMobileView = useAppStore(s => s.setMobileView);
+  const setFilter = useAppStore(s => s.setFilter);
+  const selectNote = useAppStore(s => s.selectNote);
+  const addDemoNoteId = useAppStore(s => s.addDemoNoteId);
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const queryClient = useQueryClient();

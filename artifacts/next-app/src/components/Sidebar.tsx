@@ -27,11 +27,15 @@ import { useBreakpoint } from "@/hooks/use-mobile";
 import { ScrollArea } from "./ui/scroll-area";
 
 export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
-  const {
-    activeFilter, activeFolderId, activeTag, setFilter,
-    setSettingsOpen, setAIPanelOpen,
-    isVaultUnlocked, setVaultUnlocked,
-  } = useAppStore();
+  // Atomic Zustand selectors (E1) — one subscription per value.
+  const activeFilter = useAppStore(s => s.activeFilter);
+  const activeFolderId = useAppStore(s => s.activeFolderId);
+  const activeTag = useAppStore(s => s.activeTag);
+  const setFilter = useAppStore(s => s.setFilter);
+  const setSettingsOpen = useAppStore(s => s.setSettingsOpen);
+  const setAIPanelOpen = useAppStore(s => s.setAIPanelOpen);
+  const isVaultUnlocked = useAppStore(s => s.isVaultUnlocked);
+  const setVaultUnlocked = useAppStore(s => s.setVaultUnlocked);
   const { user, logout } = useAuth();
   const queryClient = useQueryClient();
   const isDemo = useDemoMode();
@@ -492,7 +496,8 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function Sidebar() {
-  const { isSidebarOpen, sidebarWidth } = useAppStore();
+  const isSidebarOpen = useAppStore(s => s.isSidebarOpen); // atomic selectors (E1)
+  const sidebarWidth = useAppStore(s => s.sidebarWidth);
   const bp = useBreakpoint();
   const anim = useAnimationConfig();
 

@@ -36,11 +36,16 @@ import {
 } from "./ui/alert-dialog";
 
 export function RecentlyDeletedDetail() {
-  const {
-    selectedNoteId, selectNote, setMobileView,
-    setFilter, isVaultUnlocked,
-    isSidebarOpen, isNoteListOpen, toggleSidebar, toggleNoteList,
-  } = useAppStore();
+  // Atomic Zustand selectors (E1) — one subscription per value.
+  const selectedNoteId = useAppStore(s => s.selectedNoteId);
+  const selectNote = useAppStore(s => s.selectNote);
+  const setMobileView = useAppStore(s => s.setMobileView);
+  const setFilter = useAppStore(s => s.setFilter);
+  const isVaultUnlocked = useAppStore(s => s.isVaultUnlocked);
+  const isSidebarOpen = useAppStore(s => s.isSidebarOpen);
+  const isNoteListOpen = useAppStore(s => s.isNoteListOpen);
+  const toggleSidebar = useAppStore(s => s.toggleSidebar);
+  const toggleNoteList = useAppStore(s => s.toggleNoteList);
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
   const queryClient = useQueryClient();

@@ -115,7 +115,7 @@ function AttachmentRow({ attachment, onDeleted }: { attachment: AttachmentRecord
 
 export function AllAttachments() {
   const { data: attachments = [], isLoading, refetch } = useAllAttachments();
-  const { setSidebarOpen } = useAppStore();
+  const setSidebarOpen = useAppStore(s => s.setSidebarOpen); // atomic selector (E1)
   const bp = useBreakpoint();
 
   return (
