@@ -33,7 +33,7 @@ test.describe("Data integrity regressions", () => {
   test("V1: undo right after switching notes must not wipe note B's content", async ({
     page,
   }) => {
-    test.fail(); // TODO(phase-1.1): remove once the undo stack is scoped per note
+    // Fixed in Phase 1.1 (GrapheEditor clears undo history on contentKey change).
 
     const notes = page.getByTestId("note-item");
     const editor = page.locator(".ProseMirror");

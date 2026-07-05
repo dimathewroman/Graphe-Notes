@@ -7,7 +7,7 @@ import { useEffect, useCallback, useMemo, useRef, useState, type ReactNode } fro
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
-import { TextSelection } from "@tiptap/pm/state";
+import { EditorState, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import UnderlineExt from "@tiptap/extension-underline";
 import { TextStyle, FontSize } from "@tiptap/extension-text-style";
@@ -264,6 +264,10 @@ export function GrapheEditor({
   const prevContentKeyRef = useRef<string | number | undefined>(undefined);
   useEffect(() => {
     if (!editor) return;
+    // V1: skip the transient `undefined` contentKey while React Query loads — it
+    // would set an empty doc (and, before this fix, added an extra undoable
+    // empty-doc step). We only (re)load content once a real item is selected.
+    if (contentKey === undefined) return;
     // Track whether this is a switch (not the initial load) so we can mask the
     // one-frame blank that appears between contentKey changing and setContent firing.
     const isSwitch = prevContentKeyRef.current !== undefined && prevContentKeyRef.current !== contentKey;
@@ -279,6 +283,21 @@ export function GrapheEditor({
           dom.style.transition = "none";
         }
         editor.commands.setContent(content, { emitUpdate: false });
+        // V1 fix: clear the undo/redo history on every content (re)load so the
+        // note swap itself is not an undoable step, and note A's edits can never
+        // be undone into note B's document (which previously blanked/corrupted
+        // note B and autosaved the result). One ProseMirror history stack is
+        // shared for the editor's lifetime; re-creating the EditorState with the
+        // same plugins re-initialises the history plugin with empty stacks while
+        // preserving the freshly-set doc.
+        const view = editor.view;
+        view.updateState(
+          EditorState.create({
+            doc: view.state.doc,
+            schema: view.state.schema,
+            plugins: view.state.plugins,
+          }),
+        );
         if (isSwitch) {
           // Next frame: fade the new content in once the DOM has been updated.
           requestAnimationFrame(() => {
