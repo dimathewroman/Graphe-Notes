@@ -8,7 +8,7 @@ import {
   Image as ImageIcon, Table as TableIcon, RowsIcon, Scissors, X,
   Undo2, Redo2, Minus, Highlighter, Paperclip,
   Superscript as SuperscriptIcon, Subscript as SubscriptIcon,
-  MoreHorizontal,
+  MoreHorizontal, Search,
 } from "lucide-react";
 import { ColorPickerDropdown } from "./ColorPickerDropdown";
 import { WordCountPopover } from "./WordCountPopover";
@@ -240,12 +240,14 @@ export const EditorToolbar = memo(function EditorToolbar({
   className,
   style,
   onAttachFile,
+  onFindReplace,
 }: {
   editor: ReturnType<typeof useEditor>;
   showUndoRedo?: boolean;
   className?: string;
   style?: React.CSSProperties;
   onAttachFile?: (file: File) => void;
+  onFindReplace?: () => void;
 }) {
   const [colorPicker, setColorPicker] = useState<"text" | "highlight" | null>(null);
   const [fontPickerOpen, setFontPickerOpen] = useState(false);
@@ -429,6 +431,23 @@ export const EditorToolbar = memo(function EditorToolbar({
 
       <LinkPopover editor={editor} />
 
+      {/* Find & replace — a visible control on every breakpoint. The Cmd/Ctrl+F/H
+          shortcut needs a hardware keyboard, so touch users previously had no way
+          to open it. Lives top-level (not the tablet-only overflow) so it shows on
+          desktop, tablet, and mobile alike. */}
+      {onFindReplace && (
+        <>
+          <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
+          <ToolbarButton
+            command={onFindReplace}
+            active={false}
+            icon={<Search className="w-4 h-4" />}
+            title="Find & replace"
+            testId="toolbar-find-replace"
+          />
+        </>
+      )}
+
       {/* Word count + attach: inline on desktop, overflow on tablet */}
       {!isTablet ? (
         <>
@@ -452,6 +471,7 @@ export const EditorToolbar = memo(function EditorToolbar({
                 active={false}
                 icon={<Paperclip className="w-4 h-4" />}
                 title="Attach file"
+                testId="toolbar-attach-file"
               />
             </>
           )}

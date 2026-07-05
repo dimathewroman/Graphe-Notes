@@ -91,11 +91,12 @@ function AttachmentRow({ attachment, onDeleted }: { attachment: AttachmentRecord
           )}
         </div>
       </div>
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5">
+      {/* Touch: download/delete stay visible + 44px-tappable on coarse pointers. */}
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 coarse:opacity-100 transition-opacity shrink-0 mt-0.5">
         <button
           onClick={handleDownload}
           title="Download"
-          className="p-1.5 rounded hover:bg-panel text-muted-foreground hover:text-foreground transition-colors"
+          className="p-1.5 coarse:min-w-[44px] coarse:min-h-[44px] inline-flex items-center justify-center rounded hover:bg-panel text-muted-foreground hover:text-foreground transition-colors"
         >
           <Download className="w-3.5 h-3.5" />
         </button>
@@ -103,7 +104,7 @@ function AttachmentRow({ attachment, onDeleted }: { attachment: AttachmentRecord
           onClick={handleDelete}
           disabled={deleting}
           title="Delete"
-          className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+          className="p-1.5 coarse:min-w-[44px] coarse:min-h-[44px] inline-flex items-center justify-center rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
         >
           {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
         </button>

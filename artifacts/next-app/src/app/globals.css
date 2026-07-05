@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+/* Phase 4 (M4/M5): gate touch affordances on pointer capability, not viewport
+   width. `any-pointer: coarse` stays true on hybrid devices (iPad + trackpad),
+   so touch targets keep their 44px minimum and hover-only actions stay visible
+   even when a fine pointer is also attached. Use `coarse:` for touch-up rules.
+   Media-query variants require the block/@slot form (the parenthesized shorthand
+   is only for selector-based variants). */
+@custom-variant coarse {
+  @media (any-pointer: coarse) {
+    @slot;
+  }
+}
+
 @theme inline {
   --font-sans: var(--font-geist-sans), var(--font-inter), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), monospace;

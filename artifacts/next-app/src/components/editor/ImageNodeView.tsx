@@ -319,7 +319,9 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
   ].join(" ");
 
   const handleClass = (side: "left" | "right") => [
-    `absolute top-1/2 -translate-y-1/2 w-2 h-12 bg-primary/80 rounded cursor-ew-resize`,
+    // touch-none: touch-drag resizes instead of scrolling. coarse:w-4 widens the
+    // grab target on touch devices (the drag itself already uses Pointer Events).
+    `absolute top-1/2 -translate-y-1/2 w-2 coarse:w-4 h-12 bg-primary/80 rounded cursor-ew-resize touch-none`,
     `transition-opacity duration-150`,
     side === "right" ? "right-0 rounded-l rounded-r-none" : "left-0 rounded-r rounded-l-none",
     showHandles ? "opacity-100" : "opacity-0 group-hover:opacity-100",

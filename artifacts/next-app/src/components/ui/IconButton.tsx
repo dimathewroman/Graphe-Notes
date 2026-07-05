@@ -16,7 +16,9 @@ const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
         variant="ghost"
         size="icon"
         className={cn(
-          "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-2 rounded-md",
+          // Touch targets gate on pointer type, not viewport width — tablets with a
+          // coarse pointer keep the 44px HIG minimum; fine-pointer (mouse) stays compact.
+          "min-w-0 min-h-0 p-2 coarse:min-w-[44px] coarse:min-h-[44px] coarse:p-2.5 rounded-md",
           "transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]",
           "text-muted-foreground hover:text-foreground hover:bg-panel-hover hover:scale-[1.08] active:scale-[0.95]",
           "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",

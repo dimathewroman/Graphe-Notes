@@ -242,16 +242,18 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             )}
           </div>
 
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+          {/* Touch: folder actions stay visible and 44px-tappable on coarse
+              pointers instead of being hover-only (invisible/unreachable on touch). */}
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 coarse:opacity-100">
             <button
-              className="p-1.5 md:p-1 hover:bg-panel rounded-md transition-colors"
+              className="p-1.5 md:p-1 coarse:min-w-[44px] coarse:min-h-[44px] inline-flex items-center justify-center hover:bg-panel rounded-md transition-colors"
               onClick={e => { e.stopPropagation(); setEditingFolder(folder); }}
               title="Edit folder"
             >
               <Edit2 className="w-3.5 h-3.5 md:w-3 md:h-3 text-muted-foreground" />
             </button>
             <button
-              className="p-1.5 md:p-1 hover:bg-panel rounded-md transition-colors"
+              className="p-1.5 md:p-1 coarse:min-w-[44px] coarse:min-h-[44px] inline-flex items-center justify-center hover:bg-panel rounded-md transition-colors"
               onClick={e => {
                 e.stopPropagation();
                 setNewFolderParentId(folder.id);
@@ -265,7 +267,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               <Plus className="w-3.5 h-3.5 md:w-3 md:h-3 text-muted-foreground" />
             </button>
             <button
-              className="p-1.5 md:p-1 hover:bg-panel rounded-md transition-colors"
+              className="p-1.5 md:p-1 coarse:min-w-[44px] coarse:min-h-[44px] inline-flex items-center justify-center hover:bg-panel rounded-md transition-colors"
               onClick={e => {
                 e.stopPropagation();
                 if (confirm(`Delete folder "${folder.name}"?`)) {

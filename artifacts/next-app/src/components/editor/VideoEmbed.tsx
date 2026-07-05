@@ -82,7 +82,7 @@ function VideoEmbedView({ node, deleteNode }: ReactNodeViewProps) {
             e.stopPropagation();
             deleteNode();
           }}
-          className="absolute top-2 right-2 z-10 hidden group-hover:flex items-center justify-center w-7 h-7 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+          className="absolute top-2 right-2 z-10 hidden group-hover:flex coarse:flex items-center justify-center w-7 h-7 coarse:w-11 coarse:h-11 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
           aria-label="Remove video"
         >
           <X className="w-4 h-4" />
