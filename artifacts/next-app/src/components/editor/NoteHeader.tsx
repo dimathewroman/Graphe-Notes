@@ -89,6 +89,7 @@ export const NoteHeader = memo(function NoteHeader({
         )}
         <motion.div
           key={saveStatus}
+          data-testid="save-status"
           initial={{ opacity: 0.5 }}
           animate={
             saveStatus === "saved" && anim.level !== "minimal"
