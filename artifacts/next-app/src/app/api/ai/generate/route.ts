@@ -18,6 +18,14 @@ const VALID_PROVIDERS: Provider[] = [
   "local_llm",
 ];
 
+// SSRF guard (§S / CodeQL js/request-forgery): routing.model can derive from a
+// user-supplied modelOverride and is interpolated into the upstream Gemini URL
+// path. Allow only bare model-id characters — no slashes, query chars, or `..`
+// that could redirect the request or traverse the path.
+function isValidModelId(model: string): boolean {
+  return /^[a-zA-Z0-9._-]+$/.test(model);
+}
+
 export async function POST(request: NextRequest) {
   try {
     // --- Auth ---
@@ -99,6 +107,9 @@ export async function POST(request: NextRequest) {
       }
 
       const routing = resolveModel("graphe_free", taskType as TaskType);
+      if (!isValidModelId(routing.model)) {
+        return NextResponse.json({ error: "Invalid model" }, { status: 400 });
+      }
 
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
@@ -199,6 +210,9 @@ export async function POST(request: NextRequest) {
         },
         { status: 400 },
       );
+    }
+    if (!isValidModelId(routing.model)) {
+      return NextResponse.json({ error: "Invalid model" }, { status: 400 });
     }
 
     // --- google_ai_studio ---
