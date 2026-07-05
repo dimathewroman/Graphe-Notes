@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:e2e": "playwright test --project=chromium",
     "test:e2e:login": "playwright test --project=setup",
     "test:e2e:authenticated": "playwright test --project=authenticated"
@@ -91,6 +93,9 @@
     "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4.1.14",
     "@tailwindcss/typography": "^0.5.15",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/bcryptjs": "^3.0.0",
     "@types/diff-match-patch": "^1.0.36",
     "@types/node": "catalog:",
@@ -98,9 +103,12 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@types/turndown": "^5.0.6",
+    "@vitejs/plugin-react": "catalog:",
     "dotenv": "catalog:",
+    "jsdom": "^25.0.1",
     "shadcn": "^4.4.0",
     "tailwindcss": "catalog:",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "vitest": "^3.2.6"
   }
 }
