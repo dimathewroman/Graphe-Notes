@@ -9,26 +9,7 @@ import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { useAppStore } from "@/store";
 import { useDemoMode } from "@/lib/demo-context";
 import { DEMO_QUICK_BITS } from "@/lib/demo-data";
-
-// ─── Expiry label (same logic as QuickBitList / QuickBitEditor) ───────────────
-
-function formatExpiryLabel(expiresAt: string): { label: string; className: string } {
-  const msLeft = new Date(expiresAt).getTime() - Date.now();
-  const totalMinutes = msLeft / (1000 * 60);
-  const totalHours = msLeft / (1000 * 60 * 60);
-  if (msLeft <= 0) return { label: "Expired", className: "text-destructive" };
-  if (totalHours < 1) {
-    const m = Math.ceil(totalMinutes);
-    return { label: `${m} minute${m !== 1 ? "s" : ""} left`, className: "text-destructive" };
-  }
-  if (totalHours < 24) {
-    const h = Math.ceil(totalHours);
-    return { label: `${h} hour${h !== 1 ? "s" : ""} left`, className: "text-destructive" };
-  }
-  const d = Math.ceil(totalHours / 24);
-  const className = totalHours < 48 ? "text-warning" : "text-muted-foreground/70";
-  return { label: `${d} day${d !== 1 ? "s" : ""} left`, className };
-}
+import { formatExpiry } from "@/lib/format-expiry";
 
 // ─── localStorage helpers ─────────────────────────────────────────────────────
 
@@ -258,7 +239,7 @@ export function QuickBitNotifications() {
 
       {/* Notification cards */}
       {notifications.map((n) => {
-        const expiry = formatExpiryLabel(n.expiresAt);
+        const expiry = formatExpiry(n.expiresAt, { emphasize: false });
         return (
           <div
             key={n.key}

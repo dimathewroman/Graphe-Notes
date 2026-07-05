@@ -39,26 +39,7 @@ import { DEMO_QUICK_BITS } from "@/lib/demo-data";
 import { GrapheEditor } from "./editor/GrapheEditor";
 import { useAnimationConfig } from "@/hooks/use-motion";
 import posthog from "posthog-js";
-
-// ─── Expiry helpers ───────────────────────────────────────────────────────────
-
-function formatExpiry(expiresAt: string | Date): { label: string; className: string } {
-  const msLeft = new Date(expiresAt).getTime() - Date.now();
-  const totalMinutes = msLeft / (1000 * 60);
-  const totalHours = msLeft / (1000 * 60 * 60);
-  if (msLeft <= 0) return { label: "Expired", className: "text-destructive font-medium" };
-  if (totalHours < 1) {
-    const m = Math.ceil(totalMinutes);
-    return { label: `${m} minute${m !== 1 ? "s" : ""} left`, className: "text-destructive font-medium" };
-  }
-  if (totalHours < 24) {
-    const h = Math.ceil(totalHours);
-    return { label: `${h} hour${h !== 1 ? "s" : ""} left`, className: "text-destructive font-medium" };
-  }
-  const d = Math.ceil(totalHours / 24);
-  const className = totalHours < 48 ? "text-warning" : "text-muted-foreground/70";
-  return { label: `${d} day${d !== 1 ? "s" : ""} left`, className };
-}
+import { formatExpiry } from "@/lib/format-expiry";
 
 const EXPIRY_PRESETS = [
   { label: "1 day", days: 1 },
