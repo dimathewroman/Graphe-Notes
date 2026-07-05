@@ -298,18 +298,17 @@ function ExpiredModal({
 // ─── QuickBitShell ────────────────────────────────────────────────────────────
 
 export function QuickBitShell() {
-  const {
-    selectedQuickBitId,
-    selectQuickBit,
-    isSidebarOpen,
-    toggleSidebar,
-    isNoteListOpen,
-    toggleNoteList,
-    setMobileView,
-    setFilter,
-    selectNote,
-    addDemoNoteId,
-  } = useAppStore();
+  // Atomic Zustand selectors (E1) — one subscription per value.
+  const selectedQuickBitId = useAppStore(s => s.selectedQuickBitId);
+  const selectQuickBit = useAppStore(s => s.selectQuickBit);
+  const isSidebarOpen = useAppStore(s => s.isSidebarOpen);
+  const toggleSidebar = useAppStore(s => s.toggleSidebar);
+  const isNoteListOpen = useAppStore(s => s.isNoteListOpen);
+  const toggleNoteList = useAppStore(s => s.toggleNoteList);
+  const setMobileView = useAppStore(s => s.setMobileView);
+  const setFilter = useAppStore(s => s.setFilter);
+  const selectNote = useAppStore(s => s.selectNote);
+  const addDemoNoteId = useAppStore(s => s.addDemoNoteId);
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const queryClient = useQueryClient();
@@ -419,7 +418,16 @@ export function QuickBitShell() {
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await updateMut.mutateAsync({ id: pending.id, data: pending.data as any });
-          queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
+          // E2: patch the cached list in place instead of refetching on every
+          // debounced autosave. Reorder-by-sort settles on the next natural refetch.
+          {
+            const now = new Date().toISOString();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            queryClient.setQueriesData({ queryKey: getGetQuickBitsQueryKey() }, (old: any) =>
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              Array.isArray(old) ? old.map((qb: any) => qb.id === pending.id ? { ...qb, ...pending.data, updatedAt: now } : qb) : old
+            );
+          }
           setSaveStatus("saved");
         } catch (err) {
           // V3: previously set "saved" here — an outright lie on a failed PATCH.

@@ -60,7 +60,9 @@ export function useAiAction(
 } {
   const isDemo = options?.isDemo ?? false;
   const onBeforeAiRewrite = options?.onBeforeAiRewrite;
-  const { setAiSetupModalOpen, setPendingAiAction } = useAppStore();
+  // Atomic Zustand selectors (E1) — avoids subscribing the whole store.
+  const setAiSetupModalOpen = useAppStore(s => s.setAiSetupModalOpen);
+  const setPendingAiAction = useAppStore(s => s.setPendingAiAction);
 
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);

@@ -50,7 +50,19 @@ function formatExpiry(expiresAt: string): { label: string; className: string } {
 }
 
 export function QuickBitList() {
-  const { setSidebarOpen, isSidebarOpen, toggleSidebar, selectedQuickBitId, selectQuickBit, setMobileView, viewMode, setViewMode, demoExtraQbIds, addDemoQbId, openTemplatePicker, setFilter } = useAppStore();
+  // Atomic Zustand selectors (E1) — one subscription per value.
+  const setSidebarOpen = useAppStore(s => s.setSidebarOpen);
+  const isSidebarOpen = useAppStore(s => s.isSidebarOpen);
+  const toggleSidebar = useAppStore(s => s.toggleSidebar);
+  const selectedQuickBitId = useAppStore(s => s.selectedQuickBitId);
+  const selectQuickBit = useAppStore(s => s.selectQuickBit);
+  const setMobileView = useAppStore(s => s.setMobileView);
+  const viewMode = useAppStore(s => s.viewMode);
+  const setViewMode = useAppStore(s => s.setViewMode);
+  const demoExtraQbIds = useAppStore(s => s.demoExtraQbIds);
+  const addDemoQbId = useAppStore(s => s.addDemoQbId);
+  const openTemplatePicker = useAppStore(s => s.openTemplatePicker);
+  const setFilter = useAppStore(s => s.setFilter);
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
   const anim = useAnimationConfig();

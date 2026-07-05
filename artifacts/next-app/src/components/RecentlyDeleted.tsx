@@ -30,12 +30,15 @@ function daysUntil(dateStr: string | null | undefined): number {
 }
 
 export function RecentlyDeleted() {
-  const {
-    selectedNoteId, selectNote, setMobileView,
-    isSidebarOpen, toggleSidebar, setSidebarOpen,
-    isVaultUnlocked,
-    demoExtraIds,
-  } = useAppStore();
+  // Atomic Zustand selectors (E1) — one subscription per value.
+  const selectedNoteId = useAppStore(s => s.selectedNoteId);
+  const selectNote = useAppStore(s => s.selectNote);
+  const setMobileView = useAppStore(s => s.setMobileView);
+  const isSidebarOpen = useAppStore(s => s.isSidebarOpen);
+  const toggleSidebar = useAppStore(s => s.toggleSidebar);
+  const setSidebarOpen = useAppStore(s => s.setSidebarOpen);
+  const isVaultUnlocked = useAppStore(s => s.isVaultUnlocked);
+  const demoExtraIds = useAppStore(s => s.demoExtraIds);
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
   const queryClient = useQueryClient();

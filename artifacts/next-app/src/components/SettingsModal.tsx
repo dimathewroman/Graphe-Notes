@@ -57,7 +57,16 @@ function applyTheme(mode: ThemeMode, accent: string) {
 }
 
 export function SettingsModal() {
-  const { isSettingsOpen, setSettingsOpen, settingsInitialTab, motionLevel, setMotionLevel, darkModeLevel, setDarkModeLevel, colorblindMode, setColorblindMode } = useAppStore();
+  // Atomic Zustand selectors (E1) — one subscription per value.
+  const isSettingsOpen = useAppStore(s => s.isSettingsOpen);
+  const setSettingsOpen = useAppStore(s => s.setSettingsOpen);
+  const settingsInitialTab = useAppStore(s => s.settingsInitialTab);
+  const motionLevel = useAppStore(s => s.motionLevel);
+  const setMotionLevel = useAppStore(s => s.setMotionLevel);
+  const darkModeLevel = useAppStore(s => s.darkModeLevel);
+  const setDarkModeLevel = useAppStore(s => s.setDarkModeLevel);
+  const colorblindMode = useAppStore(s => s.colorblindMode);
+  const setColorblindMode = useAppStore(s => s.setColorblindMode);
   const { user, logout } = useAuth();
   const bp = useBreakpoint();
   const isMobile = bp === "mobile";
@@ -236,11 +245,17 @@ export function SettingsModal() {
   }, [activeTab, isSettingsOpen]);
 
   // ── Usage countdown timer ────────────────────────────────────────
+  // E13: depend on a derived boolean, not usageCountdown itself. Depending on the
+  // value re-ran this effect every tick (clearInterval + setInterval each second,
+  // ~1 GC-churning teardown/second). The functional updater means the interval
+  // never needs the live value, so it's created once when the countdown starts and
+  // cleared once when it reaches zero.
+  const isUsageCounting = usageCountdown > 0;
   useEffect(() => {
-    if (usageCountdown <= 0) return;
+    if (!isUsageCounting) return;
     const timer = setInterval(() => setUsageCountdown(prev => Math.max(0, prev - 1)), 1000);
     return () => clearInterval(timer);
-  }, [usageCountdown]);
+  }, [isUsageCounting]);
 
   useEffect(() => {
     if (activeTab === "security" && isSettingsOpen) {

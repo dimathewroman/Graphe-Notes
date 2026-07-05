@@ -102,7 +102,10 @@ function findNewNotifications(quickBits: QuickBit[]): QBNotification[] {
 export function QuickBitNotifications() {
   const isDemo = useDemoMode();
   const queryClient = useQueryClient();
-  const { selectQuickBit, setFilter, addDemoNoteId } = useAppStore();
+  // Atomic Zustand selectors (E1) — one subscription per value.
+  const selectQuickBit = useAppStore(s => s.selectQuickBit);
+  const setFilter = useAppStore(s => s.setFilter);
+  const addDemoNoteId = useAppStore(s => s.addDemoNoteId);
 
   const [expiredCount, setExpiredCount] = useState<number | null>(null);
   const [notifications, setNotifications] = useState<QBNotification[]>([]);

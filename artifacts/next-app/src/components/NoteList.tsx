@@ -159,7 +159,10 @@ export function NoteList() {
       performance.mark("app-data-ready");
       try {
         const measure = performance.measure("app-ready", "app-mount", "app-data-ready");
-        console.log(`[perf] app-ready (mount → first data): ${measure.duration.toFixed(1)}ms`);
+        // E12: dev-only console noise. Prod forwards the metric to PostHog instead.
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[perf] app-ready (mount → first data): ${measure.duration.toFixed(1)}ms`);
+        }
         if (process.env.NODE_ENV !== "development") {
           posthog.capture("perf_app_ready", { duration_ms: Math.round(measure.duration), timestamp: new Date().toISOString() });
         }

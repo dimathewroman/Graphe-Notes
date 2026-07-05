@@ -39,7 +39,21 @@ const mobileViewVariants = {
 };
 
 export default function Home() {
-  const { setSettingsOpen, isSidebarOpen, setSidebarOpen, isNoteListOpen, mobileView, selectedNoteId, selectedQuickBitId, activeFilter, noteListWidth, setNoteListWidth, galleryWidth, setGalleryWidth, viewMode } = useAppStore();
+  // Atomic Zustand selectors (E1) — each subscription only re-renders on its own
+  // value change, instead of a bare useAppStore() re-rendering on every store write.
+  const setSettingsOpen = useAppStore(s => s.setSettingsOpen);
+  const isSidebarOpen = useAppStore(s => s.isSidebarOpen);
+  const setSidebarOpen = useAppStore(s => s.setSidebarOpen);
+  const isNoteListOpen = useAppStore(s => s.isNoteListOpen);
+  const mobileView = useAppStore(s => s.mobileView);
+  const selectedNoteId = useAppStore(s => s.selectedNoteId);
+  const selectedQuickBitId = useAppStore(s => s.selectedQuickBitId);
+  const activeFilter = useAppStore(s => s.activeFilter);
+  const noteListWidth = useAppStore(s => s.noteListWidth);
+  const setNoteListWidth = useAppStore(s => s.setNoteListWidth);
+  const galleryWidth = useAppStore(s => s.galleryWidth);
+  const setGalleryWidth = useAppStore(s => s.setGalleryWidth);
+  const viewMode = useAppStore(s => s.viewMode);
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
   const anim = useAnimationConfig();

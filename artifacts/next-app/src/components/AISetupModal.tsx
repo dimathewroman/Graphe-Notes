@@ -11,13 +11,12 @@ import { Dialog, DialogClose } from "./ui/dialog";
 import { Dialog as DialogPrimitive } from "radix-ui";
 
 export function AISetupModal() {
-  const {
-    isAiSetupModalOpen,
-    pendingAiAction,
-    setAiSetupModalOpen,
-    setPendingAiAction,
-    setSettingsOpen,
-  } = useAppStore();
+  // Atomic Zustand selectors (E1) — one subscription per value.
+  const isAiSetupModalOpen = useAppStore(s => s.isAiSetupModalOpen);
+  const pendingAiAction = useAppStore(s => s.pendingAiAction);
+  const setAiSetupModalOpen = useAppStore(s => s.setAiSetupModalOpen);
+  const setPendingAiAction = useAppStore(s => s.setPendingAiAction);
+  const setSettingsOpen = useAppStore(s => s.setSettingsOpen);
   const anim = useAnimationConfig();
 
   const [saving, setSaving] = useState(false);
