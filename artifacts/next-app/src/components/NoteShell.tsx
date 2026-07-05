@@ -15,7 +15,7 @@ import {
   getGetNotesQueryKey, getGetNoteQueryKey, getGetTagsQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
+import { authenticatedFetch, setVaultProof } from "@workspace/api-client-react/custom-fetch";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { VersionPreviewArea } from "./VersionPreviewArea";
 import { VaultModal } from "./VaultModal";
@@ -808,10 +808,17 @@ export function NoteShell() {
       return;
     }
     try {
-      await unlockVaultMut.mutateAsync({ data: { pin } });
+      const res = await unlockVaultMut.mutateAsync({ data: { pin } });
+      // Store the unlock proof so subsequent requests can fetch vaulted content
+      // (§S / X-S2), then refetch the notes that were returned blanked.
+      setVaultProof((res as { proof?: string })?.proof ?? null);
       posthog.capture("vault_unlock_attempted", { success: true, source: "note", timestamp: new Date().toISOString() });
       setShowVaultUnlockModal(false);
       setVaultUnlocked(true);
+      queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+      if (selectedNoteId) {
+        queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
+      }
     } catch {
       posthog.capture("vault_unlock_attempted", { success: false, source: "note", timestamp: new Date().toISOString() });
       // Keep the modal open so the user can try again.

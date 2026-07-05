@@ -275,10 +275,20 @@ let _accessToken: string | null = null;
 export function setAccessToken(token: string | null) { _accessToken = token; }
 export function getAccessToken(): string | null { return _accessToken; }
 
+// Short-lived vault unlock proof (issued by POST /vault/unlock). Held in memory
+// only — the vault re-locks on reload, matching the in-memory unlock state.
+// Attached as `x-vault-proof` so the server can gate vaulted-note content.
+let _vaultProof: string | null = null;
+export function setVaultProof(proof: string | null) { _vaultProof = proof; }
+export function getVaultProof(): string | null { return _vaultProof; }
+
 export function authenticatedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   if (_accessToken && !headers.has("authorization")) {
     headers.set("authorization", `Bearer ${_accessToken}`);
+  }
+  if (_vaultProof && !headers.has("x-vault-proof")) {
+    headers.set("x-vault-proof", _vaultProof);
   }
   return fetch(input, { ...init, headers });
 }
@@ -299,6 +309,10 @@ export async function customFetch<T = unknown>(
 
   if (_accessToken && !headers.has("authorization")) {
     headers.set("authorization", `Bearer ${_accessToken}`);
+  }
+
+  if (_vaultProof && !headers.has("x-vault-proof")) {
+    headers.set("x-vault-proof", _vaultProof);
   }
 
   if (
