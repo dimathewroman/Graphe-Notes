@@ -35,17 +35,17 @@ function formatExpiry(expiresAt: string): { label: string; className: string } {
   const totalMinutes = msLeft / (1000 * 60);
   const totalHours = msLeft / (1000 * 60 * 60);
 
-  if (msLeft <= 0) return { label: "Expired", className: "text-red-500 font-medium" };
+  if (msLeft <= 0) return { label: "Expired", className: "text-destructive font-medium" };
   if (totalHours < 1) {
     const m = Math.ceil(totalMinutes);
-    return { label: `${m} minute${m !== 1 ? "s" : ""} left`, className: "text-red-500 font-medium" };
+    return { label: `${m} minute${m !== 1 ? "s" : ""} left`, className: "text-destructive font-medium" };
   }
   if (totalHours < 24) {
     const h = Math.ceil(totalHours);
-    return { label: `${h} hour${h !== 1 ? "s" : ""} left`, className: "text-red-500 font-medium" };
+    return { label: `${h} hour${h !== 1 ? "s" : ""} left`, className: "text-destructive font-medium" };
   }
   const d = Math.ceil(totalHours / 24);
-  const className = totalHours < 48 ? "text-amber-500" : "text-muted-foreground/70";
+  const className = totalHours < 48 ? "text-warning" : "text-muted-foreground/70";
   return { label: `${d} day${d !== 1 ? "s" : ""} left`, className };
 }
 
@@ -213,7 +213,7 @@ export function QuickBitList() {
               </IconButton>
               {showSortMenu && (
                 <div className="absolute right-0 top-full mt-1 z-40 min-w-[210px] bg-popover border border-panel-border rounded-lg shadow-xl py-1">
-                  <p className="px-3 py-1.5 text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Sort by</p>
+                  <p className="px-3 py-1.5 text-2xs text-muted-foreground font-semibold uppercase tracking-wider">Sort by</p>
                   {QB_SORT_OPTIONS.map(opt => (
                     <button
                       key={`${opt.sortBy}-${opt.sortDir}`}
@@ -437,7 +437,7 @@ export function QuickBitList() {
                 style={anim.cardExitStyle}
                 onClick={() => { selectQuickBit(qb.id); if (bp === "mobile") setMobileView("editor"); }}
                 className={cn(
-                  "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px]",
+                  "rounded-lg cursor-pointer border transition-all duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden min-h-[80px]",
                   anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
                   selectedQuickBitId === qb.id
                     ? "bg-primary/5 border-primary/30 shadow-sm"
@@ -453,7 +453,7 @@ export function QuickBitList() {
                   </p>
                   <div className="flex items-center gap-1.5 mt-2">
                     <Clock className="w-3 h-3 text-muted-foreground/60 shrink-0" />
-                    <span className={cn("text-[10px] font-mono", expiry.className)}>{expiry.label}</span>
+                    <span className={cn("text-2xs font-mono", expiry.className)}>{expiry.label}</span>
                   </div>
                 </div>
               </motion.div>
@@ -476,7 +476,7 @@ export function QuickBitList() {
                 style={anim.cardExitStyle}
                 onClick={() => { selectQuickBit(qb.id); if (bp === "mobile") setMobileView("editor"); }}
                 className={cn(
-                  "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
+                  "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
                   anim.useScale && "hover:-translate-y-[1px] active:scale-[0.98]",
                   selectedQuickBitId === qb.id
                     ? "bg-primary/5 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"
@@ -494,7 +494,7 @@ export function QuickBitList() {
                 </p>
                 <div className="flex items-center gap-1.5 mt-auto">
                   <Clock className="w-3 h-3 text-muted-foreground/60 shrink-0" />
-                  <span className={cn("text-[10px] font-mono", expiry.className)}>{expiry.label}</span>
+                  <span className={cn("text-2xs font-mono", expiry.className)}>{expiry.label}</span>
                 </div>
               </motion.div>
             );

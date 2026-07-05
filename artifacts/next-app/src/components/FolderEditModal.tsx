@@ -108,7 +108,7 @@ export function FolderEditModal({ folder, onClose }: Props) {
                   )}
                   style={{ backgroundColor: c ?? "transparent", boxShadow: c ? undefined : "inset 0 0 0 1px var(--color-panel-border)" }}
                 >
-                  {!c && <span className="text-[8px] text-muted-foreground flex items-center justify-center w-full h-full">✕</span>}
+                  {!c && <span className="text-2xs text-muted-foreground flex items-center justify-center w-full h-full">✕</span>}
                 </button>
               ))}
             </div>

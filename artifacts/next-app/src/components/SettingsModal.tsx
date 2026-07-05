@@ -594,7 +594,7 @@ export function SettingsModal() {
             <div className="hidden md:flex flex-col w-[200px] border-r border-panel-border bg-background/40 shrink-0">
               <div className="p-4 pb-2">
                 <p className="text-sm font-semibold text-foreground">Graphe Notes</p>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mt-0.5">Settings</p>
+                <p className="text-2xs uppercase tracking-wider text-muted-foreground font-medium mt-0.5">Settings</p>
               </div>
               <nav className="flex-1 px-2 py-2 space-y-0.5">
                 {tabs.map((tab) => (
@@ -625,7 +625,7 @@ export function SettingsModal() {
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-medium truncate">{[user.firstName, user.lastName].filter(Boolean).join(" ") || "User"}</p>
-                      <p className="text-[10px] text-muted-foreground truncate">{user.email}</p>
+                      <p className="text-2xs text-muted-foreground truncate">{user.email}</p>
                     </div>
                   </div>
                 </div>
@@ -770,7 +770,7 @@ export function SettingsModal() {
                         >
                           <opt.icon className="w-4 h-4" />
                           <span>{opt.label}</span>
-                          <span className="text-[9px] font-normal opacity-70">{opt.desc}</span>
+                          <span className="text-2xs font-normal opacity-70">{opt.desc}</span>
                         </button>
                       ))}
                     </div>
@@ -785,7 +785,7 @@ export function SettingsModal() {
                       </div>
                       <p className="text-xs text-muted-foreground leading-relaxed">This is how your notes will look with the selected theme.</p>
                       <div className="flex gap-2">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary border border-primary/20">#tag</span>
+                        <span className="px-2 py-0.5 rounded-full text-2xs bg-primary/10 text-primary border border-primary/20">#tag</span>
                         <button className="px-2.5 py-1 rounded-lg bg-primary text-primary-foreground text-xs font-medium">Button</button>
                       </div>
                     </div>
@@ -814,7 +814,7 @@ export function SettingsModal() {
                           >
                             <span className="w-5 h-5 rounded-full border border-panel-border shrink-0" style={{ backgroundColor: opt.swatch }} />
                             <span>{opt.label}</span>
-                            <span className="text-[9px] font-normal opacity-70">{opt.desc}</span>
+                            <span className="text-2xs font-normal opacity-70">{opt.desc}</span>
                           </button>
                         ))}
                       </div>
@@ -843,11 +843,11 @@ export function SettingsModal() {
                         >
                           <Accessibility className="w-4 h-4" />
                           <span>{opt.label}</span>
-                          <span className="text-[9px] font-normal opacity-70">{opt.desc}</span>
+                          <span className="text-2xs font-normal opacity-70">{opt.desc}</span>
                         </button>
                       ))}
                     </div>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    <p className="text-2xs text-muted-foreground leading-relaxed">
                       Remaps semantic colors (errors, success, warnings) for colorblind users. P/D = Protanopia &amp; Deuteranopia.
                     </p>
                   </section>
@@ -875,7 +875,7 @@ export function SettingsModal() {
                           <Zap className={cn("w-3.5 h-3.5", activeCard === "graphe_free" ? "text-primary" : "text-muted-foreground")} />
                           <span className={cn("text-sm font-medium", activeCard === "graphe_free" ? "text-primary" : "text-foreground")}>Graphe Free</span>
                         </div>
-                        <span className="text-[11px] text-muted-foreground">Built-in, no key needed</span>
+                        <span className="text-2xs text-muted-foreground">Built-in, no key needed</span>
                       </button>
 
                       {/* Google AI Studio */}
@@ -892,7 +892,7 @@ export function SettingsModal() {
                           <Key className={cn("w-3.5 h-3.5", activeCard === "google_ai_studio" ? "text-primary" : "text-muted-foreground")} />
                           <span className={cn("text-sm font-medium", activeCard === "google_ai_studio" ? "text-primary" : "text-foreground")}>Google AI Studio</span>
                         </div>
-                        <span className="text-[11px] text-muted-foreground">Your own Gemini key</span>
+                        <span className="text-2xs text-muted-foreground">Your own Gemini key</span>
                       </button>
 
                       {/* Custom BYOK */}
@@ -909,7 +909,7 @@ export function SettingsModal() {
                           <Key className={cn("w-3.5 h-3.5", activeCard === "byok" ? "text-primary" : "text-muted-foreground")} />
                           <span className={cn("text-sm font-medium", activeCard === "byok" ? "text-primary" : "text-foreground")}>OpenAI / Anthropic</span>
                         </div>
-                        <span className="text-[11px] text-muted-foreground">Your own API key</span>
+                        <span className="text-2xs text-muted-foreground">Your own API key</span>
                       </button>
 
                       {/* Local / Hosted LLM */}
@@ -926,7 +926,7 @@ export function SettingsModal() {
                           <Server className={cn("w-3.5 h-3.5", activeCard === "local_llm" ? "text-primary" : "text-muted-foreground")} />
                           <span className={cn("text-sm font-medium", activeCard === "local_llm" ? "text-primary" : "text-foreground")}>Local / Hosted LLM</span>
                         </div>
-                        <span className="text-[11px] text-muted-foreground">Ollama, LM Studio, etc.</span>
+                        <span className="text-2xs text-muted-foreground">Ollama, LM Studio, etc.</span>
                       </button>
                     </div>
                   </div>
@@ -951,11 +951,11 @@ export function SettingsModal() {
                         </div>
                       )}
                       {usageCountdown > 0 && usageData && usageData.hourlyUsed >= usageData.hourlyLimit && (
-                        <p className="text-[11px] text-amber-500">
+                        <p className="text-2xs text-warning">
                           Limit reached — resets in {Math.floor(usageCountdown / 60)}m {usageCountdown % 60}s
                         </p>
                       )}
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                      <p className="text-2xs text-muted-foreground leading-relaxed">
                         Uses Gemini Flash Lite. Switch to a paid provider for higher limits and model choice.
                       </p>
                     </div>
@@ -967,12 +967,12 @@ export function SettingsModal() {
                       {savedKeys["google_ai_studio"]?.hasKey ? (
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                            <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
                             <span className="text-sm text-foreground">API key saved</span>
                           </div>
                           <button
                             onClick={() => handleRemoveKey("google_ai_studio")}
-                            className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                            className="text-xs text-destructive/80 hover:text-destructive transition-colors"
                           >
                             Remove
                           </button>
@@ -1051,10 +1051,10 @@ export function SettingsModal() {
                         savedKeys["openai"]?.hasKey ? (
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                              <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
                               <span className="text-sm text-foreground">OpenAI key saved</span>
                             </div>
-                            <button onClick={() => handleRemoveKey("openai")} className="text-xs text-red-400 hover:text-red-300 transition-colors">Remove</button>
+                            <button onClick={() => handleRemoveKey("openai")} className="text-xs text-destructive/80 hover:text-destructive transition-colors">Remove</button>
                           </div>
                         ) : (
                           <div>
@@ -1080,10 +1080,10 @@ export function SettingsModal() {
                         savedKeys["anthropic"]?.hasKey ? (
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                              <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
                               <span className="text-sm text-foreground">Anthropic key saved</span>
                             </div>
-                            <button onClick={() => handleRemoveKey("anthropic")} className="text-xs text-red-400 hover:text-red-300 transition-colors">Remove</button>
+                            <button onClick={() => handleRemoveKey("anthropic")} className="text-xs text-destructive/80 hover:text-destructive transition-colors">Remove</button>
                           </div>
                         ) : (
                           <div>
@@ -1180,13 +1180,13 @@ export function SettingsModal() {
                       {savedKeys["local_llm"]?.endpointUrl ? (
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 min-w-0">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                            <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
                             <span className="text-sm text-foreground truncate">{savedKeys["local_llm"].endpointUrl}</span>
                             {savedKeys["local_llm"].hasKey && (
-                              <span className="text-[10px] text-emerald-500 font-medium px-1.5 py-0.5 rounded bg-emerald-500/10 shrink-0">key set</span>
+                              <span className="text-2xs text-success font-medium px-1.5 py-0.5 rounded bg-success/10 shrink-0">key set</span>
                             )}
                           </div>
-                          <button onClick={() => handleRemoveKey("local_llm")} className="text-xs text-red-400 hover:text-red-300 transition-colors shrink-0 ml-3">Remove</button>
+                          <button onClick={() => handleRemoveKey("local_llm")} className="text-xs text-destructive/80 hover:text-destructive transition-colors shrink-0 ml-3">Remove</button>
                         </div>
                       ) : (
                         <>
@@ -1243,8 +1243,8 @@ export function SettingsModal() {
                           </button>
                         </>
                       )}
-                      <p className="text-[11px] text-muted-foreground">
-                        Endpoint must expose an OpenAI-compatible <code className="text-[10px] bg-panel px-1 py-0.5 rounded">/v1/chat/completions</code> API.
+                      <p className="text-2xs text-muted-foreground">
+                        Endpoint must expose an OpenAI-compatible <code className="text-2xs bg-panel px-1 py-0.5 rounded">/v1/chat/completions</code> API.
                       </p>
                     </div>
                   )}
@@ -1263,7 +1263,7 @@ export function SettingsModal() {
               {activeTab === "data" && (
                 <section className="space-y-4">
                   <div className="p-4 rounded-xl bg-background border border-panel-border flex items-start gap-4">
-                    <div className="p-2 bg-emerald-500/10 text-emerald-500 rounded-lg shrink-0">
+                    <div className="p-2 bg-success/10 text-success rounded-lg shrink-0">
                       <Server className="w-5 h-5" />
                     </div>
                     <div>
@@ -1291,7 +1291,7 @@ export function SettingsModal() {
                   {securityMode === "idle" ? (
                     <>
                       <div className="p-4 rounded-xl bg-background border border-panel-border flex items-start gap-4">
-                        <div className={cn("p-2 rounded-lg shrink-0", vaultConfigured ? "bg-emerald-500/10 text-emerald-500" : "bg-muted-foreground/10 text-muted-foreground")}>
+                        <div className={cn("p-2 rounded-lg shrink-0", vaultConfigured ? "bg-success/10 text-success" : "bg-muted-foreground/10 text-muted-foreground")}>
                           <ShieldCheck className="w-5 h-5" />
                         </div>
                         <div>
@@ -1306,7 +1306,7 @@ export function SettingsModal() {
                       {vaultConfigured ? (
                         <button
                           onClick={() => { setSecurityMode("reset"); setSecurityStep("current"); setSecurityError(""); setSecurityFirstPin(""); setSecurityCurrentPin(""); }}
-                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500 hover:bg-amber-500/20 text-sm font-medium transition-colors"
+                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-warning/10 border border-warning/20 text-warning hover:bg-warning/20 text-sm font-medium transition-colors"
                         >
                           <KeyRound className="w-4 h-4" />
                           Reset Vault PIN
@@ -1314,7 +1314,7 @@ export function SettingsModal() {
                       ) : (
                         <button
                           onClick={() => { setSecurityMode("setup"); setSecurityStep("new"); setSecurityError(""); setSecurityFirstPin(""); }}
-                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 text-sm font-medium transition-colors"
+                          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-ai-accent/10 border border-ai-accent/20 text-ai-accent hover:bg-ai-accent/20 text-sm font-medium transition-colors"
                         >
                           <ShieldCheck className="w-4 h-4" />
                           Set Vault PIN
@@ -1387,7 +1387,7 @@ export function SettingsModal() {
                   )}
                   <button
                     onClick={logout}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 text-sm font-medium transition-colors"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive hover:bg-destructive/20 text-sm font-medium transition-colors"
                   >
                     <LogOut className="w-4 h-4" />
                     Sign out

@@ -240,7 +240,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             </button>
             <span className="text-sm truncate">{folder.name}</span>
             {isSmart && (
-              <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">
+              <span className="shrink-0 text-2xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">
                 smart
               </span>
             )}
@@ -248,7 +248,7 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
           {/* Touch: folder actions stay visible and 44px-tappable on coarse
               pointers instead of being hover-only (invisible/unreachable on touch). */}
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 coarse:opacity-100">
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 coarse:opacity-100">
             <button
               className="p-1.5 md:p-1 coarse:min-w-[44px] coarse:min-h-[44px] inline-flex items-center justify-center hover:bg-panel rounded-md transition-colors"
               onClick={e => { e.stopPropagation(); setEditingFolder(folder); }}
@@ -345,17 +345,17 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
               data-testid="nav-vault"
               className={cn(
                 "flex-1 flex items-center gap-3 px-3 py-2.5 md:py-2 rounded-lg text-sm",
-                "transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]",
+                "transition-all duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)]",
                 "active:scale-[0.97]",
                 activeFilter === "vault" && isVaultUnlocked
                   ? "bg-primary/10 text-primary font-medium"
                   : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
               )}
             >
-              <ShieldCheck className={cn("w-4 h-4", isVaultUnlocked && "text-indigo-400")} />
+              <ShieldCheck className={cn("w-4 h-4", isVaultUnlocked && "text-ai-accent")} />
               <span>Vault</span>
               {!vaultStatus?.isConfigured && (
-                <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-panel border border-panel-border text-muted-foreground">new</span>
+                <span className="ml-auto text-2xs px-1.5 py-0.5 rounded-full bg-panel border border-panel-border text-muted-foreground">new</span>
               )}
               {vaultStatus?.isConfigured && !isVaultUnlocked && (
                 <Lock className="ml-auto w-3 h-3 text-muted-foreground" />
@@ -547,7 +547,7 @@ function NavItem({ icon, label, active, onClick, testId }: { icon: React.ReactNo
       data-testid={testId}
       className={cn(
         "w-full flex items-center gap-3 py-2.5 md:py-2 px-3 rounded-lg text-sm relative",
-        "transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-expo)]",
+        "transition-colors duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)]",
         "active:scale-[0.97]",
         active ? "text-primary font-medium" : "text-muted-foreground hover:bg-panel-hover hover:text-foreground"
       )}

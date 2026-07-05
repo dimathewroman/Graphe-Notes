@@ -118,9 +118,9 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
   }, [mode, step, firstPin, currentPin, onConfirm, onVerifyCurrentPin]);
 
   const headerConfig = {
-    setup: { icon: <ShieldCheck className="w-5 h-5 text-indigo-500" />, bg: "bg-indigo-500/10 border-indigo-500/20", dotClass: "bg-indigo-500 border-indigo-500" },
-    unlock: { icon: <Lock className="w-5 h-5 text-amber-500" />, bg: "bg-amber-500/10 border-amber-500/20", dotClass: "bg-amber-500 border-amber-500" },
-    "change-password": { icon: <KeyRound className="w-5 h-5 text-amber-500" />, bg: "bg-amber-500/10 border-amber-500/20", dotClass: "bg-amber-500 border-amber-500" },
+    setup: { icon: <ShieldCheck className="w-5 h-5 text-ai-accent" />, bg: "bg-ai-accent/10 border-ai-accent/20", dotClass: "bg-ai-accent border-ai-accent" },
+    unlock: { icon: <Lock className="w-5 h-5 text-warning" />, bg: "bg-warning/10 border-warning/20", dotClass: "bg-warning border-warning" },
+    "change-password": { icon: <KeyRound className="w-5 h-5 text-warning" />, bg: "bg-warning/10 border-warning/20", dotClass: "bg-warning border-warning" },
   }[mode];
 
   const { title, subtitle } = getStepInfo();
@@ -142,10 +142,10 @@ export function VaultModal({ mode, onConfirm, onCancel, error: externalError, on
           <motion.div
             animate={unlockSuccess ? { scale: [1, 1.2, 1] } : { scale: 1 }}
             transition={anim.emphasisTransition}
-            className={cn("w-10 h-10 rounded-xl flex items-center justify-center border", unlockSuccess ? "bg-emerald-500/10 border-emerald-500/20" : headerConfig.bg)}
+            className={cn("w-10 h-10 rounded-xl flex items-center justify-center border", unlockSuccess ? "bg-success/10 border-success/20" : headerConfig.bg)}
           >
             {unlockSuccess
-              ? <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              ? <CheckCircle2 className="w-5 h-5 text-success" />
               : headerConfig.icon}
           </motion.div>
           <div>

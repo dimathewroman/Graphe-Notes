@@ -55,7 +55,7 @@ export function OverflowMenu({ note, onPin, onFav, onVaultToggle, onVersionHisto
         </DropdownMenuItem>
         {isMobile && (onPin || onFav) && <DropdownMenuSeparator className="bg-panel-border mx-2" />}
         <DropdownMenuItem onClick={onVaultToggle} className="gap-2.5 px-3 py-2.5">
-          <ShieldCheck className={cn("w-4 h-4", note?.vaulted && "fill-current text-indigo-400")} />
+          <ShieldCheck className={cn("w-4 h-4", note?.vaulted && "fill-current text-ai-accent")} />
           {note?.vaulted ? "Remove from Vault" : "Move to Vault"}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onVersionHistory} className={cn("gap-2.5 px-3 py-2.5", showVersionHistory && "text-primary")}>

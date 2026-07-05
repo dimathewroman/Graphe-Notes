@@ -64,7 +64,7 @@ function ImageUrlButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
         ref={btnRef}
         onClick={() => { setOpen(v => !v); setUrl(""); }}
         title="Insert image from URL"
-        className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${open ? " bg-primary/10 text-primary" : ""}`}
+        className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--motion-duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${open ? " bg-primary/10 text-primary" : ""}`}
       >
         <ImageIcon className="w-4 h-4" />
       </button>
@@ -163,7 +163,7 @@ function OverflowButton({
         onClick={() => setOpen(v => !v)}
         title="More formatting"
         data-testid="toolbar-overflow-btn"
-        className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${open ? " bg-primary/10 text-primary" : ""}`}
+        className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--motion-duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${open ? " bg-primary/10 text-primary" : ""}`}
       >
         <MoreHorizontal className="w-4 h-4" />
       </button>
@@ -176,7 +176,7 @@ function OverflowButton({
           onMouseDown={e => e.preventDefault()}
         >
           {/* Alignment */}
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Alignment</p>
+          <p className="text-2xs uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Alignment</p>
           <div className="flex gap-0.5 mb-2">
             <ToolbarButton command={() => { editor.chain().focus().setTextAlign("left").run(); setOpen(false); }} active={editor.isActive({ textAlign: "left" })} icon={<AlignLeft className="w-4 h-4" />} title="Align left" />
             <ToolbarButton command={() => { editor.chain().focus().setTextAlign("center").run(); setOpen(false); }} active={editor.isActive({ textAlign: "center" })} icon={<AlignCenter className="w-4 h-4" />} title="Align center" />
@@ -186,7 +186,7 @@ function OverflowButton({
           <div className="h-px bg-panel-border mx-1 mb-2" />
 
           {/* Text style extras */}
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Extras</p>
+          <p className="text-2xs uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Extras</p>
           <div className="flex gap-0.5 mb-2">
             <ToolbarButton command={() => { editor.chain().focus().toggleSuperscript().run(); setOpen(false); }} active={editor.isActive("superscript")} icon={<SuperscriptIcon className="w-4 h-4" />} title="Superscript" />
             <ToolbarButton command={() => { editor.chain().focus().toggleSubscript().run(); setOpen(false); }} active={editor.isActive("subscript")} icon={<SubscriptIcon className="w-4 h-4" />} title="Subscript" />
@@ -196,7 +196,7 @@ function OverflowButton({
           <div className="h-px bg-panel-border mx-1 mb-2" />
 
           {/* Table */}
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Table</p>
+          <p className="text-2xs uppercase tracking-wider text-muted-foreground/60 font-medium px-1 mb-1">Table</p>
           <div className="flex gap-0.5 mb-2">
             <ToolbarButton
               command={() => { editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(); setOpen(false); }}
@@ -331,7 +331,7 @@ export const EditorToolbar = memo(function EditorToolbar({
           ref={fontPickerBtnRef}
           onClick={() => setFontPickerOpen((v) => !v)}
           title="Font family"
-          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center text-sm font-medium${fontPickerOpen ? " bg-primary/10 text-primary" : ""}`}
+          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--motion-duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center text-sm font-medium${fontPickerOpen ? " bg-primary/10 text-primary" : ""}`}
         >
           Aa
         </button>
@@ -355,7 +355,7 @@ export const EditorToolbar = memo(function EditorToolbar({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => setColorPicker(colorPicker === "text" ? null : "text")}
           title="Text color"
-          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex flex-col items-center justify-center gap-0.5 py-1${colorPicker === "text" ? " bg-primary/10 text-primary" : ""}`}
+          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--motion-duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex flex-col items-center justify-center gap-0.5 py-1${colorPicker === "text" ? " bg-primary/10 text-primary" : ""}`}
         >
           <span className="text-sm font-bold leading-none">A</span>
           <div
@@ -375,7 +375,7 @@ export const EditorToolbar = memo(function EditorToolbar({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => setColorPicker(colorPicker === "highlight" ? null : "highlight")}
           title="Highlight color"
-          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${colorPicker === "highlight" ? " bg-primary/10 text-primary" : ""}${activeHighlightColor ? " text-foreground" : ""}`}
+          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--motion-duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${colorPicker === "highlight" ? " bg-primary/10 text-primary" : ""}${activeHighlightColor ? " text-foreground" : ""}`}
           style={activeHighlightColor ? { color: activeHighlightColor } : undefined}
         >
           <Highlighter className="w-4 h-4" />

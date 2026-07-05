@@ -324,7 +324,7 @@ export function ImageNodeView({ node, selected, deleteNode, updateAttributes }: 
     `absolute top-1/2 -translate-y-1/2 w-2 coarse:w-4 h-12 bg-primary/80 rounded cursor-ew-resize touch-none`,
     `transition-opacity duration-150`,
     side === "right" ? "right-0 rounded-l rounded-r-none" : "left-0 rounded-r rounded-l-none",
-    showHandles ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+    showHandles ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100",
   ].join(" ");
 
   return (

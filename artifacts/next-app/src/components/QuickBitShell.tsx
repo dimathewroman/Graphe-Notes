@@ -46,17 +46,17 @@ function formatExpiry(expiresAt: string | Date): { label: string; className: str
   const msLeft = new Date(expiresAt).getTime() - Date.now();
   const totalMinutes = msLeft / (1000 * 60);
   const totalHours = msLeft / (1000 * 60 * 60);
-  if (msLeft <= 0) return { label: "Expired", className: "text-red-500 font-medium" };
+  if (msLeft <= 0) return { label: "Expired", className: "text-destructive font-medium" };
   if (totalHours < 1) {
     const m = Math.ceil(totalMinutes);
-    return { label: `${m} minute${m !== 1 ? "s" : ""} left`, className: "text-red-500 font-medium" };
+    return { label: `${m} minute${m !== 1 ? "s" : ""} left`, className: "text-destructive font-medium" };
   }
   if (totalHours < 24) {
     const h = Math.ceil(totalHours);
-    return { label: `${h} hour${h !== 1 ? "s" : ""} left`, className: "text-red-500 font-medium" };
+    return { label: `${h} hour${h !== 1 ? "s" : ""} left`, className: "text-destructive font-medium" };
   }
   const d = Math.ceil(totalHours / 24);
-  const className = totalHours < 48 ? "text-amber-500" : "text-muted-foreground/70";
+  const className = totalHours < 48 ? "text-warning" : "text-muted-foreground/70";
   return { label: `${d} day${d !== 1 ? "s" : ""} left`, className };
 }
 
@@ -265,7 +265,7 @@ function ExpiredModal({
       <DialogContent showCloseButton={false} className="bg-panel border-panel-border rounded-2xl shadow-2xl max-w-sm p-5 sm:items-start">
         <DialogHeader>
           <div className="flex items-center gap-2">
-            <Zap className="w-4 h-4 text-red-500" />
+            <Zap className="w-4 h-4 text-destructive" />
             <DialogTitle className="text-base">This Quick Bit has expired</DialogTitle>
           </div>
           <DialogDescription>It will be permanently deleted if you exit.</DialogDescription>
@@ -714,7 +714,7 @@ export function QuickBitShell() {
 
         {/* Save status — icon-only on mobile */}
         <div className="flex items-center gap-1.5 text-xs font-mono text-muted-foreground shrink-0">
-          <span className={cn("inline-block w-1.5 h-1.5 rounded-full shrink-0", saveStatus === "saved" ? "bg-emerald-500" : saveStatus === "error" ? "bg-destructive" : "bg-amber-500 animate-pulse")} />
+          <span className={cn("inline-block w-1.5 h-1.5 rounded-full shrink-0", saveStatus === "saved" ? "bg-success" : saveStatus === "error" ? "bg-destructive" : "bg-warning animate-pulse")} />
           <span className="hidden md:inline">{saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Saving..."}</span>
         </div>
 
@@ -722,7 +722,7 @@ export function QuickBitShell() {
         <div className="flex items-center gap-1 shrink-0">
           <Clock className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />
           {isExpiredNow ? (
-            <button onClick={() => setExpiryPickerOpen(true)} ref={expiryBtnRef} className="text-xs text-red-500 font-medium">Expired</button>
+            <button onClick={() => setExpiryPickerOpen(true)} ref={expiryBtnRef} className="text-xs text-destructive font-medium">Expired</button>
           ) : (
             <button ref={expiryBtnRef} onClick={() => setExpiryPickerOpen(true)} className={cn("text-xs hover:opacity-80 transition-opacity whitespace-nowrap", expiry.className)}>
               {expiry.label}

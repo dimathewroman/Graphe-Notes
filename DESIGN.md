@@ -88,6 +88,15 @@ Warm off-white and stone. Same primary accent; surfaces use warm beige instead o
 
 These are overridden by colorblind mode selectors (see below). Always use `text-destructive`, `text-success`, `text-warning` rather than hardcoded color classes — colorblind remapping only works if you use these tokens.
 
+**Justified raw-palette exceptions.** A small set of usages intentionally keep raw Tailwind palette colors because they encode *identity*, not a success/warning/error *state* (so they must not be colorblind-remapped). These are the only permitted raw-palette usages in `src/components`:
+
+- **File-type icons** (`fileIcon()` in `AllAttachments.tsx` / `AttachmentPanel.tsx`) — PDF red, spreadsheet green, presentation orange, zip yellow. File-type identity.
+- **Favorite stars** (`text-yellow-500` on the `Star` icon in `NoteList`, `NoteHeader`, `OverflowMenu`) — the conventional gold favorite star; not a warning.
+- **Template category swatches** (`CATEGORY_COLORS` in `TemplatePickerModal.tsx`) — per-category identity colors (capture/plan/reflect/create/mine), analogous to color-picker swatches.
+- **Color-picker swatches** (`ColorPickerDropdown`) — the user is literally choosing a raw color.
+
+Everything else that signals a state uses the semantic tokens above.
+
 ### Colorblind Modes
 
 Set via `data-colorblind` attribute on `<html>`.
@@ -113,6 +122,8 @@ Accent (`--primary`, `#5B93E8`) is used surgically:
 - Focus rings
 
 More accent ≠ better. A single accent element per view is the target. The accent gradient (`bg-accent-gradient`) — `#5B93E8 → #9067EE` — is for covers and promotional surfaces only, not UI chrome.
+
+**Secondary AI/vault accent (`--ai-accent`, `#6366F1` indigo).** AI surfaces (the AI panel, selection menus, status indicator) and vault surfaces (vault icons, lock screen, setup) use a dedicated `--ai-accent` token so they read as their own "space", distinct from the primary periwinkle. Use `text-ai-accent` / `bg-ai-accent` (+ `/opacity` variants) and `bg-ai-accent-hover` for solid-button hovers — never a raw `indigo-*`/`violet-*` class. Because it's a token, a future Color Preset can recolor AI chrome intentionally rather than leaving a hardcoded indigo. (Exception: the `reflect` template-category swatch is decorative identity, not an AI surface.)
 
 ---
 
@@ -147,7 +158,8 @@ Major Third scale (ratio: 1.25) from 16px base:
 | H3 | 20px (text-xl) | ProseMirror h3 |
 | Body | 16px (text-base) | Default prose |
 | UI Small | 14px (text-sm) | Labels, list items, metadata |
-| UI Tiny | 12px (text-xs) | Timestamps, badge counts |
+| UI Tiny | 12px (text-xs) | Timestamps, labels |
+| UI Micro | 11px (`text-2xs`) | Badge counts, category chips, dense metadata — the smallest permitted tier |
 
 Heading weights: 700 (h1), 600 (h2), 500 (h3). Body: 400. UI labels: 400/500. Letter spacing: `tracking-tight` on headings.
 
@@ -170,7 +182,9 @@ All spacing is on an **8px base grid** with a 4px half-step for tight contexts.
 32px  — section-level breathing room
 ```
 
-Deviating from the grid requires a written reason. Use Tailwind's spacing scale which maps directly: `p-1` = 4px, `p-2` = 8px, `p-3` = 12px, `p-4` = 16px, `p-6` = 24px, `p-8` = 32px.
+A **2px sub-step** (`0.5` in Tailwind: `gap-0.5`, `p-0.5`, `m-0.5`) is blessed for the tightest icon/badge internals only — e.g. gaps inside a pill or between adjacent icon buttons. It is not a general-purpose spacing value; prefer the 4px half-step and 8px grid everywhere else.
+
+Deviating from the grid otherwise requires a written reason. Use Tailwind's spacing scale which maps directly: `p-0.5` = 2px, `p-1` = 4px, `p-2` = 8px, `p-3` = 12px, `p-4` = 16px, `p-6` = 24px, `p-8` = 32px.
 
 ### Three-Panel Layout
 
@@ -221,6 +235,8 @@ In light mode, `.luminance-border-top` renders no shadow — light mode uses sta
 | 12px | `rounded-xl` | Cards, panels, images |
 | 16px | `rounded-2xl` | Modals, large panels |
 | 9999px | `rounded-full` | Pills, avatar circles, scrollbar thumb |
+
+The scale is anchored to `--radius: 0.75rem` (12px) in `globals.css`. Note the Tailwind v4 defaults: bare `rounded` is **4px**, `rounded-md` is 6px, `rounded-lg` is 8px, `rounded-xl` is 12px, `rounded-2xl` is 16px — so the "tight 6px" tier is `rounded-md`, not bare `rounded`. A documented **2px micro-radius** (`border-radius: 2px`) is used for hairline internals like the find-highlight and scrollbar corners.
 
 No sharp corners (0px radius). All interactive elements have at minimum `rounded`.
 

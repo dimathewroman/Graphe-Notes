@@ -11,7 +11,7 @@ export function AiStatusIndicator({ aiLoading, aiError }: {
   return (
     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
       {aiLoading ? (
-        <div className="flex items-center gap-2.5 px-4 py-2.5 bg-popover border border-indigo-500/30 rounded-full shadow-xl text-indigo-400">
+        <div className="flex items-center gap-2.5 px-4 py-2.5 bg-popover border border-ai-accent/30 rounded-full shadow-xl text-ai-accent">
           <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
           <span className="text-xs font-medium whitespace-nowrap">AI is rewriting…</span>
         </div>

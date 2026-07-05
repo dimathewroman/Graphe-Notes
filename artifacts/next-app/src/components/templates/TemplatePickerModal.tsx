@@ -32,6 +32,9 @@ const CATEGORY_LABELS: Record<Category, string> = {
   mine: "Mine",
 };
 
+// Documented exception to the semantic-token sweep (D1): these are per-category
+// IDENTITY swatches (like the color picker), not success/warning/error states, so
+// they intentionally use raw palette colors and are not colorblind-remapped.
 const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
   capture: { bg: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-400" },
   plan: { bg: "bg-teal-500/10", text: "text-teal-600 dark:text-teal-400" },
@@ -351,7 +354,7 @@ export function TemplatePickerModal() {
                 {/* Header */}
                 <div className="px-5 pt-4 pb-3 shrink-0">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-[11px] font-medium text-muted-foreground tracking-[0.015em] uppercase">New {contextLabel} from template</p>
+                    <p className="text-2xs font-medium text-muted-foreground tracking-[0.015em] uppercase">New {contextLabel} from template</p>
                     {!isMobile && (
                       <button
                         onClick={closeTemplatePicker}
@@ -402,7 +405,7 @@ export function TemplatePickerModal() {
                   {/* User templates section */}
                   {hasUserTemplates && (activeCategory === "all" || activeCategory === "mine") && filteredUserTemplates.length > 0 && (
                     <div className="mb-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.015em] text-muted-foreground mb-2 mt-2">My Templates</p>
+                      <p className="text-2xs font-semibold uppercase tracking-[0.015em] text-muted-foreground mb-2 mt-2">My Templates</p>
                       <div className={cn("grid gap-3", isMobile ? "grid-cols-1" : "grid-cols-2")}>
                         {filteredUserTemplates.map((t, i) => (
                           <TemplateCard
@@ -425,7 +428,7 @@ export function TemplatePickerModal() {
                   {/* Preset templates section */}
                   {filteredPresets.length > 0 && activeCategory !== "mine" && (
                     <div>
-                      {hasUserTemplates && <p className="text-[11px] font-semibold uppercase tracking-[0.015em] text-muted-foreground mb-2 mt-2">Presets</p>}
+                      {hasUserTemplates && <p className="text-2xs font-semibold uppercase tracking-[0.015em] text-muted-foreground mb-2 mt-2">Presets</p>}
                       <div className={cn("grid gap-3", isMobile ? "grid-cols-1" : "grid-cols-2")}>
                         {filteredPresets.map((t, i) => (
                           <TemplateCard
@@ -449,7 +452,7 @@ export function TemplatePickerModal() {
                   {activeCategory === "mine" && filteredUserTemplates.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-12 text-center">
                       <p className="text-sm text-muted-foreground">No saved templates</p>
-                      <p className="text-[11px] text-muted-foreground mt-1">Save any note as a template from the editor menu</p>
+                      <p className="text-2xs text-muted-foreground mt-1">Save any note as a template from the editor menu</p>
                     </div>
                   )}
 
@@ -466,7 +469,7 @@ export function TemplatePickerModal() {
 
                   {/* No user templates tip */}
                   {!hasUserTemplates && (
-                    <p className="text-[11px] text-muted-foreground text-center mt-3">
+                    <p className="text-2xs text-muted-foreground text-center mt-3">
                       Tip: Save any note as a template from the editor menu.
                     </p>
                   )}
@@ -498,7 +501,7 @@ export function TemplatePickerModal() {
                         <h3 className="text-lg font-semibold truncate">{previewTemplate.name}</h3>
                       </div>
                       <span className={cn(
-                        "text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0",
+                        "text-2xs font-medium px-2 py-0.5 rounded-full shrink-0",
                         CATEGORY_COLORS[previewTemplate.category]?.bg ?? "bg-foreground/10",
                         CATEGORY_COLORS[previewTemplate.category]?.text ?? "text-muted-foreground"
                       )}>
@@ -607,7 +610,7 @@ function TemplateCard({
             <p className="text-[12px] text-muted-foreground truncate">{template.description}</p>
           )}
           <div className="flex justify-end mt-2">
-            <span className={cn("text-[11px] font-medium px-2 py-0.5 rounded-full", catColors.bg, catColors.text)}>
+            <span className={cn("text-2xs font-medium px-2 py-0.5 rounded-full", catColors.bg, catColors.text)}>
               {catLabel}
             </span>
           </div>
@@ -617,7 +620,7 @@ function TemplateCard({
               onClick={(e) => { e.stopPropagation(); onDeleteRequest(); }}
               className={cn(
                 "absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors",
-                isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100"
               )}
               aria-label="Delete template"
             >

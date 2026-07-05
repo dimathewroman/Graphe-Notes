@@ -253,7 +253,7 @@ export function VersionHistoryPanel({
                               {formatTimestamp(v.createdAt)}
                             </span>
                             {badge && (
-                              <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-muted-foreground bg-panel px-1.5 py-0.5 rounded">
+                              <span className="inline-flex items-center gap-0.5 text-2xs font-medium text-muted-foreground bg-panel px-1.5 py-0.5 rounded">
                                 {badge.icon}
                                 {badge.text}
                               </span>
@@ -292,7 +292,7 @@ export function VersionHistoryPanel({
                               </span>
                               <button
                                 onClick={(e) => { e.stopPropagation(); startEdit(v); }}
-                                className="opacity-0 group-hover:opacity-100 coarse:opacity-100 coarse:min-w-[44px] coarse:min-h-[44px] coarse:justify-center inline-flex items-center transition-opacity text-muted-foreground hover:text-foreground p-0.5"
+                                className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 coarse:opacity-100 coarse:min-w-[44px] coarse:min-h-[44px] coarse:justify-center inline-flex items-center transition-opacity text-muted-foreground hover:text-foreground p-0.5"
                                 title="Edit label"
                               >
                                 <Pencil className="w-3 h-3" />
@@ -301,7 +301,7 @@ export function VersionHistoryPanel({
                           ) : (
                             <button
                               onClick={(e) => { e.stopPropagation(); startEdit(v); }}
-                              className="mt-1 text-[12px] text-muted-foreground/70 hover:text-foreground inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 coarse:opacity-100 coarse:min-h-[44px] transition-opacity"
+                              className="mt-1 text-[12px] text-muted-foreground/70 hover:text-foreground inline-flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 coarse:opacity-100 coarse:min-h-[44px] transition-opacity"
                             >
                               <Pencil className="w-3 h-3" />
                               Add label
@@ -323,13 +323,13 @@ export function VersionHistoryPanel({
                             <div className="flex items-center gap-1">
                               <button
                                 onClick={(e) => { e.stopPropagation(); void handleDelete(v.id); }}
-                                className="text-[11px] font-medium px-2 py-0.5 rounded bg-destructive text-destructive-foreground hover:opacity-90"
+                                className="text-2xs font-medium px-2 py-0.5 rounded bg-destructive text-destructive-foreground hover:opacity-90"
                               >
                                 Delete
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
-                                className="text-[11px] text-muted-foreground hover:text-foreground"
+                                className="text-2xs text-muted-foreground hover:text-foreground"
                               >
                                 Cancel
                               </button>
@@ -339,7 +339,7 @@ export function VersionHistoryPanel({
                               onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(v.id); }}
                               className={cn(
                                 "p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-colors text-muted-foreground",
-                                isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                                isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100",
                               )}
                               title="Delete version"
                             >
@@ -350,7 +350,7 @@ export function VersionHistoryPanel({
                       </div>
 
                       {isSelected && (
-                        <div className="px-3 pb-2.5 -mt-1 flex items-center gap-1.5 text-[11px] text-primary">
+                        <div className="px-3 pb-2.5 -mt-1 flex items-center gap-1.5 text-2xs text-primary">
                           <RotateCcw className="w-3 h-3" />
                           Previewing in editor
                         </div>
@@ -363,7 +363,7 @@ export function VersionHistoryPanel({
           )}
         </div>
 
-        <div className="border-t border-panel-border p-3 text-[11px] text-muted-foreground text-center">
+        <div className="border-t border-panel-border p-3 text-2xs text-muted-foreground text-center">
           Up to 50 versions kept
         </div>
         </>

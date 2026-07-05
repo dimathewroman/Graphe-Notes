@@ -12,9 +12,21 @@
   }
 }
 
+/* Phase 6 (D3): key `dark:` off the APP theme, not the OS. This app is dark by
+   default (`:root`) and toggles light via a `.light` class on <html> (set by
+   next-themes / useAtmosphere). Tailwind's built-in `dark:` uses
+   `@media (prefers-color-scheme)`, so on OS-light + app-dark every `dark:` utility
+   silently failed to apply. Override it to match "html is not .light". */
+@custom-variant dark (&:where(:root:not(.light) *));
+
 @theme inline {
   --font-sans: var(--font-geist-sans), var(--font-inter), system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), monospace;
+
+  /* D5: one documented sub-xs tier (11px) for dense UI micro-labels — badge counts,
+     timestamps, category chips. Replaces the ad-hoc text-[8px..11px] arbitraries. */
+  --text-2xs: 0.6875rem; /* 11px */
+  --text-2xs--line-height: 1rem; /* 16px */
 
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -31,6 +43,12 @@
   --color-primary: hsl(var(--primary));
   --color-primary-foreground: hsl(var(--primary-foreground));
   --color-primary-hover: hsl(var(--primary-hover));
+
+  /* D2: dedicated AI/vault accent — distinct from --primary so AI surfaces keep
+     their own identity, but theme-responsive (a Color Preset can recolor it). */
+  --color-ai-accent: hsl(var(--ai-accent));
+  --color-ai-accent-hover: hsl(var(--ai-accent-hover));
+  --color-ai-accent-foreground: hsl(var(--ai-accent-foreground));
 
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
@@ -87,6 +105,10 @@
   --primary-hover: 216 78% 68%;
   --primary-foreground: 0 0% 100%;
 
+  --ai-accent: 239 84% 67%; /* #6366F1 — indigo; AI + vault surfaces */
+  --ai-accent-hover: 239 84% 72%;
+  --ai-accent-foreground: 0 0% 100%;
+
   --muted: 228 14% 18%;
   --muted-foreground: 249 3% 49%; /* #7B7A82 */
 
@@ -130,6 +152,10 @@
   --primary: 216 78% 63%; /* #5B93E8 */
   --primary-hover: 216 78% 58%;
   --primary-foreground: 0 0% 100%;
+
+  --ai-accent: 239 84% 63%; /* indigo, slightly deeper for light-bg contrast */
+  --ai-accent-hover: 239 84% 58%;
+  --ai-accent-foreground: 0 0% 100%;
 
   --muted: 36 10% 92%;
   --muted-foreground: 249 3% 49%; /* #7B7A82 */
@@ -577,6 +603,31 @@ html[data-motion="reduced"] .active-elevate-2:active {
 /* Minimal — no scale transform on press */
 html[data-motion="minimal"] .active-elevate-2:active {
   transform: none;
+}
+
+/* D6: tactile hover/press scale for icon buttons, gated per motion level so the
+   Vibe system's Reduced/Minimal fallback removes component transforms. Applied via
+   the `.tactile-scale` class on IconButton/ToolbarButton instead of inline
+   hover:scale utilities (which couldn't respond to data-motion). */
+.tactile-scale:hover { transform: scale(1.08); }
+.tactile-scale:active { transform: scale(0.95); }
+html[data-motion="reduced"] .tactile-scale:hover { transform: none; }
+html[data-motion="reduced"] .tactile-scale:active { transform: scale(0.98); }
+html[data-motion="minimal"] .tactile-scale:hover,
+html[data-motion="minimal"] .tactile-scale:active { transform: none; }
+
+/* D4: default keyboard focus ring for raw interactive elements that don't define
+   their own. Components with a custom focus-visible ring (IconButton, shadcn Button,
+   inputs) set `outline-none`, whose class-level specificity wins over this element
+   rule — so they keep their own ring and only unstyled raw buttons/links get this.
+   :focus-visible = keyboard/AT focus only, never on mouse click. */
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 /* ── Checkbox check draw-in animation ─────────────────────────────────────── */

@@ -30,9 +30,10 @@ export function ToolbarButton({
       className={cn(
         // Touch targets gate on pointer type, not viewport width (coarse = 44px HIG min).
         "min-w-0 min-h-0 p-1.5 coarse:min-w-[44px] coarse:min-h-[44px] coarse:p-2.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground shrink-0",
-        "transition-all duration-[var(--duration-micro)] ease-[var(--ease-out-expo)] hover:scale-[1.08] active:scale-[0.95]",
+        // D6: tactile-scale is motion-level-gated in globals.css (no transform at minimal).
+        "transition-all duration-[var(--motion-duration-micro)] ease-[var(--ease-out-expo)] tactile-scale",
         "data-[state=on]:bg-primary/10 data-[state=on]:text-primary",
-        disabled && "opacity-30 cursor-not-allowed pointer-events-none hover:scale-100"
+        disabled && "opacity-30 cursor-not-allowed pointer-events-none"
       )}
     >
       {icon}

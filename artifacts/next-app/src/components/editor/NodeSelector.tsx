@@ -111,7 +111,7 @@ export function NodeSelector({
           data-testid="toolbar-node-selector-btn"
           title="Turn into…"
           onMouseDown={(e) => e.preventDefault()}
-          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-1.5 md:px-1 py-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center gap-0.5${open ? " bg-primary/10 text-primary" : ""}`}
+          className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-1.5 md:px-1 py-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--motion-duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center gap-0.5${open ? " bg-primary/10 text-primary" : ""}`}
         >
           <span className="flex items-center justify-center w-4 h-4">
             {activeType.icon}

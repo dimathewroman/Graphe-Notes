@@ -507,7 +507,7 @@ export function NoteList() {
             )}
             <h2 className="text-lg font-semibold tracking-tight truncate">{listTitle}</h2>
             {isFolderSmart && (
-              <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">smart</span>
+              <span className="shrink-0 text-2xs px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 font-medium">smart</span>
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -521,7 +521,7 @@ export function NoteList() {
               </IconButton>
               {showSortMenu && (
                 <div className="absolute right-0 top-full mt-1 z-40 min-w-[210px] bg-popover border border-panel-border rounded-lg shadow-xl py-1">
-                  <p className="px-3 py-1.5 text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Sort by</p>
+                  <p className="px-3 py-1.5 text-2xs text-muted-foreground font-semibold uppercase tracking-wider">Sort by</p>
                   {SORT_OPTIONS.map(opt => (
                     <button
                       key={`${opt.sortBy}-${opt.sortDir}`}
@@ -792,7 +792,7 @@ export function NoteList() {
               {contextMenu.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {contextMenu.tags.map(tag => (
-                    <span key={tag} className="group/tag flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary border border-primary/20">
+                    <span key={tag} className="group/tag flex items-center gap-0.5 px-2 py-0.5 rounded-full text-2xs bg-primary/10 text-primary border border-primary/20">
                       <Hash className="w-2 h-2" />
                       {tag}
                       <button onClick={() => removeTagFromNote(tag)} className="ml-0.5 hover:text-destructive transition-colors">
@@ -851,7 +851,7 @@ export function NoteList() {
             <>
               <div className="h-px bg-panel-border mx-2 my-1" />
               <ContextMenuItem
-                icon={<ShieldCheck className={cn("w-4 h-4", contextMenu.vaulted && "text-indigo-400")} />}
+                icon={<ShieldCheck className={cn("w-4 h-4", contextMenu.vaulted && "text-ai-accent")} />}
                 label={contextMenu.vaulted ? "Remove from Vault" : "Move to Vault"}
                 testId="context-menu-vault"
                 onClick={() => {
@@ -916,8 +916,12 @@ const NoteGalleryItem = memo(function NoteGalleryItem({
       style={anim.cardExitStyle}
       onClick={() => onSelect(note.id)}
       onContextMenu={e => onContextMenu(e, note)}
+      // D4: keyboard-operable card — Tab reaches it, Enter/Space selects it.
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(note.id); } }}
+      role="button"
+      tabIndex={0}
       className={cn(
-        "rounded-lg cursor-pointer border transition-all duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden",
+        "rounded-lg cursor-pointer border transition-all duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)] group overflow-hidden",
         anim.useScale && "hover:-translate-y-0.5 active:scale-[0.98]",
         isSelected
           ? "bg-primary/10 border-primary/30 shadow-sm"
@@ -940,7 +944,7 @@ const NoteGalleryItem = memo(function NoteGalleryItem({
         <div className="flex items-start justify-between mb-1 gap-1">
           <h3 className="font-semibold text-sm text-foreground/90 flex-1 min-w-0 line-clamp-2 leading-snug">
             {note.pinned && <Pin className="inline-block w-2.5 h-2.5 mr-0.5 text-primary fill-primary align-text-bottom" />}
-            {note.vaulted && <ShieldCheck className="inline-block w-2.5 h-2.5 mr-0.5 text-indigo-400 align-text-bottom" />}
+            {note.vaulted && <ShieldCheck className="inline-block w-2.5 h-2.5 mr-0.5 text-ai-accent align-text-bottom" />}
             {note.title || "Untitled Note"}
           </h3>
           {/* Smaller touch target in gallery cards — 44px is too large for a narrow card */}
@@ -948,7 +952,7 @@ const NoteGalleryItem = memo(function NoteGalleryItem({
             onClick={e => { e.stopPropagation(); onContextMenu(e, note); }}
             className={cn(
               "rounded-md hover:bg-panel-border transition-all shrink-0 self-start",
-              bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-60 p-1"
+              bp === "desktop" ? "opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5" : "opacity-60 p-1"
             )}
           >
             <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
@@ -982,8 +986,12 @@ const NoteListItem = memo(function NoteListItem({
       style={anim.cardExitStyle}
       onClick={() => onSelect(note.id)}
       onContextMenu={e => onContextMenu(e, note)}
+      // D4: keyboard-operable card — Tab reaches it, Enter/Space selects it.
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(note.id); } }}
+      role="button"
+      tabIndex={0}
       className={cn(
-        "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
+        "p-3 rounded-lg cursor-pointer transition-colors duration-[var(--motion-duration-fast)] ease-[var(--ease-out-expo)] group relative h-[88px] flex flex-col",
         anim.useScale && "hover:-translate-y-[1px] active:scale-[0.98]",
         isSelected
           ? "bg-primary/10 border-l-2 border-l-primary border-y border-y-transparent border-r border-r-transparent"
@@ -996,14 +1004,14 @@ const NoteListItem = memo(function NoteListItem({
           isSelected ? "text-foreground" : "text-foreground/90"
         )}>
           {note.pinned && <Pin className="w-3 h-3 shrink-0 text-primary fill-primary" />}
-          {note.vaulted && <ShieldCheck className="w-3 h-3 shrink-0 text-indigo-400" />}
+          {note.vaulted && <ShieldCheck className="w-3 h-3 shrink-0 text-ai-accent" />}
           {note.title || "Untitled Note"}
         </h3>
         <div className="flex items-center gap-1 shrink-0">
           {note.favorite && <Star className="w-3 h-3 fill-current text-yellow-500 opacity-70" />}
           <button
             onClick={e => { e.stopPropagation(); onContextMenu(e, note); }}
-            className={cn("rounded-md hover:bg-panel-border transition-all", bp === "desktop" ? "opacity-0 group-hover:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}
+            className={cn("rounded-md hover:bg-panel-border transition-all", bp === "desktop" ? "opacity-0 group-hover:opacity-100 focus-within:opacity-100 p-0.5" : "opacity-70 min-w-[44px] min-h-[44px] flex items-center justify-center p-2")}
             title="Options"
           >
             <MoreVertical className="w-3.5 h-3.5 text-muted-foreground" />
@@ -1018,11 +1026,11 @@ const NoteListItem = memo(function NoteListItem({
         {note.tags && note.tags.length > 0 && (
           <div className="flex gap-1 overflow-hidden">
             {note.tags.slice(0, 2).map(tag => (
-              <span key={tag} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/8 text-primary border border-primary/15 truncate max-w-[60px]">
+              <span key={tag} className="text-2xs px-1.5 py-0.5 rounded-full bg-primary/8 text-primary border border-primary/15 truncate max-w-[60px]">
                 #{tag}
               </span>
             ))}
-            {note.tags.length > 2 && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-panel text-muted-foreground">+{note.tags.length - 2}</span>}
+            {note.tags.length > 2 && <span className="text-2xs px-1.5 py-0.5 rounded-full bg-panel text-muted-foreground">+{note.tags.length - 2}</span>}
           </div>
         )}
       </div>

@@ -14,6 +14,8 @@ import {
   type AttachmentRecord,
 } from "@/hooks/use-attachments";
 
+// Documented exception to the semantic-token sweep (D1): file-TYPE identity colors
+// (PDF red, sheet green, etc.), not success/warning/error states — raw palette by design.
 function fileIcon(mimeType: string) {
   if (mimeType === "application/pdf") return <FileText className="w-5 h-5 text-red-400 shrink-0" />;
   if (mimeType.includes("wordprocessingml")) return <FileText className="w-5 h-5 text-blue-400 shrink-0" />;
@@ -80,7 +82,7 @@ function AttachmentCard({
         <p className="text-xs text-muted-foreground">{formatBytes(attachment.fileSize)}</p>
       </div>
       {/* Touch: download/delete stay visible + 44px-tappable on coarse pointers. */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 coarse:opacity-100 transition-opacity shrink-0">
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 coarse:opacity-100 transition-opacity shrink-0">
         <button
           onClick={handleDownload}
           title="Download"

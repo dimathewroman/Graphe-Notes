@@ -217,7 +217,7 @@ export function RecentlyDeletedDetail() {
                 onClick={handleRestore}
                 disabled={restoreMut.isPending}
                 title="Restore note"
-                className="hover:text-emerald-500 hover:bg-emerald-500/10"
+                className="hover:text-success hover:bg-success/10"
               >
                 <RotateCcw className="w-4 h-4" />
               </IconButton>
@@ -266,7 +266,7 @@ export function RecentlyDeletedDetail() {
       </header>
 
       {/* Read-only banner */}
-      <div className="px-4 py-2.5 border-b border-panel-border bg-amber-500/5 flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400 shrink-0">
+      <div className="px-4 py-2.5 border-b border-panel-border bg-warning/5 flex items-center gap-2 text-xs text-warning shrink-0">
         <AlertCircle className="w-3.5 h-3.5 shrink-0" />
         <span>This note is in Recently Deleted. Restore it to edit again.</span>
       </div>
@@ -320,7 +320,7 @@ export function RecentlyDeletedDetail() {
           <button
             onClick={handleRestore}
             disabled={restoreMut.isPending}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors text-sm font-medium disabled:opacity-50"
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-success/40 text-success hover:bg-success/10 transition-colors text-sm font-medium disabled:opacity-50"
           >
             <RotateCcw className="w-4 h-4" />
             Restore

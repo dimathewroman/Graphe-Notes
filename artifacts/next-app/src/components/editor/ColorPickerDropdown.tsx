@@ -321,7 +321,7 @@ export function ColorPickerDropdown({ type, editor, onClose, triggerRef }: Color
       )}
 
       {/* Grayscale row */}
-      <p className="text-[10px] text-muted-foreground mb-1.5 font-medium uppercase tracking-wide">Grayscale</p>
+      <p className="text-2xs text-muted-foreground mb-1.5 font-medium uppercase tracking-wide">Grayscale</p>
       <div className="flex gap-1.5 mb-2">
         {GRAYSCALE.map((c) => (
           <Swatch
@@ -335,7 +335,7 @@ export function ColorPickerDropdown({ type, editor, onClose, triggerRef }: Color
       </div>
 
       {/* Rainbow row */}
-      <p className="text-[10px] text-muted-foreground mb-1.5 font-medium uppercase tracking-wide">Colors</p>
+      <p className="text-2xs text-muted-foreground mb-1.5 font-medium uppercase tracking-wide">Colors</p>
       <div className="flex gap-1.5 mb-2">
         {rainbow.map((c) => (
           <Swatch

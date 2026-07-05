@@ -369,7 +369,7 @@ export function SlashCommandMenu({ editor }: SlashCommandMenuProps) {
           style={{ top: position.top, left: position.left }}
           data-testid="slash-command-menu"
         >
-          <p className="px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="px-3 py-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
             {state.query ? `"${state.query}"` : "Commands"}
           </p>
           <div className="max-h-64 overflow-y-auto">

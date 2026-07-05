@@ -273,27 +273,27 @@ export function RecentlyDeleted() {
                 >
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <h3 className="font-medium truncate text-sm text-foreground/90 flex items-center gap-1.5">
-                      {note.vaulted && <ShieldCheck className="w-3 h-3 shrink-0 text-indigo-400" />}
+                      {note.vaulted && <ShieldCheck className="w-3 h-3 shrink-0 text-ai-accent" />}
                       {note.title || "Untitled Note"}
                     </h3>
                     {/* Badge / type indicator */}
                     {note.vaulted ? (
-                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] border border-indigo-400/30 text-indigo-400">
+                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs border border-ai-accent/30 text-ai-accent">
                         <Lock className="w-2.5 h-2.5" />
                         Vault
                       </span>
                     ) : isQb ? (
-                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500/10 border border-amber-500/30 text-amber-500">
+                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs bg-warning/10 border border-warning/30 text-warning">
                         <ZapOff className="w-2.5 h-2.5" />
                         Expired
                       </span>
                     ) : (
-                      <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] bg-muted text-muted-foreground border border-panel-border">
+                      <span className="shrink-0 px-1.5 py-0.5 rounded-full text-2xs bg-muted text-muted-foreground border border-panel-border">
                         Deleted
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] text-muted-foreground/70 font-mono">
+                  <p className="text-2xs text-muted-foreground/70 font-mono">
                     {days} day{days !== 1 ? "s" : ""} remaining
                   </p>
                 </div>

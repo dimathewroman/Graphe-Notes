@@ -72,7 +72,7 @@ export function SaveAsTemplateDialog({
         const hadImages = hadImagesRef.current;
         toast.success(hadImages ? "Template saved. Images were not included since templates are text only." : "Template saved", {
           duration: hadImages ? 4000 : 3000,
-          icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
+          icon: <CheckCircle2 className="w-4 h-4 text-success" />,
         });
       },
     },
@@ -89,7 +89,7 @@ export function SaveAsTemplateDialog({
       closeSaveAsTemplate();
       toast.success("Template saved", {
         duration: 3000,
-        icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
+        icon: <CheckCircle2 className="w-4 h-4 text-success" />,
       });
       return;
     }

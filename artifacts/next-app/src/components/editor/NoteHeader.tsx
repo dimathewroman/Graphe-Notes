@@ -107,7 +107,7 @@ export const NoteHeader = memo(function NoteHeader({
           }
           className="flex items-center gap-2 text-xs font-mono text-muted-foreground"
         >
-          <span className={cn("inline-block w-1.5 h-1.5 rounded-full", saveStatus === "saved" ? "bg-emerald-500" : saveStatus === "error" ? "bg-destructive" : "bg-amber-500 animate-pulse")} />
+          <span className={cn("inline-block w-1.5 h-1.5 rounded-full", saveStatus === "saved" ? "bg-success" : saveStatus === "error" ? "bg-destructive" : "bg-warning animate-pulse")} />
           {saveStatus === "saved" ? "Saved" : saveStatus === "error" ? "Save failed" : "Saving..."}
           {bp === "desktop" && note && <span className="ml-2 border-l border-panel-border pl-2">Updated {formatDate(note.updatedAt ?? "")}</span>}
         </motion.div>
@@ -139,7 +139,7 @@ export const NoteHeader = memo(function NoteHeader({
               onClick={onVaultToggle}
               active={note?.vaulted ?? false}
               title={note?.vaulted ? "Remove from vault" : "Move to vault"}
-              className={note?.vaulted ? "text-indigo-400" : ""}
+              className={note?.vaulted ? "text-ai-accent" : ""}
             >
               <ShieldCheck className={cn("w-4 h-4", note?.vaulted && "fill-current")} />
             </IconButton>

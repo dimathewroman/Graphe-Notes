@@ -55,7 +55,7 @@ export function WordCountPopover({ editor }: { editor: Editor | null }) {
           onClick={() => refresh()}
           title="Word count"
           className={cn(
-            "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center",
+            "min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--motion-duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center",
             open && "bg-panel text-primary"
           )}
         >
@@ -67,7 +67,7 @@ export function WordCountPopover({ editor }: { editor: Editor | null }) {
         sideOffset={6}
         className="w-48 p-3 bg-popover border-panel-border rounded-xl shadow-2xl luminance-border-top"
       >
-        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">
+        <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
           {counts.isSelection ? "Selection" : "Document"}
         </p>
         <div className="space-y-1.5">

@@ -202,7 +202,7 @@ export function MobileSelectionMenu({
               <ArrowLeft className="w-3.5 h-3.5 text-muted-foreground" />
             </button>
             <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+              <Sparkles className="w-3.5 h-3.5 text-ai-accent" />
               Writing Tools
             </span>
           </div>
@@ -218,7 +218,7 @@ export function MobileSelectionMenu({
                 className={cn(
                   "flex items-center justify-between w-full px-3 py-2.5 rounded-lg text-sm transition-colors",
                   expandedGroup === group.label
-                    ? "bg-indigo-500/10 text-indigo-400"
+                    ? "bg-ai-accent/10 text-ai-accent"
                     : "text-foreground hover:bg-panel"
                 )}
               >
@@ -243,7 +243,7 @@ export function MobileSelectionMenu({
                             className={cn(
                               "flex items-center justify-between w-full px-2 py-2 rounded-lg text-xs transition-colors",
                               expandedAction === action.id
-                                ? "bg-indigo-500/10 text-indigo-400"
+                                ? "bg-ai-accent/10 text-ai-accent"
                                 : "text-muted-foreground hover:bg-panel hover:text-foreground"
                             )}
                           >
@@ -265,12 +265,12 @@ export function MobileSelectionMenu({
                                         onChange={(e) => setCustomText(e.target.value)}
                                         onKeyDown={(e) => { if (e.key === "Enter") handleCustomSubmit(preset.id); }}
                                         placeholder="Type instruction..."
-                                        className="flex-1 bg-transparent border border-panel-border rounded px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-indigo-500 min-w-[120px]"
+                                        className="flex-1 bg-transparent border border-panel-border rounded px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-ai-accent min-w-[120px]"
                                         autoFocus
                                       />
                                       <button
                                         onClick={() => handleCustomSubmit(preset.id)}
-                                        className="p-1 rounded hover:bg-indigo-500/10 text-indigo-400"
+                                        className="p-1 rounded hover:bg-ai-accent/10 text-ai-accent"
                                       >
                                         <Check className="w-3 h-3" />
                                       </button>
@@ -350,7 +350,7 @@ export function MobileSelectionMenu({
           <div className="w-px h-5 bg-panel-border mx-0.5 shrink-0" />
           <button
             onClick={() => setShowWritingTools(true)}
-            className="flex items-center justify-center p-2 rounded-lg text-indigo-400 hover:bg-indigo-500/10 transition-colors min-h-[36px] min-w-[36px] shrink-0"
+            className="flex items-center justify-center p-2 rounded-lg text-ai-accent hover:bg-ai-accent/10 transition-colors min-h-[36px] min-w-[36px] shrink-0"
             title="Writing Tools"
           >
             <Sparkles className="w-4 h-4" />

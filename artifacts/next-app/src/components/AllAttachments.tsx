@@ -17,6 +17,8 @@ import { useAppStore } from "@/store";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { ScrollArea } from "./ui/scroll-area";
 
+// Documented exception to the semantic-token sweep (D1): file-TYPE identity colors
+// (PDF red, sheet green, etc.), not success/warning/error states — raw palette by design.
 function fileIcon(mimeType: string) {
   if (isImageType(mimeType)) return <ImageIcon className="w-5 h-5 text-sky-400 shrink-0" />;
   if (mimeType === "application/pdf") return <FileText className="w-5 h-5 text-red-400 shrink-0" />;
@@ -92,7 +94,7 @@ function AttachmentRow({ attachment, onDeleted }: { attachment: AttachmentRecord
         </div>
       </div>
       {/* Touch: download/delete stay visible + 44px-tappable on coarse pointers. */}
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 coarse:opacity-100 transition-opacity shrink-0 mt-0.5">
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 coarse:opacity-100 transition-opacity shrink-0 mt-0.5">
         <button
           onClick={handleDownload}
           title="Download"
