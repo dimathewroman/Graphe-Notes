@@ -350,6 +350,7 @@ export const EditorToolbar = memo(function EditorToolbar({
       <div className="relative shrink-0">
         <button
           ref={textColorBtnRef}
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => setColorPicker(colorPicker === "text" ? null : "text")}
           title="Text color"
           className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 px-2 md:px-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex flex-col items-center justify-center gap-0.5 py-1${colorPicker === "text" ? " bg-primary/10 text-primary" : ""}`}
@@ -369,6 +370,7 @@ export const EditorToolbar = memo(function EditorToolbar({
       <div className="relative shrink-0">
         <button
           ref={highlightBtnRef}
+          onMouseDown={(e) => e.preventDefault()}
           onClick={() => setColorPicker(colorPicker === "highlight" ? null : "highlight")}
           title="Highlight color"
           className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${colorPicker === "highlight" ? " bg-primary/10 text-primary" : ""}${activeHighlightColor ? " text-foreground" : ""}`}
@@ -380,8 +382,6 @@ export const EditorToolbar = memo(function EditorToolbar({
           <ColorPickerDropdown type="highlight" editor={editor} onClose={() => setColorPicker(null)} triggerRef={highlightBtnRef} />
         )}
       </div>
-
-      <div className="w-px h-5 bg-panel-border mx-1.5 shrink-0" />
 
       {/* Alignment: inline on desktop, overflow on tablet */}
       {!isTablet && (

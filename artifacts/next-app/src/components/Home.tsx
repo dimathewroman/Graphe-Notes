@@ -179,11 +179,13 @@ export default function Home() {
             } catch { /* PostHog may not be initialized */ }
           }}
           direction="left"
+          dismissible={false}
+          noBodyStyles
         >
           <DrawerPortal>
-            <DrawerOverlay />
+            <DrawerOverlay onClick={() => setSidebarOpen(false)} />
             <DrawerPrimitive
-              className="fixed inset-y-0 left-0 z-50 w-[280px] bg-panel border-r border-panel-border shadow-2xl"
+              className="fixed top-0 left-0 z-50 w-[280px] min-h-[100lvh] bg-panel border-r border-panel-border shadow-2xl"
             >
               <SidebarContent onNavigate={() => setSidebarOpen(false)} />
             </DrawerPrimitive>

@@ -196,22 +196,31 @@
   -webkit-touch-callout: none;
 }
 
-/* Suppress the browser's native ::selection inside ProseMirror so it does not
-   stack with the TipTap Selection decoration below. The native rectangle covers
-   the full line-height box; the decoration only covers inline content — when both
-   are active simultaneously the inter-line leading zone receives a doubled
-   background, producing a visibly brighter band between adjacent selected lines. */
+/* Native text selection inside ProseMirror — matches the TipTap Selection
+   decoration color so both layers look consistent. On mobile, native touch-handle
+   selection only fires ::selection (TipTap's decorator may lag), so this must be
+   visible. Keeping them the same color avoids any doubling artifact. */
 .ProseMirror ::selection {
-  background-color: transparent;
+  background-color: hsl(var(--primary) / 0.25);
   color: inherit;
 }
 
-/* @tiptap/extensions Selection — sole source of selection highlighting in the
-   editor. Rendered as inline decoration spans on selected text nodes.
-   Because ::selection is suppressed above there is no stacking; 0.25 is the
-   full intended opacity for a single-layer brand-colour highlight. */
+/* @tiptap/extensions Selection decoration — applied on top of ::selection for
+   cross-browser consistency and to cover node selections that ::selection misses. */
 .ProseMirror .selection {
   background-color: hsl(var(--primary) / 0.25);
+}
+
+/* TipTap Highlight — ensure <mark> elements are visible in both themes.
+   Tailwind's preflight or Typography plugin may reset browser-default yellow;
+   TipTap multicolor applies background-color as an inline style (which wins
+   over this rule), so this only affects bare <mark> with no data-color. */
+.ProseMirror mark {
+  border-radius: 2px;
+  padding: 0.05em 0.1em;
+}
+.ProseMirror mark:not([data-color]) {
+  background-color: rgba(254, 240, 138, 0.55);
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {

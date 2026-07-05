@@ -65,7 +65,7 @@ test.describe("Editor enhancements", () => {
     // Convert H1 → Bullet list
     await page.getByTestId("toolbar-node-selector-btn").click();
     await page.getByRole("menuitem", { name: "Bullet list" }).click();
-    await expect(page.locator(".ProseMirror ul li")).toBeVisible();
+    await expect(page.locator(".ProseMirror ul li").first()).toBeVisible();
 
     // Convert Bullet list → Toggle block
     await page.getByTestId("toolbar-node-selector-btn").click();
@@ -85,6 +85,8 @@ test.describe("Editor enhancements", () => {
     await page.getByTestId("toolbar-node-selector-btn").click();
     await page.getByRole("menuitem", { name: "Toggle" }).click();
     await expect(page.locator(".ProseMirror [data-type='details']")).toBeVisible();
+    // Wait for the Radix dismissable layer to fully detach before clicking in the editor
+    await expect(page.locator('[role="menu"]')).not.toBeAttached();
 
     // Type summary text
     await page.keyboard.type("Toggle summary");
@@ -116,7 +118,7 @@ test.describe("Editor enhancements", () => {
     const imageBtn = page.locator('button[title="Insert image from URL"]');
     await imageBtn.click();
     await page.getByPlaceholder("https://…").fill(TEST_IMG);
-    await page.getByRole("button", { name: "Insert" }).click();
+    await page.getByRole("button", { name: "Insert", exact: true }).click();
 
     // Wait for the image to appear in the editor
     const img = page.locator(".ProseMirror img").first();
