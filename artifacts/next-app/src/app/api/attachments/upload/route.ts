@@ -31,6 +31,24 @@ function isHeicInput(mimeType: string, filename: string, buf: Buffer): boolean {
   return hasHeicMagicBytes(buf);
 }
 
+/**
+ * Validate that the file's magic bytes match its declared image content-type,
+ * blocking content-type spoofing (§S) — e.g. an HTML/SVG payload uploaded as
+ * image/png. Only the raster types we can cheaply fingerprint are enforced here;
+ * other allowed image types (webp/avif/gif/heic) are validated downstream by
+ * sharp/heic-convert, which reject non-images.
+ */
+function imageMagicMatches(mimeType: string, buf: Buffer): boolean {
+  if (mimeType === "image/jpeg") {
+    return buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+  }
+  if (mimeType === "image/png") {
+    const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    return buf.length >= 8 && sig.every((b, i) => buf[i] === b);
+  }
+  return true;
+}
+
 type MasterFormat = "jpg" | "png" | "gif" | "avif";
 
 /**
@@ -174,6 +192,14 @@ export async function POST(request: NextRequest) {
 
     const arrayBuffer = await file.arrayBuffer();
     const uploadBuffer = Buffer.from(arrayBuffer);
+
+    // Reject files whose bytes don't match their declared image type (§S).
+    if (!imageMagicMatches(mimeType, uploadBuffer)) {
+      return NextResponse.json(
+        { error: "This file's contents don't match its type." },
+        { status: 422 },
+      );
+    }
 
     // Non-image files: single-file upload, no master/proxy split
     if (!IMAGE_MIME_TYPES.has(mimeType)) {

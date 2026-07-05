@@ -15,6 +15,7 @@ import { ArrowLeft, RotateCcw, FileText, GitCompare } from "lucide-react";
 // in tsconfig, so the default import gives us the constructor.
 import DiffMatchPatch from "diff-match-patch";
 import { cn } from "@/lib/utils";
+import { sanitizeNoteHtml } from "@/lib/sanitize-html";
 import type { NoteVersionFull } from "@/hooks/use-note-versions";
 
 interface Props {
@@ -206,10 +207,9 @@ export function VersionPreviewArea({
           ) : (
             <div
               className="prose prose-invert max-w-none"
-              // Version content is HTML produced by our own TipTap editor and
-              // already lived in the user's note — rendering it as-is is the
-              // whole point of "preview".
-              dangerouslySetInnerHTML={{ __html: version.content }}
+              // Version content is HTML from our TipTap editor, but it can carry
+              // pasted/user-authored payloads — sanitize before rendering (§S XSS).
+              dangerouslySetInnerHTML={{ __html: sanitizeNoteHtml(version.content) }}
             />
           )}
         </div>

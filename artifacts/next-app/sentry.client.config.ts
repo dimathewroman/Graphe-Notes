@@ -3,11 +3,13 @@
 // https://docs.sentry.io/platforms/javascript/guides/nextjs/
 
 import * as Sentry from "@sentry/nextjs";
+import { scrubSecretsFromBreadcrumb } from "@/lib/sentry-scrub";
 
 Sentry.init({
   // DSN is public-safe (see .env.example). Hardcoded fallback ensures events
   // reach Sentry even if NEXT_PUBLIC_SENTRY_DSN isn't baked into the build.
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN ?? "https://d68d92514a7a23c735bc9d157cad3b39@o4511108609605632.ingest.us.sentry.io/4511108611178496",
+  beforeBreadcrumb: scrubSecretsFromBreadcrumb,
 
   integrations: [Sentry.replayIntegration()],
 
@@ -21,5 +23,6 @@ Sentry.init({
   replaysSessionSampleRate: 0.1,
   replaysOnErrorSampleRate: 1.0,
 
-  sendDefaultPii: true,
+  // Do NOT send user PII by default (§S).
+  sendDefaultPii: false,
 });
