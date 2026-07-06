@@ -151,6 +151,7 @@ export function AiSelectionMenu({
         {actionGroups.map((group) => (
           <div key={group.label} className="relative">
             <button
+              data-testid={`ai-group-${group.label.replace(/\s+/g, "-").toLowerCase()}`}
               onClick={() => {
                 setExpandedGroup(expandedGroup === group.label ? null : group.label);
                 setExpandedAction(null);
@@ -276,6 +277,7 @@ export function AiSelectionMenu({
                       </>
                     ) : (
                       <button
+                        data-testid={`ai-action-${action.id}`}
                         onClick={() => {
                           onAction(action.id);
                           resetMenu();

@@ -76,6 +76,13 @@ jobs:
     permissions:
       pull-requests: write  # Required to post the performance PR comment
 
+    # Demo-AI harness: enable the mock AI path for the e2e suite ONLY (baked into
+    # this job's build + read by next start at runtime). Kept off the top-level
+    # env so the unit-test/build job stays production-like — otherwise the flag
+    # would leak into Vitest and change demo-mode behavior under test.
+    env:
+      NEXT_PUBLIC_ENABLE_DEMO_AI: "1"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
