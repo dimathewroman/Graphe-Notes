@@ -262,6 +262,13 @@ The `public.rls_auto_enable()` function (an event trigger that auto-enables RLS 
 **Master branch had no required CI checks**
 The `master` branch protection allowed merges to proceed even with failing CI. Resolved by adding `Typecheck` and `E2E Tests` as required status checks (via GitHub branch protection API). PRs cannot now be merged until both pass. `enforce_admins` remains `false` so the repo owner can still bypass in emergencies.
 
+**SSRF via user-supplied AI provider endpoint (Phase 9.2)**
+Adding plug-and-play OpenAI-compatible providers introduced a `custom_openai` provider whose base URL is user-supplied, and a model-discovery route that fetched a user-supplied endpoint server-side. An authenticated user could have aimed the server at internal hosts (`169.254.169.254`, private ranges, loopback). Resolved before merge (caught by CodeQL):
+- The `/api/ai/models` discovery route now fetches **only fixed, provider-owned base URLs**. Discovery for user-controlled endpoints (local LLM, custom) runs **client-side** in the browser, so no user URL reaches a server-side fetch.
+- The `custom_openai` base URL (fetched server-side by the generate route) is validated at save time with `isSafeExternalUrl()` in `lib/url-guard.ts`, which rejects loopback, private, link-local, carrier-grade-NAT, multicast, and cloud-metadata addresses and non-http(s) schemes.
+
+**Pattern to avoid:** never `fetch()` a user-supplied URL server-side without an SSRF barrier. Prefer fixed provider-owned URLs; when a user must supply an upstream the server will call, validate it through `isSafeExternalUrl()` before storing/using it. When the target is legitimately the *user's own* host (a local LLM), do the fetch client-side instead. Also never gate behavior on `url.includes("somehost")` — a substring match is bypassable (`https://somehost.evil.com`); key on the provider identity instead.
+
 ---
 
 ## Documented Exceptions
