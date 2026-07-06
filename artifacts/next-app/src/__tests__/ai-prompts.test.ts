@@ -32,6 +32,13 @@ describe("buildAiPrompt (system-role + data fencing)", () => {
     expect(buildAiPrompt("improve", "x")!.system).toMatch(/same language/i);
   });
 
+  it("instructs HTML preservation and HTML-only output (G13)", () => {
+    const sys = buildAiPrompt("improve", "<p>x</p>")!.system;
+    expect(sys).toMatch(/HTML/);
+    expect(sys).toMatch(/preserve/i);
+    expect(sys).toMatch(/no markdown/i);
+  });
+
   it("returns null for an unknown action", () => {
     expect(buildAiPrompt("does_not_exist", "x")).toBeNull();
   });

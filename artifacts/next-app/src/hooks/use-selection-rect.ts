@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { NodeSelection } from "@tiptap/pm/state";
+import { getSelectionHtml } from "@/lib/editor-html";
 
 /**
  * Shared text-selection tracker for the AI selection menus (R6). Watches the
@@ -43,8 +44,9 @@ export function useSelectionRect(
       if (r.width === 0) { setRect(null); return; }
       setRect(r);
       // Capture the selection NOW — before any menu interaction disturbs it.
-      const text = editor.state.doc.textBetween(from, to);
-      onSelectionCapture(from, to, text);
+      // G13: capture as HTML so AI actions preserve marks + block structure.
+      const html = getSelectionHtml(editor, from, to);
+      onSelectionCapture(from, to, html);
     };
 
     const handleBlur = () => setTimeout(() => { setRect(null); onBlurRef.current?.(); }, 150);
