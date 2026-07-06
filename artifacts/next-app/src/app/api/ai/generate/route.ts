@@ -6,6 +6,7 @@ import { checkAndIncrementUsage, recordTokenUsage } from "@lib/ai-rate-limit";
 import { resolveModel, type TaskType, type Provider, GEMINI_FLASH_LITE } from "@lib/ai-model-router";
 import { resolveFreeTierModel, invalidateFreeTierModel } from "@lib/gemini-model-discovery";
 import { parseGeminiError } from "@lib/ai-error-handler";
+import { generationSettingsFor } from "@/lib/ai-prompts";
 import { PROVIDER_ADAPTERS } from "@lib/ai-providers";
 import { db, userApiKeysTable } from "@workspace/db";
 import { decryptApiKey } from "@lib/encryption";
@@ -72,6 +73,9 @@ export async function POST(request: NextRequest) {
     const action = typeof rawAction === "string" ? rawAction : undefined;
     // G12 (10.1): task instruction for the provider's system role (optional).
     const system = typeof rawSystem === "string" ? rawSystem : undefined;
+    // G14 (10.3): per-action sampling — mechanical actions near-deterministic,
+    // creative ones varied. Derived server-side from the action name.
+    const gen = generationSettingsFor(action ?? "");
 
     const provider: Provider =
       typeof rawProvider === "string" && VALID_PROVIDERS.includes(rawProvider as Provider)
@@ -153,7 +157,7 @@ export async function POST(request: NextRequest) {
             body: JSON.stringify({
               contents: [{ parts: [{ text: combinedPrompt }] }],
               ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-              generationConfig: { maxOutputTokens: 1024 },
+              generationConfig: { maxOutputTokens: 1024, temperature: gen.temperature, topP: gen.topP },
             }),
             signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
           },
@@ -270,7 +274,7 @@ export async function POST(request: NextRequest) {
     const upstream = await fetch(adapter.url(routing.model, row.endpointUrl), {
       method: "POST",
       headers: adapter.headers(decryptedKey),
-      body: JSON.stringify(adapter.body(routing.model, combinedPrompt, 1024, system)),
+      body: JSON.stringify(adapter.body(routing.model, combinedPrompt, 1024, system, gen)),
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
 
