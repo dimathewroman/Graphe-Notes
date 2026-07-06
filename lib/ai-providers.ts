@@ -43,6 +43,9 @@ export interface ProviderAdapter {
    *  optional (omitted for freeform requests). */
   body: (model: string, prompt: string, maxTokens: number, system?: string, gen?: GenerationSettings) => unknown;
   parse: (data: unknown) => ParsedResult;
+  /** Streaming (9.3): the text delta contributed by one parsed SSE event, or ""
+   *  if the event carries no text (role/usage/keep-alive frames). */
+  streamDelta: (event: unknown) => string;
   /** Map a non-OK upstream response to our client error shape. */
   mapError: (upstreamStatus: number, rawBody: string) => AdapterError;
 }
@@ -89,6 +92,12 @@ export const geminiAdapter: ProviderAdapter = {
       },
     };
   },
+  // streamGenerateContent (alt=sse) streams GenerateContentResponse chunks with
+  // the same candidates→parts→text shape as the non-streaming response.
+  streamDelta: (event) => {
+    const e = event as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    return e.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  },
 };
 
 // ── Anthropic Messages API ────────────────────────────────────────────────────
@@ -116,6 +125,12 @@ export const anthropicAdapter: ProviderAdapter = {
     };
   },
   mapError: genericError,
+  // Anthropic streams typed events; only content_block_delta / text_delta frames
+  // carry text (message_start, *_block_start/stop, ping, message_stop do not).
+  streamDelta: (event) => {
+    const e = event as { type?: string; delta?: { type?: string; text?: string } };
+    return e.type === "content_block_delta" && e.delta?.type === "text_delta" ? e.delta.text ?? "" : "";
+  },
 };
 
 // ── OpenAI-compatible family (OpenAI + OpenRouter/Groq/Mistral/Together/Fireworks/custom) ──
@@ -144,6 +159,11 @@ export function openAiCompatibleAdapter(baseUrl?: string): ProviderAdapter {
       };
     },
     mapError: genericError,
+    // Chat-completions streaming: each chunk carries a partial in choices[0].delta.content.
+    streamDelta: (event) => {
+      const e = event as { choices?: Array<{ delta?: { content?: string } }> };
+      return e.choices?.[0]?.delta?.content ?? "";
+    },
   };
 }
 

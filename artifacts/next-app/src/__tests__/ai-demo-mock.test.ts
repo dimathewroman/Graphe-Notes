@@ -1,7 +1,7 @@
 // Demo-AI harness (dev/CI): pins the deterministic mock contract the e2e suite
 // and the future streaming work rely on.
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { mockAiText, mockGenerateBody, isDemoAiEnabled, DEMO_AI_HEADER } from "@/lib/ai-demo-mock";
+import { mockAiText, mockGenerateBody, mockStreamDeltas, isDemoAiEnabled, DEMO_AI_HEADER } from "@/lib/ai-demo-mock";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -30,5 +30,11 @@ describe("demo-AI mock", () => {
 
   it("uses a stable header name", () => {
     expect(DEMO_AI_HEADER).toBe("x-graphe-demo-ai");
+  });
+
+  it("streams deltas that reconstruct the full canned text", () => {
+    const deltas = mockStreamDeltas("proofread");
+    expect(deltas.length).toBeGreaterThan(1); // genuinely chunked
+    expect(deltas.join("")).toBe(mockAiText("proofread"));
   });
 });
