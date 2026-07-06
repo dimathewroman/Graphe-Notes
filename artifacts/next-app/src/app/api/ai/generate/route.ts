@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
-import { checkAndIncrementUsage } from "@lib/ai-rate-limit";
+import { checkAndIncrementUsage, recordTokenUsage } from "@lib/ai-rate-limit";
 import { resolveModel, type TaskType, type Provider } from "@lib/ai-model-router";
 import { parseGeminiError } from "@lib/ai-error-handler";
 import { PROVIDER_ADAPTERS } from "@lib/ai-providers";
@@ -60,8 +60,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
     }
 
-    const { taskType, prompt, context, provider: rawProvider, modelOverride: rawModelOverride } =
+    const { taskType, prompt, context, provider: rawProvider, modelOverride: rawModelOverride, action: rawAction } =
       body as Record<string, unknown>;
+    // G18: the AI action name for per-action telemetry (optional; sanitized to a string).
+    const action = typeof rawAction === "string" ? rawAction : undefined;
 
     const provider: Provider =
       typeof rawProvider === "string" && VALID_PROVIDERS.includes(rawProvider as Provider)
@@ -185,7 +187,9 @@ export async function POST(request: NextRequest) {
       const inputTokens = data.usageMetadata?.promptTokenCount ?? null;
       const outputTokens = data.usageMetadata?.candidatesTokenCount ?? null;
 
-      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, model: routing.model, input_tokens: inputTokens, output_tokens: outputTokens } });
+      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, action, model: routing.model, input_tokens: inputTokens, output_tokens: outputTokens } });
+      // G19: best-effort token accounting — never fail the response on a write error.
+      await recordTokenUsage(userId, (inputTokens ?? 0) + (outputTokens ?? 0)).catch((e) => Sentry.captureException(e));
       return NextResponse.json({
         result,
         model: routing.model,
@@ -256,7 +260,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "output_truncated", userMessage: TRUNCATION_MESSAGE }, { status: 200 });
     }
 
-    getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, model: routing.model, input_tokens: parsed.inputTokens, output_tokens: parsed.outputTokens } });
+    getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, action, model: routing.model, input_tokens: parsed.inputTokens, output_tokens: parsed.outputTokens } });
+    // G19: best-effort token accounting (BYOK too, via upsert).
+    await recordTokenUsage(userId, (parsed.inputTokens ?? 0) + (parsed.outputTokens ?? 0)).catch((e) => Sentry.captureException(e));
     return NextResponse.json({
       result: parsed.text,
       model: routing.model,

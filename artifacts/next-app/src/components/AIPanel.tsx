@@ -64,6 +64,7 @@ export function AIPanel() {
         provider,
         prompt: fullPrompt,
         taskType: "manual",
+        action: "ai_panel",
         localLlm: provider === "local_llm"
           ? { endpoint: localLlmConfig?.endpoint ?? "", model: localLlmConfig?.model ?? null, apiKey: null }
           : undefined,

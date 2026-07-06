@@ -122,3 +122,26 @@ export async function checkAndIncrementUsage(userId: string): Promise<RateLimitR
     resetInMs,
   };
 }
+
+// G19 (Phase 9.4): accumulate the model's reported token usage per user. Runs for
+// both the free tier (row already exists from checkAndIncrementUsage) and BYOK
+// (upsert creates a token-only row). Best-effort — callers should not block the
+// AI response on a failure here.
+export async function recordTokenUsage(userId: string, tokens: number): Promise<void> {
+  if (!Number.isFinite(tokens) || tokens <= 0) return;
+  const now = new Date();
+  await db
+    .insert(aiUsageTable)
+    .values({
+      userId,
+      requestsThisHour: 0,
+      hourWindowStart: now,
+      requestsThisMonth: 0,
+      monthWindowStart: now,
+      totalTokensUsed: tokens,
+    })
+    .onConflictDoUpdate({
+      target: aiUsageTable.userId,
+      set: { totalTokensUsed: sql`COALESCE(${aiUsageTable.totalTokensUsed}, 0) + ${tokens}` },
+    });
+}

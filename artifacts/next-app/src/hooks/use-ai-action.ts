@@ -204,6 +204,7 @@ export function useAiAction(
                   provider: resolvedProvider,
                   prompt: capturedPrompt,
                   taskType: capturedTaskType,
+                  action,
                   localLlm,
                   localMaxTokens: LOCAL_LLM_MAX_TOKENS,
                 });
@@ -256,6 +257,7 @@ export function useAiAction(
           provider,
           prompt,
           taskType,
+          action,
           localLlm: { endpoint: normalizedEndpoint, model: localLlmModel, apiKey: localLlmApiKey },
           localMaxTokens: LOCAL_LLM_MAX_TOKENS,
         });
@@ -294,14 +296,14 @@ export function useAiAction(
     });
 
     try {
-      let outcome = await executeAiRequest({ provider, prompt, taskType, signal: controller.signal });
+      let outcome = await executeAiRequest({ provider, prompt, taskType, action, signal: controller.signal });
 
       // G1: on an RPM-429 the server tells us how long to wait; retry ONCE.
       if (!outcome.ok && outcome.retryDelayMs != null) {
         setAiError(`AI is busy — retrying in ${Math.ceil(outcome.retryDelayMs / 1000)}s… (tap ✕ to cancel)`);
         await abortableDelay(outcome.retryDelayMs);
         setAiError("Retrying…");
-        outcome = await executeAiRequest({ provider, prompt, taskType, signal: controller.signal });
+        outcome = await executeAiRequest({ provider, prompt, taskType, action, signal: controller.signal });
         if (!outcome.ok && outcome.retryDelayMs != null) {
           setAiError("AI is still busy. Please try again in a moment.");
           setTimeout(() => setAiError(null), 5000);

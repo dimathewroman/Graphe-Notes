@@ -27,6 +27,8 @@ export interface AiRequestOptions {
   provider: string;
   prompt: string;
   taskType: string;
+  /** G18: the AI action name (e.g. "improve", "summarize_short") for per-action telemetry. */
+  action?: string;
   /** Required when provider === "local_llm". */
   localLlm?: LocalLlmConfig;
   /** Cancels the request (cloud path). */
@@ -88,7 +90,7 @@ async function runCloud(opts: AiRequestOptions): Promise<AiRequestOutcome> {
   const res = await authenticatedFetch("/api/ai/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ provider: opts.provider, taskType: opts.taskType, prompt: opts.prompt }),
+    body: JSON.stringify({ provider: opts.provider, taskType: opts.taskType, prompt: opts.prompt, action: opts.action }),
     signal: opts.signal,
   });
 
