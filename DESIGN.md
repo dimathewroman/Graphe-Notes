@@ -152,7 +152,7 @@ Major Third scale (ratio: 1.25) from 16px base:
 
 | Role | Size | Usage |
 |---|---|---|
-| Display | 32px (2rem) | Hero text, onboarding headings |
+| Display | 32px (2rem) | Hero text, welcome/empty-state headings |
 | H1 | 36px (text-4xl) | ProseMirror h1 |
 | H2 | 24px (text-2xl) | ProseMirror h2 |
 | H3 | 20px (text-xl) | ProseMirror h3 |

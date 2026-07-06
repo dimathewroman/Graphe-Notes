@@ -14,6 +14,7 @@ All notable changes to Graphe Notes are documented here. Format follows [Keep a 
 
 ### Changed
 - Consolidated all client AI requests through a single `executeAiRequest` path (`lib/execute-ai-request.ts`); the active-provider settings fetch is cached in React Query instead of refetched per action.
+- **AI prompt contract v2** — task instructions moved to the provider **system role** with the user's selection fenced as data (resists prompt injection); AI actions now round-trip the selection as **HTML** so bold/links/lists and block separation survive; each action carries per-action **sampling settings** (mechanical actions near-deterministic, creative ones varied) and, for shorten/lengthen, the result length is validated with one corrective retry; actions **route by size** to the light vs primary model instead of always using the primary. Added a zod-validated structured-output scaffold (`lib/ai-suggestions.ts`) for future background suggestions.
 
 ### Security
 - Added an SSRF guard (`lib/url-guard.ts`, `isSafeExternalUrl`) for user-supplied upstream URLs the server fetches. The custom OpenAI-compatible provider's base URL is validated at save time — loopback, private, link-local, and cloud-metadata addresses are rejected. Local-LLM and custom-endpoint model discovery run client-side, so no user-controlled URL reaches a server-side fetch.

@@ -87,9 +87,11 @@ Requires `TEST_EMAIL` and `TEST_PASSWORD` in `.env` (see `.env.example`). The te
 | `04-vault.spec.ts` | Vault setup, PIN entry, vaulting/unvaulting notes |
 | `05-micro-interactions.spec.ts` | Hover states, press feedback, panel toggles |
 | `06-templates.spec.ts` | Template picker open/apply; save-as-template flow |
-| `07-onboarding.spec.ts` | First-run onboarding modal steps |
 | `08-performance.spec.ts` | Interaction timing baselines; threshold enforcement |
 | `09-visual.spec.ts` | Visual regression snapshots |
+| `10-ordered-list-nesting.spec.ts` | Ordered-list indent/outdent numbering |
+| `11-editor-enhancements.spec.ts` | Editor toolbar/enhancement behaviors |
+| `12-data-integrity-regressions.spec.ts` | Cross-note undo, save-flush, orphan-on-delete regressions |
 
 All tests use `data-testid` attributes for selectors — never CSS classes or element structure.
 

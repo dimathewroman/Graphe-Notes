@@ -83,7 +83,7 @@ Full annotated directory tree in [ARCHITECTURE.md](ARCHITECTURE.md). Key paths: 
 
 Full schema with column definitions, RLS status, and soft-delete patterns in [ARCHITECTURE.md](ARCHITECTURE.md). 13 tables defined in `lib/db/src/schema/`.
 
-> **Important:** `user_settings` stores only `userId`, `activeAiProvider`, `hasCompletedAiSetup`, `updatedAt`. Motion level, dark mode level, colorblind mode, accent color, and onboarding state are **localStorage-only** — they are not in the database.
+> **Important:** `user_settings` stores only `userId`, `activeAiProvider`, `hasCompletedAiSetup`, `updatedAt`. Motion level, dark mode level, colorblind mode, and accent color are **localStorage-only** — they are not in the database.
 
 ---
 
@@ -190,7 +190,7 @@ Demo vault PIN is stored in sessionStorage under the key `"demo_vault_hash"`. Al
 
 | Concern | Where |
 |---|---|
-| Selected note/quickbit, active filter, sidebar/note-list visibility, vault unlock, motion level, dark mode level, colorblind mode, template picker, onboarding, AI setup modal | Zustand — `artifacts/next-app/src/store.ts` |
+| Selected note/quickbit, active filter, sidebar/note-list visibility, vault unlock, motion level, dark mode level, colorblind mode, template picker, AI setup modal | Zustand — `artifacts/next-app/src/store.ts` |
 | Server data (notes, folders, tags, vault status, templates, attachments) | React Query (TanStack Query v5) |
 
 ---
@@ -219,8 +219,8 @@ Dark mode intensity levels (`soft`, `default`, `oled`) and colorblind modes (`no
 
 The editor is split into two layers:
 
-- **NoteShell.tsx** (`components/NoteShell.tsx`, ~910 lines) — orchestrator for full notes. Contains note header, save logic, title/tag state, version history panel, vault state, and all note-specific orchestration.
-- **GrapheEditor.tsx** (`components/editor/GrapheEditor.tsx`, ~363 lines) — the Tiptap editor instance. Shared between notes and quick bits.
+- **NoteShell.tsx** (`components/NoteShell.tsx`, ~1070 lines) — orchestrator for full notes. Contains note header, save logic, title/tag state, version history panel, vault state, and all note-specific orchestration.
+- **GrapheEditor.tsx** (`components/editor/GrapheEditor.tsx`, ~560 lines) — the Tiptap editor instance. Shared between notes and quick bits.
 
 Editor sub-components in `components/editor/`:
 - `EditorToolbar.tsx` — full toolbar (font, size, formatting, link, etc.)
@@ -254,18 +254,6 @@ Preset and user-created templates stored in the `templates` table. Categories: c
 - `components/templates/SaveAsTemplateDialog.tsx` — save current note/quickbit as template
 - Template picker state managed in Zustand: `isTemplatePickerOpen`, `templatePickerContext` ("note" | "quickbit")
 - Preset templates seeded via `scripts/seed-templates.ts`
-
----
-
-<!-- TO EXTRACT: This section moves to ARCHITECTURE.md in the documentation restructure. CLAUDE.md will keep a 1-2 line summary with a pointer. -->
-## Onboarding System
-
-4-step first-run onboarding flow for new users and demo mode.
-
-- `components/onboarding/OnboardingModal.tsx` — the modal UI
-- `hooks/use-onboarding.ts` — trigger logic (checks `user_settings.onboardingCompleted` for auth users, sessionStorage for demo)
-- API: `POST /onboarding` marks onboarding complete
-- State in Zustand: `isOnboardingOpen`, `onboardingStep`
 
 ---
 
@@ -575,7 +563,7 @@ Quick start (requires dev server on port 3000):
 pnpm --filter @workspace/next-app run test:e2e
 ```
 
-All tests use demo mode — no credentials needed. 9 spec files (01–09) covering app load, notes, quick bits, vault, micro-interactions, templates, onboarding, performance, and visual regression. Use `data-testid` attributes for all selectors.
+All tests use demo mode — no credentials needed. 11 spec files (01–06, 08–12) covering app load, notes, quick bits, vault, micro-interactions, templates, performance, visual regression, ordered-list nesting, editor enhancements, and data-integrity regressions. Use `data-testid` attributes for all selectors.
 
 ---
 
