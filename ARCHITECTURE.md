@@ -119,7 +119,7 @@ All handlers live in `artifacts/next-app/src/app/api/` and are prefixed `/api`.
 
 **Templates**
 - `GET /templates`, `POST /templates`
-- `PATCH /templates/:id`, `DELETE /templates/:id`
+- `DELETE /templates/:id`
 
 **Attachments**
 - `POST /attachments/upload`
@@ -328,7 +328,7 @@ Authentication is a two-layer system.
 | hasCompletedAiSetup | boolean | |
 | updatedAt | timestamp | |
 
-> **Note:** Motion level, dark mode level, colorblind mode, accent color, and onboarding state are **not** stored here. They live in `localStorage` (keys: `motion_level`, `dark_mode_level`, `colorblind_mode`, `theme_mode`, `theme_accent`).
+> **Note:** Motion level, dark mode level, colorblind mode, and accent color are **not** stored here. They live in `localStorage` (keys: `motion_level`, `dark_mode_level`, `colorblind_mode`, `theme_mode`, `theme_accent`).
 
 **ai_usage** — AI free-tier quota tracking
 | Column | Type |
@@ -481,7 +481,7 @@ For mutations that update a known record (pin, favorite, tag, vault), use `query
 
 Demo mode is a zero-auth path through the full app.
 
-`DemoContext` (`artifacts/next-app/src/lib/demo-context.tsx`) provides a `isDemoMode` boolean. When true:
+`DemoContext` (`artifacts/next-app/src/lib/demo-context.ts`) provides a boolean read via the `useDemoMode()` hook. When true:
 
 - No API calls are made to authenticated endpoints
 - Static demo data from `src/lib/demo-data.ts` is seeded directly into the TanStack Query cache on mode entry
