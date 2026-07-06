@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
-import { db, foldersTable } from "@workspace/db";
+import { db, foldersTable, notesTable } from "@workspace/db";
 import {
   UpdateFolderBody,
   UpdateFolderParams,
@@ -69,6 +69,18 @@ export async function DELETE(
     if (!folder) {
       return NextResponse.json({ error: "Folder not found" }, { status: 404 });
     }
+
+    // X-R4: nothing may be left pointing at a folder that no longer exists.
+    // Detach notes that were in this folder (they move to "no folder", not deleted),
+    // and reparent any child folders to the deleted folder's own parent.
+    await db
+      .update(notesTable)
+      .set({ folderId: null })
+      .where(and(eq(notesTable.folderId, routeParams.data.id), eq(notesTable.userId, user.id)));
+    await db
+      .update(foldersTable)
+      .set({ parentId: folder.parentId })
+      .where(and(eq(foldersTable.parentId, routeParams.data.id), eq(foldersTable.userId, user.id)));
 
     return new Response(null, { status: 204 });
   } catch (err) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, RotateCcw, Trash2, MoreVertical, AlertCircle } from "lucide-react";
+import { ArrowLeft, RotateCcw, Trash2, MoreVertical, AlertCircle, Lock } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import UnderlineExt from "@tiptap/extension-underline";
@@ -92,15 +92,15 @@ export function RecentlyDeletedDetail() {
     content: note?.content || "",
   });
 
-  // Update editor content when note changes
+  // Update editor content when note changes.
+  // X-R7: never load a vaulted note's content into the editor while the vault is
+  // locked — otherwise re-locking after viewing leaves the plaintext in the DOM.
   useEffect(() => {
     if (editor && note?.content !== undefined) {
-      const current = editor.getHTML();
-      if (current !== note.content) {
-        editor.commands.setContent(note.content || "");
-      }
+      const next = note?.vaulted && !isVaultUnlocked ? "" : (note.content || "");
+      if (editor.getHTML() !== next) editor.commands.setContent(next);
     }
-  }, [editor, note?.content]);
+  }, [editor, note?.content, note?.vaulted, isVaultUnlocked]);
 
   // Mutations
   const restoreMut = useRestoreNote();
@@ -307,10 +307,17 @@ export function RecentlyDeletedDetail() {
               ))}
             </div>
           )}
-          <EditorContent
-            editor={editor}
-            className="prose prose-sm dark:prose-invert max-w-none focus:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[200px]"
-          />
+          {isVaultNote && !isVaultUnlocked ? (
+            <div className="flex flex-col items-center justify-center gap-3 py-16 text-center text-muted-foreground">
+              <Lock className="w-8 h-8 text-ai-accent" />
+              <p className="text-sm max-w-xs">This note is vaulted. Unlock the vault to view its contents.</p>
+            </div>
+          ) : (
+            <EditorContent
+              editor={editor}
+              className="prose prose-sm dark:prose-invert max-w-none focus:outline-none [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-[200px]"
+            />
+          )}
         </div>
       </div>
 
