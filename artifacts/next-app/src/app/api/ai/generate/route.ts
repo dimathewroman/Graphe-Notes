@@ -3,7 +3,8 @@ import * as Sentry from "@sentry/nextjs";
 import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { checkAndIncrementUsage, recordTokenUsage } from "@lib/ai-rate-limit";
-import { resolveModel, type TaskType, type Provider } from "@lib/ai-model-router";
+import { resolveModel, type TaskType, type Provider, GEMINI_FLASH_LITE } from "@lib/ai-model-router";
+import { resolveFreeTierModel, invalidateFreeTierModel } from "@lib/gemini-model-discovery";
 import { parseGeminiError } from "@lib/ai-error-handler";
 import { PROVIDER_ADAPTERS } from "@lib/ai-providers";
 import { db, userApiKeysTable } from "@workspace/db";
@@ -121,11 +122,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const routing = resolveModel("graphe_free", taskType as TaskType);
-      if (!isValidModelId(routing.model)) {
-        return NextResponse.json({ error: "Invalid model" }, { status: 400 });
-      }
-
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
         throw new Error(
@@ -133,19 +129,38 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const geminiResponse = await fetch(
-        // Key goes in the x-goog-api-key header, never the URL — URLs land in
-        // logs, Sentry breadcrumbs, and proxies (§S key-in-URL).
-        `https://generativelanguage.googleapis.com/v1beta/models/${routing.model}:generateContent`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: combinedPrompt }] }],
-            generationConfig: { maxOutputTokens: 1024 },
-          }),
-        },
-      );
+      // G19: self-healing free-tier model. Discover the lightest available model
+      // (cached, best-effort) instead of a hardcoded id; fall back to the constant
+      // if discovery returns something unexpected.
+      let freeModel = await resolveFreeTierModel(apiKey);
+      if (!isValidModelId(freeModel)) freeModel = GEMINI_FLASH_LITE;
+
+      const callGemini = (model: string) =>
+        fetch(
+          // Key goes in the x-goog-api-key header, never the URL — URLs land in
+          // logs, Sentry breadcrumbs, and proxies (§S key-in-URL).
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: combinedPrompt }] }],
+              generationConfig: { maxOutputTokens: 1024 },
+            }),
+          },
+        );
+
+      let geminiResponse = await callGemini(freeModel);
+      // A 404 means the cached/hardcoded model id was retired upstream. Drop the
+      // cache, re-discover, and retry once before surfacing an error.
+      if (geminiResponse.status === 404) {
+        invalidateFreeTierModel();
+        const rediscovered = await resolveFreeTierModel(apiKey);
+        if (rediscovered !== freeModel && isValidModelId(rediscovered)) {
+          freeModel = rediscovered;
+          geminiResponse = await callGemini(freeModel);
+        }
+      }
 
       if (!geminiResponse.ok) {
         const rawErrorBody = await geminiResponse.text();
@@ -187,12 +202,12 @@ export async function POST(request: NextRequest) {
       const inputTokens = data.usageMetadata?.promptTokenCount ?? null;
       const outputTokens = data.usageMetadata?.candidatesTokenCount ?? null;
 
-      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, action, model: routing.model, input_tokens: inputTokens, output_tokens: outputTokens } });
+      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, action, model: freeModel, input_tokens: inputTokens, output_tokens: outputTokens } });
       // G19: best-effort token accounting — never fail the response on a write error.
       await recordTokenUsage(userId, (inputTokens ?? 0) + (outputTokens ?? 0)).catch((e) => Sentry.captureException(e));
       return NextResponse.json({
         result,
-        model: routing.model,
+        model: freeModel,
         tokensUsed: { inputTokens, outputTokens },
       });
     }
