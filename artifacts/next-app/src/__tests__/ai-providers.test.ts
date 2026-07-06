@@ -87,6 +87,38 @@ describe("PROVIDER_ADAPTERS registry", () => {
   });
 });
 
+describe("system role placement (G12, 10.1)", () => {
+  it("OpenAI-compatible prepends a system message when system is given", () => {
+    const a = openAiCompatibleAdapter("https://api.openai.com/v1");
+    expect(a.body("m", "content", 100, "do the task")).toEqual({
+      model: "m",
+      messages: [{ role: "system", content: "do the task" }, { role: "user", content: "content" }],
+      max_tokens: 100,
+    });
+    // No system → single user message (freeform / AIPanel path).
+    expect((a.body("m", "content", 100) as { messages: unknown[] }).messages).toEqual([{ role: "user", content: "content" }]);
+  });
+
+  it("Gemini puts the instruction in systemInstruction", () => {
+    expect(geminiAdapter.body("m", "content", 100, "do the task")).toEqual({
+      contents: [{ parts: [{ text: "content" }] }],
+      systemInstruction: { parts: [{ text: "do the task" }] },
+      generationConfig: { maxOutputTokens: 100 },
+    });
+    expect(geminiAdapter.body("m", "content", 100)).not.toHaveProperty("systemInstruction");
+  });
+
+  it("Anthropic puts the instruction in the top-level system field", () => {
+    expect(anthropicAdapter.body("claude", "content", 100, "do the task")).toEqual({
+      model: "claude",
+      max_tokens: 100,
+      system: "do the task",
+      messages: [{ role: "user", content: "content" }],
+    });
+    expect(anthropicAdapter.body("claude", "content", 100)).not.toHaveProperty("system");
+  });
+});
+
 describe("openAiCompatibleModelsUrl (9.2 discovery)", () => {
   it("appends /models and normalizes trailing slashes", () => {
     expect(openAiCompatibleModelsUrl("https://api.groq.com/openai/v1")).toBe("https://api.groq.com/openai/v1/models");

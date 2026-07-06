@@ -27,6 +27,9 @@ export interface AiRequestOptions {
   provider: string;
   prompt: string;
   taskType: string;
+  /** G12 (10.1): task instruction for the provider's system role. The `prompt` is
+   *  then the fenced user content. Omitted for freeform (AIPanel) requests. */
+  system?: string;
   /** G18: the AI action name (e.g. "improve", "summarize_short") for per-action telemetry. */
   action?: string;
   /** Required when provider === "local_llm". */
@@ -63,13 +66,17 @@ async function runLocal(opts: AiRequestOptions): Promise<AiRequestOutcome> {
   try {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (cfg.apiKey) headers["Authorization"] = `Bearer ${cfg.apiKey}`;
+    // G12: task instruction in a system message, fenced content in the user message.
+    const messages = opts.system
+      ? [{ role: "system", content: opts.system }, { role: "user", content: opts.prompt }]
+      : [{ role: "user", content: opts.prompt }];
     const res = await fetch(`${cfg.endpoint}/v1/chat/completions`, {
       method: "POST",
       headers,
       signal: opts.signal,
       body: JSON.stringify({
         model: cfg.model ?? "default",
-        messages: [{ role: "user", content: opts.prompt }],
+        messages,
         max_tokens: opts.localMaxTokens ?? DEFAULT_LOCAL_MAX_TOKENS,
         stream: false,
       }),
@@ -90,7 +97,7 @@ async function runCloud(opts: AiRequestOptions): Promise<AiRequestOutcome> {
   const res = await authenticatedFetch("/api/ai/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ provider: opts.provider, taskType: opts.taskType, prompt: opts.prompt, action: opts.action }),
+    body: JSON.stringify({ provider: opts.provider, taskType: opts.taskType, prompt: opts.prompt, system: opts.system, action: opts.action }),
     signal: opts.signal,
   });
 

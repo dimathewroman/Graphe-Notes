@@ -66,10 +66,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
     }
 
-    const { taskType, prompt, context, provider: rawProvider, modelOverride: rawModelOverride, action: rawAction } =
+    const { taskType, prompt, context, provider: rawProvider, modelOverride: rawModelOverride, action: rawAction, system: rawSystem } =
       body as Record<string, unknown>;
     // G18: the AI action name for per-action telemetry (optional; sanitized to a string).
     const action = typeof rawAction === "string" ? rawAction : undefined;
+    // G12 (10.1): task instruction for the provider's system role (optional).
+    const system = typeof rawSystem === "string" ? rawSystem : undefined;
 
     const provider: Provider =
       typeof rawProvider === "string" && VALID_PROVIDERS.includes(rawProvider as Provider)
@@ -150,6 +152,7 @@ export async function POST(request: NextRequest) {
             headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
             body: JSON.stringify({
               contents: [{ parts: [{ text: combinedPrompt }] }],
+              ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
               generationConfig: { maxOutputTokens: 1024 },
             }),
             signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
@@ -267,7 +270,7 @@ export async function POST(request: NextRequest) {
     const upstream = await fetch(adapter.url(routing.model, row.endpointUrl), {
       method: "POST",
       headers: adapter.headers(decryptedKey),
-      body: JSON.stringify(adapter.body(routing.model, combinedPrompt, 1024)),
+      body: JSON.stringify(adapter.body(routing.model, combinedPrompt, 1024, system)),
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
 

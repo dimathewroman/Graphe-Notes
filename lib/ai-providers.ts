@@ -30,7 +30,9 @@ export interface ProviderAdapter {
   /** Upstream URL. `endpoint` is the user-provided base URL for the custom provider. */
   url: (model: string, endpoint?: string | null) => string;
   headers: (apiKey: string) => Record<string, string>;
-  body: (model: string, prompt: string, maxTokens: number) => unknown;
+  /** `system` (G12): task instruction placed in the provider's system role; `prompt`
+   *  is the fenced user content. Omitted for freeform requests. */
+  body: (model: string, prompt: string, maxTokens: number, system?: string) => unknown;
   parse: (data: unknown) => ParsedResult;
   /** Map a non-OK upstream response to our client error shape. */
   mapError: (upstreamStatus: number, rawBody: string) => AdapterError;
@@ -46,8 +48,9 @@ export const geminiAdapter: ProviderAdapter = {
   // Key rides the x-goog-api-key header, never the URL (§S key-in-URL).
   url: (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
   headers: (apiKey) => ({ "Content-Type": "application/json", "x-goog-api-key": apiKey }),
-  body: (_model, prompt, maxTokens) => ({
+  body: (_model, prompt, maxTokens, system) => ({
     contents: [{ parts: [{ text: prompt }] }],
+    ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
     generationConfig: { maxOutputTokens: maxTokens },
   }),
   parse: (data) => {
@@ -80,7 +83,12 @@ export const geminiAdapter: ProviderAdapter = {
 export const anthropicAdapter: ProviderAdapter = {
   url: () => "https://api.anthropic.com/v1/messages",
   headers: (apiKey) => ({ "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" }),
-  body: (model, prompt, maxTokens) => ({ model, max_tokens: maxTokens, messages: [{ role: "user", content: prompt }] }),
+  body: (model, prompt, maxTokens, system) => ({
+    model,
+    max_tokens: maxTokens,
+    ...(system ? { system } : {}),
+    messages: [{ role: "user", content: prompt }],
+  }),
   parse: (data) => {
     const d = data as {
       content: Array<{ text: string }>;
@@ -102,7 +110,13 @@ export function openAiCompatibleAdapter(baseUrl?: string): ProviderAdapter {
   return {
     url: (_model, endpoint) => `${stripTrailingSlashes(baseUrl ?? endpoint ?? "")}/chat/completions`,
     headers: (apiKey) => ({ "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }),
-    body: (model, prompt, maxTokens) => ({ model, messages: [{ role: "user", content: prompt }], max_tokens: maxTokens }),
+    body: (model, prompt, maxTokens, system) => ({
+      model,
+      messages: system
+        ? [{ role: "system", content: system }, { role: "user", content: prompt }]
+        : [{ role: "user", content: prompt }],
+      max_tokens: maxTokens,
+    }),
     parse: (data) => {
       const d = data as {
         choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
