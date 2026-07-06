@@ -6,6 +6,11 @@
 
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 
+// G16-partial: shared React Query key for the AI settings (active provider + local
+// config). Cached so rapid successive AI actions don't each refetch; SettingsModal
+// invalidates it after any provider/key change.
+export const AI_SETTINGS_QUERY_KEY = ["/api/ai/settings"] as const;
+
 // Strip <think>...</think> blocks emitted by reasoning models (DeepSeek R1, Qwen3
 // thinking variants) before the text reaches the editor.
 function stripThinkTags(text: string): string {

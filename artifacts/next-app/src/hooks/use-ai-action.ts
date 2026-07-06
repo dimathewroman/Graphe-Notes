@@ -5,9 +5,10 @@ import { useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import posthog from "posthog-js";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/store";
 import { buildAiPrompt } from "@/lib/ai-prompts";
-import { executeAiRequest } from "@/lib/execute-ai-request";
+import { executeAiRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
 
 interface AiSettingsResponse {
   activeAiProvider?: string | null;
@@ -68,6 +69,7 @@ export function useAiAction(
   const setAiSetupModalOpen = useAppStore(s => s.setAiSetupModalOpen);
   const setPendingAiAction = useAppStore(s => s.setPendingAiAction);
 
+  const queryClient = useQueryClient();
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const savedAiSelection = useRef<{ from: number; to: number; text: string } | null>(null);
@@ -158,9 +160,18 @@ export function useAiAction(
     let localLlmApiKey: string | null = null;
     if (!isDemo) {
       try {
-        const settingsRes = await authenticatedFetch("/api/ai/settings");
-        if (settingsRes.ok) {
-          const settingsData = await settingsRes.json() as AiSettingsResponse;
+        // G16-partial: cache the settings so rapid successive actions don't each
+        // round-trip /api/ai/settings (staleTime); SettingsModal invalidates on save.
+        const settingsData = await queryClient.fetchQuery({
+          queryKey: AI_SETTINGS_QUERY_KEY,
+          queryFn: async () => {
+            const r = await authenticatedFetch("/api/ai/settings");
+            if (!r.ok) throw new Error("Failed to fetch AI settings");
+            return r.json() as Promise<AiSettingsResponse>;
+          },
+          staleTime: 30_000,
+        });
+        {
 
           if (!settingsData.hasCompletedAiSetup) {
             // First AI action — show setup modal and queue this action to run after.

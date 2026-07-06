@@ -1,7 +1,14 @@
 // G1 / Phase 8.1: an RPM-429 must retry exactly once after the *server-provided*
 // delay (not a hardcoded 65s), and a cancel must abort the in-flight request.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { ReactNode } from "react";
 import { renderHook, act } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+function makeWrapper() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return ({ children }: { children: ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
 
 const authenticatedFetch = vi.fn();
 vi.mock("@workspace/api-client-react/custom-fetch", () => ({
@@ -48,7 +55,7 @@ describe("AI RPM-429 retry + cancel (G1, 8.1)", () => {
       .mockResolvedValueOnce(res(429, { error: "rpm_limit", retryAfterMs: 1000 }))
       .mockResolvedValueOnce(res(200, { result: "improved" }));
 
-    const { result } = renderHook(() => useAiAction(makeEditor()));
+    const { result } = renderHook(() => useAiAction(makeEditor()), { wrapper: makeWrapper() });
     act(() => result.current.captureSelection(0, 5, "hello"));
 
     let done!: Promise<void>;
@@ -71,7 +78,7 @@ describe("AI RPM-429 retry + cancel (G1, 8.1)", () => {
       .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
       .mockResolvedValueOnce(res(429, { error: "rpm_limit", retryAfterMs: 60000 }));
 
-    const { result } = renderHook(() => useAiAction(makeEditor()));
+    const { result } = renderHook(() => useAiAction(makeEditor()), { wrapper: makeWrapper() });
     act(() => result.current.captureSelection(0, 5, "hello"));
 
     let done!: Promise<void>;

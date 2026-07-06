@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import NextImage from "next/image";
 import {
   X, Key, Cloud, Download, Server, Palette, Sun, Moon, Monitor,
@@ -20,6 +20,8 @@ import { useBreakpoint } from "@/hooks/use-mobile";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import { PinPad } from "./PinPad";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
+import { useQueryClient } from "@tanstack/react-query";
+import { AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "./ui/select";
@@ -59,6 +61,17 @@ function applyTheme(mode: ThemeMode, accent: string) {
 export function SettingsModal() {
   // Atomic Zustand selectors (E1) — one subscription per value.
   const isSettingsOpen = useAppStore(s => s.isSettingsOpen);
+  const queryClient = useQueryClient();
+
+  // G16-partial: when settings closes, refresh the cached AI settings so the next
+  // AI action picks up any provider / key / endpoint change made here.
+  const prevSettingsOpen = useRef(isSettingsOpen);
+  useEffect(() => {
+    if (prevSettingsOpen.current && !isSettingsOpen) {
+      queryClient.invalidateQueries({ queryKey: AI_SETTINGS_QUERY_KEY });
+    }
+    prevSettingsOpen.current = isSettingsOpen;
+  }, [isSettingsOpen, queryClient]);
   const setSettingsOpen = useAppStore(s => s.setSettingsOpen);
   const settingsInitialTab = useAppStore(s => s.settingsInitialTab);
   const motionLevel = useAppStore(s => s.motionLevel);

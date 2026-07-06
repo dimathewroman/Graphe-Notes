@@ -11,7 +11,7 @@ import { useAnimationConfig } from "@/hooks/use-motion";
 import { useDemoMode } from "@/lib/demo-context";
 import posthog from "posthog-js";
 import { ScrollArea } from "./ui/scroll-area";
-import { executeAiRequest } from "@/lib/execute-ai-request";
+import { executeAiRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
 
 interface AiSettingsResponse {
   activeAiProvider?: string | null;
@@ -84,9 +84,17 @@ export function AIPanel() {
 
     if (!isDemo) {
       try {
-        const settingsRes = await authenticatedFetch("/api/ai/settings");
-        if (settingsRes.ok) {
-          const settingsData = await settingsRes.json() as AiSettingsResponse;
+        // G16-partial: cached settings fetch (staleTime); invalidated on save.
+        const settingsData = await queryClient.fetchQuery({
+          queryKey: AI_SETTINGS_QUERY_KEY,
+          queryFn: async () => {
+            const r = await authenticatedFetch("/api/ai/settings");
+            if (!r.ok) throw new Error("Failed to fetch AI settings");
+            return r.json() as Promise<AiSettingsResponse>;
+          },
+          staleTime: 30_000,
+        });
+        {
 
           if (!settingsData.hasCompletedAiSetup) {
             const capturedPrompt = prompt;

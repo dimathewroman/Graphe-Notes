@@ -2,7 +2,14 @@
 // the 9.1 executeAiRequest consolidation, so a regression trips a test rather than
 // shipping green (the e2e suite runs in demo mode and never exercises real AI).
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { ReactNode } from "react";
 import { renderHook, act } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+function makeWrapper() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return ({ children }: { children: ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
 
 const authenticatedFetch = vi.fn();
 vi.mock("@workspace/api-client-react/custom-fetch", () => ({
@@ -37,7 +44,7 @@ afterEach(() => { globalThis.fetch = realFetch; });
 beforeEach(() => { insertSpy.mockReset(); authenticatedFetch.mockReset(); });
 
 async function run(action: string, opts?: { isDemo?: boolean }) {
-  const { result } = renderHook(() => useAiAction(makeEditor(), opts));
+  const { result } = renderHook(() => useAiAction(makeEditor(), opts), { wrapper: makeWrapper() });
   act(() => result.current.captureSelection(0, 5, "hello"));
   await act(async () => { await result.current.callAI(action); });
   return result;
