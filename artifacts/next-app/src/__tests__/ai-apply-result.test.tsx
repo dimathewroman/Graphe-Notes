@@ -1,7 +1,14 @@
 // G5 / Phase 8.3: rewrite actions replace the selection; generative actions
 // (summarize/extract) insert AFTER it; sentinel results are never written.
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { ReactNode } from "react";
 import { renderHook, act } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+function makeWrapper() {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return ({ children }: { children: ReactNode }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>;
+}
 
 const authenticatedFetch = vi.fn();
 vi.mock("@workspace/api-client-react/custom-fetch", () => ({
@@ -38,7 +45,7 @@ async function runAction(action: string, result: string) {
   authenticatedFetch
     .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
     .mockResolvedValueOnce(res(200, { result }));
-  const { result: hook } = renderHook(() => useAiAction(makeEditor()));
+  const { result: hook } = renderHook(() => useAiAction(makeEditor()), { wrapper: makeWrapper() });
   act(() => hook.current.captureSelection(0, 5, "hello"));
   await act(async () => { await hook.current.callAI(action); });
 }
