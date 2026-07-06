@@ -17,7 +17,7 @@ test.describe("Demo-AI harness", () => {
     await enterDemoMode(page);
   });
 
-  test("a proofread action inserts the mock result into the editor", async ({ page }) => {
+  test("a proofread action streams the mock result into the editor", async ({ page }) => {
     await page.getByTestId("new-note-btn").click();
     const editor = page.locator(".ProseMirror");
     await expect(editor).toBeVisible();
@@ -32,10 +32,17 @@ test.describe("Demo-AI harness", () => {
     const group = page.getByTestId("ai-group-improve-writing");
     await expect(group).toBeVisible({ timeout: 5000 });
     await group.click();
-    await page.getByTestId("ai-action-proofread").click();
 
-    // The mock replaces the selection with a deterministic canned result
-    // (proofread is a rewrite action). No real AI was involved.
+    // Trigger the action and capture the generate response — it must be an SSE
+    // stream, proving the streaming path (not the one-shot JSON path) ran.
+    const [response] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/api/ai/generate")),
+      page.getByTestId("ai-action-proofread").click(),
+    ]);
+    expect(response.headers()["content-type"]).toContain("text/event-stream");
+
+    // The paced deltas accumulate to the full deterministic result, replacing the
+    // selection (proofread is a rewrite action). No real AI was involved.
     await expect(editor).toContainText("Mock AI response for proofread.", { timeout: 5000 });
   });
 });

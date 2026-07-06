@@ -7,7 +7,7 @@ import { resolveModel, type TaskType, type Provider, GEMINI_FLASH_LITE } from "@
 import { resolveFreeTierModel, invalidateFreeTierModel } from "@lib/gemini-model-discovery";
 import { parseGeminiError } from "@lib/ai-error-handler";
 import { generationSettingsFor } from "@/lib/ai-prompts";
-import { isDemoAiEnabled, DEMO_AI_HEADER, mockGenerateBody } from "@/lib/ai-demo-mock";
+import { isDemoAiEnabled, DEMO_AI_HEADER, mockGenerateBody, mockStreamDeltas } from "@/lib/ai-demo-mock";
 import { PROVIDER_ADAPTERS } from "@lib/ai-providers";
 import { db, userApiKeysTable } from "@workspace/db";
 import { decryptApiKey } from "@lib/encryption";
@@ -55,8 +55,27 @@ export async function POST(request: NextRequest) {
     // provider. The flag is unset in production, so this branch is dead there;
     // even if the header were forged, the env gate short-circuits first.
     if (isDemoAiEnabled() && request.headers.get(DEMO_AI_HEADER) === "1") {
-      const body = (await request.json().catch(() => ({}))) as { action?: unknown };
+      const body = (await request.json().catch(() => ({}))) as { action?: unknown; stream?: unknown };
       const action = typeof body.action === "string" ? body.action : undefined;
+      if (body.stream === true) {
+        // Emit the canned deltas as SSE, paced so the stream is observably
+        // progressive. Client contract: `data: {"delta":"…"}` frames, then [DONE].
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream<Uint8Array>({
+          async start(controller) {
+            for (const delta of mockStreamDeltas(action)) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta })}\n\n`));
+              await new Promise((r) => setTimeout(r, 40));
+            }
+            controller.enqueue(encoder.encode('data: {"done":true,"model":"mock"}\n\n'));
+            controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+            controller.close();
+          },
+        });
+        return new Response(stream, {
+          headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform" },
+        });
+      }
       return NextResponse.json(mockGenerateBody(action));
     }
 

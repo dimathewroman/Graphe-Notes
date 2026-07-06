@@ -10,7 +10,7 @@ import { useAppStore } from "@/store";
 import { buildAiPrompt, wordCount, isLengthAcceptable, lengthCorrectionHint, taskTypeFor } from "@/lib/ai-prompts";
 import { getSelectionHtml } from "@/lib/editor-html";
 import { isDemoAiEnabled } from "@/lib/ai-demo-mock";
-import { executeAiRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
+import { executeAiRequest, executeAiStreamRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
 
 interface AiSettingsResponse {
   activeAiProvider?: string | null;
@@ -163,24 +163,45 @@ export function useAiAction(
     // character count — good enough for the fuzzy ~500-char light/primary threshold.
     const taskType = taskTypeFor(action, sel.to - sel.from);
 
-    // Demo-AI harness: run the action against the mock generate endpoint (no auth,
-    // no real provider). Exercises the full client → route → editor-insert path so
-    // AI is end-to-end testable in demo; the streaming work builds on this branch.
+    // Demo-AI harness: STREAM the action from the mock generate endpoint (no auth,
+    // no real provider) and insert deltas progressively, exactly like real
+    // streaming will. Exercises the full client → SSE route → progressive editor
+    // insert path so streaming is end-to-end testable in demo (9.3).
     if (isDemo && isDemoAiEnabled()) {
       setAiLoading(true);
       setAiError(null);
-      const tracker = trackSelection();
+      // Rewrite actions replace the selection; generative ones append after it.
+      // Clear/anchor once, then append each delta at an advancing position (mock
+      // deltas are plain text, so a delta of length N advances the position by N).
+      const generative = GENERATIVE_ACTIONS.has(action);
+      const anchor = generative ? sel.to : sel.from; // append after / replace the selection
+      if (!generative) {
+        editor!.chain().focus().deleteRange({ from: sel.from, to: sel.to }).run();
+      }
+      // Re-write the whole streamed region with the full accumulated text on each
+      // delta (via the raw tr.insertText primitive, which preserves the literal
+      // string). Appending delta-by-delta instead leaves a trailing space at the
+      // growing block edge that contenteditable collapses into the model on some
+      // platforms ("Mock " + "AI " → "MockAI"); a complete string each time has no
+      // edge whitespace, so it's stable everywhere. Still visibly progressive.
+      let accumulated = "";
       try {
-        const outcome = await executeAiRequest({ provider: "graphe_free", prompt, system, taskType, action, demoMock: true });
-        if (outcome.ok && outcome.text) {
-          const { from, to } = tracker.pos();
-          applyAiResult(outcome.text, from, to);
-        } else if (!outcome.ok) {
+        const outcome = await executeAiStreamRequest(
+          { provider: "graphe_free", prompt, system, taskType, action, demoMock: true },
+          (delta) => {
+            const prevLen = accumulated.length;
+            accumulated += delta;
+            editor!.chain().command(({ tr }) => {
+              tr.insertText(accumulated, anchor, anchor + prevLen);
+              return true;
+            }).run();
+          },
+        );
+        if (!outcome.ok) {
           setAiError(outcome.message ?? "AI request failed");
           setTimeout(() => setAiError(null), 4000);
         }
       } finally {
-        tracker.stop();
         setAiLoading(false);
         savedAiSelection.current = null;
       }
