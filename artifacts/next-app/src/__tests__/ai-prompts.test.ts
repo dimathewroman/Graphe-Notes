@@ -2,7 +2,7 @@
 // selection is fenced as data. These tests pin that split so a regression can't
 // silently re-concatenate instruction + selection (which is the injection hole).
 import { describe, it, expect } from "vitest";
-import { buildAiPrompt, DATA_FENCE_CLAUSE, fenceContent } from "@/lib/ai-prompts";
+import { buildAiPrompt, DATA_FENCE_CLAUSE, fenceContent, generationSettingsFor } from "@/lib/ai-prompts";
 
 describe("buildAiPrompt (system-role + data fencing)", () => {
   it("returns the task in system and the fenced selection in content", () => {
@@ -45,5 +45,24 @@ describe("buildAiPrompt (system-role + data fencing)", () => {
 
   it("fenceContent wraps text in the documented markers", () => {
     expect(fenceContent("abc")).toBe("<<<BEGIN CONTENT>>>\nabc\n<<<END CONTENT>>>");
+  });
+});
+
+describe("generationSettingsFor (G14, 10.3)", () => {
+  it("gives mechanical actions a near-deterministic low temperature", () => {
+    for (const a of ["proofread", "summarize_short", "extract_action_items", "shorter_50", "simplify"]) {
+      expect(generationSettingsFor(a).temperature, a).toBeLessThanOrEqual(0.2);
+    }
+  });
+
+  it("gives creative actions a higher temperature", () => {
+    for (const a of ["rewrite", "tone_casual", "longer_50", "improve"]) {
+      expect(generationSettingsFor(a).temperature, a).toBeGreaterThanOrEqual(0.6);
+    }
+  });
+
+  it("defaults unknown/freeform actions to the creative setting", () => {
+    expect(generationSettingsFor("ai_panel").temperature).toBeGreaterThanOrEqual(0.6);
+    expect(generationSettingsFor("").temperature).toBeGreaterThanOrEqual(0.6);
   });
 });

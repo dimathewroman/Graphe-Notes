@@ -14,6 +14,14 @@ export function stripTrailingSlashes(s: string): string {
   return s.slice(0, end);
 }
 
+// G14 (10.3): per-action sampling. Structurally identical to the client-side
+// GenerationSettings in ai-prompts.ts — kept local so this server lib has no
+// dependency on next-app src.
+export interface GenerationSettings {
+  temperature: number;
+  topP: number;
+}
+
 export interface ParsedResult {
   text: string;
   truncated: boolean;
@@ -31,8 +39,9 @@ export interface ProviderAdapter {
   url: (model: string, endpoint?: string | null) => string;
   headers: (apiKey: string) => Record<string, string>;
   /** `system` (G12): task instruction placed in the provider's system role; `prompt`
-   *  is the fenced user content. Omitted for freeform requests. */
-  body: (model: string, prompt: string, maxTokens: number, system?: string) => unknown;
+   *  is the fenced user content. `gen` (G14): per-action sampling settings. Both
+   *  optional (omitted for freeform requests). */
+  body: (model: string, prompt: string, maxTokens: number, system?: string, gen?: GenerationSettings) => unknown;
   parse: (data: unknown) => ParsedResult;
   /** Map a non-OK upstream response to our client error shape. */
   mapError: (upstreamStatus: number, rawBody: string) => AdapterError;
@@ -48,10 +57,13 @@ export const geminiAdapter: ProviderAdapter = {
   // Key rides the x-goog-api-key header, never the URL (§S key-in-URL).
   url: (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
   headers: (apiKey) => ({ "Content-Type": "application/json", "x-goog-api-key": apiKey }),
-  body: (_model, prompt, maxTokens, system) => ({
+  body: (_model, prompt, maxTokens, system, gen) => ({
     contents: [{ parts: [{ text: prompt }] }],
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-    generationConfig: { maxOutputTokens: maxTokens },
+    generationConfig: {
+      maxOutputTokens: maxTokens,
+      ...(gen ? { temperature: gen.temperature, topP: gen.topP } : {}),
+    },
   }),
   parse: (data) => {
     const d = data as {
@@ -83,10 +95,11 @@ export const geminiAdapter: ProviderAdapter = {
 export const anthropicAdapter: ProviderAdapter = {
   url: () => "https://api.anthropic.com/v1/messages",
   headers: (apiKey) => ({ "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" }),
-  body: (model, prompt, maxTokens, system) => ({
+  body: (model, prompt, maxTokens, system, gen) => ({
     model,
     max_tokens: maxTokens,
     ...(system ? { system } : {}),
+    ...(gen ? { temperature: gen.temperature, top_p: gen.topP } : {}),
     messages: [{ role: "user", content: prompt }],
   }),
   parse: (data) => {
@@ -110,12 +123,13 @@ export function openAiCompatibleAdapter(baseUrl?: string): ProviderAdapter {
   return {
     url: (_model, endpoint) => `${stripTrailingSlashes(baseUrl ?? endpoint ?? "")}/chat/completions`,
     headers: (apiKey) => ({ "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }),
-    body: (model, prompt, maxTokens, system) => ({
+    body: (model, prompt, maxTokens, system, gen) => ({
       model,
       messages: system
         ? [{ role: "system", content: system }, { role: "user", content: prompt }]
         : [{ role: "user", content: prompt }],
       max_tokens: maxTokens,
+      ...(gen ? { temperature: gen.temperature, top_p: gen.topP } : {}),
     }),
     parse: (data) => {
       const d = data as {

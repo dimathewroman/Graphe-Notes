@@ -119,6 +119,31 @@ describe("system role placement (G12, 10.1)", () => {
   });
 });
 
+describe("per-action generation settings in body (G14, 10.3)", () => {
+  const gen = { temperature: 0.1, topP: 0.8 };
+
+  it("OpenAI-compatible maps to temperature + top_p", () => {
+    const b = openAiCompatibleAdapter("https://x/v1").body("m", "c", 100, undefined, gen) as Record<string, unknown>;
+    expect(b.temperature).toBe(0.1);
+    expect(b.top_p).toBe(0.8);
+    // Absent when no gen given.
+    expect(openAiCompatibleAdapter("https://x/v1").body("m", "c", 100)).not.toHaveProperty("temperature");
+  });
+
+  it("Anthropic maps to temperature + top_p", () => {
+    const b = anthropicAdapter.body("m", "c", 100, undefined, gen) as Record<string, unknown>;
+    expect(b.temperature).toBe(0.1);
+    expect(b.top_p).toBe(0.8);
+  });
+
+  it("Gemini nests temperature + topP under generationConfig", () => {
+    const b = geminiAdapter.body("m", "c", 100, undefined, gen) as { generationConfig: Record<string, unknown> };
+    expect(b.generationConfig.temperature).toBe(0.1);
+    expect(b.generationConfig.topP).toBe(0.8);
+    expect(b.generationConfig.maxOutputTokens).toBe(100);
+  });
+});
+
 describe("openAiCompatibleModelsUrl (9.2 discovery)", () => {
   it("appends /models and normalizes trailing slashes", () => {
     expect(openAiCompatibleModelsUrl("https://api.groq.com/openai/v1")).toBe("https://api.groq.com/openai/v1/models");

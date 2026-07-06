@@ -58,6 +58,33 @@ function taskInstruction(action: string, customInstruction?: string): string | n
   return tasks[action] ?? null;
 }
 
+// G14 (Phase 10.3): sampling settings per action. Mechanical actions (proofread,
+// summarize, extract, shorten) want near-deterministic output so retries agree and
+// the transform is faithful; creative actions (rewrite, tone, expand) want variety.
+export interface GenerationSettings {
+  temperature: number;
+  topP: number;
+}
+
+const MECHANICAL_ACTIONS = new Set([
+  "proofread",
+  "simplify",
+  "shorter_25",
+  "shorter_50",
+  "shorter_custom",
+  "summarize_short",
+  "summarize_balanced",
+  "summarize_detailed",
+  "summarize_custom",
+  "extract_action_items",
+]);
+
+export function generationSettingsFor(action: string): GenerationSettings {
+  return MECHANICAL_ACTIONS.has(action)
+    ? { temperature: 0.1, topP: 0.8 } // near-deterministic
+    : { temperature: 0.7, topP: 0.95 }; // creative (rewrite, tone, expand, improve, freeform)
+}
+
 export function buildAiPrompt(
   action: string,
   selectedText: string,
