@@ -27,13 +27,20 @@ Graphe-Notes/
 │       │   │   ├── FolderEditModal.tsx
 │       │   │   ├── Home.tsx         Main layout orchestrator
 │       │   │   ├── NoteList.tsx
-│       │   │   ├── NoteShell.tsx    Note orchestrator (~910 lines)
+│       │   │   ├── NoteShell.tsx    Note orchestrator (~1070 lines)
 │       │   │   ├── PostHogProvider.tsx
 │       │   │   ├── Providers.tsx    All context providers
 │       │   │   ├── QuickBitList.tsx
 │       │   │   ├── QuickBitShell.tsx
 │       │   │   ├── RecentlyDeleted.tsx
-│       │   │   ├── SettingsModal.tsx
+│       │   │   ├── SettingsModal.tsx  Thin shell (~340 lines): modal, tab nav, footer
+│       │   │   ├── settings/         One component per Settings tab
+│       │   │   │   ├── AiSettingsTab.tsx          Providers, keys, model discovery
+│       │   │   │   ├── AppearanceSettingsTab.tsx  Theme/accent (controlled), motion, dark, colorblind
+│       │   │   │   ├── SecuritySettingsTab.tsx    Vault PIN setup/change
+│       │   │   │   ├── QuickBitsSettingsTab.tsx   Defaults (controlled by shell)
+│       │   │   │   ├── DataSettingsTab.tsx
+│       │   │   │   └── AccountSettingsTab.tsx
 │       │   │   ├── Sidebar.tsx
 │       │   │   ├── VaultModal.tsx
 │       │   │   └── VersionHistoryPanel.tsx
