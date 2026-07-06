@@ -154,14 +154,16 @@ Do not skip or manually replicate these steps. Let the hook handle them.
 
 ## API Client Pattern
 
-Never write raw fetch calls. All API calls go through generated React Query hooks in `@workspace/api-client-react`.
+Prefer the generated React Query hooks in `@workspace/api-client-react` for any endpoint that is in the OpenAPI spec (notes, folders, quick bits, templates, smart folders, tags, vault). Never write a raw `fetch()` to those — use the hook so types and cache keys stay in sync.
 
-To add a new endpoint:
+To add a new endpoint to the spec:
 1. Edit `lib/api-spec/openapi.yaml`
 2. Run `pnpm --filter @workspace/api-spec run codegen`
 3. Import and use the generated hook
 
 Query cache keys are exported alongside hooks: `getGetNotesQueryKey()`, `getGetNoteQueryKey(id)`, etc.
+
+**Sanctioned escape hatch:** some endpoints are intentionally *not* in the OpenAPI spec — the AI routes (`/api/ai/*`), attachments (`/api/attachments/*`), note versions (`/api/notes/:id/versions*`), and quick-bit expiry (`/api/quick-bits/expired`). These are called through `authenticatedFetch` from `@workspace/api-client-react/custom-fetch`, which attaches the Supabase session. That is the correct, approved pattern for spec-external routes — it is not a raw `fetch()` and does not violate the rule above. Do not add these to the spec solely to satisfy the codegen path.
 
 ---
 
