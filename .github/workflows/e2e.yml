@@ -23,10 +23,6 @@ env:
   NEXT_PUBLIC_POSTHOG_KEY: phc_placeholder
   NEXT_PUBLIC_POSTHOG_HOST: https://app.posthog.com
   AI_KEY_ENCRYPTION_SECRET: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-  # Demo-AI harness: enable the mock AI path so the e2e suite can exercise
-  # AI-in-the-editor in demo mode. Baked into the build (NEXT_PUBLIC) and read
-  # by the route at runtime. Production never sets this.
-  NEXT_PUBLIC_ENABLE_DEMO_AI: "1"
 
 jobs:
   # ── Job 1: Typecheck + unit tests + Build verification ───────────────────────
@@ -79,6 +75,13 @@ jobs:
 
     permissions:
       pull-requests: write  # Required to post the performance PR comment
+
+    # Demo-AI harness: enable the mock AI path for the e2e suite ONLY (baked into
+    # this job's build + read by next start at runtime). Kept off the top-level
+    # env so the unit-test/build job stays production-like — otherwise the flag
+    # would leak into Vitest and change demo-mode behavior under test.
+    env:
+      NEXT_PUBLIC_ENABLE_DEMO_AI: "1"
 
     steps:
       - name: Checkout

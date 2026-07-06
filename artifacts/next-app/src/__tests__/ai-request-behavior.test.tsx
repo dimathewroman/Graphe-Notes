@@ -40,8 +40,10 @@ function res(status: number, body: unknown) {
 }
 
 const realFetch = globalThis.fetch;
-afterEach(() => { globalThis.fetch = realFetch; });
-beforeEach(() => { insertSpy.mockReset(); authenticatedFetch.mockReset(); });
+afterEach(() => { globalThis.fetch = realFetch; vi.unstubAllEnvs(); });
+// These tests assert the normal demo behavior ("Sign up"), so pin the demo-AI
+// harness flag OFF regardless of ambient env (the CI e2e job sets it globally).
+beforeEach(() => { insertSpy.mockReset(); authenticatedFetch.mockReset(); vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_AI", ""); });
 
 async function run(action: string, opts?: { isDemo?: boolean }, selection = "hello") {
   const { result } = renderHook(() => useAiAction(makeEditor(), opts), { wrapper: makeWrapper() });
