@@ -5,6 +5,7 @@ import { getPostHogClient } from "@/lib/posthog-server";
 import { checkAndIncrementUsage } from "@lib/ai-rate-limit";
 import { resolveModel, type TaskType, type Provider } from "@lib/ai-model-router";
 import { parseGeminiError } from "@lib/ai-error-handler";
+import { PROVIDER_ADAPTERS } from "@lib/ai-providers";
 import { db, userApiKeysTable } from "@workspace/db";
 import { decryptApiKey } from "@lib/encryption";
 import { eq, and } from "drizzle-orm";
@@ -16,6 +17,13 @@ const VALID_PROVIDERS: Provider[] = [
   "openai",
   "anthropic",
   "local_llm",
+  // G17 (9.2): OpenAI-compatible BYOK providers.
+  "openrouter",
+  "groq",
+  "mistral",
+  "together",
+  "fireworks",
+  "custom_openai",
 ];
 
 // SSRF guard (§S / CodeQL js/request-forgery): routing.model can derive from a
@@ -223,154 +231,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid model" }, { status: 400 });
     }
 
-    // --- google_ai_studio ---
-    if (provider === "google_ai_studio") {
-      const geminiResponse = await fetch(
-        // Key goes in the x-goog-api-key header, never the URL (§S key-in-URL).
-        `https://generativelanguage.googleapis.com/v1beta/models/${routing.model}:generateContent`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": decryptedKey },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: combinedPrompt }] }],
-            generationConfig: { maxOutputTokens: 1024 },
-          }),
-        },
-      );
-
-      if (!geminiResponse.ok) {
-        const rawErrorBody = await geminiResponse.text();
-        const parsedError = parseGeminiError(geminiResponse.status, rawErrorBody);
-
-        if (parsedError.type === "rpm_limit") {
-          return NextResponse.json(
-            { error: parsedError.type, userMessage: parsedError.userMessage, retryAfterMs: parsedError.retryAfterMs },
-            { status: 429 },
-          );
-        }
-        if (parsedError.type === "rpd_limit") {
-          return NextResponse.json(
-            { error: parsedError.type, userMessage: parsedError.userMessage, retryAfterMs: null },
-            { status: 429 },
-          );
-        }
-        if (parsedError.type === "invalid_key") {
-          return NextResponse.json(
-            { error: parsedError.type, userMessage: parsedError.userMessage },
-            { status: 401 },
-          );
-        }
-        return NextResponse.json(
-          { error: parsedError.type, userMessage: parsedError.userMessage },
-          { status: 502 },
-        );
-      }
-
-      const data = (await geminiResponse.json()) as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
-        usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
-      };
-
-      const result = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-      if (data.candidates?.[0]?.finishReason === "MAX_TOKENS") {
-        return NextResponse.json({ error: "output_truncated", userMessage: TRUNCATION_MESSAGE }, { status: 200 });
-      }
-      const inputTokens = data.usageMetadata?.promptTokenCount ?? null;
-      const outputTokens = data.usageMetadata?.candidatesTokenCount ?? null;
-
-      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, model: routing.model, input_tokens: inputTokens, output_tokens: outputTokens } });
-      return NextResponse.json({
-        result,
-        model: routing.model,
-        tokensUsed: { inputTokens, outputTokens },
-      });
+    // --- BYOK providers: one dispatch through the adapter table (G17). Adding a
+    // provider is a single record in PROVIDER_ADAPTERS; the six OpenAI-compatible
+    // providers share one adapter. (local_llm is rejected at the top — client-side.) ---
+    const adapter = PROVIDER_ADAPTERS[provider];
+    if (!adapter) {
+      return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
     }
 
-    // --- openai ---
-    if (provider === "openai") {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${decryptedKey}`,
-        },
-        body: JSON.stringify({
-          model: routing.model,
-          messages: [{ role: "user", content: combinedPrompt }],
-          max_tokens: 1024,
-        }),
-      });
+    const upstream = await fetch(adapter.url(routing.model, row.endpointUrl), {
+      method: "POST",
+      headers: adapter.headers(decryptedKey),
+      body: JSON.stringify(adapter.body(routing.model, combinedPrompt, 1024)),
+    });
 
-      if (!response.ok) {
-        const rawBody = await response.text();
-        return NextResponse.json(
-          { error: "upstream_error", geminiStatus: response.status, geminiMessage: rawBody },
-          { status: 502 },
-        );
-      }
-
-      const data = (await response.json()) as {
-        choices: Array<{ message: { content: string }; finish_reason?: string }>;
-        usage?: { prompt_tokens?: number; completion_tokens?: number };
-      };
-      const result = data.choices[0]?.message?.content ?? "";
-      if (data.choices[0]?.finish_reason === "length") {
-        return NextResponse.json({ error: "output_truncated", userMessage: TRUNCATION_MESSAGE }, { status: 200 });
-      }
-      const tokensUsed = {
-        inputTokens: data.usage?.prompt_tokens ?? null,
-        outputTokens: data.usage?.completion_tokens ?? null,
-      };
-
-      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, model: routing.model, input_tokens: tokensUsed.inputTokens, output_tokens: tokensUsed.outputTokens } });
-      return NextResponse.json({ result, model: routing.model, tokensUsed });
+    if (!upstream.ok) {
+      const rawBody = await upstream.text();
+      const mapped = adapter.mapError(upstream.status, rawBody);
+      return NextResponse.json(mapped.body, { status: mapped.status });
     }
 
-    // --- anthropic ---
-    if (provider === "anthropic") {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": decryptedKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: routing.model,
-          max_tokens: 1024,
-          messages: [{ role: "user", content: combinedPrompt }],
-        }),
-      });
-
-      if (!response.ok) {
-        const rawBody = await response.text();
-        return NextResponse.json(
-          { error: "upstream_error", geminiStatus: response.status, geminiMessage: rawBody },
-          { status: 502 },
-        );
-      }
-
-      const data = (await response.json()) as {
-        content: Array<{ text: string }>;
-        stop_reason?: string;
-        usage?: { input_tokens?: number; output_tokens?: number };
-      };
-      const result = data.content[0]?.text ?? "";
-      if (data.stop_reason === "max_tokens") {
-        return NextResponse.json({ error: "output_truncated", userMessage: TRUNCATION_MESSAGE }, { status: 200 });
-      }
-      const tokensUsed = {
-        inputTokens: data.usage?.input_tokens ?? null,
-        outputTokens: data.usage?.output_tokens ?? null,
-      };
-
-      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, model: routing.model, input_tokens: tokensUsed.inputTokens, output_tokens: tokensUsed.outputTokens } });
-      return NextResponse.json({ result, model: routing.model, tokensUsed });
+    const parsed = adapter.parse(await upstream.json());
+    if (parsed.truncated) {
+      return NextResponse.json({ error: "output_truncated", userMessage: TRUNCATION_MESSAGE }, { status: 200 });
     }
 
-    // local_llm is rejected at the top of this handler — requests must be made client-side.
-    // Should never reach here given VALID_PROVIDERS check above.
-    return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
+    getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, model: routing.model, input_tokens: parsed.inputTokens, output_tokens: parsed.outputTokens } });
+    return NextResponse.json({
+      result: parsed.text,
+      model: routing.model,
+      tokensUsed: { inputTokens: parsed.inputTokens, outputTokens: parsed.outputTokens },
+    });
   } catch (err) {
     Sentry.captureException(err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

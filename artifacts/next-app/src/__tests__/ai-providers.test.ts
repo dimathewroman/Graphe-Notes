@@ -1,0 +1,79 @@
+// G17 (Phase 9.2): the provider adapter table is where the route's per-provider
+// request/parse logic now lives. The route dispatch is thin; these tests cover the
+// substance (body shape, response parsing, truncation detection, URL building).
+import { describe, it, expect } from "vitest";
+import {
+  PROVIDER_ADAPTERS,
+  openAiCompatibleAdapter,
+  geminiAdapter,
+  anthropicAdapter,
+} from "@lib/ai-providers";
+
+describe("OpenAI-compatible adapter", () => {
+  const a = openAiCompatibleAdapter("https://api.openai.com/v1");
+
+  it("builds a chat-completions request body", () => {
+    expect(a.body("gpt-4o", "hi", 1024)).toEqual({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "hi" }],
+      max_tokens: 1024,
+    });
+  });
+
+  it("parses text + usage and detects length truncation", () => {
+    const ok = a.parse({ choices: [{ message: { content: "yo" }, finish_reason: "stop" }], usage: { prompt_tokens: 3, completion_tokens: 5 } });
+    expect(ok).toEqual({ text: "yo", truncated: false, inputTokens: 3, outputTokens: 5 });
+    expect(a.parse({ choices: [{ message: { content: "cut" }, finish_reason: "length" }] }).truncated).toBe(true);
+  });
+
+  it("uses a fixed base URL, or the caller endpoint for the custom adapter", () => {
+    expect(a.url("m")).toBe("https://api.openai.com/v1/chat/completions");
+    const custom = openAiCompatibleAdapter();
+    expect(custom.url("m", "https://my-host/v1/")).toBe("https://my-host/v1/chat/completions");
+  });
+
+  it("sends a Bearer auth header", () => {
+    expect(a.headers("sk-abc").Authorization).toBe("Bearer sk-abc");
+  });
+});
+
+describe("Gemini adapter", () => {
+  it("builds generateContent body and puts the model in the URL", () => {
+    expect(geminiAdapter.body("m", "hi", 512)).toEqual({
+      contents: [{ parts: [{ text: "hi" }] }],
+      generationConfig: { maxOutputTokens: 512 },
+    });
+    expect(geminiAdapter.url("gemini-2.5-flash")).toContain("/models/gemini-2.5-flash:generateContent");
+    expect(geminiAdapter.headers("k")["x-goog-api-key"]).toBe("k");
+  });
+
+  it("parses candidates + detects MAX_TOKENS truncation", () => {
+    expect(geminiAdapter.parse({ candidates: [{ content: { parts: [{ text: "hey" }] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 4 } }))
+      .toEqual({ text: "hey", truncated: false, inputTokens: 2, outputTokens: 4 });
+    expect(geminiAdapter.parse({ candidates: [{ content: { parts: [{ text: "x" }] }, finishReason: "MAX_TOKENS" }] }).truncated).toBe(true);
+  });
+});
+
+describe("Anthropic adapter", () => {
+  it("parses content + detects max_tokens truncation", () => {
+    expect(anthropicAdapter.parse({ content: [{ text: "claude" }], stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 2 } }))
+      .toEqual({ text: "claude", truncated: false, inputTokens: 1, outputTokens: 2 });
+    expect(anthropicAdapter.parse({ content: [{ text: "x" }], stop_reason: "max_tokens" }).truncated).toBe(true);
+  });
+});
+
+describe("PROVIDER_ADAPTERS registry", () => {
+  it("registers all BYOK providers (adding one is a single record)", () => {
+    for (const p of ["google_ai_studio", "anthropic", "openai", "openrouter", "groq", "mistral", "together", "fireworks", "custom_openai"]) {
+      expect(PROVIDER_ADAPTERS[p], p).toBeTruthy();
+    }
+  });
+
+  it("routes the six OpenAI-compatible providers to their own base URLs", () => {
+    expect(PROVIDER_ADAPTERS.groq.url("m")).toContain("api.groq.com");
+    expect(PROVIDER_ADAPTERS.openrouter.url("m")).toContain("openrouter.ai");
+    expect(PROVIDER_ADAPTERS.mistral.url("m")).toContain("mistral.ai");
+    expect(PROVIDER_ADAPTERS.together.url("m")).toContain("together.xyz");
+    expect(PROVIDER_ADAPTERS.fireworks.url("m")).toContain("fireworks.ai");
+  });
+});

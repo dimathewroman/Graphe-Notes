@@ -28,3 +28,17 @@ describe("resolveModel — Google model override (G10)", () => {
     expect(r.isAutoRouted).toBe(true);
   });
 });
+
+// G17 (9.2): the OpenAI-compatible BYOK providers use the caller's explicit model.
+describe("resolveModel — OpenAI-compatible providers (9.2)", () => {
+  for (const p of ["openrouter", "groq", "mistral", "together", "fireworks", "custom_openai"] as const) {
+    it(`${p} returns the explicit override, not auto-routed`, () => {
+      const r = resolveModel(p, "manual", "some-model");
+      expect(r.model).toBe("some-model");
+      expect(r.isAutoRouted).toBe(false);
+    });
+    it(`${p} requires a model override`, () => {
+      expect(() => resolveModel(p, "manual")).toThrow(/modelOverride is required/);
+    });
+  }
+});

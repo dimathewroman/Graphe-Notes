@@ -3,7 +3,19 @@ export const GEMINI_FLASH = "gemini-2.5-flash";
 export const GEMINI_PRO = "gemini-2.5-pro";
 
 export type TaskType = "background" | "manual" | "deliberate";
-export type Provider = "graphe_free" | "google_ai_studio" | "openai" | "anthropic" | "local_llm";
+export type Provider =
+  | "graphe_free"
+  | "google_ai_studio"
+  | "openai"
+  | "anthropic"
+  | "local_llm"
+  // G17 (9.2): OpenAI-compatible BYOK providers — one adapter serves them all.
+  | "openrouter"
+  | "groq"
+  | "mistral"
+  | "together"
+  | "fireworks"
+  | "custom_openai";
 
 export type ModelRoutingResult = {
   model: string;
@@ -41,7 +53,14 @@ export function resolveModel(
     }
 
     case "openai":
-    case "anthropic": {
+    case "anthropic":
+    // OpenAI-compatible BYOK providers: the user picks the model explicitly.
+    case "openrouter":
+    case "groq":
+    case "mistral":
+    case "together":
+    case "fireworks":
+    case "custom_openai": {
       if (!modelOverride) {
         throw new Error(`modelOverride is required for provider: ${provider}`);
       }
