@@ -5,6 +5,7 @@
 // their own orchestration (retry timing, cancel, position-mapping, UI) on top.
 
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
+import { drainSseEvents, parseSsePayload } from "@lib/ai-stream";
 
 // G16-partial: shared React Query key for the AI settings (active provider + local
 // config). Cached so rapid successive AI actions don't each refetch; SettingsModal
@@ -137,4 +138,62 @@ async function runCloud(opts: AiRequestOptions): Promise<AiRequestOutcome> {
 
 export function executeAiRequest(opts: AiRequestOptions): Promise<AiRequestOutcome> {
   return opts.provider === "local_llm" ? runLocal(opts) : runCloud(opts);
+}
+
+/**
+ * Streaming variant (9.3). POSTs with `stream: true`, consumes the SSE response
+ * (`data: {"delta":"…"}` frames, then [DONE]), and calls `onDelta` for each text
+ * delta as it arrives. Resolves with the full accumulated text. Framing is done
+ * by the pure ai-stream primitives so partial frames across network chunk
+ * boundaries are handled. AbortErrors propagate so callers can treat cancel
+ * distinctly.
+ */
+export async function executeAiStreamRequest(
+  opts: AiRequestOptions,
+  onDelta: (delta: string) => void,
+): Promise<AiRequestOutcome> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (opts.demoMock) headers["x-graphe-demo-ai"] = "1";
+  const res = await authenticatedFetch("/api/ai/generate", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      provider: opts.provider,
+      taskType: opts.taskType,
+      prompt: opts.prompt,
+      system: opts.system,
+      action: opts.action,
+      stream: true,
+    }),
+    signal: opts.signal,
+  });
+
+  if (!res.ok || !res.body) {
+    return { ok: false, message: "AI request failed. Please try again." };
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let full = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const { payloads, rest } = drainSseEvents(buffer);
+      buffer = rest;
+      for (const payload of payloads) {
+        const event = parseSsePayload(payload) as { delta?: string } | null;
+        if (event?.delta) {
+          full += event.delta;
+          onDelta(event.delta);
+        }
+      }
+    }
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    return { ok: false, message: "AI stream failed. Please try again." };
+  }
+  return { ok: true, text: full };
 }
