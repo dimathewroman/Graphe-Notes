@@ -174,20 +174,21 @@ export function useAiAction(
       // Clear/anchor once, then append each delta at an advancing position (mock
       // deltas are plain text, so a delta of length N advances the position by N).
       const generative = GENERATIVE_ACTIONS.has(action);
-      let insertPos = sel.from;
+      let insertPos: number;
       if (generative) {
-        insertPos = sel.to;
-        editor!.chain().focus().insertContentAt(insertPos, "\n\n").run();
-        insertPos += 2;
+        insertPos = sel.to; // append after the selection
       } else {
         editor!.chain().focus().deleteRange({ from: sel.from, to: sel.to }).run();
-        insertPos = sel.from;
+        insertPos = sel.from; // replace the selection
       }
       try {
         const outcome = await executeAiStreamRequest(
           { provider: "graphe_free", prompt, system, taskType, action, demoMock: true },
           (delta) => {
-            editor!.chain().insertContentAt(insertPos, delta).run();
+            // Insert as a literal text node — NOT a string, which insertContentAt
+            // would parse as HTML and collapse the deltas' whitespace ("Mock " +
+            // "AI " → "MockAI"). A text node of N chars advances the position by N.
+            editor!.chain().insertContentAt(insertPos, { type: "text", text: delta }).run();
             insertPos += delta.length;
           },
         );
