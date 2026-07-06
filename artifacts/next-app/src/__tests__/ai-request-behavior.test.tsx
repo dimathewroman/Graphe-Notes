@@ -43,9 +43,9 @@ const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
 beforeEach(() => { insertSpy.mockReset(); authenticatedFetch.mockReset(); });
 
-async function run(action: string, opts?: { isDemo?: boolean }) {
+async function run(action: string, opts?: { isDemo?: boolean }, selection = "hello") {
   const { result } = renderHook(() => useAiAction(makeEditor(), opts), { wrapper: makeWrapper() });
-  act(() => result.current.captureSelection(0, 5, "hello"));
+  act(() => result.current.captureSelection(0, 5, selection));
   await act(async () => { await result.current.callAI(action); });
   return result;
 }
@@ -96,6 +96,33 @@ describe("callAI behavior contract (Phase 8 → guarded for Phase 9)", () => {
     const r = await run("improve");
     expect(insertSpy).not.toHaveBeenCalled();
     expect(r.current.aiError).toMatch(/took too long/i);
+  });
+
+  it("shorten that comes back longer is retried once with a corrective request", async () => {
+    // G14 (10.3): 10-word original, first result is longer (12 words) → one
+    // corrective retry → shorter result applied. 3 fetches total: settings + 2 generate.
+    const original = "one two three four five six seven eight nine ten";
+    const tooLong = "a b c d e f g h i j k l"; // 12 words
+    const short = "one two three"; // 3 words
+    authenticatedFetch
+      .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
+      .mockResolvedValueOnce(res(200, { result: tooLong }))
+      .mockResolvedValueOnce(res(200, { result: short }));
+    const r = await run("shorter_25", undefined, original);
+    expect(insertSpy).toHaveBeenCalledWith({ from: 0, to: 5 }, short);
+    // settings + first generate + corrective generate
+    expect(authenticatedFetch).toHaveBeenCalledTimes(3);
+    void r;
+  });
+
+  it("shorten that is already shorter is applied without a retry", async () => {
+    const original = "one two three four five six seven eight nine ten";
+    authenticatedFetch
+      .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
+      .mockResolvedValueOnce(res(200, { result: "one two three" }));
+    await run("shorter_25", undefined, original);
+    expect(insertSpy).toHaveBeenCalledWith({ from: 0, to: 5 }, "one two three");
+    expect(authenticatedFetch).toHaveBeenCalledTimes(2); // no corrective retry
   });
 
   it("local LLM: strips <think> blocks and inserts", async () => {

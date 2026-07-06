@@ -85,6 +85,47 @@ export function generationSettingsFor(action: string): GenerationSettings {
     : { temperature: 0.7, topP: 0.95 }; // creative (rewrite, tone, expand, improve, freeform)
 }
 
+// G14 (Phase 10.3): length actions have a target size. Count words on the text
+// content (tags stripped) so we can validate the result went the right direction.
+export function wordCount(htmlOrText: string): number {
+  const plain = htmlOrText.replace(/<[^>]*>/g, " ");
+  return (plain.match(/\S+/g) ?? []).length;
+}
+
+// Target word-count ratio for the fixed-percentage length actions (null for
+// everything else, including the *_custom variants which have no numeric target).
+export function lengthTargetRatio(action: string): number | null {
+  const map: Record<string, number> = { shorter_25: 0.75, shorter_50: 0.5, longer_25: 1.25, longer_50: 1.5 };
+  return map[action] ?? null;
+}
+
+// Below this the percentage is meaningless (a 25%-shorter 4-word selection can't
+// be sensibly validated), so we don't retry on length for tiny selections.
+const MIN_WORDS_TO_VALIDATE = 8;
+
+// Whether a length-action result went the right direction. The hard rule is
+// direction (shorten must be shorter, lengthen must be longer) — that's the
+// failure the accept criterion names ("a 25% shorter result that comes back
+// longer"). No constraint for non-length actions or tiny/empty results.
+export function isLengthAcceptable(action: string, originalWords: number, resultWords: number): boolean {
+  const ratio = lengthTargetRatio(action);
+  if (ratio == null || originalWords < MIN_WORDS_TO_VALIDATE || resultWords === 0) return true;
+  return ratio < 1 ? resultWords < originalWords : resultWords > originalWords;
+}
+
+// A corrective clause appended to the system instruction on the single length
+// retry, telling the model the concrete target so it corrects course.
+export function lengthCorrectionHint(action: string, originalWords: number): string {
+  const ratio = lengthTargetRatio(action);
+  if (ratio == null) return "";
+  const target = Math.max(1, Math.round(originalWords * ratio));
+  const shorter = ratio < 1;
+  return (
+    `Your previous result was not ${shorter ? "shorter" : "longer"} than the original. ` +
+    `The original is ${originalWords} words; return approximately ${target} words and make sure the result is clearly ${shorter ? "shorter" : "longer"}.`
+  );
+}
+
 export function buildAiPrompt(
   action: string,
   selectedText: string,

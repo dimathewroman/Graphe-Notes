@@ -7,7 +7,7 @@ import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import posthog from "posthog-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/store";
-import { buildAiPrompt } from "@/lib/ai-prompts";
+import { buildAiPrompt, wordCount, isLengthAcceptable, lengthCorrectionHint } from "@/lib/ai-prompts";
 import { getSelectionHtml } from "@/lib/editor-html";
 import { executeAiRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
 
@@ -328,6 +328,17 @@ export function useAiAction(
         setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
         setTimeout(() => setAiError(null), 5000);
         return;
+      }
+
+      // G14 (10.3): validate length for shorten/lengthen actions. If the result
+      // went the wrong direction (e.g. "25% shorter" came back longer), re-request
+      // ONCE with a corrective target before giving up on the length.
+      if (outcome.ok && outcome.text && !isLengthAcceptable(action, wordCount(sel.text), wordCount(outcome.text))) {
+        const correctiveSystem = `${system ?? ""}\n\n${lengthCorrectionHint(action, wordCount(sel.text))}`.trim();
+        setAiError("Adjusting length…");
+        const retry = await executeAiRequest({ provider, prompt, system: correctiveSystem, taskType, action, signal: controller.signal });
+        if (retry.ok && retry.text) outcome = retry;
+        setAiError(null);
       }
 
       if (outcome.text) {
