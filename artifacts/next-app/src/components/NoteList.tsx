@@ -205,9 +205,12 @@ export function NoteList() {
   const notes = useMemo(() => {
     let list = rawNotes;
 
-    // Demo mode: filter out soft-deleted notes and apply search/tag client-side
+    // Demo mode: filter out soft-deleted notes and apply search/tag client-side.
+    // X-D2: permanent delete sets `_demoDeleted: false, _demoPermanentlyDeleted: true`,
+    // so we must exclude permanently-deleted notes too or "Delete Forever" resurrects
+    // them into the main list.
     if (isDemo) {
-      list = list.filter((n: any) => !n._demoDeleted);
+      list = list.filter((n: any) => !n._demoDeleted && !n._demoPermanentlyDeleted);
       if (debouncedSearch) {
         const q = debouncedSearch.toLowerCase();
         list = list.filter(n =>

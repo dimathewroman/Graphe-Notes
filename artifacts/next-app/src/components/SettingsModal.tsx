@@ -14,6 +14,7 @@ import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAnimationConfig, useSetMotionLevel } from "@/hooks/use-motion";
 import { cn } from "@/lib/utils";
+import { useDemoMode } from "@/lib/demo-context";
 import { stripTrailingSlashes } from "@lib/ai-providers";
 import { Dialog, DialogClose } from "./ui/dialog";
 import { Dialog as DialogPrimitive, VisuallyHidden } from "radix-ui";
@@ -101,6 +102,7 @@ export function SettingsModal() {
   const colorblindMode = useAppStore(s => s.colorblindMode);
   const setColorblindMode = useAppStore(s => s.setColorblindMode);
   const { user, logout } = useAuth();
+  const isDemo = useDemoMode();
   const bp = useBreakpoint();
   const isMobile = bp === "mobile";
   const anim = useAnimationConfig();
@@ -316,6 +318,9 @@ export function SettingsModal() {
   // ── Load AI settings when AI tab is active ──────────────────────
   useEffect(() => {
     if (activeTab !== "ai" || !isSettingsOpen) return;
+    // X-D1: demo mode has no authenticated backend — these would all 401. Demo
+    // defaults to graphe_free; nothing here persists.
+    if (isDemo) return;
 
     authenticatedFetch("/api/ai/settings")
       .then(r => r.json())
@@ -370,20 +375,31 @@ export function SettingsModal() {
 
   useEffect(() => {
     if (activeTab === "security" && isSettingsOpen) {
-      authenticatedFetch("/api/vault/status")
-        .then(r => r.json())
-        .then((data: { isConfigured: boolean }) => setVaultConfigured(data.isConfigured))
-        .catch(() => {});
+      if (isDemo) {
+        // X-D3: demo vault state is the sessionStorage PIN hash (source of truth).
+        setVaultConfigured(!!sessionStorage.getItem("demo_vault_hash"));
+      } else {
+        authenticatedFetch("/api/vault/status")
+          .then(r => r.json())
+          .then((data: { isConfigured: boolean }) => setVaultConfigured(data.isConfigured))
+          .catch(() => {});
+      }
       setSecurityMode("idle");
       setSecurityStep("current");
       setSecurityFirstPin("");
       setSecurityCurrentPin("");
       setSecurityError("");
     }
-  }, [activeTab, isSettingsOpen]);
+  }, [activeTab, isSettingsOpen, isDemo]);
 
   useEffect(() => {
     if (activeTab === "quickbits" && isSettingsOpen) {
+      // X-D1: demo has no settings backend — show the defaults, fire no request.
+      if (isDemo) {
+        setQbExpirationDays(3);
+        setQbNotificationHours([24]);
+        return;
+      }
       authenticatedFetch("/api/quick-bits/settings")
         .then(r => r.json())
         .then((data: { defaultExpirationDays: number; defaultNotificationHours: number[] }) => {
@@ -392,12 +408,13 @@ export function SettingsModal() {
         })
         .catch(() => {});
     }
-  }, [activeTab, isSettingsOpen]);
+  }, [activeTab, isSettingsOpen, isDemo]);
 
   // ── AI handlers ─────────────────────────────────────────────────
   // Commit the active provider to the server. Also flips hasCompletedAiSetup
   // so the first-time AI setup modal won't reappear after a direct Settings save.
   const commitActiveProvider = async (newProvider: AiProvider) => {
+    if (isDemo) return; // X-D1: no settings backend in demo
     await authenticatedFetch("/api/ai/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -425,6 +442,7 @@ export function SettingsModal() {
   };
 
   const handleSaveGoogleKey = async () => {
+    if (isDemo) return; // X-D1: no AI-key backend in demo
     if (!googleKey.trim()) return;
     setGoogleSaving(true);
     try {
@@ -442,6 +460,7 @@ export function SettingsModal() {
   };
 
   const handleSaveByokKey = async (sub: ByokSubProvider) => {
+    if (isDemo) return; // X-D1: no AI-key backend in demo
     const isOpenai = sub === "openai";
     const key = isOpenai ? byokOpenaiKey : byokAnthropicKey;
     const modelOverride = isOpenai ? byokOpenaiModel : byokAnthropicModel;
@@ -462,6 +481,7 @@ export function SettingsModal() {
   };
 
   const handleSaveCompatKey = async () => {
+    if (isDemo) return; // X-D1: no AI-key backend in demo
     if (!compatKey.trim()) return;
     if (compatProvider === "custom_openai" && !compatEndpoint.trim()) return;
     setCompatSaving(true);
@@ -492,6 +512,7 @@ export function SettingsModal() {
   };
 
   const handleSaveLocalLlm = async () => {
+    if (isDemo) return; // X-D1: no AI-key backend in demo
     if (!localEndpoint.trim()) return;
     // Strip trailing slashes so we never produce double-slash URLs like
     // http://localhost:8000//v1/chat/completions when concatenating the path.
@@ -526,6 +547,7 @@ export function SettingsModal() {
   };
 
   const handleRemoveKey = async (provider: string) => {
+    if (isDemo) return; // X-D1: no AI-key backend in demo
     await authenticatedFetch("/api/ai/keys", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -579,13 +601,19 @@ export function SettingsModal() {
             setSecurityLoading(false);
             return;
           }
-          // Send plaintext PIN — hashing happens server-side with bcrypt
-          const res = await authenticatedFetch("/api/vault/setup", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pin }),
-          });
-          if (!res.ok) throw new Error("Setup failed");
+          if (isDemo) {
+            // X-D3/D4: demo vault is client-only — the PIN lives in sessionStorage
+            // (the same key NoteShell/Sidebar read), no authenticated request.
+            sessionStorage.setItem("demo_vault_hash", pin);
+          } else {
+            // Send plaintext PIN — hashing happens server-side with bcrypt
+            const res = await authenticatedFetch("/api/vault/setup", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ pin }),
+            });
+            if (!res.ok) throw new Error("Setup failed");
+          }
           setVaultConfigured(true);
           setSecurityMode("idle");
         }
@@ -593,17 +621,27 @@ export function SettingsModal() {
 
       if (securityMode === "reset") {
         if (securityStep === "current") {
-          // Verify the current PIN against the server immediately — don't let
-          // the user type their new PIN only to find out the current one was wrong.
-          const verifyRes = await authenticatedFetch("/api/vault/unlock", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pin }),
-          });
-          if (!verifyRes.ok) {
-            setSecurityError("Incorrect PIN. Please try again.");
-            setSecurityLoading(false);
-            return;
+          // Verify the current PIN immediately — don't let the user type their new
+          // PIN only to find out the current one was wrong.
+          if (isDemo) {
+            // X-D4: compare against the sessionStorage PIN (source of truth).
+            const stored = sessionStorage.getItem("demo_vault_hash");
+            if (stored && stored !== pin) {
+              setSecurityError("Incorrect PIN. Please try again.");
+              setSecurityLoading(false);
+              return;
+            }
+          } else {
+            const verifyRes = await authenticatedFetch("/api/vault/unlock", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ pin }),
+            });
+            if (!verifyRes.ok) {
+              setSecurityError("Incorrect PIN. Please try again.");
+              setSecurityLoading(false);
+              return;
+            }
           }
           // Store the plaintext PIN so we can send it in the change-password call.
           setSecurityCurrentPin(pin);
@@ -625,15 +663,20 @@ export function SettingsModal() {
             setSecurityLoading(false);
             return;
           }
-          // Send plaintext PINs — hashing happens server-side with bcrypt
-          const res = await authenticatedFetch("/api/vault/change-password", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ currentPin: securityCurrentPin, newPin: pin }),
-          });
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            throw new Error((data as { error?: string }).error || "Failed to change PIN");
+          if (isDemo) {
+            // X-D4: rotate the sessionStorage PIN, no authenticated request.
+            sessionStorage.setItem("demo_vault_hash", pin);
+          } else {
+            // Send plaintext PINs — hashing happens server-side with bcrypt
+            const res = await authenticatedFetch("/api/vault/change-password", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ currentPin: securityCurrentPin, newPin: pin }),
+            });
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              throw new Error((data as { error?: string }).error || "Failed to change PIN");
+            }
           }
           setSecurityMode("idle");
         }
@@ -643,7 +686,7 @@ export function SettingsModal() {
     } finally {
       setSecurityLoading(false);
     }
-  }, [securityMode, securityStep, securityFirstPin, securityCurrentPin]);
+  }, [securityMode, securityStep, securityFirstPin, securityCurrentPin, isDemo]);
 
   const getSecurityStepInfo = () => {
     if (securityMode === "setup") {
@@ -686,6 +729,7 @@ export function SettingsModal() {
   ] as const;
 
   const handleQbSave = async () => {
+    if (isDemo) { setSettingsOpen(false); return; } // X-D1: no settings backend in demo
     setQbSaving(true);
     try {
       await authenticatedFetch("/api/quick-bits/settings", {
