@@ -33,3 +33,13 @@ export function mockGenerateBody(action?: string) {
     tokensUsed: { inputTokens: 0, outputTokens: 0 },
   };
 }
+
+/**
+ * The canned text split into word-ish deltas, imitating a provider's token
+ * stream. Concatenated, the deltas reconstruct mockAiText(action) exactly — so
+ * the streaming route can emit these as SSE and the e2e can assert both the
+ * progressive growth and the final content.
+ */
+export function mockStreamDeltas(action?: string): string[] {
+  return mockAiText(action).match(/\S+\s*/g) ?? [mockAiText(action)];
+}
