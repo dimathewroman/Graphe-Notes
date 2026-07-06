@@ -7,6 +7,7 @@ import { resolveModel, type TaskType, type Provider, GEMINI_FLASH_LITE } from "@
 import { resolveFreeTierModel, invalidateFreeTierModel } from "@lib/gemini-model-discovery";
 import { parseGeminiError } from "@lib/ai-error-handler";
 import { generationSettingsFor } from "@/lib/ai-prompts";
+import { isDemoAiEnabled, DEMO_AI_HEADER, mockGenerateBody } from "@/lib/ai-demo-mock";
 import { PROVIDER_ADAPTERS } from "@lib/ai-providers";
 import { db, userApiKeysTable } from "@workspace/db";
 import { decryptApiKey } from "@lib/encryption";
@@ -48,6 +49,17 @@ const UPSTREAM_TIMEOUT_MS = 30_000;
 
 export async function POST(request: NextRequest) {
   try {
+    // --- Demo-AI harness (dev/CI only) ---
+    // When NEXT_PUBLIC_ENABLE_DEMO_AI is set AND the request carries the demo
+    // header, serve a deterministic canned response with no auth and no real
+    // provider. The flag is unset in production, so this branch is dead there;
+    // even if the header were forged, the env gate short-circuits first.
+    if (isDemoAiEnabled() && request.headers.get(DEMO_AI_HEADER) === "1") {
+      const body = (await request.json().catch(() => ({}))) as { action?: unknown };
+      const action = typeof body.action === "string" ? body.action : undefined;
+      return NextResponse.json(mockGenerateBody(action));
+    }
+
     // --- Auth ---
     const { user } = await getAuthUser(request);
     if (!user) {

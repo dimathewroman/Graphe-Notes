@@ -60,6 +60,17 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.next();
   }
 
+  // Demo-AI harness (dev/CI only): let the flag-gated mock generate request
+  // through without a token so the route can serve a canned response. The flag
+  // (NEXT_PUBLIC_ENABLE_DEMO_AI) is unset in production, so this is dead there.
+  if (
+    process.env.NEXT_PUBLIC_ENABLE_DEMO_AI === "1" &&
+    pathname === "/api/ai/generate" &&
+    request.headers.get("x-graphe-demo-ai") === "1"
+  ) {
+    return NextResponse.next();
+  }
+
   const token = extractToken(request);
   if (!token) {
     return NextResponse.json(

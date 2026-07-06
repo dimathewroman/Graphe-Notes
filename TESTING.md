@@ -57,6 +57,16 @@ The default project. All tests use `enterDemoMode(page)` from `e2e/helpers.ts` t
 
 Demo mode tests never call authenticated API endpoints — mutations patch the React Query cache in-memory. Tests are deterministic and work on any machine without credentials.
 
+### Demo-AI harness
+
+AI is normally disabled in demo mode (actions show "Sign up to use AI"), so the AI-in-the-editor path had no e2e coverage. Setting **`NEXT_PUBLIC_ENABLE_DEMO_AI=1`** (dev/CI only — never production) opens a safe, deterministic path:
+
+- Demo AI actions route to a **mock** that never contacts a real provider and needs no auth — it returns a canned `mockAiText(action)` string (`src/lib/ai-demo-mock.ts`).
+- Requests carry an `x-graphe-demo-ai: 1` header; both the middleware and `/api/ai/generate` let that request through only when the flag is set, so production (flag unset) still requires auth and normal demo users still see the upsell.
+- The CI workflow sets the flag in its shared `env:` block, so `13-demo-ai-harness.spec.ts` runs in CI; the spec `test.skip`s itself when the flag is absent.
+
+To run it locally, add `NEXT_PUBLIC_ENABLE_DEMO_AI=1` to `artifacts/next-app/.env.local` (Next reads env from the app dir, not the repo root) and restart the dev server. This harness is the foundation for the AI streaming work — the same spec will later assert progressive, token-by-token insertion.
+
 ### Authenticated mode
 
 Requires `playwright/.auth/user.json` — a saved Supabase session. To create it:

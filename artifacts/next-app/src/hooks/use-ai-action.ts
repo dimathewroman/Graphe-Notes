@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/store";
 import { buildAiPrompt, wordCount, isLengthAcceptable, lengthCorrectionHint, taskTypeFor } from "@/lib/ai-prompts";
 import { getSelectionHtml } from "@/lib/editor-html";
+import { isDemoAiEnabled } from "@/lib/ai-demo-mock";
 import { executeAiRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
 
 interface AiSettingsResponse {
@@ -105,8 +106,9 @@ export function useAiAction(
     const { system, content: prompt } = built;
 
     // G9: demo mode has no authenticated AI backend — hitting /api/ai/generate
-    // would 401. Show a friendly upsell instead of a raw auth error.
-    if (isDemo) {
+    // would 401. Show a friendly upsell instead of a raw auth error. Exception:
+    // the demo-AI harness flag (dev/CI) routes demo actions to a mock instead.
+    if (isDemo && !isDemoAiEnabled()) {
       setAiLoading(false);
       setAiError("Sign up to use AI features.");
       setTimeout(() => setAiError(null), 4000);
@@ -160,6 +162,30 @@ export function useAiAction(
     // The selection's position span (to - from) is a regex-free proxy for the
     // character count — good enough for the fuzzy ~500-char light/primary threshold.
     const taskType = taskTypeFor(action, sel.to - sel.from);
+
+    // Demo-AI harness: run the action against the mock generate endpoint (no auth,
+    // no real provider). Exercises the full client → route → editor-insert path so
+    // AI is end-to-end testable in demo; the streaming work builds on this branch.
+    if (isDemo && isDemoAiEnabled()) {
+      setAiLoading(true);
+      setAiError(null);
+      const tracker = trackSelection();
+      try {
+        const outcome = await executeAiRequest({ provider: "graphe_free", prompt, system, taskType, action, demoMock: true });
+        if (outcome.ok && outcome.text) {
+          const { from, to } = tracker.pos();
+          applyAiResult(outcome.text, from, to);
+        } else if (!outcome.ok) {
+          setAiError(outcome.message ?? "AI request failed");
+          setTimeout(() => setAiError(null), 4000);
+        }
+      } finally {
+        tracker.stop();
+        setAiLoading(false);
+        savedAiSelection.current = null;
+      }
+      return;
+    }
 
     // Fetch active provider from server; default to graphe_free on any failure.
     let provider = "graphe_free";

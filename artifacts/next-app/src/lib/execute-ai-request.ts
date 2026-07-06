@@ -32,6 +32,9 @@ export interface AiRequestOptions {
   system?: string;
   /** G18: the AI action name (e.g. "improve", "summarize_short") for per-action telemetry. */
   action?: string;
+  /** Demo-AI harness: tag the request so the flag-gated mock branch in
+   *  /api/ai/generate serves a canned response (no auth, no real provider). */
+  demoMock?: boolean;
   /** Required when provider === "local_llm". */
   localLlm?: LocalLlmConfig;
   /** Cancels the request (cloud path). */
@@ -94,9 +97,11 @@ async function runLocal(opts: AiRequestOptions): Promise<AiRequestOutcome> {
 }
 
 async function runCloud(opts: AiRequestOptions): Promise<AiRequestOutcome> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (opts.demoMock) headers["x-graphe-demo-ai"] = "1";
   const res = await authenticatedFetch("/api/ai/generate", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ provider: opts.provider, taskType: opts.taskType, prompt: opts.prompt, system: opts.system, action: opts.action }),
     signal: opts.signal,
   });

@@ -23,6 +23,10 @@ env:
   NEXT_PUBLIC_POSTHOG_KEY: phc_placeholder
   NEXT_PUBLIC_POSTHOG_HOST: https://app.posthog.com
   AI_KEY_ENCRYPTION_SECRET: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  # Demo-AI harness: enable the mock AI path so the e2e suite can exercise
+  # AI-in-the-editor in demo mode. Baked into the build (NEXT_PUBLIC) and read
+  # by the route at runtime. Production never sets this.
+  NEXT_PUBLIC_ENABLE_DEMO_AI: "1"
 
 jobs:
   # ── Job 1: Typecheck + unit tests + Build verification ───────────────────────

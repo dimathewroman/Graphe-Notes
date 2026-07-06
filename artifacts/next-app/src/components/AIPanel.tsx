@@ -12,6 +12,7 @@ import { useDemoMode } from "@/lib/demo-context";
 import posthog from "posthog-js";
 import { ScrollArea } from "./ui/scroll-area";
 import { executeAiRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
+import { isDemoAiEnabled } from "@/lib/ai-demo-mock";
 
 interface AiSettingsResponse {
   activeAiProvider?: string | null;
@@ -65,6 +66,7 @@ export function AIPanel() {
         prompt: fullPrompt,
         taskType: "manual",
         action: "ai_panel",
+        demoMock: isDemo && isDemoAiEnabled(),
         localLlm: provider === "local_llm"
           ? { endpoint: localLlmConfig?.endpoint ?? "", model: localLlmConfig?.model ?? null, apiKey: null }
           : undefined,
