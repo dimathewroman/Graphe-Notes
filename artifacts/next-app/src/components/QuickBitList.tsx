@@ -21,6 +21,7 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyCont
 import { useDebounce } from "@/hooks/use-debounce";
 import { ScrollArea } from "./ui/scroll-area";
 import { formatExpiry } from "@/lib/format-expiry";
+import posthog from "posthog-js";
 
 const QB_SORT_OPTIONS = [
   { label: "Expires soonest", sortBy: "expiresAt" as const, sortDir: "asc" as const },
@@ -130,6 +131,7 @@ export function QuickBitList() {
   const createMut = useCreateQuickBit({
     mutation: {
       onSuccess: (newQb) => {
+        posthog.capture("quick_bit_created", { quick_bit_id: newQb.id, timestamp: new Date().toISOString() });
         queryClient.invalidateQueries({ queryKey: getGetQuickBitsQueryKey() });
         selectQuickBit(newQb.id);
         if (bp === "mobile") setMobileView("editor");
@@ -151,6 +153,7 @@ export function QuickBitList() {
       } as unknown as QuickBit;
       queryClient.setQueryData(getGetQuickBitQueryKey(tempId), tempQb);
       addDemoQbId(tempId);
+      posthog.capture("quick_bit_created", { quick_bit_id: tempId, demo: true, timestamp: new Date().toISOString() });
       selectQuickBit(tempId);
       if (bp === "mobile") setMobileView("editor");
       return;

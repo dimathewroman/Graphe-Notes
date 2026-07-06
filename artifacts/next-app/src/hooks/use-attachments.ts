@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { getGetNoteQueryKey } from "@workspace/api-client-react";
 import { toast } from "sonner";
+import posthog from "posthog-js";
+import * as Sentry from "@sentry/nextjs";
 import { IMAGE_MIME_TYPES, BROWSER_RENDERABLE_IMAGE_TYPES, HEIC_MIME_TYPES, formatBytes } from "@/lib/attachment-limits";
 import { useDemoMode } from "@/lib/demo-context";
 import { useAppStore } from "@/store";
@@ -78,6 +80,7 @@ async function heicToPreviewUrl(file: File): Promise<string> {
     return URL.createObjectURL(out);
   } catch (e) {
     console.error("[heicToPreviewUrl] heic2any failed:", e);
+    Sentry.captureException(e);
   }
 
   // Tier 3: SVG placeholder — always renderable, never a broken icon
@@ -143,10 +146,15 @@ export function useDeleteAttachment() {
       const res = await authenticatedFetch(`/api/attachments/${id}`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) throw new Error("Delete failed");
     },
-    onSuccess: (_, { noteId }) => {
+    onSuccess: (_, { id, noteId }) => {
+      posthog.capture("attachment_deleted", { attachment_id: id, note_id: noteId, timestamp: new Date().toISOString() });
       queryClient.invalidateQueries({ queryKey: ["/api/attachments"] });
       // Refresh the note so editor reflects the stripped inline image
       if (noteId) queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(noteId) });
+    },
+    onError: (err) => {
+      Sentry.captureException(err);
+      toast.error("Failed to delete attachment");
     },
   });
 }
@@ -219,10 +227,17 @@ export function useUploadAttachment(noteId: number | null) {
       }
 
       const record: AttachmentRecord = await res.json();
+      posthog.capture("attachment_uploaded", {
+        note_id: noteId,
+        file_type: record.fileType,
+        file_size: record.fileSize,
+        timestamp: new Date().toISOString(),
+      });
       queryClient.invalidateQueries({ queryKey: getNoteAttachmentsQueryKey(noteId) });
       queryClient.invalidateQueries({ queryKey: getAllAttachmentsQueryKey() });
       return record;
-    } catch {
+    } catch (e) {
+      Sentry.captureException(e);
       toast.error("Upload failed");
       return null;
     } finally {
