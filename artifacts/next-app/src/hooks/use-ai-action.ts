@@ -157,8 +157,9 @@ export function useAiAction(
     }
 
     // G16 (10.4): route by action + content size instead of hardcoding "manual".
-    // Length measured on the text content (HTML tags stripped).
-    const taskType = taskTypeFor(action, sel.text.replace(/<[^>]*>/g, "").length);
+    // The selection's position span (to - from) is a regex-free proxy for the
+    // character count — good enough for the fuzzy ~500-char light/primary threshold.
+    const taskType = taskTypeFor(action, sel.to - sel.from);
 
     // Fetch active provider from server; default to graphe_free on any failure.
     let provider = "graphe_free";
