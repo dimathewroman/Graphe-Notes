@@ -6,6 +6,14 @@
 
 import { parseGeminiError } from "./ai-error-handler";
 
+// Linear trailing-slash strip. A regex like /\/+$/ backtracks polynomially on a
+// long run of slashes (ReDoS) when the value is user-controlled; this scan is O(n).
+export function stripTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47 /* "/" */) end--;
+  return s.slice(0, end);
+}
+
 export interface ParsedResult {
   text: string;
   truncated: boolean;
@@ -92,7 +100,7 @@ export const anthropicAdapter: ProviderAdapter = {
 // ── OpenAI-compatible family (OpenAI + OpenRouter/Groq/Mistral/Together/Fireworks/custom) ──
 export function openAiCompatibleAdapter(baseUrl?: string): ProviderAdapter {
   return {
-    url: (_model, endpoint) => `${(baseUrl ?? endpoint ?? "").replace(/\/+$/, "")}/chat/completions`,
+    url: (_model, endpoint) => `${stripTrailingSlashes(baseUrl ?? endpoint ?? "")}/chat/completions`,
     headers: (apiKey) => ({ "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }),
     body: (model, prompt, maxTokens) => ({ model, messages: [{ role: "user", content: prompt }], max_tokens: maxTokens }),
     parse: (data) => {
@@ -111,17 +119,35 @@ export function openAiCompatibleAdapter(baseUrl?: string): ProviderAdapter {
   };
 }
 
-// BYOK provider → adapter. Adding a provider is one entry here (+ one Provider
-// union member + a Settings dropdown option). `custom_openai` takes its base URL
-// from the user's saved key row (endpoint).
+// Fixed base URLs for the OpenAI-compatible providers, in one place so both the
+// adapter table (chat/completions) and the models route (`{base}/models`
+// discovery) share a single source of truth. `custom_openai` is absent — it
+// supplies its base URL at runtime from the user's saved key row.
+export const OPENAI_COMPATIBLE_BASE_URLS: Record<string, string> = {
+  openai: "https://api.openai.com/v1",
+  openrouter: "https://openrouter.ai/api/v1",
+  groq: "https://api.groq.com/openai/v1",
+  mistral: "https://api.mistral.ai/v1",
+  together: "https://api.together.xyz/v1",
+  fireworks: "https://api.fireworks.ai/inference/v1",
+};
+
+// The OpenAI-compatible list-models endpoint for a given base URL.
+export function openAiCompatibleModelsUrl(baseUrl: string): string {
+  return `${stripTrailingSlashes(baseUrl)}/models`;
+}
+
+// BYOK provider → adapter. Adding a provider is one entry here (+ one base URL
+// above, one Provider union member, and a Settings dropdown option).
+// `custom_openai` takes its base URL from the user's saved key row (endpoint).
 export const PROVIDER_ADAPTERS: Record<string, ProviderAdapter> = {
   google_ai_studio: geminiAdapter,
   anthropic: anthropicAdapter,
-  openai: openAiCompatibleAdapter("https://api.openai.com/v1"),
-  openrouter: openAiCompatibleAdapter("https://openrouter.ai/api/v1"),
-  groq: openAiCompatibleAdapter("https://api.groq.com/openai/v1"),
-  mistral: openAiCompatibleAdapter("https://api.mistral.ai/v1"),
-  together: openAiCompatibleAdapter("https://api.together.xyz/v1"),
-  fireworks: openAiCompatibleAdapter("https://api.fireworks.ai/inference/v1"),
+  openai: openAiCompatibleAdapter(OPENAI_COMPATIBLE_BASE_URLS.openai),
+  openrouter: openAiCompatibleAdapter(OPENAI_COMPATIBLE_BASE_URLS.openrouter),
+  groq: openAiCompatibleAdapter(OPENAI_COMPATIBLE_BASE_URLS.groq),
+  mistral: openAiCompatibleAdapter(OPENAI_COMPATIBLE_BASE_URLS.mistral),
+  together: openAiCompatibleAdapter(OPENAI_COMPATIBLE_BASE_URLS.together),
+  fireworks: openAiCompatibleAdapter(OPENAI_COMPATIBLE_BASE_URLS.fireworks),
   custom_openai: openAiCompatibleAdapter(),
 };

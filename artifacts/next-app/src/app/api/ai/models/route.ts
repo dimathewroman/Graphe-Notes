@@ -3,33 +3,44 @@ import { and, eq } from "drizzle-orm";
 import { db, userApiKeysTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { decryptApiKey } from "@lib/encryption";
+import { OPENAI_COMPATIBLE_BASE_URLS, openAiCompatibleModelsUrl } from "@lib/ai-providers";
 import * as Sentry from "@sentry/nextjs";
 
-const SUPPORTED_PROVIDERS = ["openai", "anthropic"] as const;
-type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number];
+// This route only ever fetches FIXED, provider-owned base URLs (no user-supplied
+// URL reaches fetch), which is what keeps it free of server-side request forgery.
+// Discovery for user-controlled endpoints — local_llm and custom_openai — happens
+// client-side (the browser, which can actually reach the user's localhost), never
+// through this server route.
+const OPENAI_COMPATIBLE = new Set(Object.keys(OPENAI_COMPATIBLE_BASE_URLS));
+const SUPPORTED_PROVIDERS = new Set([...OPENAI_COMPATIBLE, "anthropic"]);
 
-function isSupportedProvider(p: unknown): p is SupportedProvider {
-  return typeof p === "string" && (SUPPORTED_PROVIDERS as readonly string[]).includes(p);
-}
+// Discovery is best-effort UX, not a hot path — still bound it.
+const DISCOVERY_TIMEOUT_MS = 10_000;
 
-async function fetchOpenAIModels(apiKey: string): Promise<string[]> {
-  const res = await fetch("https://api.openai.com/v1/models", {
+async function fetchOpenAiCompatibleModels(
+  provider: string,
+  modelsUrl: string,
+  apiKey: string,
+): Promise<string[]> {
+  const res = await fetch(modelsUrl, {
     headers: { Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
   });
-  if (!res.ok) throw new Error(`OpenAI API error: ${res.status}`);
-  const data = (await res.json()) as { data: Array<{ id: string }> };
-  return data.data
+  if (!res.ok) throw new Error(`Provider models API error: ${res.status}`);
+  const data = (await res.json()) as { data?: Array<{ id?: string }> };
+  const ids = (data.data ?? [])
     .map((m) => m.id)
-    .filter((id) => /^(gpt-|o1|o3|o4|chatgpt-4o)/.test(id))
-    .sort();
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  // OpenAI's catalog includes embeddings/whisper/tts etc.; narrow to chat models.
+  // Decide by provider identity — never by substring-matching the URL.
+  const filtered = provider === "openai" ? ids.filter((id) => /^(gpt-|o1|o3|o4|chatgpt-4o)/.test(id)) : ids;
+  return filtered.sort();
 }
 
 async function fetchAnthropicModels(apiKey: string): Promise<string[]> {
   const res = await fetch("https://api.anthropic.com/v1/models", {
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
+    headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+    signal: AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Anthropic API error: ${res.status}`);
   const data = (await res.json()) as { data: Array<{ id: string }> };
@@ -37,9 +48,9 @@ async function fetchAnthropicModels(apiKey: string): Promise<string[]> {
 }
 
 // POST /api/ai/models
-// Body: { provider: "openai" | "anthropic", apiKey?: string }
-// If apiKey is provided, use it directly (user is entering key for first time).
-// If not, decrypt the stored key from DB (key already saved).
+// Body: { provider, apiKey? }
+//  - apiKey: use it directly (first-time entry); otherwise decrypt the stored key.
+//  - Only fixed-base cloud providers are supported here (see note above).
 // Returns: { models: string[] }
 export async function POST(request: NextRequest) {
   const { user } = await getAuthUser(request);
@@ -47,41 +58,32 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const { provider, apiKey: providedKey } = body;
+    const provider = body.provider;
+    const providedKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
 
-    if (!isSupportedProvider(provider)) {
+    if (typeof provider !== "string" || !SUPPORTED_PROVIDERS.has(provider)) {
       return NextResponse.json({ error: "Unsupported provider" }, { status: 400 });
     }
 
-    let apiKey: string;
-
-    if (typeof providedKey === "string" && providedKey.trim()) {
-      apiKey = providedKey.trim();
-    } else {
+    let apiKey = providedKey;
+    if (!apiKey) {
       const rows = await db
         .select()
         .from(userApiKeysTable)
-        .where(
-          and(
-            eq(userApiKeysTable.userId, user.id),
-            eq(userApiKeysTable.provider, provider),
-          ),
-        );
-
+        .where(and(eq(userApiKeysTable.userId, user.id), eq(userApiKeysTable.provider, provider)));
       if (!rows[0]?.encryptedKey) {
-        return NextResponse.json(
-          { error: "No API key stored for this provider" },
-          { status: 404 },
-        );
+        return NextResponse.json({ error: "No API key stored for this provider" }, { status: 404 });
       }
       apiKey = decryptApiKey(rows[0].encryptedKey);
     }
 
-    const models =
-      provider === "openai"
-        ? await fetchOpenAIModels(apiKey)
-        : await fetchAnthropicModels(apiKey);
+    if (provider === "anthropic") {
+      return NextResponse.json({ models: await fetchAnthropicModels(apiKey) });
+    }
 
+    // OpenAI-compatible with a fixed, provider-owned base URL — no user input in the URL.
+    const base = OPENAI_COMPATIBLE_BASE_URLS[provider];
+    const models = await fetchOpenAiCompatibleModels(provider, openAiCompatibleModelsUrl(base), apiKey);
     return NextResponse.json({ models });
   } catch (err) {
     Sentry.captureException(err);
