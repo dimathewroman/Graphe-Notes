@@ -85,6 +85,23 @@ export function generationSettingsFor(action: string): GenerationSettings {
     : { temperature: 0.7, topP: 0.95 }; // creative (rewrite, tone, expand, improve, freeform)
 }
 
+// G16 (Phase 10.4): route an action to a taskType instead of hardcoding "manual"
+// at every call site. The model router maps taskType → model (background=light,
+// manual=primary, deliberate=heaviest). Short mechanical edits (proofread a
+// sentence) don't need the primary model; longer or creative work does. ~500
+// chars is the light/primary threshold.
+export const TASKTYPE_LIGHT_THRESHOLD = 500;
+
+export type AiTaskType = "background" | "manual" | "deliberate";
+
+export function taskTypeFor(action: string, contentLength: number): AiTaskType {
+  // Short + mechanical → the light model; everything else → the primary model.
+  if (MECHANICAL_ACTIONS.has(action) && contentLength < TASKTYPE_LIGHT_THRESHOLD) {
+    return "background";
+  }
+  return "manual";
+}
+
 // G14 (Phase 10.3): length actions have a target size. Count words on the text
 // content (tags stripped) so we can validate the result went the right direction.
 export function wordCount(htmlOrText: string): number {

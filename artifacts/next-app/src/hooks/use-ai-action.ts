@@ -7,7 +7,7 @@ import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import posthog from "posthog-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/store";
-import { buildAiPrompt, wordCount, isLengthAcceptable, lengthCorrectionHint } from "@/lib/ai-prompts";
+import { buildAiPrompt, wordCount, isLengthAcceptable, lengthCorrectionHint, taskTypeFor } from "@/lib/ai-prompts";
 import { getSelectionHtml } from "@/lib/editor-html";
 import { executeAiRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
 
@@ -156,7 +156,9 @@ export function useAiAction(
       try { await onBeforeAiRewrite(); } catch { /* swallow */ }
     }
 
-    const taskType = "manual";
+    // G16 (10.4): route by action + content size instead of hardcoding "manual".
+    // Length measured on the text content (HTML tags stripped).
+    const taskType = taskTypeFor(action, sel.text.replace(/<[^>]*>/g, "").length);
 
     // Fetch active provider from server; default to graphe_free on any failure.
     let provider = "graphe_free";

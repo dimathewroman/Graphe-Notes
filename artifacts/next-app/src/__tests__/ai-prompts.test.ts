@@ -11,6 +11,8 @@ import {
   lengthTargetRatio,
   isLengthAcceptable,
   lengthCorrectionHint,
+  taskTypeFor,
+  TASKTYPE_LIGHT_THRESHOLD,
 } from "@/lib/ai-prompts";
 
 describe("buildAiPrompt (system-role + data fencing)", () => {
@@ -113,5 +115,23 @@ describe("length validation (G14, 10.3)", () => {
     expect(hint).toMatch(/5 words/);
     expect(hint).toMatch(/shorter/);
     expect(lengthCorrectionHint("proofread", 10)).toBe("");
+  });
+});
+
+describe("taskTypeFor (G16, 10.4)", () => {
+  it("routes a short mechanical action to the light model (background)", () => {
+    expect(taskTypeFor("proofread", 40)).toBe("background");
+    expect(taskTypeFor("summarize_short", TASKTYPE_LIGHT_THRESHOLD - 1)).toBe("background");
+  });
+
+  it("routes a long rewrite (or any creative action) to the primary model (manual)", () => {
+    expect(taskTypeFor("rewrite", 2000)).toBe("manual");
+    expect(taskTypeFor("rewrite", 10)).toBe("manual"); // creative → primary regardless of size
+    expect(taskTypeFor("tone_casual", 40)).toBe("manual");
+  });
+
+  it("promotes a long mechanical action to the primary model past the threshold", () => {
+    expect(taskTypeFor("proofread", TASKTYPE_LIGHT_THRESHOLD)).toBe("manual");
+    expect(taskTypeFor("proofread", 5000)).toBe("manual");
   });
 });
