@@ -40,6 +40,11 @@ function isValidModelId(model: string): boolean {
 const TRUNCATION_MESSAGE =
   "The AI response was too long and got cut off. Try selecting less text or asking for a shorter result.";
 
+// G16 (9.3): cap how long we wait on an upstream provider. Without this a hung
+// provider holds the serverless function open until the platform's own (much
+// longer) timeout, burning execution time and leaving the user with a spinner.
+const UPSTREAM_TIMEOUT_MS = 30_000;
+
 export async function POST(request: NextRequest) {
   try {
     // --- Auth ---
@@ -147,6 +152,7 @@ export async function POST(request: NextRequest) {
               contents: [{ parts: [{ text: combinedPrompt }] }],
               generationConfig: { maxOutputTokens: 1024 },
             }),
+            signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
           },
         );
 
@@ -262,6 +268,7 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: adapter.headers(decryptedKey),
       body: JSON.stringify(adapter.body(routing.model, combinedPrompt, 1024)),
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
 
     if (!upstream.ok) {
@@ -284,6 +291,15 @@ export async function POST(request: NextRequest) {
       tokensUsed: { inputTokens: parsed.inputTokens, outputTokens: parsed.outputTokens },
     });
   } catch (err) {
+    // G16 (9.3): a hit UPSTREAM_TIMEOUT_MS surfaces as a TimeoutError from
+    // AbortSignal.timeout. Return a clean 504 instead of a generic 500 so the
+    // client can show "try again" rather than "something broke".
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      return NextResponse.json(
+        { error: "upstream_timeout", userMessage: "The AI provider took too long to respond. Please try again." },
+        { status: 504 },
+      );
+    }
     Sentry.captureException(err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

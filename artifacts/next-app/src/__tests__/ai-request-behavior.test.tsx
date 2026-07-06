@@ -86,6 +86,18 @@ describe("callAI behavior contract (Phase 8 → guarded for Phase 9)", () => {
     expect(authenticatedFetch).toHaveBeenCalledTimes(2);
   });
 
+  it("upstream timeout (504) surfaces the friendly userMessage, not a raw code", async () => {
+    // G16 (9.3): the server maps a hung provider to 504 { error, userMessage }.
+    // runCloud has no explicit 504 branch, so this pins that the fallback still
+    // prefers userMessage over the error code.
+    authenticatedFetch
+      .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
+      .mockResolvedValueOnce(res(504, { error: "upstream_timeout", userMessage: "The AI provider took too long to respond. Please try again." }));
+    const r = await run("improve");
+    expect(insertSpy).not.toHaveBeenCalled();
+    expect(r.current.aiError).toMatch(/took too long/i);
+  });
+
   it("local LLM: strips <think> blocks and inserts", async () => {
     authenticatedFetch.mockResolvedValueOnce(
       res(200, { hasCompletedAiSetup: true, activeAiProvider: "local_llm", localLlmEndpoint: "http://localhost:1234", localLlmModel: "m" }),
