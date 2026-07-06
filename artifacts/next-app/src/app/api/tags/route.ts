@@ -10,8 +10,10 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
+    // X-R3: exclude soft-deleted notes so deleting a note removes its now-unused
+    // tags from the sidebar instead of leaving orphan tags behind.
     const result = await db.execute(
-      sql`SELECT DISTINCT unnest(tags) as tag FROM notes WHERE user_id = ${user.id} ORDER BY tag`,
+      sql`SELECT DISTINCT unnest(tags) as tag FROM notes WHERE user_id = ${user.id} AND deleted_at IS NULL ORDER BY tag`,
     );
     const tags = result.rows
       .map((row: Record<string, unknown>) => row.tag as string)

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Trash2, MoreVertical, Menu, PanelLeft, Lock, ShieldCheck, ZapOff } from "lucide-react";
+import { Trash2, MoreVertical, Menu, PanelLeft, Lock, ShieldCheck, ZapOff, Zap } from "lucide-react";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -258,7 +258,6 @@ export function RecentlyDeleted() {
         ) : (
           <>
             {notes.map((note) => {
-              const isQb = (note as any).deletedReason === "expired" || (note as any)._isQuickBit;
               const days = daysUntil((note as any).autoDeleteAt);
               return (
                 <div
@@ -282,10 +281,16 @@ export function RecentlyDeleted() {
                         <Lock className="w-2.5 h-2.5" />
                         Vault
                       </span>
-                    ) : isQb ? (
+                    ) : (note as any).deletedReason === "expired" ? (
                       <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs bg-warning/10 border border-warning/30 text-warning">
                         <ZapOff className="w-2.5 h-2.5" />
                         Expired
+                      </span>
+                    ) : (note as any)._isQuickBit ? (
+                      // X-R5: a converted/deleted quick bit isn't "Expired" — label it distinctly.
+                      <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs bg-primary/10 border border-primary/30 text-primary">
+                        <Zap className="w-2.5 h-2.5" />
+                        Quick Bit
                       </span>
                     ) : (
                       <span className="shrink-0 px-1.5 py-0.5 rounded-full text-2xs bg-muted text-muted-foreground border border-panel-border">
