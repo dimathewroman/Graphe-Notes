@@ -1,5 +1,6 @@
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
+import * as Sentry from "@sentry/nextjs";
 import { sanitizeNoteHtml } from "@/lib/sanitize-html";
 
 function sanitizeFilename(title: string): string {
@@ -42,9 +43,14 @@ export function exportAsMarkdown(title: string, html: string): void {
     },
   });
 
-  const markdown = td.turndown(html);
-  const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
-  triggerDownload(blob, `${sanitizeFilename(title)}.md`);
+  try {
+    const markdown = td.turndown(html);
+    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    triggerDownload(blob, `${sanitizeFilename(title)}.md`);
+  } catch (e) {
+    Sentry.captureException(e);
+    throw e;
+  }
 }
 
 export async function exportAsPdf(title: string, html: string): Promise<void> {
@@ -134,6 +140,9 @@ export async function exportAsPdf(title: string, html: string): Promise<void> {
       })
       .from(content)
       .save();
+  } catch (e) {
+    Sentry.captureException(e);
+    throw e;
   } finally {
     document.body.removeChild(wrapper);
   }

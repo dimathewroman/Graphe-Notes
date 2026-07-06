@@ -142,6 +142,11 @@ Events captured from React components via `posthog.capture(event, properties)`.
 | `user_logged_in` | `hooks/use-auth.ts` | `method` (`"email"`) |
 | `user_signed_up` | `hooks/use-auth.ts` | `method` (`"email"`) |
 | `user_logged_out` | `hooks/use-auth.ts` | _(none)_ |
+| `attachment_uploaded` | `hooks/use-attachments.ts` | `note_id`, `file_type`, `file_size`, `timestamp` |
+| `attachment_deleted` | `hooks/use-attachments.ts` | `attachment_id`, `note_id`, `timestamp` |
+| `note_version_deleted` | `hooks/use-note-versions.ts` | `note_id`, `version_id`, `timestamp` |
+| `quick_bit_created` | `QuickBitList.tsx` | `quick_bit_id`, `demo` (when demo), `timestamp` |
+| `find_replace_used` | `editor/FindReplace.tsx` | `mode` (`"single"` \| `"all"`), `count` (all only), `timestamp` |
 
 ### Server-side events
 
@@ -152,7 +157,7 @@ Events captured from API route handlers via `getPostHogClient().capture({ distin
 | `note_created` | `POST /api/notes` | `note_id` |
 | `note_deleted` | `POST /api/notes/:id/delete` | `note_id` |
 | `note_restored` | `POST /api/notes/:id/restore` | `note_id` |
-| `ai_generate_completed` | `POST /api/ai/generate` | `provider`, `model`, `input_tokens`, `output_tokens` |
+| `ai_generate_completed` | `POST /api/ai/generate` | `provider`, `action`, `model`, `input_tokens`, `output_tokens` |
 | `vault_setup_completed` | `POST /api/vault/setup` | _(none)_ |
 | `vault_unlocked` | `POST /api/vault/unlock` | _(none)_ |
 
@@ -163,10 +168,9 @@ The following user actions have no instrumentation. Add `posthog.capture()` call
 - `note_moved` (move to folder)
 - `note_restored` (client-side, from Recently Deleted view)
 - `tag_added`, `tag_removed`
-- `attachment_uploaded`
 - `folder_deleted`
 - `settings_changed` (general settings mutations)
-- `quick_bit_created`, `quick_bit_deleted`
+- `quick_bit_deleted`
 
 ---
 

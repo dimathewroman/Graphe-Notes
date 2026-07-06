@@ -13,6 +13,8 @@ import { useCallback } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { useDemoMode } from "@/lib/demo-context";
+import posthog from "posthog-js";
+import * as Sentry from "@sentry/nextjs";
 
 export type VersionSource =
   | "manual_save"
@@ -204,7 +206,8 @@ export function useCreateNoteVersion() {
           },
         );
         return data.version ?? null;
-      } catch {
+      } catch (e) {
+        Sentry.captureException(e);
         return null;
       }
     },
@@ -277,6 +280,7 @@ export function useDeleteNoteVersion() {
       return { noteId, versionId };
     },
     onSuccess: ({ noteId, versionId }) => {
+      posthog.capture("note_version_deleted", { note_id: noteId, version_id: versionId, timestamp: new Date().toISOString() });
       queryClient.setQueryData<NoteVersionMeta[]>(
         noteVersionsKey(noteId),
         (old) => (old ?? []).filter((v) => v.id !== versionId),
@@ -285,6 +289,7 @@ export function useDeleteNoteVersion() {
         queryKey: noteVersionDetailKey(noteId, versionId),
       });
     },
+    onError: (err) => Sentry.captureException(err),
   });
 }
 

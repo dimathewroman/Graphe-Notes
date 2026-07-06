@@ -6,6 +6,7 @@ import type { EditorState, Transaction } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { X, ChevronUp, ChevronDown, CaseSensitive } from "lucide-react";
+import posthog from "posthog-js";
 import { cn } from "@/lib/utils";
 
 // ── Match finding ─────────────────────────────────────────────────────────────
@@ -180,6 +181,7 @@ export function frReplaceNext(editor: Editor, replacement: string) {
   const { tr } = editor.state;
   tr.insertText(replacement, match.from, match.to);
   editor.view.dispatch(tr);
+  posthog.capture("find_replace_used", { mode: "single", timestamp: new Date().toISOString() });
 }
 
 export function frReplaceAll(editor: Editor, replacement: string) {
@@ -192,6 +194,7 @@ export function frReplaceAll(editor: Editor, replacement: string) {
     tr.insertText(replacement, match.from, match.to);
   }
   editor.view.dispatch(tr);
+  posthog.capture("find_replace_used", { mode: "all", count: sorted.length, timestamp: new Date().toISOString() });
 }
 
 export function frClear(editor: Editor) {
