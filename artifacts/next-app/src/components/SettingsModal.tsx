@@ -38,9 +38,28 @@ const ACCENT_PRESETS = [
 ];
 
 type ThemeMode = "dark" | "light";
-type AiProvider = "graphe_free" | "google_ai_studio" | "openai" | "anthropic" | "local_llm";
+// G17 (9.2): OpenAI-compatible providers share one server adapter; the UI lists
+// them from this single config so adding one is a one-line change here.
+type CompatProvider = "openrouter" | "groq" | "mistral" | "together" | "fireworks" | "custom_openai";
+type AiProvider =
+  | "graphe_free"
+  | "google_ai_studio"
+  | "openai"
+  | "anthropic"
+  | "local_llm"
+  | CompatProvider;
 type ByokSubProvider = "openai" | "anthropic";
 type KeyInfo = { hasKey: boolean; endpointUrl: string | null; modelOverride: string | null };
+
+const COMPAT_PROVIDERS: { id: CompatProvider; label: string; hint: string; needsEndpoint?: boolean }[] = [
+  { id: "openrouter", label: "OpenRouter", hint: "300+ models, one key" },
+  { id: "groq", label: "Groq", hint: "Fast inference" },
+  { id: "mistral", label: "Mistral", hint: "Mistral La Plateforme" },
+  { id: "together", label: "Together AI", hint: "Open models" },
+  { id: "fireworks", label: "Fireworks", hint: "Fast open models" },
+  { id: "custom_openai", label: "Custom", hint: "Any OpenAI-compatible URL", needsEndpoint: true },
+];
+const COMPAT_IDS = COMPAT_PROVIDERS.map((p) => p.id);
 type UsageData = { hourlyUsed: number; hourlyLimit: number; resetInMs: number };
 
 function applyTheme(mode: ThemeMode, accent: string) {
@@ -156,6 +175,18 @@ export function SettingsModal() {
   const [localApiKey, setLocalApiKey] = useState("");
   const [localApiKeyVisible, setLocalApiKeyVisible] = useState(false);
   const [localSaving, setLocalSaving] = useState(false);
+  const [localModels, setLocalModels] = useState<string[]>([]);
+  const [localModelsLoading, setLocalModelsLoading] = useState(false);
+
+  // OpenAI-compatible BYOK (9.2): one set of fields drives all six providers.
+  const [compatProvider, setCompatProvider] = useState<CompatProvider>("openrouter");
+  const [compatKey, setCompatKey] = useState("");
+  const [compatKeyVisible, setCompatKeyVisible] = useState(false);
+  const [compatEndpoint, setCompatEndpoint] = useState(""); // custom_openai base URL
+  const [compatModel, setCompatModel] = useState("");
+  const [compatModels, setCompatModels] = useState<string[]>([]);
+  const [compatModelsLoading, setCompatModelsLoading] = useState(false);
+  const [compatSaving, setCompatSaving] = useState(false);
 
   // Usage (Graphe Free)
   const [usageData, setUsageData] = useState<UsageData | null>(null);
@@ -216,6 +247,58 @@ export function SettingsModal() {
     return () => clearTimeout(timer);
   }, [byokAnthropicKey, fetchByokModels]);
 
+  // ── 9.2: OpenAI-compatible + local model discovery ──────────────
+  const fetchCompatModels = useCallback(async (provider: CompatProvider, apiKey: string, endpointUrl?: string) => {
+    setCompatModelsLoading(true);
+    try {
+      const res = await authenticatedFetch("/api/ai/models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider, apiKey, ...(endpointUrl ? { endpointUrl } : {}) }),
+      });
+      if (!res.ok) { setCompatModels([]); return; }
+      const data = await res.json() as { models?: string[] };
+      setCompatModels(data.models ?? []);
+    } catch { setCompatModels([]); }
+    finally { setCompatModelsLoading(false); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const discoverLocalModels = useCallback(async (endpoint: string, apiKey?: string) => {
+    if (!endpoint.trim()) return;
+    setLocalModelsLoading(true);
+    try {
+      const res = await authenticatedFetch("/api/ai/models", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "local_llm", endpointUrl: endpoint.trim(), ...(apiKey?.trim() ? { apiKey: apiKey.trim() } : {}) }),
+      });
+      if (!res.ok) { setLocalModels([]); return; }
+      const data = await res.json() as { models?: string[] };
+      setLocalModels(data.models ?? []);
+    } catch { setLocalModels([]); }
+    finally { setLocalModelsLoading(false); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Debounce: discover models as the user types their key (and base URL for custom).
+  useEffect(() => {
+    const needsEndpoint = compatProvider === "custom_openai";
+    if (!compatKey.trim() || compatKey.length < 10 || (needsEndpoint && !compatEndpoint.trim())) {
+      setCompatModels([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      void fetchCompatModels(compatProvider, compatKey.trim(), needsEndpoint ? compatEndpoint.trim() : undefined);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [compatKey, compatEndpoint, compatProvider, fetchCompatModels]);
+
+  // Keep the model/endpoint fields in sync with the selected compat provider's saved key.
+  useEffect(() => {
+    const info = savedKeys[compatProvider];
+    setCompatModel(info?.modelOverride ?? "");
+    setCompatEndpoint(info?.endpointUrl ?? "");
+  }, [compatProvider, savedKeys]);
+
   // ── Load AI settings when AI tab is active ──────────────────────
   useEffect(() => {
     if (activeTab !== "ai" || !isSettingsOpen) return;
@@ -226,6 +309,7 @@ export function SettingsModal() {
         const p = data.activeAiProvider as AiProvider | null;
         setAiProvider(p);
         if (p === "openai" || p === "anthropic") setByokSubProvider(p);
+        if (p && COMPAT_IDS.includes(p as CompatProvider)) setCompatProvider(p as CompatProvider);
       })
       .catch(() => {});
 
@@ -320,6 +404,7 @@ export function SettingsModal() {
       (newProvider === "google_ai_studio" && savedKeys["google_ai_studio"]?.hasKey) ||
       (newProvider === "openai" && savedKeys["openai"]?.hasKey) ||
       (newProvider === "anthropic" && savedKeys["anthropic"]?.hasKey) ||
+      (COMPAT_IDS.includes(newProvider as CompatProvider) && Boolean(savedKeys[newProvider]?.hasKey)) ||
       (newProvider === "local_llm" && Boolean(savedKeys["local_llm"]?.endpointUrl));
 
     if (isConfigured) await commitActiveProvider(newProvider);
@@ -359,6 +444,36 @@ export function SettingsModal() {
       await commitActiveProvider(sub);
     } finally {
       if (isOpenai) setByokOpenaiSaving(false); else setByokAnthropicSaving(false);
+    }
+  };
+
+  const handleSaveCompatKey = async () => {
+    if (!compatKey.trim()) return;
+    if (compatProvider === "custom_openai" && !compatEndpoint.trim()) return;
+    setCompatSaving(true);
+    try {
+      await authenticatedFetch("/api/ai/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: compatProvider,
+          apiKey: compatKey.trim(),
+          modelOverride: compatModel.trim() || null,
+          ...(compatProvider === "custom_openai" ? { endpointUrl: compatEndpoint.trim() } : {}),
+        }),
+      });
+      setSavedKeys(prev => ({
+        ...prev,
+        [compatProvider]: {
+          hasKey: true,
+          endpointUrl: compatProvider === "custom_openai" ? compatEndpoint.trim() : null,
+          modelOverride: compatModel.trim() || null,
+        },
+      }));
+      setCompatKey("");
+      await commitActiveProvider(compatProvider);
+    } finally {
+      setCompatSaving(false);
     }
   };
 
@@ -573,7 +688,12 @@ export function SettingsModal() {
   };
 
   // Derived: which provider card is highlighted
-  const activeCard = aiProvider === "openai" || aiProvider === "anthropic" ? "byok" : aiProvider;
+  const activeCard =
+    aiProvider === "openai" || aiProvider === "anthropic"
+      ? "byok"
+      : aiProvider && COMPAT_IDS.includes(aiProvider as CompatProvider)
+        ? "compat"
+        : aiProvider;
 
   return (
     <Dialog open={isSettingsOpen} onOpenChange={(open) => { if (!open) setSettingsOpen(false); }}>
@@ -941,6 +1061,23 @@ export function SettingsModal() {
                         </div>
                         <span className="text-2xs text-muted-foreground">Ollama, LM Studio, etc.</span>
                       </button>
+
+                      {/* OpenAI-Compatible (OpenRouter, Groq, Mistral, Together, Fireworks, custom) */}
+                      <button
+                        onClick={() => handleAiProviderChange(compatProvider)}
+                        className={cn(
+                          "flex flex-col items-start gap-1.5 p-3 rounded-xl border text-left transition-all",
+                          activeCard === "compat"
+                            ? "border-primary bg-primary/10"
+                            : "border-panel-border bg-background hover:border-primary/40"
+                        )}
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <Cloud className={cn("w-3.5 h-3.5", activeCard === "compat" ? "text-primary" : "text-muted-foreground")} />
+                          <span className={cn("text-sm font-medium", activeCard === "compat" ? "text-primary" : "text-foreground")}>OpenAI-Compatible</span>
+                        </div>
+                        <span className="text-2xs text-muted-foreground">OpenRouter, Groq, Mistral…</span>
+                      </button>
                     </div>
                   </div>
 
@@ -1188,6 +1325,96 @@ export function SettingsModal() {
                   )}
 
                   {/* Local / Hosted LLM detail */}
+                  {/* OpenAI-Compatible detail (9.2) */}
+                  {activeCard === "compat" && (
+                    <div className="p-4 rounded-xl bg-background border border-panel-border space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-muted-foreground mb-1">Provider</label>
+                        <select
+                          value={compatProvider}
+                          onChange={(e) => { const p = e.target.value as CompatProvider; setCompatProvider(p); handleAiProviderChange(p); }}
+                          className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                        >
+                          {COMPAT_PROVIDERS.map((p) => (
+                            <option key={p.id} value={p.id}>{p.label} — {p.hint}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {savedKeys[compatProvider]?.hasKey ? (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
+                            <span className="text-sm text-foreground truncate">
+                              {COMPAT_PROVIDERS.find(p => p.id === compatProvider)?.label} key saved
+                              {savedKeys[compatProvider]?.modelOverride ? ` · ${savedKeys[compatProvider]?.modelOverride}` : ""}
+                            </span>
+                          </div>
+                          <button onClick={() => handleRemoveKey(compatProvider)} className="text-xs text-destructive/80 hover:text-destructive transition-colors shrink-0 ml-3">Remove</button>
+                        </div>
+                      ) : (
+                        <>
+                          {compatProvider === "custom_openai" && (
+                            <div>
+                              <label className="block text-xs font-medium text-muted-foreground mb-1">Base URL</label>
+                              <input
+                                type="text"
+                                value={compatEndpoint}
+                                onChange={(e) => setCompatEndpoint(e.target.value)}
+                                placeholder="https://your-host/v1"
+                                className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                              />
+                            </div>
+                          )}
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">API Key</label>
+                            <div className="relative">
+                              <input
+                                type={compatKeyVisible ? "text" : "password"}
+                                value={compatKey}
+                                onChange={(e) => setCompatKey(e.target.value)}
+                                placeholder="sk-..."
+                                className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 pr-9 text-sm focus:border-primary focus:outline-none"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setCompatKeyVisible(v => !v)}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground transition-colors"
+                                aria-label={compatKeyVisible ? "Hide API key" : "Show API key"}
+                              >
+                                {compatKeyVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">
+                              Model {compatModelsLoading && <span className="font-normal">(loading…)</span>}
+                            </label>
+                            <input
+                              type="text"
+                              list="compat-models"
+                              value={compatModel}
+                              onChange={(e) => setCompatModel(e.target.value)}
+                              placeholder={compatModels.length ? "Pick or type a model" : "e.g. meta-llama/llama-3.1-8b-instruct"}
+                              className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                            />
+                            <datalist id="compat-models">
+                              {compatModels.map((m) => <option key={m} value={m} />)}
+                            </datalist>
+                          </div>
+                          <button
+                            onClick={handleSaveCompatKey}
+                            disabled={!compatKey.trim() || !compatModel.trim() || (compatProvider === "custom_openai" && !compatEndpoint.trim()) || compatSaving}
+                            className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 hover:bg-primary-hover transition-colors"
+                          >
+                            {compatSaving ? "Saving…" : "Save Key"}
+                          </button>
+                          <p className="text-2xs text-muted-foreground">A model is required — enter your key to auto-discover available models.</p>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   {activeCard === "local_llm" && (
                     <div className="p-4 rounded-xl bg-background border border-panel-border space-y-3">
                       {savedKeys["local_llm"]?.endpointUrl ? (
@@ -1214,16 +1441,28 @@ export function SettingsModal() {
                             />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-muted-foreground mb-1">
-                              Model name <span className="font-normal">(optional)</span>
+                            <label className="text-xs font-medium text-muted-foreground mb-1 flex items-center justify-between">
+                              <span>Model name <span className="font-normal">(optional)</span></span>
+                              <button
+                                type="button"
+                                onClick={() => void discoverLocalModels(localEndpoint, localApiKey)}
+                                disabled={!localEndpoint.trim() || localModelsLoading}
+                                className="text-2xs text-primary hover:underline disabled:opacity-50 disabled:no-underline disabled:text-muted-foreground"
+                              >
+                                {localModelsLoading ? "Discovering…" : "Discover"}
+                              </button>
                             </label>
                             <input
                               type="text"
+                              list="local-models"
                               value={localModel}
                               onChange={(e) => setLocalModel(e.target.value)}
                               placeholder="e.g. llama3.2"
                               className="w-full bg-panel border border-panel-border rounded-lg px-3 py-2 text-sm focus:border-primary focus:outline-none"
                             />
+                            <datalist id="local-models">
+                              {localModels.map((m) => <option key={m} value={m} />)}
+                            </datalist>
                           </div>
                           <div>
                             <label className="block text-xs font-medium text-muted-foreground mb-1">

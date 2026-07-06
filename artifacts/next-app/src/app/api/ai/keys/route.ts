@@ -11,6 +11,14 @@ const VALID_PROVIDERS = [
   "openai",
   "anthropic",
   "local_llm",
+  // G17 (9.2): OpenAI-compatible BYOK providers. Fixed base URLs live in the
+  // adapter table; custom_openai additionally requires a user-supplied endpoint.
+  "openrouter",
+  "groq",
+  "mistral",
+  "together",
+  "fireworks",
+  "custom_openai",
 ] as const;
 
 type ValidProvider = (typeof VALID_PROVIDERS)[number];
@@ -68,6 +76,15 @@ export async function POST(request: NextRequest) {
     if (requiresApiKey && (!apiKey || typeof apiKey !== "string" || !apiKey.trim())) {
       return NextResponse.json(
         { error: "apiKey is required for this provider" },
+        { status: 400 },
+      );
+    }
+
+    // custom_openai has no fixed base URL — the user must supply where to send
+    // requests. Without it the generate route would build an invalid "/chat/completions".
+    if (provider === "custom_openai" && (typeof endpointUrl !== "string" || !endpointUrl.trim())) {
+      return NextResponse.json(
+        { error: "endpointUrl is required for a custom OpenAI-compatible provider" },
         { status: 400 },
       );
     }

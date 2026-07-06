@@ -5,6 +5,8 @@ import { describe, it, expect } from "vitest";
 import {
   PROVIDER_ADAPTERS,
   openAiCompatibleAdapter,
+  openAiCompatibleModelsUrl,
+  OPENAI_COMPATIBLE_BASE_URLS,
   geminiAdapter,
   anthropicAdapter,
 } from "@lib/ai-providers";
@@ -75,5 +77,20 @@ describe("PROVIDER_ADAPTERS registry", () => {
     expect(PROVIDER_ADAPTERS.mistral.url("m")).toContain("mistral.ai");
     expect(PROVIDER_ADAPTERS.together.url("m")).toContain("together.xyz");
     expect(PROVIDER_ADAPTERS.fireworks.url("m")).toContain("fireworks.ai");
+  });
+
+  it("shares the base-URL map with the adapter table (single source of truth)", () => {
+    // The adapter's chat URL must derive from the same base the models route uses.
+    for (const [p, base] of Object.entries(OPENAI_COMPATIBLE_BASE_URLS)) {
+      expect(PROVIDER_ADAPTERS[p].url("m")).toBe(`${base}/chat/completions`);
+    }
+  });
+});
+
+describe("openAiCompatibleModelsUrl (9.2 discovery)", () => {
+  it("appends /models and normalizes trailing slashes", () => {
+    expect(openAiCompatibleModelsUrl("https://api.groq.com/openai/v1")).toBe("https://api.groq.com/openai/v1/models");
+    expect(openAiCompatibleModelsUrl("https://my-host/v1/")).toBe("https://my-host/v1/models");
+    expect(openAiCompatibleModelsUrl("http://localhost:1234/v1")).toBe("http://localhost:1234/v1/models");
   });
 });
