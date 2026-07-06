@@ -8,6 +8,7 @@ import posthog from "posthog-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/store";
 import { buildAiPrompt } from "@/lib/ai-prompts";
+import { getSelectionHtml } from "@/lib/editor-html";
 import { executeAiRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
 
 interface AiSettingsResponse {
@@ -88,10 +89,11 @@ export function useAiAction(
   const callAI = async (action: string, customInstruction?: string) => {
     if (!editor) return;
 
-    // Use the selection captured when the toolbar appeared; fall back to current selection.
+    // Use the selection captured when the toolbar appeared; fall back to current
+    // selection. G13: content is HTML (preserves marks + block structure).
     const sel = savedAiSelection.current ?? (() => {
       const { from, to } = editor.state.selection;
-      return { from, to, text: editor.state.doc.textBetween(from, to) };
+      return { from, to, text: getSelectionHtml(editor, from, to) };
     })();
 
     if (!sel.text.trim()) return;
