@@ -6,6 +6,19 @@ All notable changes to Graphe Notes are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+### Added
+- **Plug-and-play AI providers** — six OpenAI-compatible providers (OpenRouter, Groq, Mistral, Together, Fireworks, and a custom base-URL option) selectable in Settings → AI, backed by a single server-side adapter table (`lib/ai-providers.ts`). Adding a provider is one config record.
+- **Model discovery** — the OpenAI-compatible and Anthropic settings forms auto-discover available models from the provider; local LLMs and custom endpoints discover client-side via `/v1/models`.
+- **Self-healing free-tier model** — the free tier discovers the lightest available Gemini model from the ListModels API (cached, with fallback to the hardcoded constant) and re-discovers on a 404, so a retired model id no longer breaks free AI (`lib/gemini-model-discovery.ts`).
+- **AI token accounting + per-action telemetry** — the generate route persists per-user `total_tokens_used` and tags every `ai_generate_completed` event with the originating action.
+
+### Changed
+- Consolidated all client AI requests through a single `executeAiRequest` path (`lib/execute-ai-request.ts`); the active-provider settings fetch is cached in React Query instead of refetched per action.
+
+### Security
+- Added an SSRF guard (`lib/url-guard.ts`, `isSafeExternalUrl`) for user-supplied upstream URLs the server fetches. The custom OpenAI-compatible provider's base URL is validated at save time — loopback, private, link-local, and cloud-metadata addresses are rejected. Local-LLM and custom-endpoint model discovery run client-side, so no user-controlled URL reaches a server-side fetch.
+- Added a server-side `AbortSignal.timeout` (30s) on all upstream AI provider calls so a hung provider returns a clean 504 instead of holding the serverless function open.
+
 ### Fixed
 - Added `try/catch` + `Sentry.captureException` to all ~37 API route handlers that previously had no error tracking. Unhandled DB or Zod errors now surface in Sentry instead of returning silent 500s.
 - Replaced four `rounded-[10px]` arbitrary values in `NoteList.tsx` and `QuickBitList.tsx` with `rounded-xl` (12px design token).
