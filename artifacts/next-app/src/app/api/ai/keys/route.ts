@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db, userApiKeysTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { encryptApiKey } from "@lib/encryption";
+import { isSafeExternalUrl } from "@lib/url-guard";
 import * as Sentry from "@sentry/nextjs";
 
 const VALID_PROVIDERS = [
@@ -82,11 +83,21 @@ export async function POST(request: NextRequest) {
 
     // custom_openai has no fixed base URL — the user must supply where to send
     // requests. Without it the generate route would build an invalid "/chat/completions".
-    if (provider === "custom_openai" && (typeof endpointUrl !== "string" || !endpointUrl.trim())) {
-      return NextResponse.json(
-        { error: "endpointUrl is required for a custom OpenAI-compatible provider" },
-        { status: 400 },
-      );
+    // The generate route fetches this URL server-side, so guard against SSRF: only
+    // a routable, non-internal http(s) host may be stored.
+    if (provider === "custom_openai") {
+      if (typeof endpointUrl !== "string" || !endpointUrl.trim()) {
+        return NextResponse.json(
+          { error: "endpointUrl is required for a custom OpenAI-compatible provider" },
+          { status: 400 },
+        );
+      }
+      if (!isSafeExternalUrl(endpointUrl.trim())) {
+        return NextResponse.json(
+          { error: "endpointUrl must be a public https/http URL (internal and loopback addresses are not allowed)" },
+          { status: 400 },
+        );
+      }
     }
 
     // local_llm: apiKey is optional. If present, encrypt and store it for

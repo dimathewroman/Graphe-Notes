@@ -6,6 +6,14 @@
 
 import { parseGeminiError } from "./ai-error-handler";
 
+// Linear trailing-slash strip. A regex like /\/+$/ backtracks polynomially on a
+// long run of slashes (ReDoS) when the value is user-controlled; this scan is O(n).
+export function stripTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47 /* "/" */) end--;
+  return s.slice(0, end);
+}
+
 export interface ParsedResult {
   text: string;
   truncated: boolean;
@@ -92,7 +100,7 @@ export const anthropicAdapter: ProviderAdapter = {
 // ── OpenAI-compatible family (OpenAI + OpenRouter/Groq/Mistral/Together/Fireworks/custom) ──
 export function openAiCompatibleAdapter(baseUrl?: string): ProviderAdapter {
   return {
-    url: (_model, endpoint) => `${(baseUrl ?? endpoint ?? "").replace(/\/+$/, "")}/chat/completions`,
+    url: (_model, endpoint) => `${stripTrailingSlashes(baseUrl ?? endpoint ?? "")}/chat/completions`,
     headers: (apiKey) => ({ "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` }),
     body: (model, prompt, maxTokens) => ({ model, messages: [{ role: "user", content: prompt }], max_tokens: maxTokens }),
     parse: (data) => {
@@ -126,7 +134,7 @@ export const OPENAI_COMPATIBLE_BASE_URLS: Record<string, string> = {
 
 // The OpenAI-compatible list-models endpoint for a given base URL.
 export function openAiCompatibleModelsUrl(baseUrl: string): string {
-  return `${baseUrl.replace(/\/+$/, "")}/models`;
+  return `${stripTrailingSlashes(baseUrl)}/models`;
 }
 
 // BYOK provider → adapter. Adding a provider is one entry here (+ one base URL

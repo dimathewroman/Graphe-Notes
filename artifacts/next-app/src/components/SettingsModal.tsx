@@ -14,6 +14,7 @@ import { IconButton } from "./ui/IconButton";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAnimationConfig, useSetMotionLevel } from "@/hooks/use-motion";
 import { cn } from "@/lib/utils";
+import { stripTrailingSlashes } from "@lib/ai-providers";
 import { Dialog, DialogClose } from "./ui/dialog";
 import { Dialog as DialogPrimitive, VisuallyHidden } from "radix-ui";
 import { useBreakpoint } from "@/hooks/use-mobile";
@@ -248,13 +249,29 @@ export function SettingsModal() {
   }, [byokAnthropicKey, fetchByokModels]);
 
   // ── 9.2: OpenAI-compatible + local model discovery ──────────────
+  // Providers with a fixed, provider-owned base URL discover server-side (the key
+  // stays server-only and there's no CORS wall). User-controlled endpoints —
+  // custom_openai and local_llm — discover client-side: the browser can reach the
+  // user's own host, and no user URL ever touches our server (no SSRF surface).
+  const parseModelIds = (data: { data?: Array<{ id?: string }> }): string[] =>
+    (data.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === "string" && id.length > 0).sort();
+
   const fetchCompatModels = useCallback(async (provider: CompatProvider, apiKey: string, endpointUrl?: string) => {
     setCompatModelsLoading(true);
     try {
+      if (provider === "custom_openai") {
+        if (!endpointUrl) { setCompatModels([]); return; }
+        const res = await fetch(`${stripTrailingSlashes(endpointUrl)}/models`, {
+          headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+        });
+        if (!res.ok) { setCompatModels([]); return; }
+        setCompatModels(parseModelIds(await res.json()));
+        return;
+      }
       const res = await authenticatedFetch("/api/ai/models", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, apiKey, ...(endpointUrl ? { endpointUrl } : {}) }),
+        body: JSON.stringify({ provider, apiKey }),
       });
       if (!res.ok) { setCompatModels([]); return; }
       const data = await res.json() as { models?: string[] };
@@ -267,14 +284,11 @@ export function SettingsModal() {
     if (!endpoint.trim()) return;
     setLocalModelsLoading(true);
     try {
-      const res = await authenticatedFetch("/api/ai/models", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: "local_llm", endpointUrl: endpoint.trim(), ...(apiKey?.trim() ? { apiKey: apiKey.trim() } : {}) }),
+      const res = await fetch(`${stripTrailingSlashes(endpoint.trim())}/v1/models`, {
+        headers: apiKey?.trim() ? { Authorization: `Bearer ${apiKey.trim()}` } : {},
       });
       if (!res.ok) { setLocalModels([]); return; }
-      const data = await res.json() as { models?: string[] };
-      setLocalModels(data.models ?? []);
+      setLocalModels(parseModelIds(await res.json()));
     } catch { setLocalModels([]); }
     finally { setLocalModelsLoading(false); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -481,7 +495,7 @@ export function SettingsModal() {
     if (!localEndpoint.trim()) return;
     // Strip trailing slashes so we never produce double-slash URLs like
     // http://localhost:8000//v1/chat/completions when concatenating the path.
-    const normalizedEndpoint = localEndpoint.trim().replace(/\/+$/, "");
+    const normalizedEndpoint = stripTrailingSlashes(localEndpoint.trim());
     setLocalSaving(true);
     try {
       const trimmedKey = localApiKey.trim();
