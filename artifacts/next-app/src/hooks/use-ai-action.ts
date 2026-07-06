@@ -7,6 +7,7 @@ import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import posthog from "posthog-js";
 import { useAppStore } from "@/store";
 import { buildAiPrompt } from "@/lib/ai-prompts";
+import { executeAiRequest } from "@/lib/execute-ai-request";
 
 interface AiSettingsResponse {
   activeAiProvider?: string | null;
@@ -16,21 +17,11 @@ interface AiSettingsResponse {
   localLlmApiKey?: string | null;
 }
 
-interface LocalLlmChatResponse {
-  choices: Array<{ message: { content: string } }>;
-}
-
 // Local LLMs cost no per-token money, so we give reasoning models room to
 // emit their chain-of-thought without truncating mid-thought. Cloud providers
-// keep their tighter caps to keep latency and cost predictable.
+// keep their tighter caps to keep latency and cost predictable. (The request +
+// think-tag stripping now live in execute-ai-request.)
 const LOCAL_LLM_MAX_TOKENS = 4096;
-
-// Strip <think>...</think> blocks emitted by reasoning models (DeepSeek R1,
-// Qwen3 thinking variants, etc.) before inserting the result into the editor.
-// Without this the user sees the model's internal monologue in their note.
-function stripThinkTags(text: string): string {
-  return text.replace(/<think>[\s\S]*?<\/think>\s*/gi, "").trimStart();
-}
 
 // G5: generative actions produce NEW content derived from the selection (a summary,
 // extracted tasks). Inserting them *after* the selection preserves the source;
@@ -182,12 +173,12 @@ export function useAiAction(
               setAiError(null);
               try {
                 // Re-fetch settings to get endpoint URL at execution time
+                let localLlm: { endpoint: string; model: string | null; apiKey: string | null } | undefined;
                 if (resolvedProvider === "local_llm") {
+                  // Re-fetch settings to get the endpoint URL at execution time.
                   const freshSettings = await authenticatedFetch("/api/ai/settings");
                   if (!freshSettings.ok) throw new Error("Failed to fetch AI settings");
                   const freshData = await freshSettings.json() as AiSettingsResponse;
-                  // Dev override (from .env) wins; otherwise use the saved endpoint.
-                  // Strip trailing slashes defensively for endpoints saved before normalization existed.
                   const normalizedEndpoint =
                     LOCAL_LLM_DEV_ENDPOINT_OVERRIDE ?? freshData.localLlmEndpoint?.replace(/\/+$/, "") ?? null;
                   if (!normalizedEndpoint) {
@@ -195,42 +186,22 @@ export function useAiAction(
                     setTimeout(() => setAiError(null), 5000);
                     return;
                   }
-                  const freshHeaders: Record<string, string> = { "Content-Type": "application/json" };
-                  if (freshData.localLlmApiKey) freshHeaders["Authorization"] = `Bearer ${freshData.localLlmApiKey}`;
-                  const res = await fetch(`${normalizedEndpoint}/v1/chat/completions`, {
-                    method: "POST",
-                    headers: freshHeaders,
-                    body: JSON.stringify({
-                      model: freshData.localLlmModel ?? "default",
-                      messages: [{ role: "user", content: capturedPrompt }],
-                      max_tokens: LOCAL_LLM_MAX_TOKENS,
-                      stream: false,
-                    }),
-                  });
-                  if (!res.ok) throw new Error("Local LLM returned an error");
-                  const data = await res.json() as LocalLlmChatResponse;
-                  const result = stripThinkTags(data.choices[0]?.message?.content ?? "");
-                  if (result && editor) {
-                    applyAiResult(result, capturedFrom, capturedTo);
-                  }
-                  return;
+                  localLlm = { endpoint: normalizedEndpoint, model: freshData.localLlmModel ?? null, apiKey: freshData.localLlmApiKey ?? null };
                 }
 
-                const res = await authenticatedFetch("/api/ai/generate", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ provider: resolvedProvider, taskType: capturedTaskType, prompt: capturedPrompt }),
+                const outcome = await executeAiRequest({
+                  provider: resolvedProvider,
+                  prompt: capturedPrompt,
+                  taskType: capturedTaskType,
+                  localLlm,
+                  localMaxTokens: LOCAL_LLM_MAX_TOKENS,
                 });
-                if (!res.ok) {
-                  setAiError("AI request failed. Please try again.");
+                if (!outcome.ok) {
+                  const msg = outcome.message ?? "AI request failed";
+                  setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
                   setTimeout(() => setAiError(null), 5000);
-                  return;
-                }
-                const data = await res.json() as { result?: string; error?: string; userMessage?: string };
-                if (data.error) throw new Error(data.userMessage ?? data.error);
-                const result = data.result || "";
-                if (result && editor) {
-                  applyAiResult(result, capturedFrom, capturedTo);
+                } else if (outcome.text && editor) {
+                  applyAiResult(outcome.text, capturedFrom, capturedTo);
                 }
               } catch (err) {
                 const msg = err instanceof Error ? err.message : "AI request failed";
@@ -270,32 +241,21 @@ export function useAiAction(
       setAiError(null);
       const tracker = trackSelection();
       try {
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (localLlmApiKey) headers["Authorization"] = `Bearer ${localLlmApiKey}`;
-        const res = await fetch(`${normalizedEndpoint}/v1/chat/completions`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            model: localLlmModel ?? "default",
-            messages: [{ role: "user", content: prompt }],
-            max_tokens: LOCAL_LLM_MAX_TOKENS,
-            stream: false,
-          }),
+        const outcome = await executeAiRequest({
+          provider,
+          prompt,
+          taskType,
+          localLlm: { endpoint: normalizedEndpoint, model: localLlmModel, apiKey: localLlmApiKey },
+          localMaxTokens: LOCAL_LLM_MAX_TOKENS,
         });
-        if (!res.ok) throw new Error("Local LLM returned an error");
-        const data = await res.json() as LocalLlmChatResponse;
-        const result = stripThinkTags(data.choices[0]?.message?.content ?? "");
-        if (result) {
+        if (!outcome.ok) {
+          const msg = outcome.message ?? "AI request failed";
+          setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
+          setTimeout(() => setAiError(null), 5000);
+        } else if (outcome.text) {
           const { from, to } = tracker.pos();
-          applyAiResult(result, from, to);
+          applyAiResult(outcome.text, from, to);
         }
-      } catch (err) {
-        const isNetworkError = err instanceof TypeError;
-        const msg = isNetworkError
-          ? "Could not reach local LLM. Make sure your inference server is running."
-          : err instanceof Error ? err.message : "AI request failed";
-        setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
-        setTimeout(() => setAiError(null), 5000);
       } finally {
         tracker.stop();
         setAiLoading(false);
@@ -313,15 +273,6 @@ export function useAiAction(
     abortRef.current = controller;
     const tracker = trackSelection();
 
-    const doRequest = async (): Promise<Response> => {
-      return authenticatedFetch("/api/ai/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, taskType, prompt }),
-        signal: controller.signal,
-      });
-    };
-
     // Abortable wait — rejects with an AbortError if the user cancels mid-retry.
     const abortableDelay = (ms: number) => new Promise<void>((resolve, reject) => {
       const t = setTimeout(resolve, ms);
@@ -332,66 +283,35 @@ export function useAiAction(
     });
 
     try {
-      let res = await doRequest();
+      let outcome = await executeAiRequest({ provider, prompt, taskType, signal: controller.signal });
 
-      if (res.status === 429) {
-        const data = await res.json() as { error?: string; reason?: string; resetInMs?: number; retryAfterMs?: number };
-        // G1: the upstream RPM-429 arrives as `error: "rpm_limit"` + retryAfterMs;
-        // the app-key rate limits arrive as `reason` + resetInMs. Branch on either.
-        const kind = data.error ?? data.reason;
-        if (kind === "rpm_limit") {
-          // Sleep the server-provided delay (was a hardcoded 65s), then retry ONCE.
-          const delayMs = data.retryAfterMs ?? data.resetInMs ?? 60000;
-          setAiError(`AI is busy — retrying in ${Math.ceil(delayMs / 1000)}s… (tap ✕ to cancel)`);
-          await abortableDelay(delayMs);
-          setAiError("Retrying…");
-          res = await doRequest();
-          if (res.status === 429) {
-            setAiError("AI is still busy. Please try again in a moment.");
-            setTimeout(() => setAiError(null), 5000);
-            return;
-          }
-        } else if (kind === "hourly_limit_reached") {
-          posthog.capture("ai_rate_limit_reached", { reason: "hourly_limit_reached", reset_in_ms: data.resetInMs });
-          const resetMins = Math.ceil((data.resetInMs ?? 0) / 60000);
-          setAiError(`You've reached your hourly AI limit. Resets in ${resetMins} minutes.`);
-          setTimeout(() => setAiError(null), 5000);
-          return;
-        } else if (data.reason === "monthly_limit_reached") {
-          posthog.capture("ai_rate_limit_reached", { reason: "monthly_limit_reached" });
-          setAiError("Monthly AI limit reached. Add your own API key in Settings for unlimited use.");
-          setTimeout(() => setAiError(null), 6000);
-          return;
-        }
-      }
-
-      if (res.status === 400) {
-        const data = await res.json() as { error?: string };
-        if (data.error === "no_key_configured") {
-          setAiError("No API key configured. Please add one in Settings.");
+      // G1: on an RPM-429 the server tells us how long to wait; retry ONCE.
+      if (!outcome.ok && outcome.retryDelayMs != null) {
+        setAiError(`AI is busy — retrying in ${Math.ceil(outcome.retryDelayMs / 1000)}s… (tap ✕ to cancel)`);
+        await abortableDelay(outcome.retryDelayMs);
+        setAiError("Retrying…");
+        outcome = await executeAiRequest({ provider, prompt, taskType, signal: controller.signal });
+        if (!outcome.ok && outcome.retryDelayMs != null) {
+          setAiError("AI is still busy. Please try again in a moment.");
           setTimeout(() => setAiError(null), 5000);
           return;
         }
       }
 
-      if (res.status === 401) {
-        setAiError("AI key invalid or missing. Check Settings.");
+      if (outcome.rateLimit) {
+        posthog.capture("ai_rate_limit_reached", { reason: outcome.rateLimit.reason, reset_in_ms: outcome.rateLimit.resetInMs });
+      }
+
+      if (!outcome.ok) {
+        const msg = outcome.message ?? "AI request failed";
+        setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
         setTimeout(() => setAiError(null), 5000);
         return;
       }
 
-      if (res.status === 502) {
-        setAiError("AI request failed. Please try again.");
-        setTimeout(() => setAiError(null), 5000);
-        return;
-      }
-
-      const data = await res.json() as { error?: string; result?: string; userMessage?: string };
-      if (data.error) throw new Error(data.userMessage ?? data.error);
-      const result: string = data.result || "";
-      if (result) {
+      if (outcome.text) {
         const { from, to } = tracker.pos();
-        applyAiResult(result, from, to);
+        applyAiResult(outcome.text, from, to);
       }
     } catch (err) {
       // User-initiated cancel — abort the flow silently, no error banner.

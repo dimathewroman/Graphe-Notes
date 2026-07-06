@@ -11,10 +11,7 @@ import { useAnimationConfig } from "@/hooks/use-motion";
 import { useDemoMode } from "@/lib/demo-context";
 import posthog from "posthog-js";
 import { ScrollArea } from "./ui/scroll-area";
-
-interface LocalLlmChatResponse {
-  choices: Array<{ message: { content: string } }>;
-}
+import { executeAiRequest } from "@/lib/execute-ai-request";
 
 interface AiSettingsResponse {
   activeAiProvider?: string | null;
@@ -61,42 +58,18 @@ export function AIPanel() {
     setIsPending(true);
     setResult("");
     try {
-      if (provider === "local_llm") {
-        if (!localLlmConfig?.endpoint) {
-          setResult("Local LLM endpoint not configured. Please check Settings.");
-          return;
-        }
-        const res = await fetch(`${localLlmConfig.endpoint}/v1/chat/completions`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: localLlmConfig.model ?? "default",
-            messages: [{ role: "user", content: fullPrompt }],
-            max_tokens: 1024,
-            stream: false,
-          }),
-        });
-        if (!res.ok) throw new Error("Local LLM returned an error");
-        const data = await res.json() as LocalLlmChatResponse;
-        setResult(data.choices[0]?.message?.content ?? "");
-        return;
-      }
-
-      const res = await authenticatedFetch("/api/ai/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider, taskType: "manual", prompt: fullPrompt }),
+      // G8: shared request path. AIPanel keeps its 1024-token budget and shows the
+      // result — or the friendly error message — inline in the result area.
+      const outcome = await executeAiRequest({
+        provider,
+        prompt: fullPrompt,
+        taskType: "manual",
+        localLlm: provider === "local_llm"
+          ? { endpoint: localLlmConfig?.endpoint ?? "", model: localLlmConfig?.model ?? null, apiKey: null }
+          : undefined,
+        localMaxTokens: 1024,
       });
-      const data = await res.json() as { result?: string; error?: string };
-      if (data.error) throw new Error(data.error);
-      setResult(data.result ?? "");
-    } catch (e) {
-      console.error(e);
-      if (provider === "local_llm" && e instanceof TypeError) {
-        setResult("Could not reach local LLM. Make sure your inference server is running.");
-      } else {
-        setResult("Error generating response. Please check your AI settings.");
-      }
+      setResult(outcome.ok ? (outcome.text ?? "") : (outcome.message ?? "Error generating response. Please check your AI settings."));
     } finally {
       setIsPending(false);
     }
