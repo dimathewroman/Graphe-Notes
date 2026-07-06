@@ -174,22 +174,27 @@ export function useAiAction(
       // Clear/anchor once, then append each delta at an advancing position (mock
       // deltas are plain text, so a delta of length N advances the position by N).
       const generative = GENERATIVE_ACTIONS.has(action);
-      let insertPos: number;
-      if (generative) {
-        insertPos = sel.to; // append after the selection
-      } else {
+      const anchor = generative ? sel.to : sel.from; // append after / replace the selection
+      if (!generative) {
         editor!.chain().focus().deleteRange({ from: sel.from, to: sel.to }).run();
-        insertPos = sel.from; // replace the selection
       }
+      // Re-write the whole streamed region with the full accumulated text on each
+      // delta (via the raw tr.insertText primitive, which preserves the literal
+      // string). Appending delta-by-delta instead leaves a trailing space at the
+      // growing block edge that contenteditable collapses into the model on some
+      // platforms ("Mock " + "AI " → "MockAI"); a complete string each time has no
+      // edge whitespace, so it's stable everywhere. Still visibly progressive.
+      let accumulated = "";
       try {
         const outcome = await executeAiStreamRequest(
           { provider: "graphe_free", prompt, system, taskType, action, demoMock: true },
           (delta) => {
-            // Insert as a literal text node — NOT a string, which insertContentAt
-            // would parse as HTML and collapse the deltas' whitespace ("Mock " +
-            // "AI " → "MockAI"). A text node of N chars advances the position by N.
-            editor!.chain().insertContentAt(insertPos, { type: "text", text: delta }).run();
-            insertPos += delta.length;
+            const prevLen = accumulated.length;
+            accumulated += delta;
+            editor!.chain().command(({ tr }) => {
+              tr.insertText(accumulated, anchor, anchor + prevLen);
+              return true;
+            }).run();
           },
         );
         if (!outcome.ok) {
