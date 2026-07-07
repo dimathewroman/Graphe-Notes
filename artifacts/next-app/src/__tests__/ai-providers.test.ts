@@ -144,6 +144,45 @@ describe("per-action generation settings in body (G14, 10.3)", () => {
   });
 });
 
+describe("streaming request construction (9.3)", () => {
+  it("Gemini streams via streamGenerateContent?alt=sse with the generateContent body", () => {
+    expect(geminiAdapter.streamUrl("gemini-2.5-flash")).toBe(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
+    );
+    expect(geminiAdapter.streamBody("m", "hi", 512)).toEqual({
+      contents: [{ parts: [{ text: "hi" }] }],
+      generationConfig: { maxOutputTokens: 512 },
+    });
+  });
+
+  it("OpenAI-compatible reuses the chat URL and adds stream:true", () => {
+    const a = openAiCompatibleAdapter("https://api.openai.com/v1");
+    expect(a.streamUrl("m")).toBe("https://api.openai.com/v1/chat/completions");
+    expect(a.streamBody("gpt-4o", "hi", 100)).toEqual({
+      model: "gpt-4o",
+      messages: [{ role: "user", content: "hi" }],
+      max_tokens: 100,
+      stream: true,
+    });
+  });
+
+  it("Anthropic reuses the messages URL and adds stream:true", () => {
+    expect(anthropicAdapter.streamUrl("claude")).toBe("https://api.anthropic.com/v1/messages");
+    const b = anthropicAdapter.streamBody("claude", "hi", 100) as Record<string, unknown>;
+    expect(b.stream).toBe(true);
+    expect(b.messages).toEqual([{ role: "user", content: "hi" }]);
+  });
+
+  it("every adapter exposes the streaming surface", () => {
+    for (const p of Object.keys(PROVIDER_ADAPTERS)) {
+      const a = PROVIDER_ADAPTERS[p];
+      expect(typeof a.streamUrl, p).toBe("function");
+      expect(typeof a.streamBody, p).toBe("function");
+      expect(typeof a.streamDelta, p).toBe("function");
+    }
+  });
+});
+
 describe("openAiCompatibleModelsUrl (9.2 discovery)", () => {
   it("appends /models and normalizes trailing slashes", () => {
     expect(openAiCompatibleModelsUrl("https://api.groq.com/openai/v1")).toBe("https://api.groq.com/openai/v1/models");

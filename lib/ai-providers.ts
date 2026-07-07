@@ -46,6 +46,12 @@ export interface ProviderAdapter {
   /** Streaming (9.3): the text delta contributed by one parsed SSE event, or ""
    *  if the event carries no text (role/usage/keep-alive frames). */
   streamDelta: (event: unknown) => string;
+  /** Streaming (9.3): the upstream URL for a streamed request (Gemini uses a
+   *  different endpoint; OpenAI/Anthropic reuse the non-stream URL). */
+  streamUrl: (model: string, endpoint?: string | null) => string;
+  /** Streaming (9.3): the request body for a streamed request (OpenAI/Anthropic
+   *  add `stream: true`; Gemini streams via the URL, so the body is unchanged). */
+  streamBody: (model: string, prompt: string, maxTokens: number, system?: string, gen?: GenerationSettings) => unknown;
   /** Map a non-OK upstream response to our client error shape. */
   mapError: (upstreamStatus: number, rawBody: string) => AdapterError;
 }
@@ -98,6 +104,16 @@ export const geminiAdapter: ProviderAdapter = {
     const e = event as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
     return e.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   },
+  // Gemini streams via a different method; body is the generateContent body.
+  streamUrl: (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,
+  streamBody: (_model, prompt, maxTokens, system, gen) => ({
+    contents: [{ parts: [{ text: prompt }] }],
+    ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+    generationConfig: {
+      maxOutputTokens: maxTokens,
+      ...(gen ? { temperature: gen.temperature, topP: gen.topP } : {}),
+    },
+  }),
 };
 
 // ── Anthropic Messages API ────────────────────────────────────────────────────
@@ -131,6 +147,15 @@ export const anthropicAdapter: ProviderAdapter = {
     const e = event as { type?: string; delta?: { type?: string; text?: string } };
     return e.type === "content_block_delta" && e.delta?.type === "text_delta" ? e.delta.text ?? "" : "";
   },
+  streamUrl: () => "https://api.anthropic.com/v1/messages",
+  streamBody: (model, prompt, maxTokens, system, gen) => ({
+    model,
+    max_tokens: maxTokens,
+    stream: true,
+    ...(system ? { system } : {}),
+    ...(gen ? { temperature: gen.temperature, top_p: gen.topP } : {}),
+    messages: [{ role: "user", content: prompt }],
+  }),
 };
 
 // ── OpenAI-compatible family (OpenAI + OpenRouter/Groq/Mistral/Together/Fireworks/custom) ──
@@ -164,6 +189,16 @@ export function openAiCompatibleAdapter(baseUrl?: string): ProviderAdapter {
       const e = event as { choices?: Array<{ delta?: { content?: string } }> };
       return e.choices?.[0]?.delta?.content ?? "";
     },
+    streamUrl: (_model, endpoint) => `${stripTrailingSlashes(baseUrl ?? endpoint ?? "")}/chat/completions`,
+    streamBody: (model, prompt, maxTokens, system, gen) => ({
+      model,
+      messages: system
+        ? [{ role: "system", content: system }, { role: "user", content: prompt }]
+        : [{ role: "user", content: prompt }],
+      max_tokens: maxTokens,
+      stream: true,
+      ...(gen ? { temperature: gen.temperature, top_p: gen.topP } : {}),
+    }),
   };
 }
 
