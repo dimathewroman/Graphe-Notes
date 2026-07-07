@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { checkAndIncrementUsage, recordTokenUsage } from "@lib/ai-rate-limit";
-import { resolveModel, type TaskType, type Provider, GEMINI_FLASH_LITE } from "@lib/ai-model-router";
+import { resolveModel, pickModelForTier, type TaskType, type Provider, GEMINI_FLASH_LITE } from "@lib/ai-model-router";
 import { resolveFreeTierModel, invalidateFreeTierModel } from "@lib/gemini-model-discovery";
 import { parseGeminiError } from "@lib/ai-error-handler";
 import { type AiErrorCode, type AiErrorContext, resolveAiError, httpForCode } from "@lib/ai-errors";
@@ -278,8 +278,11 @@ export async function POST(request: NextRequest) {
 
     const decryptedKey = decryptApiKey(row.encryptedKey);
 
-    // Effective model override: request body → db row fallback
-    const effectiveModelOverride = modelOverride ?? (row.modelOverride ?? undefined);
+    // Effective model override: explicit request body wins; otherwise pick the
+    // per-tier model from the saved row (fast model for background actions, main
+    // model for the rest — see pickModelForTier).
+    const effectiveModelOverride =
+      modelOverride ?? pickModelForTier(row.modelOverride, row.fastModelOverride, taskType as TaskType);
 
     let routing;
     try {

@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
         hasKey: !!r.encryptedKey,
         endpointUrl: r.endpointUrl,
         modelOverride: r.modelOverride,
+        fastModelOverride: r.fastModelOverride,
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
       })),
@@ -62,7 +63,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const { provider, apiKey, endpointUrl, modelOverride } = body;
+    const { provider, apiKey, endpointUrl, modelOverride, fastModelOverride } = body;
+    // Normalize an optional string field to a trimmed value or null.
+    const asText = (v: unknown) => (typeof v === "string" ? v.trim() || null : null);
 
     if (!isValidProvider(provider)) {
       return NextResponse.json(
@@ -121,8 +124,9 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         provider,
         encryptedKey: encrypted,
-        endpointUrl: typeof endpointUrl === "string" ? endpointUrl.trim() || null : null,
-        modelOverride: typeof modelOverride === "string" ? modelOverride.trim() || null : null,
+        endpointUrl: asText(endpointUrl),
+        modelOverride: asText(modelOverride),
+        fastModelOverride: asText(fastModelOverride),
         createdAt: now,
         updatedAt: now,
       })
@@ -130,8 +134,9 @@ export async function POST(request: NextRequest) {
         target: [userApiKeysTable.userId, userApiKeysTable.provider],
         set: {
           encryptedKey: encrypted,
-          endpointUrl: typeof endpointUrl === "string" ? endpointUrl.trim() || null : null,
-          modelOverride: typeof modelOverride === "string" ? modelOverride.trim() || null : null,
+          endpointUrl: asText(endpointUrl),
+          modelOverride: asText(modelOverride),
+          fastModelOverride: asText(fastModelOverride),
           updatedAt: now,
         },
       });
@@ -150,7 +155,7 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const { provider, modelOverride } = body;
+    const { provider, modelOverride, fastModelOverride } = body;
 
     if (!isValidProvider(provider)) {
       return NextResponse.json(
@@ -159,13 +164,17 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const now = new Date();
+    // Only patch the fields actually present, so a model-only update doesn't wipe
+    // the fast model (and vice-versa).
+    const patch: { modelOverride?: string | null; fastModelOverride?: string | null; updatedAt: Date } = {
+      updatedAt: new Date(),
+    };
+    if ("modelOverride" in body) patch.modelOverride = typeof modelOverride === "string" ? modelOverride.trim() || null : null;
+    if ("fastModelOverride" in body) patch.fastModelOverride = typeof fastModelOverride === "string" ? fastModelOverride.trim() || null : null;
+
     await db
       .update(userApiKeysTable)
-      .set({
-        modelOverride: typeof modelOverride === "string" ? modelOverride.trim() || null : null,
-        updatedAt: now,
-      })
+      .set(patch)
       .where(
         and(
           eq(userApiKeysTable.userId, user.id),

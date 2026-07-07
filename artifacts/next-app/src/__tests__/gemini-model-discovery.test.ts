@@ -5,6 +5,8 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import {
   pickLightestModel,
+  filterGeminiChatModels,
+  listGeminiModels,
   resolveFreeTierModel,
   invalidateFreeTierModel,
   __resetFreeTierModelCache,
@@ -12,6 +14,37 @@ import {
 import { GEMINI_FLASH_LITE } from "@lib/ai-model-router";
 
 const gen = (name: string) => ({ name, supportedGenerationMethods: ["generateContent"] });
+
+describe("filterGeminiChatModels (BYOK model dropdown)", () => {
+  it("keeps only generateContent models, strips the models/ prefix, drops embedding/aqa, sorts", () => {
+    const out = filterGeminiChatModels([
+      gen("models/gemini-2.5-pro"),
+      gen("models/gemini-2.5-flash"),
+      { name: "models/text-embedding-004", supportedGenerationMethods: ["embedContent"] },
+      { name: "models/aqa", supportedGenerationMethods: ["generateAnswer"] },
+      { name: "models/embedding-gecko", supportedGenerationMethods: ["generateContent"] }, // has generateContent but is an embedding helper
+    ]);
+    expect(out).toEqual(["gemini-2.5-flash", "gemini-2.5-pro"]);
+  });
+
+  it("de-dupes", () => {
+    expect(filterGeminiChatModels([gen("models/gemini-2.5-flash"), gen("models/gemini-2.5-flash")])).toEqual(["gemini-2.5-flash"]);
+  });
+});
+
+describe("listGeminiModels", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("fetches ListModels and returns the filtered chat models", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ models: [gen("models/gemini-2.5-flash"), gen("models/gemini-2.5-pro")] }) }));
+    expect(await listGeminiModels("k")).toEqual(["gemini-2.5-flash", "gemini-2.5-pro"]);
+  });
+
+  it("throws on a non-OK response (so the caller can surface the failure)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 403 }));
+    await expect(listGeminiModels("bad")).rejects.toThrow(/ListModels error: 403/);
+  });
+});
 
 describe("pickLightestModel", () => {
   it("prefers flash-lite over flash and pro", () => {

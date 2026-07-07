@@ -16,7 +16,12 @@ export const userApiKeysTable = pgTable(
     provider: text("provider").notNull(),
     encryptedKey: text("encrypted_key").notNull(),
     endpointUrl: text("endpoint_url"),
+    // The main model (the "standard" tier — used for manual/creative actions).
     modelOverride: text("model_override"),
+    // Optional "fast" model for the light/mechanical tier (proofread, summarize,
+    // extract, short-shorten). Null ⇒ fall back to modelOverride. See the
+    // generate route's pickModelForTier + taskTypeFor.
+    fastModelOverride: text("fast_model_override"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

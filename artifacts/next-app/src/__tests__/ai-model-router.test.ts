@@ -1,10 +1,31 @@
 import { describe, it, expect } from "vitest";
 import {
   resolveModel,
+  pickModelForTier,
   GEMINI_FLASH,
   GEMINI_FLASH_LITE,
   GEMINI_PRO,
 } from "@lib/ai-model-router";
+
+// Action-type tiers: the light "background" tier can use a separate fast model;
+// everything else uses the main model. Fast falls back to main when unset.
+describe("pickModelForTier", () => {
+  it("uses the fast model for background actions when set", () => {
+    expect(pickModelForTier("sonnet", "haiku", "background")).toBe("haiku");
+  });
+  it("falls back to the main model for background when no fast model is set", () => {
+    expect(pickModelForTier("sonnet", null, "background")).toBe("sonnet");
+    expect(pickModelForTier("sonnet", "", "background")).toBe("sonnet");
+  });
+  it("always uses the main model for manual/deliberate actions", () => {
+    expect(pickModelForTier("sonnet", "haiku", "manual")).toBe("sonnet");
+    expect(pickModelForTier("sonnet", "haiku", "deliberate")).toBe("sonnet");
+  });
+  it("returns undefined when nothing is configured (so resolveModel can decide)", () => {
+    expect(pickModelForTier(null, null, "background")).toBeUndefined();
+    expect(pickModelForTier(undefined, undefined, "manual")).toBeUndefined();
+  });
+});
 
 // G10 (Phase 8.2): the Google model override set in Settings must be honored, not
 // silently ignored. Free tier still ignores it (locked to Flash-Lite).

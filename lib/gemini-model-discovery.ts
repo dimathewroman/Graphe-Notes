@@ -55,6 +55,41 @@ export function pickLightestModel(models: GeminiModel[]): string | null {
   return null;
 }
 
+// Shared ListModels fetch. Returns the raw model array (empty on any failure);
+// callers decide how to rank/filter. `resolveFreeTierModel` needs best-effort
+// (never throws); BYOK discovery wants the error to surface, so it re-fetches.
+async function fetchGeminiModels(apiKey: string): Promise<GeminiModel[]> {
+  const res = await fetch(LIST_MODELS_URL, {
+    headers: { "x-goog-api-key": apiKey },
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new Error(`Gemini ListModels error: ${res.status}`);
+  const data = (await res.json()) as { models?: GeminiModel[] };
+  return data.models ?? [];
+}
+
+/**
+ * All chat-capable Gemini model ids from a ListModels response — pure so the
+ * filter is unit-testable. Keeps only generateContent models, strips the
+ * `models/` prefix, drops embedding/aqa helpers, de-dupes and sorts.
+ */
+export function filterGeminiChatModels(models: GeminiModel[]): string[] {
+  const ids = models
+    .filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
+    .map((m) => (m.name ?? "").replace(/^models\//, ""))
+    .filter((id) => id && !/embedding|aqa/i.test(id));
+  return [...new Set(ids)].sort();
+}
+
+/**
+ * List every chat-capable Gemini model for a BYOK Google key (Settings model
+ * dropdown). Throws on network / non-OK so the caller can surface the failure —
+ * unlike resolveFreeTierModel, which is best-effort.
+ */
+export async function listGeminiModels(apiKey: string): Promise<string[]> {
+  return filterGeminiChatModels(await fetchGeminiModels(apiKey));
+}
+
 /**
  * Resolve the free-tier model id, using a cached discovery result when fresh.
  * Any failure (network, non-OK, empty/unmatched list) falls back to the
@@ -63,13 +98,7 @@ export function pickLightestModel(models: GeminiModel[]): string | null {
 export async function resolveFreeTierModel(apiKey: string): Promise<string> {
   if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.model;
   try {
-    const res = await fetch(LIST_MODELS_URL, {
-      headers: { "x-goog-api-key": apiKey },
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return GEMINI_FLASH_LITE;
-    const data = (await res.json()) as { models?: GeminiModel[] };
-    const picked = pickLightestModel(data.models ?? []);
+    const picked = pickLightestModel(await fetchGeminiModels(apiKey));
     if (!picked) return GEMINI_FLASH_LITE;
     cached = { model: picked, at: Date.now() };
     return picked;

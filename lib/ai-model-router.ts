@@ -24,6 +24,20 @@ export type ModelRoutingResult = {
   isAutoRouted: boolean;
 };
 
+// Action-type model tiers. Every action routes (via taskTypeFor) to "background"
+// (light/mechanical: proofread, summarize, extract, short-shorten) or "manual"
+// (everything else). A BYOK provider can set a separate `fastModel` for the
+// background tier; the main `model` serves the rest. Fast falls back to main when
+// unset, so a single-model config behaves exactly as before.
+export function pickModelForTier(
+  model: string | null | undefined,
+  fastModel: string | null | undefined,
+  taskType: TaskType,
+): string | undefined {
+  const chosen = taskType === "background" ? fastModel || model : model;
+  return chosen || undefined;
+}
+
 export function resolveModel(
   provider: Provider,
   taskType: TaskType,
