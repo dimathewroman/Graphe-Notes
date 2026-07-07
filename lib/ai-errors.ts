@@ -26,6 +26,7 @@ export type AiErrorCode =
   // limits & quotas
   | "free_hourly_limit"
   | "free_capacity"
+  | "free_unavailable"
   | "provider_rpm"
   | "provider_daily_quota"
   | "provider_quota_unknown"
@@ -146,6 +147,13 @@ const REGISTRY: Record<AiErrorCode, RegistryEntry> = {
     title: "Free AI at capacity",
     message: () => "Free AI is at capacity this month. Add your own API key in Settings for unlimited use.",
   },
+  free_unavailable: {
+    // The free-tier backend isn't configured (e.g. its server key is missing) —
+    // our problem, not the user's. Offer the workaround, don't burn their quota.
+    severity: "blocked", action: "settings", retryable: false,
+    title: "Free AI unavailable",
+    message: () => "Free AI is temporarily unavailable. Add your own API key in Settings → AI to keep using AI, or try again later.",
+  },
   provider_rpm: {
     severity: "transient", action: "retry", retryable: true,
     title: "Rate-limited",
@@ -258,6 +266,7 @@ const HTTP_FOR_CODE: Partial<Record<AiErrorCode, number>> = {
   bad_request: 400,
   free_hourly_limit: 429,
   free_capacity: 429,
+  free_unavailable: 503,
   provider_rpm: 429,
   provider_daily_quota: 429,
   provider_quota_unknown: 429,

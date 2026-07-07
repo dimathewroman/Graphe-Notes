@@ -175,18 +175,21 @@ export async function POST(request: NextRequest) {
 
     // --- graphe_free path ---
     if (provider === "graphe_free") {
+      // Check the free-tier backend key BEFORE counting usage. If it's missing
+      // (a server misconfiguration), a raw throw would (a) burn one of the user's
+      // 5 hourly requests for our problem and (b) surface a scary generic 500.
+      // Instead: don't increment, log it for ops, and return a clear message.
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        Sentry.captureException(new Error("GEMINI_API_KEY is not set — free-tier AI is unavailable."));
+        return aiError("free_unavailable", { provider });
+      }
+
       const rateLimit = await checkAndIncrementUsage(userId);
       if (!rateLimit.allowed) {
         const code = rateLimit.reason === "monthly_limit_reached" ? "free_capacity" : "free_hourly_limit";
         // Keep reason + resetInMs in the body for the client's rate-limit telemetry.
         return aiError(code, { provider, resetInMs: rateLimit.resetInMs }, { reason: rateLimit.reason, resetInMs: rateLimit.resetInMs });
-      }
-
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error(
-          "GEMINI_API_KEY environment variable is required but not set.",
-        );
       }
 
       // G19: self-healing free-tier model. Discover the lightest available model
