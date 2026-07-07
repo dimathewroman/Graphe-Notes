@@ -1,6 +1,6 @@
 // G5 / Phase 8.3: rewrite actions replace the selection; generative actions
 // (summarize/extract) insert AFTER it; sentinel results are never written.
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { ReactNode } from "react";
 import { renderHook, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -40,11 +40,19 @@ function res(status: number, body: unknown) {
   return { status, ok: status >= 200 && status < 300, json: async () => body };
 }
 
+const realFetch = globalThis.fetch;
+afterEach(() => { globalThis.fetch = realFetch; });
+
+// applyAiResult (rewrite-replace / generative-after / sentinel) is exercised by
+// the LOCAL provider path — the cloud path now streams progressively (covered by
+// the streaming tests + the demo-AI e2e), while local still applies a one-shot
+// result via applyAiResult. Drive it through local so this contract stays pinned.
 async function runAction(action: string, result: string) {
   authenticatedFetch.mockReset();
-  authenticatedFetch
-    .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
-    .mockResolvedValueOnce(res(200, { result }));
+  authenticatedFetch.mockResolvedValueOnce(
+    res(200, { hasCompletedAiSetup: true, activeAiProvider: "local_llm", localLlmEndpoint: "http://localhost:1234", localLlmModel: "m" }),
+  );
+  globalThis.fetch = vi.fn().mockResolvedValue(res(200, { choices: [{ message: { content: result } }] })) as never;
   const { result: hook } = renderHook(() => useAiAction(makeEditor()), { wrapper: makeWrapper() });
   act(() => hook.current.captureSelection(0, 5, "hello"));
   await act(async () => { await hook.current.callAI(action); });
