@@ -4,6 +4,7 @@ import { db, userApiKeysTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { decryptApiKey } from "@lib/encryption";
 import { OPENAI_COMPATIBLE_BASE_URLS, openAiCompatibleModelsUrl } from "@lib/ai-providers";
+import { listGeminiModels } from "@lib/gemini-model-discovery";
 import * as Sentry from "@sentry/nextjs";
 
 // This route only ever fetches FIXED, provider-owned base URLs (no user-supplied
@@ -12,7 +13,7 @@ import * as Sentry from "@sentry/nextjs";
 // client-side (the browser, which can actually reach the user's localhost), never
 // through this server route.
 const OPENAI_COMPATIBLE = new Set(Object.keys(OPENAI_COMPATIBLE_BASE_URLS));
-const SUPPORTED_PROVIDERS = new Set([...OPENAI_COMPATIBLE, "anthropic"]);
+const SUPPORTED_PROVIDERS = new Set([...OPENAI_COMPATIBLE, "anthropic", "google_ai_studio"]);
 
 // Discovery is best-effort UX, not a hot path — still bound it.
 const DISCOVERY_TIMEOUT_MS = 10_000;
@@ -79,6 +80,11 @@ export async function POST(request: NextRequest) {
 
     if (provider === "anthropic") {
       return NextResponse.json({ models: await fetchAnthropicModels(apiKey) });
+    }
+
+    // Google AI Studio: Gemini ListModels (fixed, provider-owned host).
+    if (provider === "google_ai_studio") {
+      return NextResponse.json({ models: await listGeminiModels(apiKey) });
     }
 
     // OpenAI-compatible with a fixed, provider-owned base URL — no user input in the URL.
