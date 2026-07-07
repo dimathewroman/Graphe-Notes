@@ -36,6 +36,14 @@ describe("resolveAiError", () => {
     expect(resolveAiError("no_key_configured", { provider: "anthropic" }).message).toContain("Claude");
   });
 
+  it("free_unavailable offers the bring-your-own-key workaround", () => {
+    const e = resolveAiError("free_unavailable");
+    expect(e.severity).toBe("blocked");
+    expect(e.action).toBe("settings");
+    expect(e.message).toMatch(/add your own api key/i);
+    expect(e.retryAfterMs).toBeNull();
+  });
+
   it("info-severity outcomes (empty selection, no action items) aren't styled as errors", () => {
     expect(resolveAiError("empty_selection").severity).toBe("info");
     expect(resolveAiError("no_action_items").severity).toBe("info");
@@ -56,6 +64,7 @@ describe("httpForCode", () => {
   it("maps codes to the status the route returns", () => {
     expect(httpForCode("session_expired")).toBe(401);
     expect(httpForCode("invalid_key")).toBe(401);
+    expect(httpForCode("free_unavailable")).toBe(503);
     expect(httpForCode("provider_daily_quota")).toBe(429);
     expect(httpForCode("upstream_timeout")).toBe(504);
     expect(httpForCode("upstream_error")).toBe(502);
