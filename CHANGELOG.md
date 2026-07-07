@@ -7,6 +7,7 @@ All notable changes to Graphe Notes are documented here. Format follows [Keep a 
 ## [Unreleased]
 
 ### Added
+- **Streaming AI responses** — AI toolbar actions now stream tokens into the editor progressively (SSE) instead of appearing all at once, for the free tier and every BYOK provider (`lib/ai-stream.ts`, `streamProviderDeltas` + per-adapter `streamDelta`/`streamUrl`/`streamBody`). Retry, cancel, and length-validation are preserved on the streaming path. A flag-gated (`NEXT_PUBLIC_ENABLE_DEMO_AI`, dev/CI only) mock streams deterministic tokens so the whole pipeline is exercisable in demo mode and e2e-tested.
 - **Plug-and-play AI providers** — six OpenAI-compatible providers (OpenRouter, Groq, Mistral, Together, Fireworks, and a custom base-URL option) selectable in Settings → AI, backed by a single server-side adapter table (`lib/ai-providers.ts`). Adding a provider is one config record.
 - **Model discovery** — the OpenAI-compatible and Anthropic settings forms auto-discover available models from the provider; local LLMs and custom endpoints discover client-side via `/v1/models`.
 - **Self-healing free-tier model** — the free tier discovers the lightest available Gemini model from the ListModels API (cached, with fallback to the hardcoded constant) and re-discovers on a 404, so a retired model id no longer breaks free AI (`lib/gemini-model-discovery.ts`).
