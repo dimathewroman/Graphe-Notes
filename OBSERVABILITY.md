@@ -157,7 +157,7 @@ Events captured from API route handlers via `getPostHogClient().capture({ distin
 | `note_created` | `POST /api/notes` | `note_id` |
 | `note_deleted` | `POST /api/notes/:id/delete` | `note_id` |
 | `note_restored` | `POST /api/notes/:id/restore` | `note_id` |
-| `ai_generate_completed` | `POST /api/ai/generate` | `provider`, `action`, `model`, `input_tokens`, `output_tokens` |
+| `ai_generate_completed` | `POST /api/ai/generate` | `provider`, `action`, `model`, `input_tokens`, `output_tokens` (one-shot); `streamed: true` on the SSE path (no token counts) |
 | `vault_setup_completed` | `POST /api/vault/setup` | _(none)_ |
 | `vault_unlocked` | `POST /api/vault/unlock` | _(none)_ |
 
