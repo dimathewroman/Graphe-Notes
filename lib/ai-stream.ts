@@ -17,23 +17,30 @@ export const SSE_DONE = "[DONE]";
  * which the caller prepends to the next network chunk. An event may carry
  * multiple `data:` lines — they're joined with "\n" per the SSE spec.
  */
+// Event boundary + line separators per the SSE spec: a blank line ends an event
+// and may be CRLF, LF, or CR. Real providers (Gemini's alt=sse) use CRLF, so a
+// parser that only knows "\n\n" silently drains nothing. Regex-matched here so
+// the incomplete trailing event stays in `rest` for the next network chunk.
+const SSE_BOUNDARY = /\r\n\r\n|\n\n|\r\r/;
+const SSE_LINE = /\r\n|\n|\r/;
+
 export function drainSseEvents(buffer: string): { payloads: string[]; rest: string } {
   const payloads: string[] = [];
   let rest = buffer;
-  let sep = rest.indexOf("\n\n");
-  while (sep !== -1) {
-    const block = rest.slice(0, sep);
-    rest = rest.slice(sep + 2);
+  let m = rest.match(SSE_BOUNDARY);
+  while (m && m.index !== undefined) {
+    const block = rest.slice(0, m.index);
+    rest = rest.slice(m.index + m[0].length);
     const data = sseDataPayload(block);
     if (data !== null) payloads.push(data);
-    sep = rest.indexOf("\n\n");
+    m = rest.match(SSE_BOUNDARY);
   }
   return { payloads, rest };
 }
 
 function sseDataPayload(block: string): string | null {
   const dataLines = block
-    .split("\n")
+    .split(SSE_LINE)
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice(5).replace(/^ /, "")); // one optional leading space
   return dataLines.length ? dataLines.join("\n") : null;

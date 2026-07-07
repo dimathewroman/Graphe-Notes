@@ -45,6 +45,21 @@ describe("drainSseEvents", () => {
     const { payloads } = drainSseEvents(': keep-alive\n\ndata: line1\ndata: line2\n\n');
     expect(payloads).toEqual(["line1\nline2"]);
   });
+
+  it("handles CRLF event/line separators (real providers, e.g. Gemini alt=sse)", () => {
+    // Regression: the parser used to split only on "\n\n" and silently drained
+    // NOTHING from a CRLF stream — real-provider streaming produced no tokens.
+    const { payloads, rest } = drainSseEvents('data: a\r\n\r\ndata: b\r\n\r\ndata: par');
+    expect(payloads).toEqual(["a", "b"]);
+    expect(rest).toBe("data: par");
+  });
+
+  it("reassembles a CRLF event split across chunks", () => {
+    const first = drainSseEvents('data: {"x":1}\r\n\r\ndata: {"y');
+    expect(first.payloads).toEqual(['{"x":1}']);
+    const second = drainSseEvents(first.rest + '":2}\r\n\r\n');
+    expect(second.payloads).toEqual(['{"y":2}']);
+  });
 });
 
 describe("parseSsePayload", () => {
