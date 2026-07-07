@@ -94,6 +94,26 @@ describe("callAI behavior contract (Phase 8 → guarded for Phase 9)", () => {
   // (Truncation is a one-shot concept — the streaming path has no output_truncated
   // frame; a stream just ends. So that test no longer applies to the cloud path.)
 
+  it("cloud HTML result is finalized via a parsed insertContentAt, not left as literal deltas", async () => {
+    // Regression: real providers return HTML (per 10.2). The streamed deltas are
+    // inserted as literal text for live progress, but the FINAL content must be
+    // re-derived authoritatively from the full result and HTML-parsed — otherwise
+    // tags render as literal text and a per-delta boundary can strand a fragment
+    // (the ">4<" / ">-<" orphan seen with the old whole-region rewrite + finalize).
+    authenticatedFetch
+      .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
+      // split mid-tag so a naive finalize would strand the boundary char
+      .mockResolvedValueOnce(sseRes(["<p>This is ", "some proofread", " text.</p>"]));
+    await run("proofread");
+    const full = "<p>This is some proofread text.</p>";
+    // Finalize overwrote the streamed span with the full HTML over an explicit range.
+    const finalize = insertSpy.mock.calls.at(-1);
+    expect(finalize?.[0]).toMatchObject({ from: expect.any(Number), to: expect.any(Number) });
+    expect(finalize?.[1]).toBe(full);
+    // The last literal insert must NOT be the raw HTML (that would show tags as text).
+    expect(streamedText()).not.toBe(full);
+  });
+
   it("hourly rate limit shows a reset message and does not retry", async () => {
     authenticatedFetch
       .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))

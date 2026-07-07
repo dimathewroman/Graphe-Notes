@@ -354,33 +354,43 @@ export function useAiAction(
     });
 
     // Progressive streaming insert (9.3). Rewrite actions replace the selection;
-    // generative ones append after it. Each streamed delta rewrites the whole
-    // inserted region with the full accumulated text (platform-stable whitespace);
-    // a retry clears what was inserted and re-streams, so a stale attempt is never
-    // left behind. `clearPartial` lets the cancel path wipe a half-streamed result.
+    // generative ones append after it. Each streamed delta is appended as literal
+    // text at an advancing `end` position — the streamed insert is PURELY VISUAL
+    // progress. The final content is always re-derived from `outcome.text` on
+    // finalize (HTML-parsed, or literal for plain prose), so no streamed-boundary
+    // artifact or platform whitespace quirk can survive into the saved document.
+    // A retry clears what was inserted and re-streams. `clearPartial` lets the
+    // cancel path wipe a half-streamed result.
     let clearPartial: (() => void) | null = null;
     try {
       const generative = GENERATIVE_ACTIONS.has(action);
-      const startFrom = generative ? sel.to : sel.from;
-      if (!generative) editor!.chain().focus().deleteRange({ from: sel.from, to: sel.to }).run();
-      let insertedLen = 0;
+      // Span [start, end) of the visual stream. Generative appends after the
+      // selection; rewrite replaces it — but the rewrite delete happens on the
+      // FIRST streamed token, not upfront, so an empty or errored stream leaves
+      // the user's selection intact (no data loss).
+      let start = generative ? sel.to : sel.from;
+      let end = start;
+      let selectionDeleted = generative; // rewrite deletes lazily on first delta
       const clearInserted = () => {
-        if (insertedLen > 0) {
-          editor!.chain().command(({ tr }) => { tr.delete(startFrom, startFrom + insertedLen); return true; }).run();
-          insertedLen = 0;
+        if (end > start) {
+          editor!.chain().command(({ tr }) => { tr.delete(start, end); return true; }).run();
+          end = start;
         }
       };
       clearPartial = clearInserted;
       const streamOnce = (sys: string | undefined) => {
         clearInserted();
-        let acc = "";
         return executeAiStreamRequest(
           { provider, prompt, system: sys, taskType, action, signal: controller.signal },
           (delta) => {
-            const prev = acc.length;
-            acc += delta;
-            editor!.chain().command(({ tr }) => { tr.insertText(acc, startFrom, startFrom + prev); return true; }).run();
-            insertedLen = acc.length;
+            if (!selectionDeleted) {
+              editor!.chain().focus().deleteRange({ from: sel.from, to: sel.to }).run();
+              start = sel.from;
+              end = sel.from;
+              selectionDeleted = true;
+            }
+            editor!.chain().command(({ tr }) => { tr.insertText(delta, end, end); return true; }).run();
+            end += delta.length;
           },
         );
       };
@@ -415,21 +425,33 @@ export function useAiAction(
 
       // G14 (10.3): length validation for shorten/lengthen. If the streamed result
       // went the wrong way, re-stream ONCE with a corrective target; if that fails,
-      // restore the first result (streamOnce already cleared it).
+      // keep the first result (streamOnce already cleared the retry's partial —
+      // the finalize below re-inserts firstText authoritatively).
       if (outcome.text && !isLengthAcceptable(action, wordCount(sel.text), wordCount(outcome.text))) {
-        const firstText = outcome.text;
+        const firstOutcome = outcome;
         const correctiveSystem = `${system ?? ""}\n\n${lengthCorrectionHint(action, wordCount(sel.text))}`.trim();
         setAiError("Adjusting length…");
         const retry = await streamOnce(correctiveSystem);
-        if (retry.ok && retry.text) {
-          outcome = retry;
-        } else {
-          editor!.chain().command(({ tr }) => { tr.insertText(firstText, startFrom, startFrom + insertedLen); return true; }).run();
-          insertedLen = firstText.length;
-        }
+        if (retry.ok && retry.text) outcome = retry;
+        else outcome = firstOutcome; // streamOnce cleared the visual stream; finalize restores it
         setAiError(null);
       }
-      // The result is already in the editor (streamed) — nothing else to insert.
+
+      // Finalize: the streamed deltas were only a visual preview. Overwrite the
+      // whole streamed span with the authoritative `outcome.text`. Real providers
+      // return HTML (per 10.2) — re-parse it so tags render as structure, not
+      // literal text; plain prose is re-inserted as literal text. Either way the
+      // saved content is exactly `outcome.text`, independent of stream framing.
+      if (outcome.ok && outcome.text) {
+        const finalText = outcome.text;
+        const isHtml = /<[a-z][a-z0-9]*[\s/>]/i.test(finalText);
+        if (isHtml) {
+          editor!.chain().focus().insertContentAt({ from: start, to: end }, finalText).run();
+        } else {
+          editor!.chain().command(({ tr }) => { tr.insertText(finalText, start, end); return true; }).run();
+        }
+        end = start;
+      }
     } catch (err) {
       // User-initiated cancel — wipe any half-streamed text and exit silently.
       if (err instanceof DOMException && err.name === "AbortError") {
