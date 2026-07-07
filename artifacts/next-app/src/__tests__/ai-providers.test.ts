@@ -8,6 +8,8 @@ import {
   openAiCompatibleModelsUrl,
   OPENAI_COMPATIBLE_BASE_URLS,
   geminiAdapter,
+  geminiThinkingBudget,
+  geminiGenerationConfig,
   anthropicAdapter,
 } from "@lib/ai-providers";
 
@@ -53,6 +55,40 @@ describe("Gemini adapter", () => {
     expect(geminiAdapter.parse({ candidates: [{ content: { parts: [{ text: "hey" }] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 4 } }))
       .toEqual({ text: "hey", truncated: false, inputTokens: 2, outputTokens: 4 });
     expect(geminiAdapter.parse({ candidates: [{ content: { parts: [{ text: "x" }] }, finishReason: "MAX_TOKENS" }] }).truncated).toBe(true);
+  });
+});
+
+describe("Gemini thinking budget (truncation fix)", () => {
+  // Regression: Gemini 2.5 bills thinking tokens against maxOutputTokens, so with
+  // thinking left on, a real note's request spends the whole budget thinking and
+  // truncates (MAX_TOKENS) — silently, on the streaming path. These transforms
+  // don't need reasoning, so thinking is disabled per-model.
+  it("disables thinking for Flash / Flash-Lite (budget 0), floors Pro at 128", () => {
+    expect(geminiThinkingBudget("gemini-2.5-flash")).toBe(0);
+    expect(geminiThinkingBudget("gemini-2.5-flash-lite")).toBe(0);
+    expect(geminiThinkingBudget("gemini-2.5-pro")).toBe(128); // Pro can't be fully disabled
+  });
+
+  it("returns null for non-2.5 models (thinkingConfig is 2.5-only; would 400 otherwise)", () => {
+    expect(geminiThinkingBudget("gemini-1.5-flash")).toBeNull();
+    expect(geminiThinkingBudget("gemini-2.0-flash")).toBeNull();
+    expect(geminiThinkingBudget("m")).toBeNull();
+  });
+
+  it("geminiGenerationConfig includes thinkingConfig only for 2.5 models", () => {
+    expect(geminiGenerationConfig("gemini-2.5-flash", 4096)).toEqual({
+      maxOutputTokens: 4096,
+      thinkingConfig: { thinkingBudget: 0 },
+    });
+    // Non-2.5 → no thinkingConfig key at all.
+    expect(geminiGenerationConfig("gemini-1.5-flash", 4096)).toEqual({ maxOutputTokens: 4096 });
+  });
+
+  it("body + streamBody carry the thinking budget for a 2.5 model", () => {
+    const body = geminiAdapter.body("gemini-2.5-flash", "hi", 4096) as { generationConfig: Record<string, unknown> };
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    const stream = geminiAdapter.streamBody("gemini-2.5-pro", "hi", 4096) as { generationConfig: Record<string, unknown> };
+    expect(stream.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 128 });
   });
 });
 

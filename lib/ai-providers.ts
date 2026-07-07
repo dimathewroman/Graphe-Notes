@@ -61,18 +61,41 @@ const genericError = (upstreamStatus: number, rawBody: string): AdapterError => 
   body: { error: "upstream_error", upstreamStatus, upstreamMessage: rawBody },
 });
 
+// Gemini 2.5 models "think" by default, and thinking tokens are billed against
+// maxOutputTokens. On a realistic note the model spends nearly its whole budget
+// thinking and truncates the actual answer (finishReason MAX_TOKENS) — on the
+// streaming path that surfaces as a silently cut-off fragment. Our actions are
+// mechanical/creative text transforms (proofread, tone, summarize, rewrite) that
+// gain nothing from reasoning, so disable thinking. Flash and Flash-Lite accept a
+// budget of 0 (fully off); Pro cannot be disabled (API floor of 128), so give it
+// the floor. Returns null for non-2.5 models (a power-user modelOverride to a
+// 1.5/2.0 model): thinkingConfig is only valid on 2.5 and would 400 otherwise.
+export function geminiThinkingBudget(model: string): number | null {
+  if (!/gemini-2\.5/i.test(model)) return null;
+  return /pro/i.test(model) ? 128 : 0;
+}
+
+// The Gemini generationConfig shared by the one-shot and streaming bodies (and the
+// free-tier inline call in the route). Includes thinkingConfig only when the model
+// supports it (see geminiThinkingBudget).
+export function geminiGenerationConfig(model: string, maxTokens: number, gen?: GenerationSettings) {
+  const budget = geminiThinkingBudget(model);
+  return {
+    maxOutputTokens: maxTokens,
+    ...(budget !== null ? { thinkingConfig: { thinkingBudget: budget } } : {}),
+    ...(gen ? { temperature: gen.temperature, topP: gen.topP } : {}),
+  };
+}
+
 // ── Gemini (google_ai_studio; the free tier reuses this shape) ────────────────
 export const geminiAdapter: ProviderAdapter = {
   // Key rides the x-goog-api-key header, never the URL (§S key-in-URL).
   url: (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
   headers: (apiKey) => ({ "Content-Type": "application/json", "x-goog-api-key": apiKey }),
-  body: (_model, prompt, maxTokens, system, gen) => ({
+  body: (model, prompt, maxTokens, system, gen) => ({
     contents: [{ parts: [{ text: prompt }] }],
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-    generationConfig: {
-      maxOutputTokens: maxTokens,
-      ...(gen ? { temperature: gen.temperature, topP: gen.topP } : {}),
-    },
+    generationConfig: geminiGenerationConfig(model, maxTokens, gen),
   }),
   parse: (data) => {
     const d = data as {
@@ -106,13 +129,10 @@ export const geminiAdapter: ProviderAdapter = {
   },
   // Gemini streams via a different method; body is the generateContent body.
   streamUrl: (model) => `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,
-  streamBody: (_model, prompt, maxTokens, system, gen) => ({
+  streamBody: (model, prompt, maxTokens, system, gen) => ({
     contents: [{ parts: [{ text: prompt }] }],
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-    generationConfig: {
-      maxOutputTokens: maxTokens,
-      ...(gen ? { temperature: gen.temperature, topP: gen.topP } : {}),
-    },
+    generationConfig: geminiGenerationConfig(model, maxTokens, gen),
   }),
 };
 
