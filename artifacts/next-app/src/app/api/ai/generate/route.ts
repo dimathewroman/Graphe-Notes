@@ -6,6 +6,7 @@ import { checkAndIncrementUsage, recordTokenUsage } from "@lib/ai-rate-limit";
 import { resolveModel, type TaskType, type Provider, GEMINI_FLASH_LITE } from "@lib/ai-model-router";
 import { resolveFreeTierModel, invalidateFreeTierModel } from "@lib/gemini-model-discovery";
 import { parseGeminiError } from "@lib/ai-error-handler";
+import { type AiErrorCode, type AiErrorContext, resolveAiError, httpForCode } from "@lib/ai-errors";
 import { generationSettingsFor } from "@/lib/ai-prompts";
 import { isDemoAiEnabled, DEMO_AI_HEADER, mockGenerateBody, mockStreamDeltas } from "@/lib/ai-demo-mock";
 import { streamProviderDeltas } from "@lib/ai-stream";
@@ -38,10 +39,16 @@ function isValidModelId(model: string): boolean {
   return /^[a-zA-Z0-9._-]+$/.test(model);
 }
 
-// G4: surfaced (via userMessage) when the model hit its output-token cap
-// mid-response, so the client shows a friendly error instead of a silent cut.
-const TRUNCATION_MESSAGE =
-  "The AI response was too long and got cut off. Try selecting less text or asking for a shorter result.";
+// Build an error response from a stable code: the registry supplies the copy +
+// severity, httpForCode the status, so the message the user reads and the way the
+// client behaves can't drift apart. `extra` carries rate-limit telemetry fields.
+function aiError(code: AiErrorCode, ctx: AiErrorContext = {}, extra: Record<string, unknown> = {}) {
+  const e = resolveAiError(code, ctx);
+  return NextResponse.json(
+    { error: e.code, userMessage: e.message, severity: e.severity, retryAfterMs: e.retryAfterMs, ...extra },
+    { status: httpForCode(code) },
+  );
+}
 
 // G16 (9.3): cap how long we wait on an upstream provider. Without this a hung
 // provider holds the serverless function open until the platform's own (much
@@ -113,7 +120,9 @@ export async function POST(request: NextRequest) {
     // --- Auth ---
     const { user } = await getAuthUser(request);
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      // No valid session — almost always an expired token mid-use. The client
+      // shows "session timed out, refresh" rather than a bad-key wild-goose chase.
+      return aiError("session_expired");
     }
     const userId = user.id;
 
@@ -122,11 +131,11 @@ export async function POST(request: NextRequest) {
     try {
       body = await request.json();
     } catch {
-      return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 });
+      return aiError("bad_request");
     }
 
     if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
+      return aiError("bad_request");
     }
 
     const { taskType, prompt, context, provider: rawProvider, modelOverride: rawModelOverride, action: rawAction, system: rawSystem, stream: rawStream } =
@@ -146,32 +155,15 @@ export async function POST(request: NextRequest) {
         ? (rawProvider as Provider)
         : "graphe_free";
 
-    if (provider === "local_llm") {
-      return NextResponse.json(
-        { error: "local_llm_client_only", message: "Local LLM requests must be made directly from the client." },
-        { status: 400 },
-      );
-    }
+    // local_llm never routes through the server (it's called client-side); a
+    // request for it here is a malformed client, not a user-fixable condition.
+    if (provider === "local_llm") return aiError("bad_request");
 
-    if (!taskType || !VALID_TASK_TYPES.includes(taskType as TaskType)) {
-      return NextResponse.json(
-        {
-          error: `Missing or invalid taskType. Must be one of: ${VALID_TASK_TYPES.join(", ")}`,
-        },
-        { status: 400 },
-      );
-    }
+    if (!taskType || !VALID_TASK_TYPES.includes(taskType as TaskType)) return aiError("bad_request");
 
-    if (!prompt || typeof prompt !== "string" || prompt.trim() === "") {
-      return NextResponse.json(
-        { error: "Missing or empty required field: prompt" },
-        { status: 400 },
-      );
-    }
+    if (!prompt || typeof prompt !== "string" || prompt.trim() === "") return aiError("bad_request");
 
-    if (context !== undefined && typeof context !== "string") {
-      return NextResponse.json({ error: "context must be a string if provided" }, { status: 400 });
-    }
+    if (context !== undefined && typeof context !== "string") return aiError("bad_request");
 
     const modelOverride =
       typeof rawModelOverride === "string" && rawModelOverride.trim()
@@ -185,16 +177,9 @@ export async function POST(request: NextRequest) {
     if (provider === "graphe_free") {
       const rateLimit = await checkAndIncrementUsage(userId);
       if (!rateLimit.allowed) {
-        return NextResponse.json(
-          {
-            error: "rate_limit_exceeded",
-            reason: rateLimit.reason,
-            hourlyUsed: rateLimit.hourlyUsed,
-            hourlyLimit: rateLimit.hourlyLimit,
-            resetInMs: rateLimit.resetInMs,
-          },
-          { status: 429 },
-        );
+        const code = rateLimit.reason === "monthly_limit_reached" ? "free_capacity" : "free_hourly_limit";
+        // Keep reason + resetInMs in the body for the client's rate-limit telemetry.
+        return aiError(code, { provider, resetInMs: rateLimit.resetInMs }, { reason: rateLimit.reason, resetInMs: rateLimit.resetInMs });
       }
 
       const apiKey = process.env.GEMINI_API_KEY;
@@ -220,12 +205,8 @@ export async function POST(request: NextRequest) {
         });
         if (!upstream.ok || !upstream.body) {
           const rawErr = await upstream.text().catch(() => "");
-          const parsedError = parseGeminiError(upstream.status, rawErr);
-          const status = parsedError.type === "rpm_limit" || parsedError.type === "rpd_limit" ? 429 : parsedError.type === "invalid_key" ? 401 : 502;
-          return NextResponse.json(
-            { error: parsedError.type, userMessage: parsedError.userMessage, retryAfterMs: parsedError.type === "rpm_limit" ? parsedError.retryAfterMs : null },
-            { status },
-          );
+          const { code, retryAfterMs } = parseGeminiError(upstream.status, rawErr);
+          return aiError(code, { provider, model: freeModel, retryAfterMs });
         }
         getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, action, model: freeModel, streamed: true } });
         return sseResponse(streamProviderDeltas(upstream.body, geminiAdapter.streamDelta));
@@ -262,51 +243,24 @@ export async function POST(request: NextRequest) {
 
       if (!geminiResponse.ok) {
         const rawErrorBody = await geminiResponse.text();
-        const parsedError = parseGeminiError(geminiResponse.status, rawErrorBody);
-
-        if (parsedError.type === "rpm_limit") {
-          return NextResponse.json(
-            { error: parsedError.type, userMessage: parsedError.userMessage, retryAfterMs: parsedError.retryAfterMs },
-            { status: 429 },
-          );
-        }
-        if (parsedError.type === "rpd_limit") {
-          return NextResponse.json(
-            { error: parsedError.type, userMessage: parsedError.userMessage, retryAfterMs: null },
-            { status: 429 },
-          );
-        }
-        if (parsedError.type === "invalid_key") {
-          return NextResponse.json(
-            { error: parsedError.type, userMessage: parsedError.userMessage },
-            { status: 401 },
-          );
-        }
-        return NextResponse.json(
-          { error: parsedError.type, userMessage: parsedError.userMessage },
-          { status: 502 },
-        );
+        const { code, retryAfterMs } = parseGeminiError(geminiResponse.status, rawErrorBody);
+        return aiError(code, { provider, model: freeModel, retryAfterMs });
       }
 
-      const data = (await geminiResponse.json()) as {
-        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
-        usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
-      };
+      // Parse through the adapter so truncation, content-filter, and empty-result
+      // handling is identical to the BYOK path below.
+      const parsed = geminiAdapter.parse(await geminiResponse.json());
+      if (parsed.filtered) return aiError("content_filtered", { provider });
+      if (parsed.truncated) return aiError("output_truncated", { provider });
+      if (!parsed.text.trim()) return aiError("stream_empty", { provider });
 
-      const result = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-      if (data.candidates?.[0]?.finishReason === "MAX_TOKENS") {
-        return NextResponse.json({ error: "output_truncated", userMessage: TRUNCATION_MESSAGE }, { status: 200 });
-      }
-      const inputTokens = data.usageMetadata?.promptTokenCount ?? null;
-      const outputTokens = data.usageMetadata?.candidatesTokenCount ?? null;
-
-      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, action, model: freeModel, input_tokens: inputTokens, output_tokens: outputTokens } });
+      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, action, model: freeModel, input_tokens: parsed.inputTokens, output_tokens: parsed.outputTokens } });
       // G19: best-effort token accounting — never fail the response on a write error.
-      await recordTokenUsage(userId, (inputTokens ?? 0) + (outputTokens ?? 0)).catch((e) => Sentry.captureException(e));
+      await recordTokenUsage(userId, (parsed.inputTokens ?? 0) + (parsed.outputTokens ?? 0)).catch((e) => Sentry.captureException(e));
       return NextResponse.json({
-        result,
+        result: parsed.text,
         model: freeModel,
-        tokensUsed: { inputTokens, outputTokens },
+        tokensUsed: { inputTokens: parsed.inputTokens, outputTokens: parsed.outputTokens },
       });
     }
 
@@ -317,15 +271,7 @@ export async function POST(request: NextRequest) {
       .where(and(eq(userApiKeysTable.userId, userId), eq(userApiKeysTable.provider, provider)));
 
     const row = rows[0];
-    if (!row) {
-      return NextResponse.json(
-        {
-          error: "no_key_configured",
-          userMessage: "No API key found for this provider. Please add one in Settings.",
-        },
-        { status: 400 },
-      );
-    }
+    if (!row) return aiError("no_key_configured", { provider });
 
     const decryptedKey = decryptApiKey(row.encryptedKey);
 
@@ -336,25 +282,15 @@ export async function POST(request: NextRequest) {
     try {
       routing = resolveModel(provider, taskType as TaskType, effectiveModelOverride);
     } catch {
-      return NextResponse.json(
-        {
-          error: "no_model_configured",
-          userMessage: "No model configured for this provider. Please set one in Settings.",
-        },
-        { status: 400 },
-      );
+      return aiError("no_model_configured", { provider });
     }
-    if (!isValidModelId(routing.model)) {
-      return NextResponse.json({ error: "Invalid model" }, { status: 400 });
-    }
+    if (!isValidModelId(routing.model)) return aiError("model_unavailable", { provider, model: routing.model });
 
     // --- BYOK providers: one dispatch through the adapter table (G17). Adding a
     // provider is a single record in PROVIDER_ADAPTERS; the six OpenAI-compatible
     // providers share one adapter. (local_llm is rejected at the top — client-side.) ---
     const adapter = PROVIDER_ADAPTERS[provider];
-    if (!adapter) {
-      return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
-    }
+    if (!adapter) return aiError("bad_request");
 
     // 9.3: streamed BYOK response — same adapter table, streaming url/body.
     if (wantStream) {
@@ -367,7 +303,7 @@ export async function POST(request: NextRequest) {
       if (!upstreamStream.ok || !upstreamStream.body) {
         const rawBody = await upstreamStream.text().catch(() => "");
         const mapped = adapter.mapError(upstreamStream.status, rawBody);
-        return NextResponse.json(mapped.body, { status: mapped.status });
+        return aiError(mapped.code, { provider, model: routing.model, retryAfterMs: mapped.retryAfterMs });
       }
       getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, action, model: routing.model, streamed: true } });
       return sseResponse(streamProviderDeltas(upstreamStream.body, adapter.streamDelta));
@@ -383,13 +319,13 @@ export async function POST(request: NextRequest) {
     if (!upstream.ok) {
       const rawBody = await upstream.text();
       const mapped = adapter.mapError(upstream.status, rawBody);
-      return NextResponse.json(mapped.body, { status: mapped.status });
+      return aiError(mapped.code, { provider, model: routing.model, retryAfterMs: mapped.retryAfterMs });
     }
 
     const parsed = adapter.parse(await upstream.json());
-    if (parsed.truncated) {
-      return NextResponse.json({ error: "output_truncated", userMessage: TRUNCATION_MESSAGE }, { status: 200 });
-    }
+    if (parsed.filtered) return aiError("content_filtered", { provider });
+    if (parsed.truncated) return aiError("output_truncated", { provider });
+    if (!parsed.text.trim()) return aiError("stream_empty", { provider });
 
     getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, action, model: routing.model, input_tokens: parsed.inputTokens, output_tokens: parsed.outputTokens } });
     // G19: best-effort token accounting (BYOK too, via upsert).
@@ -404,12 +340,9 @@ export async function POST(request: NextRequest) {
     // AbortSignal.timeout. Return a clean 504 instead of a generic 500 so the
     // client can show "try again" rather than "something broke".
     if (err instanceof DOMException && err.name === "TimeoutError") {
-      return NextResponse.json(
-        { error: "upstream_timeout", userMessage: "The AI provider took too long to respond. Please try again." },
-        { status: 504 },
-      );
+      return aiError("upstream_timeout");
     }
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return aiError("internal_error");
   }
 }

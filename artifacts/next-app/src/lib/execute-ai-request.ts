@@ -6,6 +6,20 @@
 
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import { drainSseEvents, parseSsePayload } from "@lib/ai-stream";
+import { resolveAiError } from "@lib/ai-errors";
+
+// A per-minute limit that the provider didn't hand us a delay for still gets one
+// retry, after this default, so the "retrying…" message isn't a lie.
+const RPM_DEFAULT_RETRY_MS = 60_000;
+
+// Turn a thrown fetch (network down, DNS, CORS) into a user-facing outcome —
+// offline when the browser knows it's offline, a generic connection error
+// otherwise. AbortErrors are re-thrown so callers can treat cancel distinctly.
+function networkOutcome(err: unknown): AiRequestOutcome {
+  if (err instanceof DOMException && err.name === "AbortError") throw err;
+  const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  return { ok: false, message: resolveAiError(offline ? "offline" : "upstream_error").message };
+}
 
 // G16-partial: shared React Query key for the AI settings (active provider + local
 // config). Cached so rapid successive AI actions don't each refetch; SettingsModal
@@ -97,50 +111,42 @@ async function runLocal(opts: AiRequestOptions): Promise<AiRequestOutcome> {
   }
 }
 
-// Map an error/non-2xx /api/ai/generate response to an outcome. Returns null for
-// a 2xx status so the caller handles success. Shared by the one-shot and
-// streaming paths so both surface RPM-retry / rate-limit info identically.
+// Map a non-OK /api/ai/generate response to an outcome. The route now tags every
+// failure with a stable code + registry-resolved `userMessage` (see ai-errors.ts),
+// so this just trusts that copy and decides retry/telemetry from the code. Returns
+// null for a 2xx so the caller handles success (and 200-with-error bodies like
+// output_truncated / content_filtered). Shared by the one-shot and streaming paths.
 async function mapCloudErrorStatus(res: Response): Promise<AiRequestOutcome | null> {
-  if (res.status === 429) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string; reason?: string; resetInMs?: number; retryAfterMs?: number };
-    const kind = data.error ?? data.reason;
-    if (kind === "rpm_limit") {
-      return { ok: false, retryDelayMs: data.retryAfterMs ?? data.resetInMs ?? 60000, message: "AI is busy." };
-    }
-    if (kind === "hourly_limit_reached") {
-      const resetMins = Math.ceil((data.resetInMs ?? 0) / 60000);
-      return { ok: false, message: `You've reached your hourly AI limit. Resets in ${resetMins} minutes.`, rateLimit: { reason: "hourly_limit_reached", resetInMs: data.resetInMs } };
-    }
-    if (kind === "monthly_limit_reached") {
-      return { ok: false, message: "Monthly AI limit reached. Add your own API key in Settings for unlimited use.", rateLimit: { reason: "monthly_limit_reached" } };
-    }
-    return { ok: false, message: "AI is busy. Please try again in a moment." };
-  }
-  if (res.status === 400) {
-    const data = (await res.json().catch(() => ({}))) as { error?: string };
-    if (data.error === "no_key_configured") return { ok: false, message: "No API key configured. Please add one in Settings." };
-    return { ok: false, message: "AI request failed. Please try again." };
-  }
-  if (res.status === 401) return { ok: false, message: "AI key invalid or missing. Check Settings." };
-  if (res.status === 502) return { ok: false, message: "AI request failed. Please try again." };
-  if (!res.ok) {
-    // Any other non-2xx (e.g. 504 upstream_timeout) — prefer the server's userMessage.
-    const data = (await res.json().catch(() => ({}))) as { error?: string; userMessage?: string };
-    if (data.error) return { ok: false, message: data.userMessage ?? data.error };
-    return { ok: false, message: "AI request failed. Please try again." };
-  }
-  return null;
+  if (res.ok) return null;
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    userMessage?: string;
+    retryAfterMs?: number | null;
+    reason?: string;
+    resetInMs?: number;
+  };
+  const code = data.error;
+  const message = data.userMessage ?? "AI request failed. Please try again.";
+  // Only a per-minute limit auto-retries; a daily quota / blocked error must not.
+  const retryDelayMs = code === "provider_rpm" ? data.retryAfterMs ?? RPM_DEFAULT_RETRY_MS : undefined;
+  const rateLimit = data.reason ? { reason: data.reason, resetInMs: data.resetInMs } : undefined;
+  return { ok: false, message, retryDelayMs, rateLimit };
 }
 
 async function runCloud(opts: AiRequestOptions): Promise<AiRequestOutcome> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (opts.demoMock) headers["x-graphe-demo-ai"] = "1";
-  const res = await authenticatedFetch("/api/ai/generate", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ provider: opts.provider, taskType: opts.taskType, prompt: opts.prompt, system: opts.system, action: opts.action }),
-    signal: opts.signal,
-  });
+  let res: Response;
+  try {
+    res = await authenticatedFetch("/api/ai/generate", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ provider: opts.provider, taskType: opts.taskType, prompt: opts.prompt, system: opts.system, action: opts.action }),
+      signal: opts.signal,
+    });
+  } catch (err) {
+    return networkOutcome(err);
+  }
 
   const mapped = await mapCloudErrorStatus(res);
   if (mapped) return mapped;
@@ -168,27 +174,32 @@ export async function executeAiStreamRequest(
 ): Promise<AiRequestOutcome> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (opts.demoMock) headers["x-graphe-demo-ai"] = "1";
-  const res = await authenticatedFetch("/api/ai/generate", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      provider: opts.provider,
-      taskType: opts.taskType,
-      prompt: opts.prompt,
-      system: opts.system,
-      action: opts.action,
-      stream: true,
-    }),
-    signal: opts.signal,
-  });
+  let res: Response;
+  try {
+    res = await authenticatedFetch("/api/ai/generate", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        provider: opts.provider,
+        taskType: opts.taskType,
+        prompt: opts.prompt,
+        system: opts.system,
+        action: opts.action,
+        stream: true,
+      }),
+      signal: opts.signal,
+    });
+  } catch (err) {
+    return networkOutcome(err);
+  }
 
   if (!res.ok) {
     // Errors arrive as JSON before any stream starts — map them like the one-shot
     // path so RPM-retry / rate-limit handling is identical.
     const mapped = await mapCloudErrorStatus(res);
-    return mapped ?? { ok: false, message: "AI request failed. Please try again." };
+    return mapped ?? { ok: false, message: resolveAiError("upstream_error").message };
   }
-  if (!res.body) return { ok: false, message: "AI request failed. Please try again." };
+  if (!res.body) return { ok: false, message: resolveAiError("upstream_error").message };
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -211,7 +222,11 @@ export async function executeAiStreamRequest(
     }
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw err;
-    return { ok: false, message: "AI stream failed. Please try again." };
+    // A drop after some text streamed is "interrupted"; before any is a plain fail.
+    return { ok: false, message: resolveAiError(full ? "stream_interrupted" : "upstream_error").message };
   }
+  // A clean stream that produced nothing (all budget spent thinking, an instant
+  // MAX_TOKENS, or a content-filter block) must not fail silently — surface it.
+  if (full === "") return { ok: false, message: resolveAiError("stream_empty").message };
   return { ok: true, text: full };
 }

@@ -5,6 +5,7 @@
 // shape) and share `openAiCompatibleAdapter`; Gemini and Anthropic are variants.
 
 import { parseGeminiError } from "./ai-error-handler";
+import { type AiErrorCode, httpForCode } from "./ai-errors";
 
 // Linear trailing-slash strip. A regex like /\/+$/ backtracks polynomially on a
 // long run of slashes (ReDoS) when the value is user-controlled; this scan is O(n).
@@ -25,13 +26,19 @@ export interface GenerationSettings {
 export interface ParsedResult {
   text: string;
   truncated: boolean;
+  /** The provider refused on content-policy grounds (safety filter). */
+  filtered: boolean;
   inputTokens: number | null;
   outputTokens: number | null;
 }
 
+// A classified upstream failure: a stable error code, the HTTP status the route
+// should return, and a provider-supplied retry delay (RPM only). The route turns
+// the code into user-facing copy via resolveAiError, with the right provider.
 export interface AdapterError {
-  status: number;
-  body: Record<string, unknown>;
+  code: AiErrorCode;
+  httpStatus: number;
+  retryAfterMs: number | null;
 }
 
 export interface ProviderAdapter {
@@ -56,10 +63,27 @@ export interface ProviderAdapter {
   mapError: (upstreamStatus: number, rawBody: string) => AdapterError;
 }
 
-const genericError = (upstreamStatus: number, rawBody: string): AdapterError => ({
-  status: 502,
-  body: { error: "upstream_error", upstreamStatus, upstreamMessage: rawBody },
-});
+// Classify an OpenAI-compatible / Anthropic upstream failure into a shared code.
+// These providers put the interesting detail in the body (e.g. OpenAI's
+// "insufficient_quota"); headers (Retry-After) aren't available here, so a
+// per-minute 429 carries no delay and the client shows a plain "try again".
+const genericError = (upstreamStatus: number, rawBody: string): AdapterError => {
+  const body = rawBody.toLowerCase();
+  let code: AiErrorCode;
+  if (upstreamStatus === 429) {
+    // Out-of-credits / billing caps are terminal; a plain 429 is a rate limit.
+    code = /insufficient_quota|billing|exceeded your current quota|out of credit/.test(body)
+      ? "provider_quota_unknown"
+      : "provider_rpm";
+  } else if (upstreamStatus === 401 || upstreamStatus === 403) {
+    code = "invalid_key";
+  } else if (upstreamStatus === 404) {
+    code = "model_unavailable";
+  } else {
+    code = "upstream_error";
+  }
+  return { code, httpStatus: httpForCode(code), retryAfterMs: null };
+};
 
 // Gemini 2.5 models "think" by default, and thinking tokens are billed against
 // maxOutputTokens. On a realistic note the model spends nearly its whole budget
@@ -100,26 +124,26 @@ export const geminiAdapter: ProviderAdapter = {
   parse: (data) => {
     const d = data as {
       candidates?: Array<{ content?: { parts?: Array<{ text?: string }> }; finishReason?: string }>;
+      promptFeedback?: { blockReason?: string };
       usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
     };
+    const finishReason = d.candidates?.[0]?.finishReason;
+    // A content-policy stop (or a blocked prompt) means the model refused, not
+    // that anything is broken — surfaced to the user as content_filtered.
+    const filtered =
+      d.promptFeedback?.blockReason != null ||
+      ["SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII"].includes(finishReason ?? "");
     return {
       text: d.candidates?.[0]?.content?.parts?.[0]?.text ?? "",
-      truncated: d.candidates?.[0]?.finishReason === "MAX_TOKENS",
+      truncated: finishReason === "MAX_TOKENS",
+      filtered,
       inputTokens: d.usageMetadata?.promptTokenCount ?? null,
       outputTokens: d.usageMetadata?.candidatesTokenCount ?? null,
     };
   },
   mapError: (upstreamStatus, rawBody) => {
     const p = parseGeminiError(upstreamStatus, rawBody);
-    const status = p.type === "rpm_limit" || p.type === "rpd_limit" ? 429 : p.type === "invalid_key" ? 401 : 502;
-    return {
-      status,
-      body: {
-        error: p.type,
-        userMessage: p.userMessage,
-        retryAfterMs: p.type === "rpm_limit" ? p.retryAfterMs : null,
-      },
-    };
+    return { code: p.code, httpStatus: httpForCode(p.code), retryAfterMs: p.retryAfterMs };
   },
   // streamGenerateContent (alt=sse) streams GenerateContentResponse chunks with
   // the same candidates→parts→text shape as the non-streaming response.
@@ -156,6 +180,7 @@ export const anthropicAdapter: ProviderAdapter = {
     return {
       text: d.content?.[0]?.text ?? "",
       truncated: d.stop_reason === "max_tokens",
+      filtered: d.stop_reason === "refusal",
       inputTokens: d.usage?.input_tokens ?? null,
       outputTokens: d.usage?.output_tokens ?? null,
     };
@@ -199,6 +224,7 @@ export function openAiCompatibleAdapter(baseUrl?: string): ProviderAdapter {
       return {
         text: d.choices?.[0]?.message?.content ?? "",
         truncated: d.choices?.[0]?.finish_reason === "length",
+        filtered: d.choices?.[0]?.finish_reason === "content_filter",
         inputTokens: d.usage?.prompt_tokens ?? null,
         outputTokens: d.usage?.completion_tokens ?? null,
       };

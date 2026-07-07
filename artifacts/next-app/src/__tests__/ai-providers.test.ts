@@ -26,7 +26,7 @@ describe("OpenAI-compatible adapter", () => {
 
   it("parses text + usage and detects length truncation", () => {
     const ok = a.parse({ choices: [{ message: { content: "yo" }, finish_reason: "stop" }], usage: { prompt_tokens: 3, completion_tokens: 5 } });
-    expect(ok).toEqual({ text: "yo", truncated: false, inputTokens: 3, outputTokens: 5 });
+    expect(ok).toEqual({ text: "yo", truncated: false, filtered: false, inputTokens: 3, outputTokens: 5 });
     expect(a.parse({ choices: [{ message: { content: "cut" }, finish_reason: "length" }] }).truncated).toBe(true);
   });
 
@@ -53,8 +53,33 @@ describe("Gemini adapter", () => {
 
   it("parses candidates + detects MAX_TOKENS truncation", () => {
     expect(geminiAdapter.parse({ candidates: [{ content: { parts: [{ text: "hey" }] }, finishReason: "STOP" }], usageMetadata: { promptTokenCount: 2, candidatesTokenCount: 4 } }))
-      .toEqual({ text: "hey", truncated: false, inputTokens: 2, outputTokens: 4 });
+      .toEqual({ text: "hey", truncated: false, filtered: false, inputTokens: 2, outputTokens: 4 });
     expect(geminiAdapter.parse({ candidates: [{ content: { parts: [{ text: "x" }] }, finishReason: "MAX_TOKENS" }] }).truncated).toBe(true);
+  });
+});
+
+describe("adapter error + content-filter mapping", () => {
+  it("Gemini flags a safety finishReason as filtered", () => {
+    expect(geminiAdapter.parse({ candidates: [{ finishReason: "SAFETY" }] }).filtered).toBe(true);
+    expect(geminiAdapter.parse({ promptFeedback: { blockReason: "SAFETY" } }).filtered).toBe(true);
+    expect(geminiAdapter.parse({ candidates: [{ content: { parts: [{ text: "ok" }] }, finishReason: "STOP" }] }).filtered).toBe(false);
+  });
+
+  it("Gemini mapError forwards the classifier code + status", () => {
+    const rpm = geminiAdapter.mapError(429, JSON.stringify({ error: { message: "x", details: [{ "@type": "QuotaFailure", violations: [{ quotaId: "…PerMinute…" }] }, { "@type": "RetryInfo", retryDelay: "5s" }] } }));
+    expect(rpm.code).toBe("provider_rpm");
+    expect(rpm.httpStatus).toBe(429);
+    expect(rpm.retryAfterMs).toBe(5000);
+    expect(geminiAdapter.mapError(400, "API_KEY_INVALID").code).toBe("invalid_key");
+  });
+
+  it("OpenAI-compatible mapError separates rate-limit from out-of-credit 429s", () => {
+    const a = openAiCompatibleAdapter("https://api.openai.com/v1");
+    expect(a.mapError(429, "rate limit reached").code).toBe("provider_rpm");
+    expect(a.mapError(429, JSON.stringify({ error: { code: "insufficient_quota" } })).code).toBe("provider_quota_unknown");
+    expect(a.mapError(401, "bad key").code).toBe("invalid_key");
+    expect(a.mapError(404, "no model").code).toBe("model_unavailable");
+    expect(a.parse({ choices: [{ message: { content: "" }, finish_reason: "content_filter" }] }).filtered).toBe(true);
   });
 });
 
@@ -95,7 +120,7 @@ describe("Gemini thinking budget (truncation fix)", () => {
 describe("Anthropic adapter", () => {
   it("parses content + detects max_tokens truncation", () => {
     expect(anthropicAdapter.parse({ content: [{ text: "claude" }], stop_reason: "end_turn", usage: { input_tokens: 1, output_tokens: 2 } }))
-      .toEqual({ text: "claude", truncated: false, inputTokens: 1, outputTokens: 2 });
+      .toEqual({ text: "claude", truncated: false, filtered: false, inputTokens: 1, outputTokens: 2 });
     expect(anthropicAdapter.parse({ content: [{ text: "x" }], stop_reason: "max_tokens" }).truncated).toBe(true);
   });
 });

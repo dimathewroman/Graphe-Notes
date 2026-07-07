@@ -114,13 +114,20 @@ describe("callAI behavior contract (Phase 8 → guarded for Phase 9)", () => {
     expect(streamedText()).not.toBe(full);
   });
 
-  it("hourly rate limit shows a reset message and does not retry", async () => {
+  it("hourly rate limit shows the server message and does not retry", async () => {
+    // Route now sends a registry-resolved userMessage + the code; the client
+    // trusts that copy and doesn't retry a free-tier limit.
     authenticatedFetch
       .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
-      .mockResolvedValueOnce(res(429, { reason: "hourly_limit_reached", resetInMs: 600000 }));
+      .mockResolvedValueOnce(res(429, {
+        error: "free_hourly_limit",
+        userMessage: "You've used your 5 free AI requests this hour. More in 10 min, or add your own API key in Settings for no limit.",
+        reason: "hourly_limit_reached",
+        resetInMs: 600000,
+      }));
     const r = await run("improve");
     expect(insertSpy).not.toHaveBeenCalled();
-    expect(r.current.aiError).toMatch(/hourly AI limit/i);
+    expect(r.current.aiError).toMatch(/free AI requests this hour/i);
     // one settings + one generate = 2; no retry
     expect(authenticatedFetch).toHaveBeenCalledTimes(2);
   });

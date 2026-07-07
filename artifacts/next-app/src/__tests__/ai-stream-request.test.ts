@@ -49,9 +49,9 @@ describe("executeAiStreamRequest", () => {
     expect((init.headers as Record<string, string>)["x-graphe-demo-ai"]).toBe("1");
   });
 
-  it("surfaces an RPM-429 with retryDelayMs so the hook can retry", async () => {
+  it("surfaces a per-minute limit with retryDelayMs so the hook can retry", async () => {
     authenticatedFetch.mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: "rpm_limit", retryAfterMs: 1500 }), { status: 429 }),
+      new Response(JSON.stringify({ error: "provider_rpm", userMessage: "Gemini is busy right now. Retrying in a moment…", retryAfterMs: 1500 }), { status: 429 }),
     );
     const outcome = await executeAiStreamRequest(
       { provider: "graphe_free", prompt: "x", taskType: "manual" },
@@ -61,9 +61,23 @@ describe("executeAiStreamRequest", () => {
     expect(outcome.retryDelayMs).toBe(1500);
   });
 
-  it("maps a monthly limit to a friendly message + rateLimit", async () => {
+  it("a daily quota is NOT auto-retried (no retryDelayMs) and shows its own message", async () => {
+    // Regression: a per-day limit used to be mislabeled per-minute and retried forever.
     authenticatedFetch.mockResolvedValueOnce(
-      new Response(JSON.stringify({ reason: "monthly_limit_reached" }), { status: 429 }),
+      new Response(JSON.stringify({ error: "provider_daily_quota", userMessage: "You've hit Gemini's daily limit for gemini-2.5-flash. It resets around midnight Pacific." }), { status: 429 }),
+    );
+    const outcome = await executeAiStreamRequest(
+      { provider: "google_ai_studio", prompt: "x", taskType: "manual" },
+      () => {},
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.retryDelayMs).toBeUndefined(); // terminal — never auto-retries
+    expect(outcome.message).toMatch(/daily limit/i);
+  });
+
+  it("maps a monthly free-tier limit to its message + rateLimit telemetry", async () => {
+    authenticatedFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: "free_capacity", userMessage: "Free AI is at capacity this month. Add your own API key in Settings for unlimited use.", reason: "monthly_limit_reached" }), { status: 429 }),
     );
     const outcome = await executeAiStreamRequest(
       { provider: "graphe_free", prompt: "x", taskType: "manual" },
@@ -71,5 +85,15 @@ describe("executeAiStreamRequest", () => {
     );
     expect(outcome.ok).toBe(false);
     expect(outcome.rateLimit?.reason).toBe("monthly_limit_reached");
+  });
+
+  it("a clean stream that yields zero tokens surfaces stream_empty, not silence", async () => {
+    authenticatedFetch.mockResolvedValueOnce(sseResponse(["data: [DONE]\n\n"]));
+    const outcome = await executeAiStreamRequest(
+      { provider: "graphe_free", prompt: "x", taskType: "manual" },
+      () => {},
+    );
+    expect(outcome.ok).toBe(false);
+    expect(outcome.message).toMatch(/returned nothing/i);
   });
 });
