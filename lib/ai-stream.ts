@@ -52,3 +52,33 @@ export function parseSsePayload(payload: string): unknown | null {
     return null;
   }
 }
+
+/**
+ * Read a provider's SSE response body and yield the text deltas it contains,
+ * using the provider's own `streamDelta` to interpret each frame. Combines the
+ * framing (drainSseEvents, boundary-safe) with per-frame delta extraction, so
+ * the route just re-emits these in our own `data: {"delta"}` shape. Pure w.r.t.
+ * the provider format — testable by feeding a canned ReadableStream.
+ */
+export async function* streamProviderDeltas(
+  body: ReadableStream<Uint8Array>,
+  streamDelta: (event: unknown) => string,
+): AsyncGenerator<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const { payloads, rest } = drainSseEvents(buffer);
+    buffer = rest;
+    for (const payload of payloads) {
+      const event = parseSsePayload(payload);
+      if (event) {
+        const delta = streamDelta(event);
+        if (delta) yield delta;
+      }
+    }
+  }
+}

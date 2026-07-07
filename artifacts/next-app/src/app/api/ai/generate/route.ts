@@ -8,7 +8,8 @@ import { resolveFreeTierModel, invalidateFreeTierModel } from "@lib/gemini-model
 import { parseGeminiError } from "@lib/ai-error-handler";
 import { generationSettingsFor } from "@/lib/ai-prompts";
 import { isDemoAiEnabled, DEMO_AI_HEADER, mockGenerateBody, mockStreamDeltas } from "@/lib/ai-demo-mock";
-import { PROVIDER_ADAPTERS } from "@lib/ai-providers";
+import { streamProviderDeltas } from "@lib/ai-stream";
+import { PROVIDER_ADAPTERS, geminiAdapter } from "@lib/ai-providers";
 import { db, userApiKeysTable } from "@workspace/db";
 import { decryptApiKey } from "@lib/encryption";
 import { eq, and } from "drizzle-orm";
@@ -46,6 +47,29 @@ const TRUNCATION_MESSAGE =
 // provider holds the serverless function open until the platform's own (much
 // longer) timeout, burning execution time and leaving the user with a spinner.
 const UPSTREAM_TIMEOUT_MS = 30_000;
+
+// Wrap a stream of text deltas in our client SSE contract: `data: {"delta":"…"}`
+// frames, then a terminating [DONE]. A mid-stream provider error just ends the
+// stream (the client keeps whatever streamed so far).
+function sseResponse(deltas: AsyncGenerator<string>): Response {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        for await (const delta of deltas) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta })}\n\n`));
+        }
+      } catch (err) {
+        Sentry.captureException(err);
+      }
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+  return new Response(stream, {
+    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform" },
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -98,8 +122,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Request body must be a JSON object" }, { status: 400 });
     }
 
-    const { taskType, prompt, context, provider: rawProvider, modelOverride: rawModelOverride, action: rawAction, system: rawSystem } =
+    const { taskType, prompt, context, provider: rawProvider, modelOverride: rawModelOverride, action: rawAction, system: rawSystem, stream: rawStream } =
       body as Record<string, unknown>;
+    // 9.3: when true, respond with an SSE token stream instead of one-shot JSON.
+    const wantStream = rawStream === true;
     // G18: the AI action name for per-action telemetry (optional; sanitized to a string).
     const action = typeof rawAction === "string" ? rawAction : undefined;
     // G12 (10.1): task instruction for the provider's system role (optional).
@@ -176,6 +202,27 @@ export async function POST(request: NextRequest) {
       // if discovery returns something unexpected.
       let freeModel = await resolveFreeTierModel(apiKey);
       if (!isValidModelId(freeModel)) freeModel = GEMINI_FLASH_LITE;
+
+      // 9.3: streamed free-tier response (rate limit already counted above).
+      if (wantStream) {
+        const upstream = await fetch(geminiAdapter.streamUrl(freeModel), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify(geminiAdapter.streamBody(freeModel, combinedPrompt, 1024, system, gen)),
+          signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        });
+        if (!upstream.ok || !upstream.body) {
+          const rawErr = await upstream.text().catch(() => "");
+          const parsedError = parseGeminiError(upstream.status, rawErr);
+          const status = parsedError.type === "rpm_limit" || parsedError.type === "rpd_limit" ? 429 : parsedError.type === "invalid_key" ? 401 : 502;
+          return NextResponse.json(
+            { error: parsedError.type, userMessage: parsedError.userMessage, retryAfterMs: parsedError.type === "rpm_limit" ? parsedError.retryAfterMs : null },
+            { status },
+          );
+        }
+        getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, action, model: freeModel, streamed: true } });
+        return sseResponse(streamProviderDeltas(upstream.body, geminiAdapter.streamDelta));
+      }
 
       const callGemini = (model: string) =>
         fetch(
@@ -300,6 +347,23 @@ export async function POST(request: NextRequest) {
     const adapter = PROVIDER_ADAPTERS[provider];
     if (!adapter) {
       return NextResponse.json({ error: "Unknown provider" }, { status: 400 });
+    }
+
+    // 9.3: streamed BYOK response — same adapter table, streaming url/body.
+    if (wantStream) {
+      const upstreamStream = await fetch(adapter.streamUrl(routing.model, row.endpointUrl), {
+        method: "POST",
+        headers: adapter.headers(decryptedKey),
+        body: JSON.stringify(adapter.streamBody(routing.model, combinedPrompt, 1024, system, gen)),
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      });
+      if (!upstreamStream.ok || !upstreamStream.body) {
+        const rawBody = await upstreamStream.text().catch(() => "");
+        const mapped = adapter.mapError(upstreamStream.status, rawBody);
+        return NextResponse.json(mapped.body, { status: mapped.status });
+      }
+      getPostHogClient().capture({ distinctId: userId, event: "ai_generate_completed", properties: { provider, action, model: routing.model, streamed: true } });
+      return sseResponse(streamProviderDeltas(upstreamStream.body, adapter.streamDelta));
     }
 
     const upstream = await fetch(adapter.url(routing.model, row.endpointUrl), {

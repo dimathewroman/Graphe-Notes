@@ -3,8 +3,27 @@
 // pinned here: SSE framing across arbitrary chunk boundaries, the [DONE]
 // sentinel, and each provider's per-frame delta extraction.
 import { describe, it, expect } from "vitest";
-import { drainSseEvents, parseSsePayload, SSE_DONE } from "@lib/ai-stream";
+import { drainSseEvents, parseSsePayload, SSE_DONE, streamProviderDeltas } from "@lib/ai-stream";
 import { openAiCompatibleAdapter, geminiAdapter, anthropicAdapter } from "@lib/ai-providers";
+
+// Build a ReadableStream that emits the given text chunks (split at whatever
+// boundaries the caller chooses, to exercise cross-chunk framing).
+function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
+  const enc = new TextEncoder();
+  let i = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (i < chunks.length) controller.enqueue(enc.encode(chunks[i++]));
+      else controller.close();
+    },
+  });
+}
+
+async function collect(gen: AsyncGenerator<string>): Promise<string> {
+  let out = "";
+  for await (const d of gen) out += d;
+  return out;
+}
 
 describe("drainSseEvents", () => {
   it("extracts complete data: payloads and keeps the incomplete tail", () => {
@@ -54,6 +73,34 @@ describe("per-provider streamDelta", () => {
     expect(anthropicAdapter.streamDelta({ type: "content_block_delta", delta: { type: "text_delta", text: "yo" } })).toBe("yo");
     expect(anthropicAdapter.streamDelta({ type: "message_start" })).toBe("");
     expect(anthropicAdapter.streamDelta({ type: "content_block_start", content_block: { type: "text" } })).toBe("");
+  });
+});
+
+describe("streamProviderDeltas (route-side transform)", () => {
+  it("reconstructs text from a Gemini streamGenerateContent SSE body", async () => {
+    const frame = (t: string) => `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: t }] } }] })}\n\n`;
+    const stream = streamFrom([frame("Hello, "), frame("world"), "data: [DONE]\n\n"]);
+    expect(await collect(streamProviderDeltas(stream, geminiAdapter.streamDelta))).toBe("Hello, world");
+  });
+
+  it("reconstructs text from an OpenAI-compatible SSE body, ignoring non-text frames", async () => {
+    const openai = openAiCompatibleAdapter("https://x/v1");
+    const stream = streamFrom([
+      'data: {"choices":[{"delta":{"role":"assistant"}}]}\n\n', // no content
+      'data: {"choices":[{"delta":{"content":"Hi "}}]}\n\n',
+      'data: {"choices":[{"delta":{"content":"there"}}]}\n\ndata: [DONE]\n\n',
+    ]);
+    expect(await collect(streamProviderDeltas(stream, openai.streamDelta))).toBe("Hi there");
+  });
+
+  it("reconstructs text from Anthropic typed events, ignoring non-delta frames", async () => {
+    const stream = streamFrom([
+      'data: {"type":"message_start"}\n\n',
+      'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Cla"}}\n\n',
+      'data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"ude"}}\n\n',
+      'data: {"type":"message_stop"}\n\n',
+    ]);
+    expect(await collect(streamProviderDeltas(stream, anthropicAdapter.streamDelta))).toBe("Claude");
   });
 });
 
