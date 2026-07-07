@@ -9,6 +9,10 @@ type SettingsTab = "appearance" | "ai" | "data" | "security" | "quickbits" | "ac
 export type MotionLevel = "full" | "reduced" | "minimal";
 export type DarkModeLevel = "soft" | "default" | "oled";
 export type ColorblindMode = "none" | "protanopia" | "tritanopia";
+// Dev-only Claude-proxy routing (see use-claude-proxy.ts). "auto" = proxy when
+// running else the account provider; "proxy" = always proxy; "account" = always
+// the account's Graphe-free / BYOK provider.
+export type ClaudeAiRouting = "auto" | "proxy" | "account";
 
 interface AppState {
   activeFilter: FilterType;
@@ -27,6 +31,16 @@ interface AppState {
 
   colorblindMode: ColorblindMode;
   setColorblindMode: (mode: ColorblindMode) => void;
+
+  // Dev-only Claude-proxy routing (gated by NEXT_PUBLIC_ENABLE_CLAUDE_PROXY).
+  // routing + model are persisted via use-claude-proxy; availability is probed
+  // client-side and never persisted.
+  claudeAiRouting: ClaudeAiRouting;
+  claudeProxyModel: string;
+  claudeProxyAvailable: boolean;
+  setClaudeAiRouting: (routing: ClaudeAiRouting) => void;
+  setClaudeProxyModel: (model: string) => void;
+  setClaudeProxyAvailable: (available: boolean) => void;
 
   selectedNoteId: number | null;
   selectedQuickBitId: number | null;
@@ -107,6 +121,13 @@ export const useAppStore = create<AppState>((set) => ({
 
   colorblindMode: "none",
   setColorblindMode: (mode) => set({ colorblindMode: mode }),
+
+  claudeAiRouting: "auto",
+  claudeProxyModel: "sonnet",
+  claudeProxyAvailable: false,
+  setClaudeAiRouting: (routing) => set({ claudeAiRouting: routing }),
+  setClaudeProxyModel: (model) => set({ claudeProxyModel: model }),
+  setClaudeProxyAvailable: (available) => set({ claudeProxyAvailable: available }),
 
   selectedNoteId: null,
   selectedQuickBitId: null,

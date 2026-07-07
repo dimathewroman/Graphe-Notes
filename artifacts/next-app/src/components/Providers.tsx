@@ -9,6 +9,7 @@ import { TokenSync } from "@/lib/token-sync";
 import { PHProvider } from "@/components/PostHogProvider";
 import { useMotionInit } from "@/hooks/use-motion";
 import { useAtmosphereInit } from "@/hooks/use-atmosphere";
+import { useClaudeProxyInit } from "@/hooks/use-claude-proxy";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +35,13 @@ function MotionInit() {
 
 function AtmosphereInit() {
   useAtmosphereInit();
+  return null;
+}
+
+// Dev-only: probe the local Claude proxy so "auto" routing can flip live.
+// No-ops unless NEXT_PUBLIC_ENABLE_CLAUDE_PROXY is set.
+function ClaudeProxyInit() {
+  useClaudeProxyInit();
   return null;
 }
 
@@ -68,6 +76,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <MotionInit />
         <AtmosphereInit />
+        <ClaudeProxyInit />
         <NetworkStatusInit />
         <TokenSync />
         <Toaster />

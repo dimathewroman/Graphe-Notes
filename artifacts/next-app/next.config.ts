@@ -6,6 +6,13 @@ import { config as loadEnv } from "dotenv";
 // Load .env from repo root (2 levels up from artifacts/next-app/)
 loadEnv({ path: path.resolve(__dirname, "../../.env"), override: false });
 
+// Dev only: let the browser reach local inference endpoints (Ollama, LM Studio,
+// the Claude proxy on :8788) that the client-side local_llm provider fetches.
+// `next build` runs with NODE_ENV=production, so this is empty in every deployed
+// build — production CSP never allows localhost.
+const devConnectSrc =
+  process.env.NODE_ENV !== "production" ? " http://localhost:* http://127.0.0.1:* ws://localhost:*" : "";
+
 const cspDirectives = [
   "default-src 'self'",
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.i.posthog.com https://us-assets.i.posthog.com",
@@ -16,7 +23,7 @@ const cspDirectives = [
   // worker-src must be set explicitly (with blob:) because Sentry's SDK uses a blob:
   // worker for its replay / profiling features and the script-src fallback does not
   // include blob:, which causes a CSP violation.
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://us.i.posthog.com https://us-assets.i.posthog.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://*.ingest.us.sentry.io https://*.ingest.sentry.io",
+  `connect-src 'self' https://*.supabase.co wss://*.supabase.co https://us.i.posthog.com https://us-assets.i.posthog.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://*.ingest.us.sentry.io https://*.ingest.sentry.io${devConnectSrc}`,
   "worker-src 'self' blob:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
