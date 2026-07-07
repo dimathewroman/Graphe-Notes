@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { stripTrailingSlashes } from "@lib/ai-providers";
 import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
@@ -98,30 +98,38 @@ export function ByokProviderBlock({
     }
   }, []);
 
-  // ── On provider change / mount: sync fields + discover for saved keys ──
-  // Ref so the effect can read savedKeys without re-running every time the map
-  // changes (which would re-fire discovery / activation on unrelated updates).
-  const savedKeysRef = useRef(savedKeys);
-  savedKeysRef.current = savedKeys;
-
+  // ── Sync editable fields + discover models for a saved key ──────────
+  // Keyed on THIS provider's saved record (not the whole map, not a ref), so it
+  // re-syncs when savedKeys arrives asynchronously (the GET /api/ai/keys the
+  // parent fires on open) or after a save — but does NOT reset while you edit the
+  // model/fast dropdowns, since those don't touch savedKeys until you hit Save.
+  // Activation is deliberately NOT here (see handleProviderChange) so it can never
+  // re-trigger a field reset.
+  const savedModel = info?.modelOverride ?? null;
+  const savedFast = info?.fastModelOverride ?? null;
+  const savedEndpoint = info?.endpointUrl ?? null;
+  const savedHasKey = Boolean(info?.hasKey);
   useEffect(() => {
-    const saved = savedKeysRef.current[provider];
-    setModel(saved?.modelOverride ?? "");
-    setFastModel(saved?.fastModelOverride ?? "");
-    setEndpoint(saved?.endpointUrl ?? "");
+    setModel(savedModel ?? "");
+    setFastModel(savedFast ?? "");
+    setEndpoint(savedEndpoint ?? "");
     setApiKey("");
-    setModels([]);
-
-    const configured = provider === "custom_openai"
-      ? Boolean(saved?.hasKey || saved?.endpointUrl)
-      : Boolean(saved?.hasKey);
-
-    if (saved?.hasKey) {
-      // No apiKey arg — server decrypts the stored key.
-      void fetchModels(provider, undefined, saved.endpointUrl ?? undefined);
+    if (savedHasKey) {
+      // No apiKey arg — the server decrypts the stored key.
+      void fetchModels(provider, undefined, savedEndpoint ?? undefined);
+    } else {
+      setModels([]);
     }
-    if (configured) void onActivate(provider);
-  }, [provider, fetchModels, onActivate]);
+  }, [provider, savedHasKey, savedModel, savedFast, savedEndpoint, fetchModels]);
+
+  // Selecting a configured provider makes it active (as clicking a card did
+  // before). Kept out of the sync effect so activation never resets the fields.
+  const handleProviderChange = (p: string) => {
+    setProvider(p);
+    const inf = savedKeys[p];
+    const configured = p === "custom_openai" ? Boolean(inf?.hasKey || inf?.endpointUrl) : Boolean(inf?.hasKey);
+    if (configured) void onActivate(p);
+  };
 
   // ── Debounce: discover models as the user types the key ──────────
   useEffect(() => {
@@ -224,7 +232,7 @@ export function ByokProviderBlock({
       {/* Provider dropdown */}
       <div>
         <label className="block text-xs font-medium text-muted-foreground mb-1">Provider</label>
-        <Select value={provider} onValueChange={setProvider}>
+        <Select value={provider} onValueChange={handleProviderChange}>
           <SelectTrigger className="w-full bg-panel border-panel-border rounded-lg">
             <SelectValue placeholder="Select a provider…" />
           </SelectTrigger>
