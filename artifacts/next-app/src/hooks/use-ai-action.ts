@@ -11,6 +11,7 @@ import { buildAiPrompt, wordCount, isLengthAcceptable, lengthCorrectionHint, tas
 import { getSelectionHtml } from "@/lib/editor-html";
 import { isDemoAiEnabled } from "@/lib/ai-demo-mock";
 import { resolveAiError } from "@lib/ai-errors";
+import { CLAUDE_PROXY_URL, shouldUseProxy, isClaudeProxyEnabled } from "@/hooks/use-claude-proxy";
 import { executeAiRequest, executeAiStreamRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
 
 interface AiSettingsResponse {
@@ -71,6 +72,10 @@ export function useAiAction(
   // Atomic Zustand selectors (E1) — avoids subscribing the whole store.
   const setAiSetupModalOpen = useAppStore(s => s.setAiSetupModalOpen);
   const setPendingAiAction = useAppStore(s => s.setPendingAiAction);
+  // Dev-only Claude-proxy routing (inert unless NEXT_PUBLIC_ENABLE_CLAUDE_PROXY).
+  const claudeAiRouting = useAppStore(s => s.claudeAiRouting);
+  const claudeProxyModel = useAppStore(s => s.claudeProxyModel);
+  const claudeProxyAvailable = useAppStore(s => s.claudeProxyAvailable);
 
   const queryClient = useQueryClient();
   const [aiLoading, setAiLoading] = useState(false);
@@ -213,12 +218,29 @@ export function useAiAction(
       return;
     }
 
+    // Dev-only: if routing forces the proxy but it isn't up, say so plainly
+    // rather than letting the request fail as a confusing connection error.
+    if (isClaudeProxyEnabled() && claudeAiRouting === "proxy" && !claudeProxyAvailable) {
+      setAiError("Claude proxy isn't running. Start it (pnpm claude-proxy) or switch AI routing in Settings → AI.");
+      setTimeout(() => setAiError(null), 5000);
+      return;
+    }
+    // When the proxy is selected/available, route through it as a local_llm
+    // pointed at the proxy URL — no account provider fetch, no setup modal.
+    const useProxy = shouldUseProxy(claudeAiRouting, claudeProxyAvailable);
+
     // Fetch active provider from server; default to graphe_free on any failure.
     let provider = "graphe_free";
     let localLlmEndpoint: string | null = null;
     let localLlmModel: string | null = null;
     let localLlmApiKey: string | null = null;
-    if (!isDemo) {
+    // Set when routing through the local Claude proxy — wins over the saved
+    // local-LLM endpoint in the branch below.
+    const proxyEndpoint = useProxy ? CLAUDE_PROXY_URL : null;
+    if (useProxy) {
+      provider = "local_llm";
+      localLlmModel = claudeProxyModel;
+    } else if (!isDemo) {
       try {
         // G16-partial: cache the settings so rapid successive actions don't each
         // round-trip /api/ai/settings (staleTime); SettingsModal invalidates on save.
@@ -301,10 +323,10 @@ export function useAiAction(
 
     // --- Local LLM: call inference server directly from the client ---
     if (provider === "local_llm") {
-      // Dev override (from .env) wins; otherwise use the saved endpoint.
+      // Claude proxy (dev) wins; then the .env dev override; then the saved endpoint.
       // Strip trailing slashes defensively for endpoints saved before normalization existed.
       const normalizedEndpoint =
-        LOCAL_LLM_DEV_ENDPOINT_OVERRIDE ?? localLlmEndpoint?.replace(/\/+$/, "") ?? null;
+        proxyEndpoint ?? LOCAL_LLM_DEV_ENDPOINT_OVERRIDE ?? localLlmEndpoint?.replace(/\/+$/, "") ?? null;
       if (!normalizedEndpoint) {
         setAiError("Local LLM endpoint not configured. Please check Settings.");
         setTimeout(() => setAiError(null), 5000);

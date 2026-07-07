@@ -7,6 +7,7 @@ import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "../ui/select";
+import { ClaudeProxyDevPanel } from "./ClaudeProxyDevPanel";
 
 // G17 (9.2): OpenAI-compatible providers share one server adapter; the UI lists
 // them from this single config so adding one is a one-line change here.
@@ -434,6 +435,9 @@ export function AiSettingsTab({ isDemo }: { isDemo: boolean }) {
 
   return (
     <section className="space-y-4">
+      {/* Dev-only: local Claude proxy routing (renders null unless the flag is set) */}
+      <ClaudeProxyDevPanel />
+
       {/* Provider selection cards */}
       <div>
         <label className="block text-xs font-medium text-muted-foreground mb-2">AI Provider</label>
