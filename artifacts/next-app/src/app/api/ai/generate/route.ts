@@ -9,7 +9,7 @@ import { parseGeminiError } from "@lib/ai-error-handler";
 import { generationSettingsFor } from "@/lib/ai-prompts";
 import { isDemoAiEnabled, DEMO_AI_HEADER, mockGenerateBody, mockStreamDeltas } from "@/lib/ai-demo-mock";
 import { streamProviderDeltas } from "@lib/ai-stream";
-import { PROVIDER_ADAPTERS, geminiAdapter } from "@lib/ai-providers";
+import { PROVIDER_ADAPTERS, geminiAdapter, geminiGenerationConfig } from "@lib/ai-providers";
 import { db, userApiKeysTable } from "@workspace/db";
 import { decryptApiKey } from "@lib/encryption";
 import { eq, and } from "drizzle-orm";
@@ -47,6 +47,13 @@ const TRUNCATION_MESSAGE =
 // provider holds the serverless function open until the platform's own (much
 // longer) timeout, burning execution time and leaving the user with a spinner.
 const UPSTREAM_TIMEOUT_MS = 30_000;
+
+// Output-token budget for a single AI action. Was 1024, which truncated even a
+// ~200-word note once Gemini's thinking tokens (now disabled — see
+// geminiThinkingBudget) or a large expand/rewrite are in play. 4096 covers a
+// note-sized selection and its transform with headroom, while staying bounded
+// for the rate-limited free tier.
+const AI_MAX_OUTPUT_TOKENS = 4096;
 
 // Wrap a stream of text deltas in our client SSE contract: `data: {"delta":"…"}`
 // frames, then a terminating [DONE]. A mid-stream provider error just ends the
@@ -208,7 +215,7 @@ export async function POST(request: NextRequest) {
         const upstream = await fetch(geminiAdapter.streamUrl(freeModel), {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-          body: JSON.stringify(geminiAdapter.streamBody(freeModel, combinedPrompt, 1024, system, gen)),
+          body: JSON.stringify(geminiAdapter.streamBody(freeModel, combinedPrompt, AI_MAX_OUTPUT_TOKENS, system, gen)),
           signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
         });
         if (!upstream.ok || !upstream.body) {
@@ -235,7 +242,7 @@ export async function POST(request: NextRequest) {
             body: JSON.stringify({
               contents: [{ parts: [{ text: combinedPrompt }] }],
               ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-              generationConfig: { maxOutputTokens: 1024, temperature: gen.temperature, topP: gen.topP },
+              generationConfig: geminiGenerationConfig(model, AI_MAX_OUTPUT_TOKENS, gen),
             }),
             signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
           },
@@ -354,7 +361,7 @@ export async function POST(request: NextRequest) {
       const upstreamStream = await fetch(adapter.streamUrl(routing.model, row.endpointUrl), {
         method: "POST",
         headers: adapter.headers(decryptedKey),
-        body: JSON.stringify(adapter.streamBody(routing.model, combinedPrompt, 1024, system, gen)),
+        body: JSON.stringify(adapter.streamBody(routing.model, combinedPrompt, AI_MAX_OUTPUT_TOKENS, system, gen)),
         signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       });
       if (!upstreamStream.ok || !upstreamStream.body) {
@@ -369,7 +376,7 @@ export async function POST(request: NextRequest) {
     const upstream = await fetch(adapter.url(routing.model, row.endpointUrl), {
       method: "POST",
       headers: adapter.headers(decryptedKey),
-      body: JSON.stringify(adapter.body(routing.model, combinedPrompt, 1024, system, gen)),
+      body: JSON.stringify(adapter.body(routing.model, combinedPrompt, AI_MAX_OUTPUT_TOKENS, system, gen)),
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
 
