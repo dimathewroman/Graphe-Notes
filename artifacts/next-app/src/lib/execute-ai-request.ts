@@ -97,18 +97,12 @@ async function runLocal(opts: AiRequestOptions): Promise<AiRequestOutcome> {
   }
 }
 
-async function runCloud(opts: AiRequestOptions): Promise<AiRequestOutcome> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (opts.demoMock) headers["x-graphe-demo-ai"] = "1";
-  const res = await authenticatedFetch("/api/ai/generate", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ provider: opts.provider, taskType: opts.taskType, prompt: opts.prompt, system: opts.system, action: opts.action }),
-    signal: opts.signal,
-  });
-
+// Map an error/non-2xx /api/ai/generate response to an outcome. Returns null for
+// a 2xx status so the caller handles success. Shared by the one-shot and
+// streaming paths so both surface RPM-retry / rate-limit info identically.
+async function mapCloudErrorStatus(res: Response): Promise<AiRequestOutcome | null> {
   if (res.status === 429) {
-    const data = (await res.json()) as { error?: string; reason?: string; resetInMs?: number; retryAfterMs?: number };
+    const data = (await res.json().catch(() => ({}))) as { error?: string; reason?: string; resetInMs?: number; retryAfterMs?: number };
     const kind = data.error ?? data.reason;
     if (kind === "rpm_limit") {
       return { ok: false, retryDelayMs: data.retryAfterMs ?? data.resetInMs ?? 60000, message: "AI is busy." };
@@ -122,14 +116,34 @@ async function runCloud(opts: AiRequestOptions): Promise<AiRequestOutcome> {
     }
     return { ok: false, message: "AI is busy. Please try again in a moment." };
   }
-
   if (res.status === 400) {
-    const data = (await res.json()) as { error?: string };
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
     if (data.error === "no_key_configured") return { ok: false, message: "No API key configured. Please add one in Settings." };
     return { ok: false, message: "AI request failed. Please try again." };
   }
   if (res.status === 401) return { ok: false, message: "AI key invalid or missing. Check Settings." };
   if (res.status === 502) return { ok: false, message: "AI request failed. Please try again." };
+  if (!res.ok) {
+    // Any other non-2xx (e.g. 504 upstream_timeout) — prefer the server's userMessage.
+    const data = (await res.json().catch(() => ({}))) as { error?: string; userMessage?: string };
+    if (data.error) return { ok: false, message: data.userMessage ?? data.error };
+    return { ok: false, message: "AI request failed. Please try again." };
+  }
+  return null;
+}
+
+async function runCloud(opts: AiRequestOptions): Promise<AiRequestOutcome> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (opts.demoMock) headers["x-graphe-demo-ai"] = "1";
+  const res = await authenticatedFetch("/api/ai/generate", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ provider: opts.provider, taskType: opts.taskType, prompt: opts.prompt, system: opts.system, action: opts.action }),
+    signal: opts.signal,
+  });
+
+  const mapped = await mapCloudErrorStatus(res);
+  if (mapped) return mapped;
 
   const data = (await res.json()) as { error?: string; result?: string; userMessage?: string };
   if (data.error) return { ok: false, message: data.userMessage ?? data.error };
@@ -168,9 +182,13 @@ export async function executeAiStreamRequest(
     signal: opts.signal,
   });
 
-  if (!res.ok || !res.body) {
-    return { ok: false, message: "AI request failed. Please try again." };
+  if (!res.ok) {
+    // Errors arrive as JSON before any stream starts — map them like the one-shot
+    // path so RPM-retry / rate-limit handling is identical.
+    const mapped = await mapCloudErrorStatus(res);
+    return mapped ?? { ok: false, message: "AI request failed. Please try again." };
   }
+  if (!res.body) return { ok: false, message: "AI request failed. Please try again." };
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

@@ -23,9 +23,12 @@ vi.mock("@/store", () => ({
 import { useAiAction } from "@/hooks/use-ai-action";
 
 function makeEditor() {
-  const chain: Record<string, () => unknown> = {};
+  const chain: Record<string, (...a: unknown[]) => unknown> = {};
   chain.focus = () => chain;
   chain.insertContentAt = () => chain;
+  chain.deleteRange = () => chain;
+  // Cloud path streams via chain().command(({tr}) => tr.insertText(...)).
+  chain.command = (fn: unknown) => { (fn as (a: { tr: { insertText: () => void; delete: () => void } }) => void)({ tr: { insertText: () => {}, delete: () => {} } }); return chain; };
   chain.run = () => true;
   return {
     on: () => {},
@@ -37,6 +40,20 @@ function makeEditor() {
 
 function res(status: number, body: unknown) {
   return { status, ok: status >= 200 && status < 300, json: async () => body };
+}
+
+// Streaming success response: SSE `data: {"delta"}` frames + [DONE].
+function sseRes(deltas: string[]): Response {
+  const enc = new TextEncoder();
+  const frames = [...deltas.map((d) => `data: ${JSON.stringify({ delta: d })}\n\n`), "data: [DONE]\n\n"];
+  let i = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (i < frames.length) controller.enqueue(enc.encode(frames[i++]));
+      else controller.close();
+    },
+  });
+  return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
 }
 
 const generateCalls = () =>
@@ -53,7 +70,7 @@ describe("AI RPM-429 retry + cancel (G1, 8.1)", () => {
     authenticatedFetch
       .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
       .mockResolvedValueOnce(res(429, { error: "rpm_limit", retryAfterMs: 1000 }))
-      .mockResolvedValueOnce(res(200, { result: "improved" }));
+      .mockResolvedValueOnce(sseRes(["improved"]));
 
     const { result } = renderHook(() => useAiAction(makeEditor()), { wrapper: makeWrapper() });
     act(() => result.current.captureSelection(0, 5, "hello"));

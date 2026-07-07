@@ -353,15 +353,47 @@ export function useAiAction(
       }, { once: true });
     });
 
+    // Progressive streaming insert (9.3). Rewrite actions replace the selection;
+    // generative ones append after it. Each streamed delta rewrites the whole
+    // inserted region with the full accumulated text (platform-stable whitespace);
+    // a retry clears what was inserted and re-streams, so a stale attempt is never
+    // left behind. `clearPartial` lets the cancel path wipe a half-streamed result.
+    let clearPartial: (() => void) | null = null;
     try {
-      let outcome = await executeAiRequest({ provider, prompt, system, taskType, action, signal: controller.signal });
+      const generative = GENERATIVE_ACTIONS.has(action);
+      const startFrom = generative ? sel.to : sel.from;
+      if (!generative) editor!.chain().focus().deleteRange({ from: sel.from, to: sel.to }).run();
+      let insertedLen = 0;
+      const clearInserted = () => {
+        if (insertedLen > 0) {
+          editor!.chain().command(({ tr }) => { tr.delete(startFrom, startFrom + insertedLen); return true; }).run();
+          insertedLen = 0;
+        }
+      };
+      clearPartial = clearInserted;
+      const streamOnce = (sys: string | undefined) => {
+        clearInserted();
+        let acc = "";
+        return executeAiStreamRequest(
+          { provider, prompt, system: sys, taskType, action, signal: controller.signal },
+          (delta) => {
+            const prev = acc.length;
+            acc += delta;
+            editor!.chain().command(({ tr }) => { tr.insertText(acc, startFrom, startFrom + prev); return true; }).run();
+            insertedLen = acc.length;
+          },
+        );
+      };
 
-      // G1: on an RPM-429 the server tells us how long to wait; retry ONCE.
+      let outcome = await streamOnce(system);
+
+      // G1: RPM-429 — the server returns the 429 BEFORE any token streams, so
+      // nothing was inserted; wait and re-stream ONCE.
       if (!outcome.ok && outcome.retryDelayMs != null) {
         setAiError(`AI is busy — retrying in ${Math.ceil(outcome.retryDelayMs / 1000)}s… (tap ✕ to cancel)`);
         await abortableDelay(outcome.retryDelayMs);
         setAiError("Retrying…");
-        outcome = await executeAiRequest({ provider, prompt, system, taskType, action, signal: controller.signal });
+        outcome = await streamOnce(system);
         if (!outcome.ok && outcome.retryDelayMs != null) {
           setAiError("AI is still busy. Please try again in a moment.");
           setTimeout(() => setAiError(null), 5000);
@@ -374,30 +406,36 @@ export function useAiAction(
       }
 
       if (!outcome.ok) {
+        clearInserted();
         const msg = outcome.message ?? "AI request failed";
         setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
         setTimeout(() => setAiError(null), 5000);
         return;
       }
 
-      // G14 (10.3): validate length for shorten/lengthen actions. If the result
-      // went the wrong direction (e.g. "25% shorter" came back longer), re-request
-      // ONCE with a corrective target before giving up on the length.
-      if (outcome.ok && outcome.text && !isLengthAcceptable(action, wordCount(sel.text), wordCount(outcome.text))) {
+      // G14 (10.3): length validation for shorten/lengthen. If the streamed result
+      // went the wrong way, re-stream ONCE with a corrective target; if that fails,
+      // restore the first result (streamOnce already cleared it).
+      if (outcome.text && !isLengthAcceptable(action, wordCount(sel.text), wordCount(outcome.text))) {
+        const firstText = outcome.text;
         const correctiveSystem = `${system ?? ""}\n\n${lengthCorrectionHint(action, wordCount(sel.text))}`.trim();
         setAiError("Adjusting length…");
-        const retry = await executeAiRequest({ provider, prompt, system: correctiveSystem, taskType, action, signal: controller.signal });
-        if (retry.ok && retry.text) outcome = retry;
+        const retry = await streamOnce(correctiveSystem);
+        if (retry.ok && retry.text) {
+          outcome = retry;
+        } else {
+          editor!.chain().command(({ tr }) => { tr.insertText(firstText, startFrom, startFrom + insertedLen); return true; }).run();
+          insertedLen = firstText.length;
+        }
         setAiError(null);
       }
-
-      if (outcome.text) {
-        const { from, to } = tracker.pos();
-        applyAiResult(outcome.text, from, to);
-      }
+      // The result is already in the editor (streamed) — nothing else to insert.
     } catch (err) {
-      // User-initiated cancel — abort the flow silently, no error banner.
-      if (err instanceof DOMException && err.name === "AbortError") return;
+      // User-initiated cancel — wipe any half-streamed text and exit silently.
+      if (err instanceof DOMException && err.name === "AbortError") {
+        clearPartial?.();
+        return;
+      }
       const msg = err instanceof Error ? err.message : "AI request failed";
       setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
       setTimeout(() => setAiError(null), 5000);

@@ -23,11 +23,19 @@ vi.mock("@/store", () => ({
 
 import { useAiAction } from "@/hooks/use-ai-action";
 
-const insertSpy = vi.fn();
+const insertSpy = vi.fn();  // insertContentAt — local & generative-demo paths
+const streamSpy = vi.fn();  // tr.insertText — cloud streaming path
 function makeEditor() {
   const chain: Record<string, (...a: unknown[]) => unknown> = {};
   chain.focus = () => chain;
   chain.insertContentAt = (...a: unknown[]) => { insertSpy(...a); return chain; };
+  chain.deleteRange = () => chain;
+  chain.command = (fn: unknown) => {
+    (fn as (a: { tr: { insertText: (...x: unknown[]) => void; delete: () => void } }) => void)({
+      tr: { insertText: (...x: unknown[]) => streamSpy(...x), delete: () => {} },
+    });
+    return chain;
+  };
   chain.run = () => true;
   return {
     on: () => {}, off: () => {},
@@ -35,15 +43,29 @@ function makeEditor() {
     chain: () => chain,
   } as never;
 }
+// The final tr.insertText carries the full streamed text (replace-whole-region).
+const streamedText = () => streamSpy.mock.calls.at(-1)?.[0];
 function res(status: number, body: unknown) {
   return { status, ok: status >= 200 && status < 300, json: async () => body };
+}
+function sseRes(deltas: string[]): Response {
+  const enc = new TextEncoder();
+  const frames = [...deltas.map((d) => `data: ${JSON.stringify({ delta: d })}\n\n`), "data: [DONE]\n\n"];
+  let i = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (i < frames.length) controller.enqueue(enc.encode(frames[i++]));
+      else controller.close();
+    },
+  });
+  return new Response(body, { status: 200, headers: { "Content-Type": "text/event-stream" } });
 }
 
 const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; vi.unstubAllEnvs(); });
 // These tests assert the normal demo behavior ("Sign up"), so pin the demo-AI
 // harness flag OFF regardless of ambient env (the CI e2e job sets it globally).
-beforeEach(() => { insertSpy.mockReset(); authenticatedFetch.mockReset(); vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_AI", ""); });
+beforeEach(() => { insertSpy.mockReset(); streamSpy.mockReset(); authenticatedFetch.mockReset(); vi.stubEnv("NEXT_PUBLIC_ENABLE_DEMO_AI", ""); });
 
 async function run(action: string, opts?: { isDemo?: boolean }, selection = "hello") {
   const { result } = renderHook(() => useAiAction(makeEditor(), opts), { wrapper: makeWrapper() });
@@ -60,22 +82,17 @@ describe("callAI behavior contract (Phase 8 → guarded for Phase 9)", () => {
     expect(r.current.aiError).toBe("Sign up to use AI features.");
   });
 
-  it("cloud success inserts the result", async () => {
+  it("cloud success streams the result into the editor", async () => {
     authenticatedFetch
       .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
-      .mockResolvedValueOnce(res(200, { result: "better" }));
+      .mockResolvedValueOnce(sseRes(["bet", "ter"]));
     await run("improve");
-    expect(insertSpy).toHaveBeenCalledWith({ from: 0, to: 5 }, "better");
+    // Deltas accumulate to the full text in the final tr.insertText.
+    expect(streamedText()).toBe("better");
   });
 
-  it("truncation surfaces the friendly userMessage, not the code", async () => {
-    authenticatedFetch
-      .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
-      .mockResolvedValueOnce(res(200, { error: "output_truncated", userMessage: "too long, friend" }));
-    const r = await run("longer_50");
-    expect(insertSpy).not.toHaveBeenCalled();
-    expect(r.current.aiError).toBe("too long, friend");
-  });
+  // (Truncation is a one-shot concept — the streaming path has no output_truncated
+  // frame; a stream just ends. So that test no longer applies to the cloud path.)
 
   it("hourly rate limit shows a reset message and does not retry", async () => {
     authenticatedFetch
@@ -108,22 +125,22 @@ describe("callAI behavior contract (Phase 8 → guarded for Phase 9)", () => {
     const short = "one two three"; // 3 words
     authenticatedFetch
       .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
-      .mockResolvedValueOnce(res(200, { result: tooLong }))
-      .mockResolvedValueOnce(res(200, { result: short }));
-    const r = await run("shorter_25", undefined, original);
-    expect(insertSpy).toHaveBeenCalledWith({ from: 0, to: 5 }, short);
+      .mockResolvedValueOnce(sseRes([tooLong]))
+      .mockResolvedValueOnce(sseRes([short]));
+    await run("shorter_25", undefined, original);
+    // The corrective stream replaced the too-long one; final text is the short result.
+    expect(streamedText()).toBe(short);
     // settings + first generate + corrective generate
     expect(authenticatedFetch).toHaveBeenCalledTimes(3);
-    void r;
   });
 
   it("shorten that is already shorter is applied without a retry", async () => {
     const original = "one two three four five six seven eight nine ten";
     authenticatedFetch
       .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
-      .mockResolvedValueOnce(res(200, { result: "one two three" }));
+      .mockResolvedValueOnce(sseRes(["one two three"]));
     await run("shorter_25", undefined, original);
-    expect(insertSpy).toHaveBeenCalledWith({ from: 0, to: 5 }, "one two three");
+    expect(streamedText()).toBe("one two three");
     expect(authenticatedFetch).toHaveBeenCalledTimes(2); // no corrective retry
   });
 
