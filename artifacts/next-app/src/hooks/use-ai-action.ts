@@ -10,6 +10,7 @@ import { useAppStore } from "@/store";
 import { buildAiPrompt, wordCount, isLengthAcceptable, lengthCorrectionHint, taskTypeFor } from "@/lib/ai-prompts";
 import { getSelectionHtml } from "@/lib/editor-html";
 import { isDemoAiEnabled } from "@/lib/ai-demo-mock";
+import { resolveAiError } from "@lib/ai-errors";
 import { executeAiRequest, executeAiStreamRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
 
 interface AiSettingsResponse {
@@ -97,7 +98,11 @@ export function useAiAction(
       return { from, to, text: getSelectionHtml(editor, from, to) };
     })();
 
-    if (!sel.text.trim()) return;
+    if (!sel.text.trim()) {
+      setAiError(resolveAiError("empty_selection").message);
+      setTimeout(() => setAiError(null), 4000);
+      return;
+    }
 
     const built = buildAiPrompt(action, sel.text, customInstruction);
     if (!built) { setAiLoading(false); return; }
@@ -267,14 +272,14 @@ export function useAiAction(
                 });
                 if (!outcome.ok) {
                   const msg = outcome.message ?? "AI request failed";
-                  setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
+                  setAiError(msg);
                   setTimeout(() => setAiError(null), 5000);
                 } else if (outcome.text && editor) {
                   applyAiResult(outcome.text, capturedFrom, capturedTo);
                 }
               } catch (err) {
                 const msg = err instanceof Error ? err.message : "AI request failed";
-                setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
+                setAiError(msg);
                 setTimeout(() => setAiError(null), 5000);
               } finally {
                 setAiLoading(false);
@@ -321,7 +326,7 @@ export function useAiAction(
         });
         if (!outcome.ok) {
           const msg = outcome.message ?? "AI request failed";
-          setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
+          setAiError(msg);
           setTimeout(() => setAiError(null), 5000);
         } else if (outcome.text) {
           const { from, to } = tracker.pos();
@@ -418,7 +423,7 @@ export function useAiAction(
       if (!outcome.ok) {
         clearInserted();
         const msg = outcome.message ?? "AI request failed";
-        setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
+        setAiError(msg);
         setTimeout(() => setAiError(null), 5000);
         return;
       }
@@ -459,7 +464,7 @@ export function useAiAction(
         return;
       }
       const msg = err instanceof Error ? err.message : "AI request failed";
-      setAiError(msg.length > 120 ? msg.slice(0, 120) + "…" : msg);
+      setAiError(msg);
       setTimeout(() => setAiError(null), 5000);
     } finally {
       tracker.stop();

@@ -69,7 +69,7 @@ describe("AI RPM-429 retry + cancel (G1, 8.1)", () => {
   it("retries exactly once after the server's retryAfterMs, then succeeds", async () => {
     authenticatedFetch
       .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
-      .mockResolvedValueOnce(res(429, { error: "rpm_limit", retryAfterMs: 1000 }))
+      .mockResolvedValueOnce(res(429, { error: "provider_rpm", retryAfterMs: 1000 }))
       .mockResolvedValueOnce(sseRes(["improved"]));
 
     const { result } = renderHook(() => useAiAction(makeEditor()), { wrapper: makeWrapper() });
@@ -93,7 +93,7 @@ describe("AI RPM-429 retry + cancel (G1, 8.1)", () => {
   it("cancel aborts the request mid-retry-wait (no second attempt)", async () => {
     authenticatedFetch
       .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))
-      .mockResolvedValueOnce(res(429, { error: "rpm_limit", retryAfterMs: 60000 }));
+      .mockResolvedValueOnce(res(429, { error: "provider_rpm", retryAfterMs: 60000 }));
 
     const { result } = renderHook(() => useAiAction(makeEditor()), { wrapper: makeWrapper() });
     act(() => result.current.captureSelection(0, 5, "hello"));
