@@ -1,4 +1,4 @@
-# Claude Code Project Entry Point
+# Gemini Project Entry Point
 
 @AGENTS.md
 
