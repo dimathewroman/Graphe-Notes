@@ -9,15 +9,23 @@
 
 import { type NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
-import { db, noteVersionsTable, notesTable, attachmentsTable } from "@workspace/db";
+import {
+  db,
+  noteVersionsTable,
+  notesTable,
+  attachmentsTable,
+} from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
+import { canAccessVaultedNote } from "@/lib/vault-note-authorization";
 import * as Sentry from "@sentry/nextjs";
 
 // Extract the storage path from a Supabase signed or public URL.
 // Signed URL: .../object/sign/note-attachments/<path>?token=...
 // Public URL:  .../object/public/note-attachments/<path>
 function extractStoragePath(src: string): string | null {
-  const match = src.match(/\/object\/(?:sign|public)\/note-attachments\/([^?#]+)/);
+  const match = src.match(
+    /\/object\/(?:sign|public)\/note-attachments\/([^?#]+)/,
+  );
   return match ? decodeURIComponent(match[1]) : null;
 }
 
@@ -27,16 +35,17 @@ function replaceImgWithPlaceholder(content: string, src: string): string {
   const regex = new RegExp(`<img[^>]*src="${escaped}"[^>]*/?>`, "gi");
   return content.replace(
     regex,
-    '<p><em style="opacity:0.5">⚠ Image no longer available</em></p>'
+    '<p><em style="opacity:0.5">⚠ Image no longer available</em></p>',
   );
 }
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; versionId: string }> }
+  { params }: { params: Promise<{ id: string; versionId: string }> },
 ) {
   const { user } = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id, versionId } = await params;
   const noteId = Number(id);
@@ -48,19 +57,33 @@ export async function POST(
   try {
     // Verify the note belongs to this user
     const [note] = await db
-      .select({ id: notesTable.id })
+      .select({ id: notesTable.id, vaulted: notesTable.vaulted })
       .from(notesTable)
       .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
       .limit(1);
-    if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    if (!note)
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+
+    if (!(await canAccessVaultedNote(request, user.id, note.vaulted))) {
+      return NextResponse.json(
+        { error: "Vault unlock required" },
+        { status: 403 },
+      );
+    }
 
     // Fetch the version
     const [version] = await db
       .select()
       .from(noteVersionsTable)
-      .where(and(eq(noteVersionsTable.id, versionIdNum), eq(noteVersionsTable.noteId, noteId)))
+      .where(
+        and(
+          eq(noteVersionsTable.id, versionIdNum),
+          eq(noteVersionsTable.noteId, noteId),
+        ),
+      )
       .limit(1);
-    if (!version) return NextResponse.json({ error: "Version not found" }, { status: 404 });
+    if (!version)
+      return NextResponse.json({ error: "Version not found" }, { status: 404 });
 
     let content: string = version.content ?? "";
 
@@ -78,10 +101,16 @@ export async function POST(
 
       // Look up the attachment (including soft-deleted ones)
       const [attachment] = await db
-        .select({ id: attachmentsTable.id, deletedAt: attachmentsTable.deletedAt })
+        .select({
+          id: attachmentsTable.id,
+          deletedAt: attachmentsTable.deletedAt,
+        })
         .from(attachmentsTable)
         .where(
-          and(eq(attachmentsTable.storagePath, storagePath), eq(attachmentsTable.userId, user.id))
+          and(
+            eq(attachmentsTable.storagePath, storagePath),
+            eq(attachmentsTable.userId, user.id),
+          ),
         )
         .limit(1);
 
@@ -101,6 +130,9 @@ export async function POST(
     return NextResponse.json({ content, title: version.title });
   } catch (err) {
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

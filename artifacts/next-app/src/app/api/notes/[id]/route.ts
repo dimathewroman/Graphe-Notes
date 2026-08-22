@@ -7,10 +7,10 @@ import {
   UpdateNoteParams,
   UpdateNoteBody,
   UpdateNoteResponse,
-  DeleteNoteParams,
 } from "@workspace/api-zod";
 import { getAuthUser } from "@/lib/auth-server";
 import { hasValidVaultProof } from "@/lib/vault-proof";
+import { canAccessVaultedNote } from "@/lib/vault-note-authorization";
 import * as Sentry from "@sentry/nextjs";
 
 export async function GET(
@@ -18,19 +18,28 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { user } = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const { id } = await params;
     const routeParams = GetNoteParams.safeParse({ id });
     if (!routeParams.success) {
-      return NextResponse.json({ error: routeParams.error.message }, { status: 400 });
+      return NextResponse.json(
+        { error: routeParams.error.message },
+        { status: 400 },
+      );
     }
 
     const [note] = await db
       .select()
       .from(notesTable)
-      .where(and(eq(notesTable.id, routeParams.data.id), eq(notesTable.userId, user.id)));
+      .where(
+        and(
+          eq(notesTable.id, routeParams.data.id),
+          eq(notesTable.userId, user.id),
+        ),
+      );
 
     if (!note) {
       return NextResponse.json({ error: "Note not found" }, { status: 404 });
@@ -40,7 +49,10 @@ export async function GET(
     // metadata (incl. vaulted:true) so the client can render the lock screen,
     // but blank the content until a valid unlock proof is presented.
     if (note.vaulted) {
-      const unlocked = await hasValidVaultProof(request.headers.get("x-vault-proof"), user.id);
+      const unlocked = await hasValidVaultProof(
+        request.headers.get("x-vault-proof"),
+        user.id,
+      );
       if (!unlocked) {
         return NextResponse.json(
           GetNoteResponse.parse({ ...note, content: "", contentText: "" }),
@@ -51,7 +63,10 @@ export async function GET(
     return NextResponse.json(GetNoteResponse.parse(note));
   } catch (err) {
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
 
@@ -60,19 +75,48 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { user } = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const { id } = await params;
     const routeParams = UpdateNoteParams.safeParse({ id });
     if (!routeParams.success) {
-      return NextResponse.json({ error: routeParams.error.message }, { status: 400 });
+      return NextResponse.json(
+        { error: routeParams.error.message },
+        { status: 400 },
+      );
     }
 
     const body = await request.json();
     const parsed = UpdateNoteBody.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error.message }, { status: 400 });
+      return NextResponse.json(
+        { error: parsed.error.message },
+        { status: 400 },
+      );
+    }
+
+    const [existingNote] = await db
+      .select({ id: notesTable.id, vaulted: notesTable.vaulted })
+      .from(notesTable)
+      .where(
+        and(
+          eq(notesTable.id, routeParams.data.id),
+          eq(notesTable.userId, user.id),
+        ),
+      )
+      .limit(1);
+
+    if (!existingNote) {
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    }
+
+    if (!(await canAccessVaultedNote(request, user.id, existingNote.vaulted))) {
+      return NextResponse.json(
+        { error: "Vault unlock required" },
+        { status: 403 },
+      );
     }
 
     const isContentChange =
@@ -80,8 +124,12 @@ export async function PATCH(
       parsed.data.content !== undefined ||
       parsed.data.contentText !== undefined;
 
-    let updatePayload: typeof parsed.data & { updatedAt?: Date; folderId?: number | null } =
-      isContentChange ? { ...parsed.data, updatedAt: new Date() } : { ...parsed.data };
+    let updatePayload: typeof parsed.data & {
+      updatedAt?: Date;
+      folderId?: number | null;
+    } = isContentChange
+      ? { ...parsed.data, updatedAt: new Date() }
+      : { ...parsed.data };
 
     // Auto-move note to a matching folder when tags are updated
     if (parsed.data.tags !== undefined) {
@@ -91,7 +139,9 @@ export async function PATCH(
         .where(eq(foldersTable.userId, user.id));
 
       const matchingFolder = folders.find(
-        (f) => f.tagRules?.length > 0 && parsed.data.tags!.some((t) => f.tagRules.includes(t)),
+        (f) =>
+          f.tagRules?.length > 0 &&
+          parsed.data.tags!.some((t) => f.tagRules.includes(t)),
       );
 
       if (matchingFolder) {
@@ -102,7 +152,12 @@ export async function PATCH(
     const [note] = await db
       .update(notesTable)
       .set(updatePayload)
-      .where(and(eq(notesTable.id, routeParams.data.id), eq(notesTable.userId, user.id)))
+      .where(
+        and(
+          eq(notesTable.id, routeParams.data.id),
+          eq(notesTable.userId, user.id),
+        ),
+      )
       .returning();
 
     if (!note) {
@@ -112,36 +167,19 @@ export async function PATCH(
     return NextResponse.json(UpdateNoteResponse.parse(note));
   } catch (err) {
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
 
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
+  _request: NextRequest,
+  _context: { params: Promise<{ id: string }> },
 ) {
-  const { user } = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  try {
-    const { id } = await params;
-    const routeParams = DeleteNoteParams.safeParse({ id });
-    if (!routeParams.success) {
-      return NextResponse.json({ error: routeParams.error.message }, { status: 400 });
-    }
-
-    const [deleted] = await db
-      .delete(notesTable)
-      .where(and(eq(notesTable.id, routeParams.data.id), eq(notesTable.userId, user.id)))
-      .returning();
-
-    if (!deleted) {
-      return NextResponse.json({ error: "Note not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
+  return NextResponse.json(
+    { error: "Use the soft-delete or confirmed permanent-delete route" },
+    { status: 405, headers: { Allow: "GET, PATCH" } },
+  );
 }

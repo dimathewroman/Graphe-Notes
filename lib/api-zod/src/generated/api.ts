@@ -197,14 +197,6 @@ export const UpdateNoteResponse = zod.object({
 
 
 /**
- * @summary Delete a note
- */
-export const DeleteNoteParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-
-/**
  * @summary Soft-delete a note (moves to Recently Deleted)
  */
 export const SoftDeleteNoteParams = zod.object({

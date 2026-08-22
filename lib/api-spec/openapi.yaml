@@ -256,26 +256,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-    delete:
-      operationId: deleteNote
-      tags: [notes]
-      summary: Delete a note
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "204":
-          description: Deleted
-        "404":
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
   /notes/{id}/delete:
     patch:
       operationId: softDeleteNote
@@ -955,21 +935,21 @@ components:
         id:
           type: string
         email:
-          type: ['string', 'null']
+          type: ["string", "null"]
         firstName:
-          type: ['string', 'null']
+          type: ["string", "null"]
         lastName:
-          type: ['string', 'null']
+          type: ["string", "null"]
         profileImageUrl:
-          type: ['string', 'null']
+          type: ["string", "null"]
     AuthUserEnvelope:
       type: object
       required: [user]
       properties:
         user:
           oneOf:
-            - $ref: '#/components/schemas/AuthUser'
-            - type: 'null'
+            - $ref: "#/components/schemas/AuthUser"
+            - type: "null"
     MobileTokenExchangeRequest:
       type: object
       required: [code, code_verifier, redirect_uri, state]
