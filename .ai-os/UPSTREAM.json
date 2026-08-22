@@ -13,7 +13,7 @@
     ".ai-os/CODEX_BOOTSTRAP.md": "2d58ff40e1284be25d49bbf1646529be8d71f4991b010668c815ad5b8f7566dd",
     ".ai-os/REPO_ENGINEERING_POLICY.md": "9495bc209357510394fc898ebbaa8a0a54d59d1a15edcd79093f15a537b26b6c",
     ".ai-os/RUN_LEDGER.md": "e41a740b792e8bb1978c1c7fd7f03ffd1a3b04d20b2f1c859235bafa4f10ef0b",
-    ".ai-os/manifest.yaml": "1916260890854bdbad693ff41f7b28336bb664ced0365d6f47d88021fba81290",
+    ".ai-os/manifest.yaml": "6e573f9b437eeb997261c5058b98fdb05c9cd82f1387e04f43326204cbceda03",
     ".ai-os/policy/authority.yaml": "d1323e3ab15e6698f74e07f0ff05855f9c99f81ca73d69a33c88c1eee266f409",
     ".ai-os/policy/budgets.yaml": "fe8b68671d18110c29c7d7bdaba21dd670f58465c33f9987308fe33eba2979a4",
     ".ai-os/policy/context-loading.yaml": "fc82f3b338cf82b783356e74be1bbf6042ff5ab4a2179ef24175c4d68f546c8d",
@@ -42,17 +42,17 @@
     ".gitignore#PERSONAL-AI-OS": "89d7976a2b6079a8120d01b8761ba38ec6f68f3f4f4554874465d12b9eaf19cf",
     "AGENTS.md#PERSONAL-AI-OS": "478525f46dc45634e2d7e978ebe2a88ca56ab84951ea1139641654ce5c7a22ca"
   },
-  "personal_ai_os_version": "0.5.0-alpha.5",
+  "personal_ai_os_version": "0.5.0-alpha.4",
   "project_profile": {
     "destination": ".ai-os/project/PROJECT_PROFILE.md",
     "installed_from_sha256": "0fcf4960a5017b4324407550c06f21969993227d6ebcae59560a5cc13b82015b",
-    "last_upstream_version": "0.5.0-alpha.5",
+    "last_upstream_version": "0.5.0-alpha.4",
     "managed": false,
     "source": "overlays/graphe/PROJECT_PROFILE.md"
   },
   "repository_key": "graphe",
   "schema_version": 1,
-  "source_commit": "ae6d1c12d5bd0df5a947987ff4fc26afdc8542a6",
+  "source_commit": "b4968dcdff584522a87ae25d2e6b82ca1833b7ee",
   "source_repository": "https://github.com/dimathewroman/Personal-AI-Operating-System.git",
-  "synchronized_at": "2026-08-22T05:23:06.099818Z"
+  "synchronized_at": "2026-08-22T04:52:29.242000Z"
 }
