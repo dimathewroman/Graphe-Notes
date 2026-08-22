@@ -5,9 +5,11 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   getAuthUser: vi.fn(),
   hasValidVaultProof: vi.fn(),
+  canAccessVaultedNote: vi.fn(),
   captureException: vi.fn(),
   createSignedUrl: vi.fn(),
   removeStorage: vi.fn(),
+  uploadStorage: vi.fn(),
   db: {
     select: vi.fn(),
     update: vi.fn(),
@@ -21,6 +23,10 @@ vi.mock("@/lib/auth-server", () => ({
 vi.mock("@/lib/vault-proof", () => ({
   hasValidVaultProof: (...args: unknown[]) => mocks.hasValidVaultProof(...args),
 }));
+vi.mock("@/lib/vault-note-authorization", () => ({
+  canAccessVaultedNote: (...args: unknown[]) =>
+    mocks.canAccessVaultedNote(...args),
+}));
 vi.mock("@sentry/nextjs", () => ({ captureException: mocks.captureException }));
 vi.mock("@/lib/supabase-admin", () => ({
   supabaseAdmin: {
@@ -28,13 +34,22 @@ vi.mock("@/lib/supabase-admin", () => ({
       from: () => ({
         createSignedUrl: mocks.createSignedUrl,
         remove: mocks.removeStorage,
+        upload: mocks.uploadStorage,
       }),
     },
   },
 }));
 vi.mock("@workspace/db", () => ({
   db: mocks.db,
-  notesTable: { id: "id", userId: "userId", vaulted: "vaulted" },
+  notesTable: {
+    id: "id",
+    userId: "userId",
+    vaulted: "vaulted",
+    deletedAt: "deletedAt",
+    autoDeleteAt: "autoDeleteAt",
+    title: "title",
+    content: "content",
+  },
   foldersTable: { userId: "userId" },
   noteVersionsTable: { id: "id", noteId: "noteId", createdAt: "createdAt" },
   attachmentsTable: {
@@ -45,6 +60,11 @@ vi.mock("@workspace/db", () => ({
     storagePath: "storagePath",
     proxyPath: "proxyPath",
     masterPath: "masterPath",
+    fileName: "fileName",
+    fileType: "fileType",
+    fileSize: "fileSize",
+    masterFormat: "masterFormat",
+    createdAt: "createdAt",
   },
 }));
 
@@ -63,11 +83,16 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.getAuthUser.mockResolvedValue({ user: { id: "synthetic-owner" } });
   mocks.hasValidVaultProof.mockResolvedValue(false);
+  mocks.canAccessVaultedNote.mockImplementation(
+    async (_request: NextRequest, _userId: string, vaulted: boolean | null) =>
+      !vaulted,
+  );
   mocks.createSignedUrl.mockResolvedValue({
     data: { signedUrl: "synthetic-url" },
     error: null,
   });
   mocks.removeStorage.mockResolvedValue({ error: null });
+  mocks.uploadStorage.mockResolvedValue({ error: null });
 });
 
 describe("note data boundary", () => {
@@ -122,6 +147,100 @@ describe("note data boundary", () => {
 
     expect(response.status).toBe(403);
     expect(mocks.createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it("does not list attachment metadata or URLs from a locked vaulted note", async () => {
+    mocks.db.select.mockReturnValue(
+      query([
+        {
+          id: "attachment-1",
+          noteId: 1,
+          storagePath: "synthetic-path",
+          proxyPath: null,
+          masterPath: null,
+          vaulted: true,
+        },
+      ]),
+    );
+
+    const { GET } = await import("@/app/api/attachments/all/route");
+    const response = await GET(
+      new NextRequest("http://localhost/api/attachments/all"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([]);
+    expect(mocks.createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it("does not list a locked vaulted note's attachment metadata or URLs", async () => {
+    mocks.db.select
+      .mockReturnValueOnce(query([{ id: 1, vaulted: true }]))
+      .mockReturnValueOnce(
+        query([{ id: "attachment-1", storagePath: "synthetic-path" }]),
+      );
+
+    const { GET } = await import("@/app/api/attachments/note/[noteId]/route");
+    const response = await GET(
+      new NextRequest("http://localhost/api/attachments/note/1"),
+      { params: Promise.resolve({ noteId: "1" }) },
+    );
+
+    expect(response.status).toBe(403);
+    expect(mocks.createSignedUrl).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["id", "attachment-1"],
+    ["path", "synthetic-owner/1/synthetic-path"],
+  ])(
+    "does not download a locked vaulted attachment by %s",
+    async (key, value) => {
+      mocks.canAccessVaultedNote.mockResolvedValue(false);
+      mocks.db.select.mockReturnValue(
+        query([
+          {
+            id: "attachment-1",
+            storagePath: "synthetic-owner/1/synthetic-path",
+            masterPath: null,
+            vaulted: true,
+          },
+        ]),
+      );
+
+      const { GET } = await import("@/app/api/attachments/download/route");
+      const response = await GET(
+        new NextRequest(
+          `http://localhost/api/attachments/download?${key}=${value}`,
+        ),
+      );
+
+      expect(response.status).toBe(403);
+      expect(mocks.createSignedUrl).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not upload to a soft-deleted note", async () => {
+    mocks.db.select.mockReturnValue(
+      query([{ id: 1, deletedAt: new Date(), autoDeleteAt: new Date() }]),
+    );
+    const form = new FormData();
+    form.set("note_id", "1");
+    form.set(
+      "file",
+      new File(["synthetic"], "synthetic.txt", { type: "text/plain" }),
+    );
+
+    const { POST } = await import("@/app/api/attachments/upload/route");
+    const response = await POST(
+      new NextRequest("http://localhost/api/attachments/upload", {
+        method: "POST",
+        body: form,
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(mocks.uploadStorage).not.toHaveBeenCalled();
   });
 
   it("does not offer an unconfirmed hard-delete route", async () => {
@@ -186,5 +305,77 @@ describe("note data boundary", () => {
 
     expect(response.status).toBe(503);
     expect(mocks.db.delete).not.toHaveBeenCalled();
+  });
+
+  it("does not delete a parent note when an attachment arrives during cleanup", async () => {
+    mocks.db.select
+      .mockReturnValueOnce(query([{ id: 1, vaulted: false }]))
+      .mockReturnValueOnce(
+        query([
+          {
+            id: "snapshotted",
+            storagePath: "synthetic-path",
+            proxyPath: null,
+            masterPath: null,
+          },
+        ]),
+      )
+      .mockReturnValueOnce(query([{ id: "concurrent-upload" }]));
+    mocks.db.delete.mockReturnValue({ where: () => Promise.resolve([]) });
+
+    const { DELETE } = await import("@/app/api/notes/[id]/permanent/route");
+    const response = await DELETE(
+      new NextRequest("http://localhost/api/notes/1/permanent", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      }),
+      { params: Promise.resolve({ id: "1" }) },
+    );
+
+    expect(response.status).toBe(503);
+    expect(mocks.db.delete).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["GET", "PATCH", "DELETE"] as const)(
+    "does not expose a vaulted version item through %s",
+    async (method) => {
+      mocks.db.select.mockReturnValue(query([{ id: 1, vaulted: true }]));
+      const handlers =
+        await import("@/app/api/notes/[id]/versions/[versionId]/route");
+      const request = new NextRequest(
+        "http://localhost/api/notes/1/versions/1",
+        {
+          method,
+          headers:
+            method === "PATCH"
+              ? { "content-type": "application/json" }
+              : undefined,
+          body:
+            method === "PATCH"
+              ? JSON.stringify({ label: "synthetic" })
+              : undefined,
+        },
+      );
+      const response = await handlers[method](request, {
+        params: Promise.resolve({ id: "1", versionId: "1" }),
+      });
+
+      expect(response.status).toBe(403);
+    },
+  );
+
+  it("does not restore a vaulted version without its owner's valid proof", async () => {
+    mocks.db.select.mockReturnValue(query([{ id: 1, vaulted: true }]));
+    const { POST } =
+      await import("@/app/api/notes/[id]/versions/[versionId]/restore/route");
+    const response = await POST(
+      new NextRequest("http://localhost/api/notes/1/versions/1/restore", {
+        method: "POST",
+      }),
+      { params: Promise.resolve({ id: "1", versionId: "1" }) },
+    );
+
+    expect(response.status).toBe(403);
   });
 });

@@ -2,15 +2,17 @@ import { type NextRequest, NextResponse } from "next/server";
 import { eq, and, asc, isNull } from "drizzle-orm";
 import { db, attachmentsTable, notesTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
+import { canAccessVaultedNote } from "@/lib/vault-note-authorization";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import * as Sentry from "@sentry/nextjs";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ noteId: string }> }
+  { params }: { params: Promise<{ noteId: string }> },
 ) {
   const { user } = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const { noteId: noteIdStr } = await params;
@@ -21,20 +23,29 @@ export async function GET(
 
     // Verify note ownership
     const [note] = await db
-      .select({ id: notesTable.id })
+      .select({ id: notesTable.id, vaulted: notesTable.vaulted })
       .from(notesTable)
       .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
       .limit(1);
-    if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    if (!note)
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    if (!(await canAccessVaultedNote(request, user.id, note.vaulted))) {
+      return NextResponse.json(
+        { error: "Vault unlock required" },
+        { status: 403 },
+      );
+    }
 
     const attachments = await db
       .select()
       .from(attachmentsTable)
-      .where(and(
-        eq(attachmentsTable.noteId, noteId),
-        eq(attachmentsTable.userId, user.id),
-        isNull(attachmentsTable.deletedAt)
-      ))
+      .where(
+        and(
+          eq(attachmentsTable.noteId, noteId),
+          eq(attachmentsTable.userId, user.id),
+          isNull(attachmentsTable.deletedAt),
+        ),
+      )
       .orderBy(asc(attachmentsTable.createdAt));
 
     const withUrls = await Promise.all(
@@ -46,24 +57,32 @@ export async function GET(
 
         const [displaySign, masterSign] = await Promise.all([
           displayPath
-            ? supabaseAdmin.storage.from("note-attachments").createSignedUrl(displayPath, 604800)
+            ? supabaseAdmin.storage
+                .from("note-attachments")
+                .createSignedUrl(displayPath, 604800)
             : Promise.resolve({ data: null }),
           masterServePath && masterServePath !== displayPath
-            ? supabaseAdmin.storage.from("note-attachments").createSignedUrl(masterServePath, 604800)
+            ? supabaseAdmin.storage
+                .from("note-attachments")
+                .createSignedUrl(masterServePath, 604800)
             : Promise.resolve({ data: null }),
         ]);
 
         return {
           ...a,
           url: displaySign.data?.signedUrl ?? null,
-          masterUrl: masterSign.data?.signedUrl ?? (displaySign.data?.signedUrl ?? null),
+          masterUrl:
+            masterSign.data?.signedUrl ?? displaySign.data?.signedUrl ?? null,
         };
-      })
+      }),
     );
 
     return NextResponse.json(withUrls);
   } catch (err) {
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
