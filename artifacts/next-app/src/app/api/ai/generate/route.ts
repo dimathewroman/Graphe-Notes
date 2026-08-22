@@ -13,6 +13,8 @@ import { streamProviderDeltas } from "@lib/ai-stream";
 import { PROVIDER_ADAPTERS, geminiAdapter, geminiGenerationConfig } from "@lib/ai-providers";
 import { db, userApiKeysTable } from "@workspace/db";
 import { decryptApiKey } from "@lib/encryption";
+import { ExternalUrlValidationError } from "@lib/url-guard";
+import { safeExternalFetch } from "@lib/safe-external-fetch";
 import { eq, and } from "drizzle-orm";
 
 const VALID_TASK_TYPES = ["background", "manual", "deliberate"] as const;
@@ -298,14 +300,25 @@ export async function POST(request: NextRequest) {
     const adapter = PROVIDER_ADAPTERS[provider];
     if (!adapter) return aiError("bad_request");
 
+    // A custom endpoint was validated when saved, but DNS answers and stored
+    // rows can change. Revalidate immediately before each server-side request.
+    const fetchProvider = (url: string, init: RequestInit) =>
+      provider === "custom_openai" ? safeExternalFetch(url, init) : fetch(url, init);
+
     // 9.3: streamed BYOK response — same adapter table, streaming url/body.
     if (wantStream) {
-      const upstreamStream = await fetch(adapter.streamUrl(routing.model, row.endpointUrl), {
-        method: "POST",
-        headers: adapter.headers(decryptedKey),
-        body: JSON.stringify(adapter.streamBody(routing.model, combinedPrompt, AI_MAX_OUTPUT_TOKENS, system, gen)),
-        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-      });
+      let upstreamStream: Response;
+      try {
+        upstreamStream = await fetchProvider(adapter.streamUrl(routing.model, row.endpointUrl), {
+          method: "POST",
+          headers: adapter.headers(decryptedKey),
+          body: JSON.stringify(adapter.streamBody(routing.model, combinedPrompt, AI_MAX_OUTPUT_TOKENS, system, gen)),
+          signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        });
+      } catch (err) {
+        if (err instanceof ExternalUrlValidationError) return aiError("upstream_error", { provider, model: routing.model });
+        throw err;
+      }
       if (!upstreamStream.ok || !upstreamStream.body) {
         const rawBody = await upstreamStream.text().catch(() => "");
         const mapped = adapter.mapError(upstreamStream.status, rawBody);
@@ -315,12 +328,18 @@ export async function POST(request: NextRequest) {
       return sseResponse(streamProviderDeltas(upstreamStream.body, adapter.streamDelta));
     }
 
-    const upstream = await fetch(adapter.url(routing.model, row.endpointUrl), {
-      method: "POST",
-      headers: adapter.headers(decryptedKey),
-      body: JSON.stringify(adapter.body(routing.model, combinedPrompt, AI_MAX_OUTPUT_TOKENS, system, gen)),
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-    });
+    let upstream: Response;
+    try {
+      upstream = await fetchProvider(adapter.url(routing.model, row.endpointUrl), {
+        method: "POST",
+        headers: adapter.headers(decryptedKey),
+        body: JSON.stringify(adapter.body(routing.model, combinedPrompt, AI_MAX_OUTPUT_TOKENS, system, gen)),
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      });
+    } catch (err) {
+      if (err instanceof ExternalUrlValidationError) return aiError("upstream_error", { provider, model: routing.model });
+      throw err;
+    }
 
     if (!upstream.ok) {
       const rawBody = await upstream.text();
