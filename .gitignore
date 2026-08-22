@@ -82,4 +82,6 @@ study/
 .ai-os/data/
 .ai-os/cache/
 .ai-os/generated/local/
+.ai-os/**/__pycache__/
+.ai-os/**/*.py[cod]
 # PERSONAL-AI-OS:END

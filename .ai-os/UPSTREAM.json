@@ -39,7 +39,7 @@
     ".ai-os/templates/PROJECT_PROFILE.md": "d5a4d3a44668a9c2c0d70f6a518a2d2635e941949ce376d3e95b504b54986f79",
     ".ai-os/templates/SECURITY_EVIDENCE.md": "673c075ab4d9b004ac0b2095f7ae31cba6544375db6f78c3c2f13224245d285d",
     ".ai-os/templates/TASK_PACKET.md": "686e7f8838e67f3fcbc194e150c705e2cfc2c0e519852db098c7b787f58a23bf",
-    ".gitignore#PERSONAL-AI-OS": "5a2557a510ea69d0a526118f4740676029ee7af56743494597e8d39e8b3fc086",
+    ".gitignore#PERSONAL-AI-OS": "89d7976a2b6079a8120d01b8761ba38ec6f68f3f4f4554874465d12b9eaf19cf",
     "AGENTS.md#PERSONAL-AI-OS": "478525f46dc45634e2d7e978ebe2a88ca56ab84951ea1139641654ce5c7a22ca"
   },
   "personal_ai_os_version": "0.5.0-alpha.4",
@@ -52,7 +52,7 @@
   },
   "repository_key": "graphe",
   "schema_version": 1,
-  "source_commit": "7120f97c13f826c3defff64d9e425ea1405bc7fd",
+  "source_commit": "b4968dcdff584522a87ae25d2e6b82ca1833b7ee",
   "source_repository": "https://github.com/dimathewroman/Personal-AI-Operating-System.git",
-  "synchronized_at": "2026-08-22T04:48:50.024049Z"
+  "synchronized_at": "2026-08-22T04:52:29.242000Z"
 }
