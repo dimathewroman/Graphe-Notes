@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "name": "personal-ai-os-repository-runtime",
-  "release_version": "0.5.0-alpha.4",
+  "release_version": "0.5.0-alpha.5",
   "entrypoint": "CODEX_BOOTSTRAP.md",
   "policy": "REPO_ENGINEERING_POLICY.md",
   "schemas": [
