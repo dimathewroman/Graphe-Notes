@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "plan_id": "PLAN-EXAMPLE-1",
+  "orchestration_run_id": "RUN-EXAMPLE-1",
+  "task_id": "TASK-EXAMPLE-1",
+  "registry": {
+    "source": "Personal AI OS Model Routing Registry",
+    "revision": "YYYY-MM-DD.REVISION",
+    "checked_at": "2026-08-21T12:00:00Z"
+  },
+  "units": [
+    {
+      "unit_id": "bounded-builder-1",
+      "title": "Implement the frozen bounded change",
+      "capability_role": "frozen_spec_builder",
+      "task_class": "bounded_implementation",
+      "risk_tier": "R2",
+      "owns": ["path/to/owned/subsystem/**"],
+      "may_modify": ["path/to/owned/tests/**"],
+      "must_not_modify": ["unrelated/**"],
+      "depends_on": [],
+      "acceptance_criteria": ["The frozen behavior passes its focused checks."],
+      "verification": ["repository-owned focused test command"],
+      "skills": ["trigger-matched-skill"],
+      "worktree_required": true,
+      "route": {
+        "provider": "provider-id",
+        "model": "builder-model-id",
+        "effort": "medium",
+        "fallback": "owner-routing-decision",
+        "confidence": "provisional"
+      },
+      "review": {
+        "required": true,
+        "capability_role": "independent_reviewer",
+        "route": {
+          "provider": "provider-id",
+          "model": "reviewer-model-id",
+          "effort": "high",
+          "fallback": "owner-routing-decision",
+          "confidence": "provisional"
+        }
+      }
+    }
+  ],
+  "integration": {
+    "capability_role": "integration_merge_owner",
+    "route": {
+      "provider": "provider-id",
+      "model": "integration-model-id",
+      "effort": "high",
+      "fallback": "owner-routing-decision",
+      "confidence": "provisional"
+    },
+    "combined_review_required": true,
+    "verification": ["repository-owned combined verification command"]
+  }
+}

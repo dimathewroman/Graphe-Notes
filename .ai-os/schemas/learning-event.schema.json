@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://personal-ai-os.local/schemas/learning-event.schema.json",
+  "title": "Personal AI OS Learning Candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id", "timestamp", "project", "task_class", "observation", "claim",
+    "evidence", "confidence", "scope", "status"
+  ],
+  "properties": {
+    "event_id": {"type": "string", "minLength": 1},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "project": {"type": "string", "minLength": 1},
+    "task_id": {"type": ["string", "null"]},
+    "task_class": {"type": "string"},
+    "observation": {"type": "string", "minLength": 1},
+    "claim": {"type": "string", "minLength": 1},
+    "evidence": {"type": "array", "items": {"type": "string"}},
+    "confidence": {"enum": ["low", "medium", "high"]},
+    "scope": {"enum": ["run", "project", "stack", "universal"]},
+    "status": {"enum": ["candidate", "observing", "verified", "promoted_local", "proposed_universal", "promoted_universal", "rejected", "retired"]},
+    "recurrence_count": {"type": "integer", "minimum": 1},
+    "cost_impact": {"type": "string"},
+    "quality_impact": {"type": "string"},
+    "proposed_action": {"type": "string"},
+    "expiry_condition": {"type": "string"},
+    "revalidate_on": {"type": "string"}
+  }
+}

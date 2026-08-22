@@ -1,0 +1,7 @@
+interface:
+  display_name: "Unslop prose"
+  short_description: "Remove generic AI phrasing from human-facing prose."
+  default_prompt: "Revise this human-facing prose for clarity and voice without changing facts, citations, or technical meaning."
+
+policy:
+  allow_implicit_invocation: false

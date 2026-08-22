@@ -125,3 +125,19 @@ explicit owner gates.
   combined gate. Production conflicts move to a dedicated integration worktree.
 - Keep this entry point under 300 substantive lines; route detail to the owned
   repository documents above.
+
+<!-- PERSONAL-AI-OS:START -->
+
+## Personal AI OS repository runtime
+
+- Personal AI OS is the sole development-system authority. Read
+  `.ai-os/CODEX_BOOTSTRAP.md` before substantive planning.
+- Preserve this repository's product instructions, architecture, decisions,
+  roadmap, and tests as project authority under its adopted PAIOS baseline.
+- Treat references elsewhere to a separate Engineering Playbook or Codex agent
+  catalog checkout as legacy provenance, not independent runtime guidance.
+- Treat upstream-managed `.ai-os` files as read-only distribution artifacts.
+- Load the project profile, active task record, and skills only when relevant.
+- Keep raw prompts, traces, private data, credentials, and machine-local paths out of Git.
+
+<!-- PERSONAL-AI-OS:END -->

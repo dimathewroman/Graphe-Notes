@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://personal-ai-os.local/schemas/execution-plan.schema.json",
+  "title": "Personal AI OS Execution Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "plan_id", "orchestration_run_id", "task_id",
+    "created_at", "registry", "units", "integration", "execution_waves"
+  ],
+  "properties": {
+    "schema_version": {"enum": [1]},
+    "plan_id": {"type": "string", "minLength": 1},
+    "orchestration_run_id": {"type": "string", "minLength": 1},
+    "task_id": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "revision", "checked_at"],
+      "properties": {
+        "source": {"type": "string", "minLength": 1},
+        "revision": {"type": "string", "minLength": 1},
+        "checked_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unit_id", "title", "capability_role", "task_class", "risk_tier",
+          "owns", "may_modify", "must_not_modify", "depends_on",
+          "acceptance_criteria", "verification", "skills", "worktree_required",
+          "route", "review"
+        ],
+        "properties": {
+          "unit_id": {"type": "string", "minLength": 1},
+          "title": {"type": "string", "minLength": 1},
+          "capability_role": {"enum": ["quick_hit_worker", "frozen_spec_builder", "judgment_builder"]},
+          "task_class": {"type": "string", "minLength": 1},
+          "risk_tier": {"enum": ["R1", "R2", "R3"]},
+          "owns": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "may_modify": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "must_not_modify": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "depends_on": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "acceptance_criteria": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "verification": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "skills": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "worktree_required": {"enum": [true]},
+          "route": {
+            "type": "object", "additionalProperties": false,
+            "required": ["provider", "model", "effort", "fallback", "confidence"],
+            "properties": {
+              "provider": {"type": "string", "minLength": 1},
+              "model": {"type": "string", "minLength": 1},
+              "effort": {"type": ["string", "null"]},
+              "fallback": {"type": "string", "minLength": 1},
+              "confidence": {"type": "string", "minLength": 1}
+            }
+          },
+          "review": {
+            "type": "object", "additionalProperties": false,
+            "required": ["required", "capability_role", "route"],
+            "properties": {
+              "required": {"enum": [true]},
+              "capability_role": {"enum": ["independent_reviewer"]},
+              "route": {
+                "type": "object", "additionalProperties": false,
+                "required": ["provider", "model", "effort", "fallback", "confidence"],
+                "properties": {
+                  "provider": {"type": "string", "minLength": 1},
+                  "model": {"type": "string", "minLength": 1},
+                  "effort": {"type": ["string", "null"]},
+                  "fallback": {"type": "string", "minLength": 1},
+                  "confidence": {"type": "string", "minLength": 1}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "integration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["capability_role", "route", "combined_review_required", "verification"],
+      "properties": {
+        "capability_role": {"enum": ["integration_merge_owner"]},
+        "route": {
+          "type": "object", "additionalProperties": false,
+          "required": ["provider", "model", "effort", "fallback", "confidence"],
+          "properties": {
+            "provider": {"type": "string", "minLength": 1},
+            "model": {"type": "string", "minLength": 1},
+            "effort": {"type": ["string", "null"]},
+            "fallback": {"type": "string", "minLength": 1},
+            "confidence": {"type": "string", "minLength": 1}
+          }
+        },
+        "combined_review_required": {"type": "boolean"},
+        "verification": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "execution_waves": {
+      "type": "array", "minItems": 1,
+      "items": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+    }
+  }
+}

@@ -1,0 +1,14 @@
+version: 1
+task_resources:
+  - wall_clock_time
+  - owner_attention
+  - model_or_api_cost
+  - ci_minutes_and_artifacts
+  - storage_and_network
+  - device_compute_energy_and_battery
+  - context_window
+rules:
+  - Record only budgets that can change the task plan or evidence.
+  - Include retries, review, repair, integration, and recovery in successful-task cost.
+  - Do not enable recurring spend or a paid dependency without the applicable owner decision.
+  - Stop unbounded retry loops and classify the failure before escalation.

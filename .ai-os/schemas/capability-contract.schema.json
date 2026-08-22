@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://personal-ai-os.local/schemas/capability-contract.schema.json",
+  "title": "Personal AI OS Capability Contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "capability_id", "description", "inputs", "output", "reads", "writes",
+    "authority_level", "confirmation", "offline", "idempotent", "undo", "audit", "allowed_callers"
+  ],
+  "properties": {
+    "capability_id": {"type": "string", "minLength": 1},
+    "description": {"type": "string", "minLength": 1},
+    "inputs": {"type": "object"},
+    "output": {"type": "object"},
+    "reads": {"type": "array", "items": {"type": "string"}},
+    "writes": {"type": "array", "items": {"type": "string"}},
+    "authority_level": {"enum": ["observe", "propose", "reversible_write", "external_write", "destructive"]},
+    "confirmation": {"enum": ["never", "policy", "always"]},
+    "offline": {"type": "boolean"},
+    "idempotent": {"type": "boolean"},
+    "undo": {"type": "string"},
+    "audit": {"type": "string"},
+    "allowed_callers": {"type": "array", "items": {"type": "string"}},
+    "data_classification": {"type": "array", "items": {"type": "string"}},
+    "rate_limit": {"type": ["string", "null"]},
+    "cost_limit": {"type": ["string", "null"]},
+    "provider_policy": {"type": ["string", "null"]}
+  }
+}

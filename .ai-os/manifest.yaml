@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "name": "personal-ai-os-repository-runtime",
+  "release_version": "0.5.0-alpha.4",
+  "entrypoint": "CODEX_BOOTSTRAP.md",
+  "policy": "REPO_ENGINEERING_POLICY.md",
+  "schemas": [
+    "schemas/task-packet.schema.json",
+    "schemas/run-status.schema.json",
+    "schemas/evidence-receipt.schema.json",
+    "schemas/learning-event.schema.json",
+    "schemas/model-run.schema.json",
+    "schemas/execution-plan.schema.json",
+    "schemas/execution-state.schema.json",
+    "schemas/execution-review.schema.json",
+    "schemas/capability-contract.schema.json"
+  ],
+  "private_sources_excluded": true,
+  "executable_runtime": true
+}

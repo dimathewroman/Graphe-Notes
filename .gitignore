@@ -74,3 +74,12 @@ artifacts/next-app/public/test-images/
 resize-image.mov
 reference images/
 study/
+
+# PERSONAL-AI-OS:START
+# Personal AI OS machine-local and unsanitized state
+.ai-os/local/
+.ai-os/runs/
+.ai-os/data/
+.ai-os/cache/
+.ai-os/generated/local/
+# PERSONAL-AI-OS:END

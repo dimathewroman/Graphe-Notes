@@ -1,0 +1,23 @@
+version: 1
+framework: R0-R3
+tiers:
+  R0:
+    name: observation
+    examples: [read_only_audit, explanation]
+    evidence: [source_backed_result]
+  R1:
+    name: low_reversible
+    examples: [documentation, narrow_test, mechanical_refactor]
+    evidence: [focused_deterministic_checks, diff_review]
+  R2:
+    name: normal_product_change
+    examples: [feature, persistent_write, shared_component, external_integration]
+    evidence: [acceptance_matrix, deterministic_checks, independent_review, rollback]
+  R3:
+    name: consequential
+    examples: [security_boundary, financial_truth, migration, protocol, sensitive_data]
+    evidence: [threat_or_failure_model, enhanced_tests, independent_review, recovery_proof, owner_gate]
+rules:
+  - Classify from credible harm and reversibility rather than diff size.
+  - Use the repository's stronger adopted risk definition when present.
+  - Risk labels organize evidence and decisions; they do not grant or remove runtime authority.

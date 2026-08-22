@@ -1,0 +1,19 @@
+version: 1
+default_load:
+  - applicable_repository_instructions
+  - CODEX_BOOTSTRAP.md
+  - matching_project_profile_when_relevant
+  - active_task_record_when_present
+  - trigger_matched_skills
+default_exclude:
+  - unrelated_project_profiles
+  - full_private_personal_context
+  - raw_run_history
+  - all_skills
+  - all_historical_plans
+  - machine_local_paths
+rules:
+  - Load progressively by task branch and role.
+  - Prefer exact current repository evidence over cached planning context.
+  - Treat learning candidates as evidence until deliberately promoted.
+  - Surface source conflicts instead of silently choosing the convenient one.
