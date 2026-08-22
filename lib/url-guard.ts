@@ -62,19 +62,34 @@ function isBlockedIpv6(address: string): boolean {
   const words = ipv6Words(address);
   if (!words) return true;
 
-  // IPv4-compatible and IPv4-mapped IPv6 literals inherit the IPv4 decision.
+  // IPv4-mapped IPv6 literals inherit the IPv4 decision. IPv4-compatible
+  // literals are deprecated and not a globally routable IPv6 address class.
   const firstFiveAreZero = words.slice(0, 5).every((word) => word === 0);
   const firstSixAreZero = words.slice(0, 6).every((word) => word === 0);
-  if ((firstFiveAreZero && words[5] === 0xffff) || firstSixAreZero) {
+  if (firstFiveAreZero && words[5] === 0xffff) {
     return isBlockedIpv4(`${words[6] >> 8}.${words[6] & 0xff}.${words[7] >> 8}.${words[7] & 0xff}`);
   }
+  if (firstSixAreZero) return true;
 
-  if (words.every((word) => word === 0)) return true; // unspecified
-  if (words.slice(0, 7).every((word) => word === 0) && words[7] === 1) return true; // loopback
-  if ((words[0] & 0xfe00) === 0xfc00) return true; // unique local fc00::/7
-  if ((words[0] & 0xffc0) === 0xfe80) return true; // link-local fe80::/10
-  if ((words[0] & 0xff00) === 0xff00) return true; // multicast ff00::/8
-  if (words[0] === 0x2001 && (words[1] === 0x0db8 || words[1] === 0x0002)) return true; // documentation / benchmarking
+  // The well-known IPv4/IPv6 translation prefix is globally routable. Its
+  // locally assigned companion (64:ff9b:1::/48) and all other 0064:: space
+  // remain fail-closed below.
+  const isWellKnownTranslation =
+    words[0] === 0x0064 && words[1] === 0xff9b && words.slice(2, 6).every((word) => word === 0);
+  if (isWellKnownTranslation) return false;
+
+  // Globally routable IPv6 unicast is 2000::/3, excluding IANA special-use
+  // assignments within that range. Everything else fails closed, including
+  // deprecated site-local (fec0::/10), discard-only (100::/64), local-use,
+  // link-local, unique-local, multicast, and reserved space.
+  if ((words[0] & 0xe000) !== 0x2000) return true;
+  if (words[0] === 0x2001 && words[1] === 0x0000) return true; // Teredo 2001::/32
+  if (words[0] === 0x2001 && words[1] === 0x0002 && words[2] === 0x0000) return true; // benchmarking 2001:2::/48
+  if (words[0] === 0x2001 && (words[1] & 0xfff0) === 0x0010) return true; // ORCHID 2001:10::/28
+  if (words[0] === 0x2001 && (words[1] & 0xfff0) === 0x0020) return true; // ORCHIDv2 2001:20::/28
+  if (words[0] === 0x2001 && words[1] === 0x0db8) return true; // documentation 2001:db8::/32
+  if (words[0] === 0x2002) return true; // deprecated 6to4 2002::/16
+  if (words[0] === 0x3fff && (words[1] & 0xf000) === 0x0000) return true; // documentation 3fff::/20
   return false;
 }
 
@@ -115,11 +130,39 @@ const systemDnsLookup: DnsLookup = async (hostname) => {
   return addresses.map(({ address }) => address);
 };
 
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException("The operation was aborted", "AbortError");
+}
+
+function awaitWithAbort<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return operation;
+  if (signal.aborted) return Promise.reject(abortReason(signal));
+
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortReason(signal));
+    signal.addEventListener("abort", onAbort, { once: true });
+    operation.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 /**
  * Validates an HTTPS endpoint and every current DNS answer. A mixed public and
  * internal answer is unsafe because connection selection is not under our control.
  */
-export async function resolveSafeExternalUrl(raw: string, dnsLookup: DnsLookup = systemDnsLookup): Promise<ResolvedExternalUrl> {
+export async function resolveSafeExternalUrl(
+  raw: string,
+  dnsLookup: DnsLookup = systemDnsLookup,
+  { signal }: { signal?: AbortSignal } = {},
+): Promise<ResolvedExternalUrl> {
   const url = parseSafeExternalUrl(raw);
   if (!url) throw new ExternalUrlValidationError("endpoint must be a public HTTPS URL");
 
@@ -128,8 +171,9 @@ export async function resolveSafeExternalUrl(raw: string, dnsLookup: DnsLookup =
 
   let addresses: readonly string[];
   try {
-    addresses = await dnsLookup(hostname);
+    addresses = await awaitWithAbort(dnsLookup(hostname), signal);
   } catch {
+    if (signal?.aborted) throw abortReason(signal);
     throw new ExternalUrlValidationError("endpoint hostname could not be resolved");
   }
   if (addresses.length === 0 || addresses.some((address) => !isPublicIpAddress(address))) {

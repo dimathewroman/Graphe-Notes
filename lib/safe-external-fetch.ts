@@ -30,9 +30,18 @@ function systemFetch(input: RequestInfo | URL, init: RequestInit, endpoint: Reso
 
   return new Promise((resolve, reject) => {
     let settled = false;
+    let removeAbortListener: () => void = () => {};
+    const settleResolve = (response: Response) => {
+      if (!settled) {
+        settled = true;
+        removeAbortListener();
+        resolve(response);
+      }
+    };
     const settleReject = (error: Error) => {
       if (!settled) {
         settled = true;
+        removeAbortListener();
         reject(error);
       }
     };
@@ -46,15 +55,19 @@ function systemFetch(input: RequestInfo | URL, init: RequestInit, endpoint: Reso
         headers: Object.fromEntries(request.headers.entries()),
         servername: hostname,
         lookup: (_name, options, callback) => {
-          const address = endpoint.addresses.find((candidate) => options.family === 0 || isIP(candidate) === options.family);
-          if (!address) return callback(new ExternalUrlValidationError("endpoint has no usable public address"), "", 0);
-          return callback(null, address, isIP(address));
+          const addresses = endpoint.addresses.filter((candidate) => options.family === 0 || isIP(candidate) === options.family);
+          if (addresses.length === 0) return callback(new ExternalUrlValidationError("endpoint has no usable public address"), "", 0);
+          if ((options as { all?: boolean }).all) {
+            return (callback as unknown as (error: Error | null, addresses: Array<{ address: string; family: number }>) => void)(
+              null,
+              addresses.map((address) => ({ address, family: isIP(address) })),
+            );
+          }
+          return callback(null, addresses[0], isIP(addresses[0]));
         },
       },
       (response) => {
-        if (settled) return;
-        settled = true;
-        resolve(
+        settleResolve(
           new Response(Readable.toWeb(response) as ReadableStream<Uint8Array>, {
             status: response.statusCode ?? 502,
             statusText: response.statusMessage ?? "",
@@ -66,13 +79,43 @@ function systemFetch(input: RequestInfo | URL, init: RequestInit, endpoint: Reso
 
     upstream.on("error", settleReject);
     if (signal) {
-      const abort = () => upstream.destroy(signal.reason instanceof Error ? signal.reason : new DOMException("Aborted", "AbortError"));
+      const abort = () => {
+        const reason = signal.reason instanceof Error ? signal.reason : new DOMException("Aborted", "AbortError");
+        upstream.destroy(reason);
+        settleReject(reason);
+      };
       if (signal.aborted) abort();
-      else signal.addEventListener("abort", abort, { once: true });
+      else {
+        signal.addEventListener("abort", abort, { once: true });
+        removeAbortListener = () => signal.removeEventListener("abort", abort);
+      }
     }
+    if (signal?.aborted) return;
     if (request.body) Readable.fromWeb(request.body as unknown as import("node:stream/web").ReadableStream).pipe(upstream);
     else upstream.end();
   });
+}
+
+function redirectedInit(init: RequestInit, status: number, from: URL, to: URL): RequestInit {
+  const method = (init.method ?? "GET").toUpperCase();
+  const changePostToGet = (status === 301 || status === 302) && method === "POST";
+  const changeToGet = status === 303 && method !== "HEAD";
+  const crossOrigin = from.origin !== to.origin;
+  if (!changePostToGet && !changeToGet && !crossOrigin) return init;
+
+  const headers = new Headers(init.headers);
+  if (crossOrigin) {
+    headers.delete("authorization");
+    headers.delete("proxy-authorization");
+    headers.delete("cookie");
+  }
+  if (changePostToGet || changeToGet) {
+    headers.delete("content-length");
+    headers.delete("content-type");
+    headers.delete("transfer-encoding");
+    return { ...init, method: "GET", body: undefined, headers };
+  }
+  return { ...init, headers };
 }
 
 /**
@@ -86,16 +129,19 @@ export async function safeExternalFetch(
   { dnsLookup, fetchImpl = systemFetch }: SafeExternalFetchDependencies = {},
 ): Promise<Response> {
   let nextUrl = rawUrl;
+  let nextInit = init;
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
-    const endpoint = await resolveSafeExternalUrl(nextUrl, dnsLookup);
-    const response = await fetchImpl(endpoint.url.toString(), { ...init, redirect: "manual" }, endpoint);
+    const endpoint = await resolveSafeExternalUrl(nextUrl, dnsLookup, { signal: init.signal ?? undefined });
+    const response = await fetchImpl(endpoint.url.toString(), { ...nextInit, redirect: "manual" }, endpoint);
     if (!REDIRECT_STATUSES.has(response.status)) return response;
 
     const location = response.headers.get("location");
     if (!location) return response;
     if (redirects === MAX_REDIRECTS) throw new ExternalUrlValidationError("endpoint redirected too many times");
     try {
-      nextUrl = new URL(location, endpoint.url).toString();
+      const redirectedUrl = new URL(location, endpoint.url);
+      nextInit = redirectedInit(nextInit, response.status, endpoint.url, redirectedUrl);
+      nextUrl = redirectedUrl.toString();
     } catch {
       throw new ExternalUrlValidationError("endpoint returned an invalid redirect");
     }

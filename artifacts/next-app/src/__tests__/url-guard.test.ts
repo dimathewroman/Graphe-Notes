@@ -28,6 +28,21 @@ describe("isSafeExternalUrl", () => {
     expect(isSafeExternalUrl("https://[::ffff:127.0.0.1]/v1")).toBe(false);
   });
 
+  it("blocks non-global IPv6 special-use ranges while allowing documented global unicast", () => {
+    for (const address of [
+      "fec0::1", // deprecated site-local
+      "100::1", // discard-only
+      "2001:10::1", // ORCHID
+      "64:ff9b:1::a9fe:a9fe", // local-use IPv4/IPv6 translation
+      "3fff::1", // documentation
+    ]) {
+      expect(isSafeExternalUrl(`https://[${address}]/v1`)).toBe(false);
+    }
+
+    expect(isSafeExternalUrl("https://[2001:4860:4860::8888]/v1")).toBe(true);
+    expect(isSafeExternalUrl("https://[64:ff9b::808:808]/v1")).toBe(true);
+  });
+
   it("allows a public host that merely borders a private range", () => {
     expect(isSafeExternalUrl("https://172.32.0.1/v1")).toBe(true);
     expect(isSafeExternalUrl("https://11.0.0.1/v1")).toBe(true);
