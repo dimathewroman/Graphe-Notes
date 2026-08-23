@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   uploadStorage: vi.fn(),
   db: {
     select: vi.fn(),
+    insert: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
   },
@@ -51,6 +52,7 @@ vi.mock("@workspace/db", () => ({
     content: "content",
   },
   foldersTable: { userId: "userId" },
+  usersTable: { id: "id", storageTier: "storageTier" },
   noteVersionsTable: { id: "id", noteId: "noteId", createdAt: "createdAt" },
   attachmentsTable: {
     id: "id",
@@ -77,6 +79,14 @@ function query(result: unknown) {
     limit: () => query(result),
     orderBy: () => query(result),
   });
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }
 
 beforeEach(() => {
@@ -241,6 +251,108 @@ describe("note data boundary", () => {
 
     expect(response.status).toBe(409);
     expect(mocks.uploadStorage).not.toHaveBeenCalled();
+  });
+
+  it("does not orphan an upload that passed validation while its note is permanently purged", async () => {
+    const uploadReachedStorage = deferred();
+    const releaseUpload = deferred();
+    const storagePaths = new Set<string>();
+    let noteExists = true;
+    let attachmentCommitted = false;
+
+    mocks.db.select.mockImplementation(
+      (selection: Record<string, unknown> | undefined) => {
+        if (selection && "deletedAt" in selection) {
+          return query(
+            noteExists
+              ? [{ id: 1, deletedAt: null, autoDeleteAt: null }]
+              : [],
+          );
+        }
+        if (selection && "storageTier" in selection) {
+          return query([{ storageTier: "admin" }]);
+        }
+        if (selection && "vaulted" in selection) {
+          return query(noteExists ? [{ id: 1, vaulted: false }] : []);
+        }
+        // Cleanup snapshots and post-cleanup child rechecks are empty while the
+        // upload is paused before its attachment insert.
+        return query([]);
+      },
+    );
+    mocks.uploadStorage.mockImplementation(async (storagePath: string) => {
+      uploadReachedStorage.resolve();
+      await releaseUpload.promise;
+      storagePaths.add(storagePath);
+      return { error: null };
+    });
+    mocks.removeStorage.mockImplementation(async (paths: string[]) => {
+      paths.forEach((path) => storagePaths.delete(path));
+      return { error: null };
+    });
+    mocks.db.delete.mockReturnValue({
+      where: async () => {
+        noteExists = false;
+        return [];
+      },
+    });
+    mocks.db.insert.mockReturnValue({
+      values: (values: Record<string, unknown>) => ({
+        returning: async () => {
+          if (!noteExists) {
+            throw new Error("synthetic attachments_note_id_fkey violation");
+          }
+          attachmentCommitted = true;
+          return [
+            {
+              id: "concurrent-attachment",
+              ...values,
+              createdAt: new Date("2026-08-23T00:00:00.000Z"),
+            },
+          ];
+        },
+      }),
+    });
+
+    const form = new FormData();
+    form.set("note_id", "1");
+    form.set(
+      "file",
+      new File(["synthetic"], "synthetic.txt", { type: "text/plain" }),
+    );
+
+    const { POST } = await import("@/app/api/attachments/upload/route");
+    const { DELETE } = await import("@/app/api/notes/[id]/permanent/route");
+    const uploadPromise = POST(
+      new NextRequest("http://localhost/api/attachments/upload", {
+        method: "POST",
+        body: form,
+      }),
+    );
+
+    await uploadReachedStorage.promise;
+    const deleteResponse = await DELETE(
+      new NextRequest("http://localhost/api/notes/1/permanent", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      }),
+      { params: Promise.resolve({ id: "1" }) },
+    );
+    releaseUpload.resolve();
+    const uploadResponse = await uploadPromise;
+
+    const parentWasDeleted = deleteResponse.status === 200;
+    expect({
+      bothRoutesReportedSuccess:
+        parentWasDeleted && uploadResponse.status === 201,
+      orphanAttachment: parentWasDeleted && attachmentCommitted,
+      orphanStoragePaths: parentWasDeleted ? [...storagePaths] : [],
+    }).toEqual({
+      bothRoutesReportedSuccess: false,
+      orphanAttachment: false,
+      orphanStoragePaths: [],
+    });
   });
 
   it("does not offer an unconfirmed hard-delete route", async () => {

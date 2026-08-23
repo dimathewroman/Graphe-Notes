@@ -68,6 +68,66 @@ function imageMagicMatches(mimeType: string, buf: Buffer): boolean {
 
 type MasterFormat = "jpg" | "png" | "gif" | "avif";
 
+const STORAGE_BUCKET = "note-attachments";
+
+/**
+ * Remove files that were uploaded before their attachment row could be made
+ * durable. A failed removal is observable in Sentry; it must never obscure the
+ * original validation or database failure.
+ */
+async function cleanupUploadedPaths(paths: string[]): Promise<void> {
+  const uniquePaths = [...new Set(paths)];
+  if (uniquePaths.length === 0) return;
+
+  try {
+    const { error } = await supabaseAdmin.storage
+      .from(STORAGE_BUCKET)
+      .remove(uniquePaths);
+    if (error) {
+      Sentry.captureException(
+        new Error(`[attachments] Storage cleanup error: ${error.message}`),
+        { extra: { storagePathCount: uniquePaths.length } },
+      );
+    }
+  } catch (error) {
+    Sentry.captureException(error, {
+      extra: { storagePathCount: uniquePaths.length },
+    });
+  }
+}
+
+async function noteIsStillAvailable(
+  noteId: number,
+  userId: string,
+): Promise<boolean> {
+  const [note] = await db
+    .select({
+      id: notesTable.id,
+      deletedAt: notesTable.deletedAt,
+      autoDeleteAt: notesTable.autoDeleteAt,
+    })
+    .from(notesTable)
+    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, userId)))
+    .limit(1);
+
+  return Boolean(note && !note.deletedAt && !note.autoDeleteAt);
+}
+
+async function validateParentAfterUpload(
+  noteId: number,
+  userId: string,
+  uploadedPaths: string[],
+): Promise<boolean> {
+  try {
+    const available = await noteIsStillAvailable(noteId, userId);
+    if (!available) await cleanupUploadedPaths(uploadedPaths);
+    return available;
+  } catch (validationError) {
+    await cleanupUploadedPaths(uploadedPaths);
+    throw validationError;
+  }
+}
+
 /**
  * Produce the master buffer for non-GIF images.
  *
@@ -269,17 +329,35 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Upload failed" }, { status: 500 });
       }
 
-      const [attachment] = await db
-        .insert(attachmentsTable)
-        .values({
-          noteId,
-          userId: user.id,
-          fileName: file.name,
-          fileType: mimeType,
-          fileSize: uploadBuffer.length,
-          storagePath,
-        })
-        .returning();
+      if (
+        !(await validateParentAfterUpload(noteId, user.id, [storagePath]))
+      ) {
+        return NextResponse.json(
+          { error: "Note is unavailable for attachments" },
+          { status: 409 },
+        );
+      }
+
+      let attachment;
+      try {
+        const attachments = await db
+          .insert(attachmentsTable)
+          .values({
+            noteId,
+            userId: user.id,
+            fileName: file.name,
+            fileType: mimeType,
+            fileSize: uploadBuffer.length,
+            storagePath,
+          })
+          .returning();
+        attachment = attachments[0];
+        if (!attachment)
+          throw new Error("[attachments] Attachment insert returned no row");
+      } catch (insertError) {
+        await cleanupUploadedPaths([storagePath]);
+        throw insertError;
+      }
 
       const { data: signedData } = await supabaseAdmin.storage
         .from("note-attachments")
@@ -381,40 +459,55 @@ export async function POST(request: NextRequest) {
           Sentry.captureException(
             new Error(`[attachments] GIF upload error: ${err!.message}`),
           );
-          if (!masterUpload.error)
-            await supabaseAdmin.storage
-              .from("note-attachments")
-              .remove([masterPath]);
-          if (!proxyUpload.error)
-            await supabaseAdmin.storage
-              .from("note-attachments")
-              .remove([proxyPath]);
+          await cleanupUploadedPaths([
+            ...(!masterUpload.error ? [masterPath] : []),
+            ...(!proxyUpload.error ? [proxyPath] : []),
+          ]);
           return NextResponse.json({ error: "Upload failed" }, { status: 500 });
         }
 
         const masterSizeBytes = masterBuffer.length;
         const proxySizeBytes = proxyBuffer.length;
 
-        const [attachment] = await db
-          .insert(attachmentsTable)
-          .values({
-            noteId,
-            userId: user.id,
-            fileName: file.name,
-            fileType: "image/gif",
-            fileSize: masterSizeBytes + proxySizeBytes,
-            storagePath: null,
-            masterPath,
-            proxyPath,
-            masterFormat,
-            proxyFormat: "webp",
-            isAnimated: true,
-            masterSizeBytes,
-            proxySizeBytes,
-            width: width ?? null,
-            height: height ?? null,
-          })
-          .returning();
+        const uploadedPaths = [masterPath, proxyPath];
+        if (
+          !(await validateParentAfterUpload(noteId, user.id, uploadedPaths))
+        ) {
+          return NextResponse.json(
+            { error: "Note is unavailable for attachments" },
+            { status: 409 },
+          );
+        }
+
+        let attachment;
+        try {
+          const attachments = await db
+            .insert(attachmentsTable)
+            .values({
+              noteId,
+              userId: user.id,
+              fileName: file.name,
+              fileType: "image/gif",
+              fileSize: masterSizeBytes + proxySizeBytes,
+              storagePath: null,
+              masterPath,
+              proxyPath,
+              masterFormat,
+              proxyFormat: "webp",
+              isAnimated: true,
+              masterSizeBytes,
+              proxySizeBytes,
+              width: width ?? null,
+              height: height ?? null,
+            })
+            .returning();
+          attachment = attachments[0];
+          if (!attachment)
+            throw new Error("[attachments] Attachment insert returned no row");
+        } catch (insertError) {
+          await cleanupUploadedPaths(uploadedPaths);
+          throw insertError;
+        }
 
         const [proxySign, masterSign] = await Promise.all([
           supabaseAdmin.storage
@@ -570,38 +663,53 @@ export async function POST(request: NextRequest) {
           `[attachments] Storage upload error (${failedUpload.which}): ${err.message}`,
         ),
       );
-      // Best-effort cleanup
       const toRemove = uploadResults
         .filter((r) => !r.error)
         .map((r) => (r.which === "master" ? masterPath : resolvedProxyPath));
-      if (toRemove.length)
-        await supabaseAdmin.storage.from("note-attachments").remove(toRemove);
+      await cleanupUploadedPaths(toRemove);
       return NextResponse.json({ error: "Upload failed" }, { status: 500 });
     }
 
     const masterSizeBytes = masterBuffer.length;
     const proxySizeBytes = sameFileForProxy ? 0 : proxyBuffer.length;
 
-    const [attachment] = await db
-      .insert(attachmentsTable)
-      .values({
-        noteId,
-        userId: user.id,
-        fileName: file.name,
-        fileType: masterMime,
-        fileSize: masterSizeBytes + proxySizeBytes,
-        storagePath: null,
-        masterPath,
-        proxyPath: resolvedProxyPath,
-        masterFormat,
-        proxyFormat,
-        isAnimated: false,
-        masterSizeBytes,
-        proxySizeBytes,
-        width: width ?? null,
-        height: height ?? null,
-      })
-      .returning();
+    const uploadedPaths = [masterPath, resolvedProxyPath];
+    if (!(await validateParentAfterUpload(noteId, user.id, uploadedPaths))) {
+      return NextResponse.json(
+        { error: "Note is unavailable for attachments" },
+        { status: 409 },
+      );
+    }
+
+    let attachment;
+    try {
+      const attachments = await db
+        .insert(attachmentsTable)
+        .values({
+          noteId,
+          userId: user.id,
+          fileName: file.name,
+          fileType: masterMime,
+          fileSize: masterSizeBytes + proxySizeBytes,
+          storagePath: null,
+          masterPath,
+          proxyPath: resolvedProxyPath,
+          masterFormat,
+          proxyFormat,
+          isAnimated: false,
+          masterSizeBytes,
+          proxySizeBytes,
+          width: width ?? null,
+          height: height ?? null,
+        })
+        .returning();
+      attachment = attachments[0];
+      if (!attachment)
+        throw new Error("[attachments] Attachment insert returned no row");
+    } catch (insertError) {
+      await cleanupUploadedPaths(uploadedPaths);
+      throw insertError;
+    }
 
     // Generate signed URLs (1 hr) for proxy (display) and master (download)
     const [proxySign, masterSign] = await Promise.all([
