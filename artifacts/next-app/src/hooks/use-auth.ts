@@ -79,7 +79,7 @@ export function useAuth(): AuthState {
       .then(({ data: { session } }) => {
         if (session?.user) {
           setUser(mapUser(session.user));
-          posthog.identify(session.user.id, { email: session.user.email });
+          posthog.identify(session.user.id);
         } else {
           setUser(null);
         }
@@ -97,7 +97,7 @@ export function useAuth(): AuthState {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setUser(mapUser(session.user));
-        posthog.identify(session.user.id, { email: session.user.email });
+        posthog.identify(session.user.id);
       } else {
         setUser(null);
       }
@@ -137,7 +137,7 @@ export function useAuth(): AuthState {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) return { error: error.message };
         if (data.user) {
-          posthog.identify(data.user.id, { email: data.user.email });
+          posthog.identify(data.user.id);
           posthog.capture("user_logged_in", { method: "email" });
         }
         return { error: null };
@@ -154,7 +154,7 @@ export function useAuth(): AuthState {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) return { error: error.message };
         if (data.user) {
-          posthog.identify(data.user.id, { email: data.user.email });
+          posthog.identify(data.user.id);
           posthog.capture("user_signed_up", { method: "email" });
         }
         return { error: null };
