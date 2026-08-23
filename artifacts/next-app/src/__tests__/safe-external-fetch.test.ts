@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it, vi } from "vitest";
 
 const requestMock = vi.hoisted(() => vi.fn());
@@ -63,7 +65,7 @@ describe("safeExternalFetch", () => {
     await expect(pending).rejects.toThrow("stopped");
   });
 
-  it("revalidates a safe redirect before forwarding the authorization header and body", async () => {
+  it("revalidates a safe cross-origin redirect while preserving the method and body without credentials", async () => {
     const dnsLookup = vi.fn<(hostname: string) => Promise<readonly string[]>>((hostname) =>
       Promise.resolve(hostname === "provider.example" ? ["93.184.216.34"] : ["104.16.1.2"]),
     );
@@ -77,12 +79,15 @@ describe("safeExternalFetch", () => {
 
     expect(dnsLookup).toHaveBeenNthCalledWith(1, "provider.example");
     expect(dnsLookup).toHaveBeenNthCalledWith(2, "regional.provider.example");
+    const redirectedInit = fetchImpl.mock.calls[1]?.[1] as RequestInit;
+    const redirectedHeaders = new Headers(redirectedInit.headers);
     expect(fetchImpl).toHaveBeenNthCalledWith(
       2,
       "https://regional.provider.example/v1/chat/completions",
-      expect.objectContaining({ headers: init.headers, body: init.body, redirect: "manual" }),
+      expect.objectContaining({ method: "POST", body: init.body, redirect: "manual" }),
       expect.objectContaining({ addresses: ["104.16.1.2"] }),
     );
+    expect(redirectedHeaders.get("authorization")).toBeNull();
   });
 
   it.each([301, 302, 303])("changes a POST redirect with status %i into a bodyless GET", async (status) => {

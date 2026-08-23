@@ -99,7 +99,7 @@ export function NoteList() {
   // Capture search_performed whenever the debounced query becomes non-empty.
   useEffect(() => {
     if (debouncedSearch.trim().length > 0) {
-      posthog.capture("search_performed", { query: debouncedSearch, timestamp: new Date().toISOString() });
+      posthog.capture("search_performed", { query_length: debouncedSearch.length, timestamp: new Date().toISOString() });
     }
   }, [debouncedSearch]);
 

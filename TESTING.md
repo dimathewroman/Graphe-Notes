@@ -6,9 +6,38 @@ Reference for the Graphe Notes test suite. Read this before writing or modifying
 
 ## Overview
 
-Graphe Notes uses **Playwright** for E2E testing. There are no unit tests (no Jest or Vitest). The pre-push typecheck hook serves as the build-gate equivalent of a unit test suite — it catches type errors, import mismatches, and broken API signatures before code reaches CI.
+Graphe Notes uses **Vitest** for deterministic route/domain regressions and
+**Playwright** for browser E2E testing. Typecheck remains a required build gate.
 
 Test location: `artifacts/next-app/e2e/`
+
+Security regression tests live in
+`artifacts/next-app/src/__tests__/security/`. The durable upload-reservation
+suite covers lease fencing, stale claims, completed-path exclusion,
+missing-object success, and retained retry state. Run it with:
+
+```bash
+pnpm --filter @workspace/next-app exec vitest run src/__tests__/security/attachment-upload-reservation.test.ts
+```
+
+Database migrations have two explicit checksummed tracks: current fresh install
+and a synthetic production-equivalent 0006 fixture plus upgrade. Historical
+0000-0006 files are immutable provenance and explicitly non-replayable. Validate
+the source tracks, negative baseline, and finalization/delete serial order using
+disposable local PostgreSQL (never a configured Supabase database):
+
+```bash
+pnpm run db:migrations:validate
+```
+
+The validator uses tuples-only output with exact parsing and lock-state
+handshakes for both soft-delete race orders. It separately proves hard-delete FK
+rejection and rejects a mutated `USING (true)` policy or explicit client-role
+EXECUTE grant.
+
+`pnpm run db:hosted-preflight` is a separate deployment-only, read-only check.
+It requires both `GRAPHE_HOSTED_PREFLIGHT_DB_URL` and the independently proven
+`GRAPHE_EXPECTED_RUNTIME_DB_ROLE`; local/CI validation never invokes it.
 
 ---
 
@@ -45,11 +74,11 @@ pnpm --filter @workspace/next-app exec playwright show-report
 
 The config (`artifacts/next-app/playwright.config.ts`) defines three projects:
 
-| Project | When to use | Auth required |
-|---|---|---|
-| `chromium` | Default — smoke tests, CI, most local dev | No — demo mode |
-| `authenticated` | Full-flow tests against real Supabase | Yes — see below |
-| `setup` | One-time auth session capture | Yes — interactive |
+| Project         | When to use                               | Auth required     |
+| --------------- | ----------------------------------------- | ----------------- |
+| `chromium`      | Default — smoke tests, CI, most local dev | No — demo mode    |
+| `authenticated` | Full-flow tests against real Supabase     | Yes — see below   |
+| `setup`         | One-time auth session capture             | Yes — interactive |
 
 ### Demo mode (chromium)
 
@@ -89,18 +118,18 @@ Requires `TEST_EMAIL` and `TEST_PASSWORD` in `.env` (see `.env.example`). The te
 
 ## Test Files
 
-| File | What it covers |
-|---|---|
-| `01-app-loads.spec.ts` | Login screen renders; demo mode boots; app shell visible |
-| `02-notes.spec.ts` | Create, open, edit, delete, search notes |
-| `03-quick-bits.spec.ts` | Quick Bits list load, creation, navigation |
-| `04-vault.spec.ts` | Vault setup, PIN entry, vaulting/unvaulting notes |
-| `05-micro-interactions.spec.ts` | Hover states, press feedback, panel toggles |
-| `06-templates.spec.ts` | Template picker open/apply; save-as-template flow |
-| `08-performance.spec.ts` | Interaction timing baselines; threshold enforcement |
-| `09-visual.spec.ts` | Visual regression snapshots |
-| `10-ordered-list-nesting.spec.ts` | Ordered-list indent/outdent numbering |
-| `11-editor-enhancements.spec.ts` | Editor toolbar/enhancement behaviors |
+| File                                    | What it covers                                            |
+| --------------------------------------- | --------------------------------------------------------- |
+| `01-app-loads.spec.ts`                  | Login screen renders; demo mode boots; app shell visible  |
+| `02-notes.spec.ts`                      | Create, open, edit, delete, search notes                  |
+| `03-quick-bits.spec.ts`                 | Quick Bits list load, creation, navigation                |
+| `04-vault.spec.ts`                      | Vault setup, PIN entry, vaulting/unvaulting notes         |
+| `05-micro-interactions.spec.ts`         | Hover states, press feedback, panel toggles               |
+| `06-templates.spec.ts`                  | Template picker open/apply; save-as-template flow         |
+| `08-performance.spec.ts`                | Interaction timing baselines; threshold enforcement       |
+| `09-visual.spec.ts`                     | Visual regression snapshots                               |
+| `10-ordered-list-nesting.spec.ts`       | Ordered-list indent/outdent numbering                     |
+| `11-editor-enhancements.spec.ts`        | Editor toolbar/enhancement behaviors                      |
 | `12-data-integrity-regressions.spec.ts` | Cross-note undo, save-flush, orphan-on-delete regressions |
 
 All tests use `data-testid` attributes for selectors — never CSS classes or element structure.
@@ -131,7 +160,7 @@ Always use `data-testid`:
 
 ```tsx
 // In the component
-<button data-testid="new-note-button">New Note</button>
+<button data-testid="new-note-button">New Note</button>;
 
 // In the test
 await page.click('[data-testid="new-note-button"]');
@@ -148,7 +177,7 @@ Focus on user-visible outcomes, not implementation:
 await expect(page.locator('[data-testid="note-title"]')).toBeVisible();
 
 // Avoid — tests internal structure
-await expect(page.locator('.NoteShell__titleInput')).toBeVisible();
+await expect(page.locator(".NoteShell__titleInput")).toBeVisible();
 ```
 
 ### Viewports

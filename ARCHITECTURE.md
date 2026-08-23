@@ -85,9 +85,9 @@ Graphe-Notes/
 
 ### Pages
 
-| Route | File | Purpose |
-|---|---|---|
-| `/` | `app/page.tsx` | Single-page app — renders `<Home />` after auth check |
+| Route            | File                         | Purpose                                                                   |
+| ---------------- | ---------------------------- | ------------------------------------------------------------------------- |
+| `/`              | `app/page.tsx`               | Single-page app — renders `<Home />` after auth check                     |
 | `/auth/callback` | `app/auth/callback/page.tsx` | OAuth redirect handler; listens for `onAuthStateChange`, redirects to `/` |
 
 The app is a single-page application. All navigation (notes, folders, quick bits, settings) is state-driven inside `Home.tsx` — no additional Next.js page routes.
@@ -97,6 +97,7 @@ The app is a single-page application. All navigation (notes, folders, quick bits
 All handlers live in `artifacts/next-app/src/app/api/` and are prefixed `/api`.
 
 **Notes**
+
 - `GET /notes` — list (filters: folderId, search, pinned, favorite, tag, sortBy, sortDir)
 - `POST /notes` — create
 - `GET /notes/:id` — fetch single note with full HTML content
@@ -114,10 +115,12 @@ All handlers live in `artifacts/next-app/src/app/api/` and are prefixed `/api`.
 - `POST /notes/:id/versions/:versionId/restore`
 
 **Folders**
+
 - `GET /folders`, `POST /folders`
 - `PATCH /folders/:id`, `DELETE /folders/:id`
 
 **Quick Bits**
+
 - `GET /quick-bits`, `POST /quick-bits`
 - `GET /quick-bits/:id`, `PATCH /quick-bits/:id`, `DELETE /quick-bits/:id`
 - `DELETE /quick-bits/:id/soft-delete`
@@ -125,22 +128,26 @@ All handlers live in `artifacts/next-app/src/app/api/` and are prefixed `/api`.
 - `DELETE /quick-bits/expired`
 
 **Templates**
+
 - `GET /templates`, `POST /templates`
 - `DELETE /templates/:id`
 
 **Attachments**
+
 - `POST /attachments/upload`
 - `GET /attachments/all`
 - `GET /attachments/note/:noteId`
 - `GET /attachments/:attachmentId`, `DELETE /attachments/:attachmentId`
 
 **Vault**
+
 - `GET /vault/status`
 - `POST /vault/setup`
 - `POST /vault/unlock`
 - `POST /vault/change-password`
 
 **AI**
+
 - `POST /ai/generate`
 - `GET /ai/keys`, `POST /ai/keys`, `PATCH /ai/keys`, `DELETE /ai/keys`
 - `GET /ai/settings`, `PATCH /ai/settings`
@@ -148,6 +155,7 @@ All handlers live in `artifacts/next-app/src/app/api/` and are prefixed `/api`.
 - `POST /ai/models`
 
 **Other**
+
 - `GET /tags`
 - `GET /smart-folders`, `POST /smart-folders`
 - `PATCH /smart-folders/:id`, `DELETE /smart-folders/:id`
@@ -174,6 +182,7 @@ Authentication is a two-layer system.
 `artifacts/next-app/src/lib/auth-server.ts` is called inside every handler via `getAuthUser(request)`.
 
 **Flow:**
+
 1. Extract Bearer token from `Authorization` header
 2. Check 60-second LRU cache (max 100 entries, keyed by token)
 3. On cache miss: call `supabaseAdmin.auth.getUser(token)` (Supabase Admin API)
@@ -284,6 +293,24 @@ Authentication is a two-layer system.
 | displayMode | text |
 | createdAt / deletedAt | timestamp |
 
+**private.attachment_upload_reservations** — server-only upload/cleanup outbox
+| Column | Type | Notes |
+|---|---|---|
+| id / leaseToken | uuid | App-generated identity and fencing token |
+| userId / noteId | text / int | Informational only; intentionally no FK |
+| state | text | uploading / cleanup_pending |
+| leaseExpiresAt / nextAttemptAt | timestamp | One-hour active lease and retry schedule |
+| retryCount / lastErrorCode | int / text | Indefinite backoff; bounded non-sensitive code |
+| storagePath / masterPath / proxyPath | text | Durable Storage cleanup inventory |
+| attachment | jsonb | Draft consumed by atomic finalization |
+
+The upload route inserts this row before its first Storage write. Finalization
+locks the current unexpired token, rechecks the live parent, inserts the
+attachment, and consumes the reservation in one database transaction. The
+purge cron claims expired rows with `FOR UPDATE SKIP LOCKED`, rotates the token,
+cross-checks all deduplicated paths against completed attachments immediately
+before deletion, and retains failures for later retry.
+
 **quick_bits** — ephemeral short-lived notes
 | Column | Type |
 |---|---|
@@ -355,10 +382,26 @@ Authentication is a two-layer system.
 RLS is enabled on all 13 tables. Policies restrict access to the owning user (`user_id = auth.uid()::text`). The `templates` table SELECT policy additionally allows reading preset rows (`is_preset = true`). The `users` table UPDATE policy prevents `storage_tier` self-promotion.
 
 Route handlers use the service role key which bypasses RLS — RLS is a defense-in-depth layer for direct PostgREST access. Migrations:
+
 - `lib/db/drizzle/0000_*` — initial schema
 - `lib/db/drizzle/0001_*` — RLS policies for 12 tables
 - `lib/db/drizzle/0002_*` — note_versions user_id backfill
 - `lib/db/drizzle/0003_templates_rls_policies.sql` — RLS policies for templates table
+- `lib/db/drizzle/0007_attachment_upload_reservations.sql` — fail-closed upgrade from the verified 0006-equivalent baseline
+- `lib/db/drizzle/migration-manifest.json` — separates non-replayable legacy provenance hashes from the checksummed production fixture/upgrade and fresh-install tracks
+- `lib/db/drizzle/fresh/*` — current complete fresh-install schema and private-table hardening
+
+Run `pnpm run db:migrations:validate` to validate checksums, a disposable fresh
+database, a production-equivalent 0006 upgrade, and rejection of an unexpected
+baseline. Rollback is app-first: disable the writer/cleaner while retaining the
+private table until its inventory is empty; dropping cleanup evidence is a
+separate destructive operation.
+
+The local fixture is evidence about source SQL, not the hosted database. After
+an operator applies the reviewed migration and exact-role grant, the explicit
+read-only `pnpm run db:hosted-preflight` command must validate the hosted public
+fingerprint, private RLS/revokes, current role, and role privileges before app
+deployment. That live evidence is currently unproven.
 
 ---
 
@@ -424,26 +467,26 @@ Two state layers, with a strict separation of concerns.
 
 `artifacts/next-app/src/store.ts`. All UI state that does not live on the server:
 
-| State | Type | Purpose |
-|---|---|---|
-| activeFilter | string | Which list view is showing (all-notes, quick-bits, etc.) |
-| activeFolderId | string \| null | Currently selected folder |
-| activeTag | string \| null | Currently selected tag filter |
-| searchQuery | string | Live search input |
-| sort / sortDir | string | Sort field and direction |
-| viewMode | string | List or grid |
-| motionLevel | string | full / reduced / minimal |
-| darkModeLevel | string | soft / default / oled |
-| colorblindMode | string | none / protanopia / tritanopia |
-| selectedNoteId | string \| null | Currently open note |
-| selectedQuickBitId | string \| null | Currently open quick bit |
-| mobileView | string | Which panel is visible on mobile |
-| Panel open states | boolean | Version history, AI panel, settings, etc. |
-| Panel widths | number | Draggable divider positions |
-| vaultUnlocked | boolean | Whether vault PIN has been entered |
-| AI setup state | object | Setup modal step, provider selection |
-| Template picker state | object | Open state + context (note/quickbit) |
-| Demo mode note IDs | string[] | IDs of demo-seeded notes for E2E |
+| State                 | Type           | Purpose                                                  |
+| --------------------- | -------------- | -------------------------------------------------------- |
+| activeFilter          | string         | Which list view is showing (all-notes, quick-bits, etc.) |
+| activeFolderId        | string \| null | Currently selected folder                                |
+| activeTag             | string \| null | Currently selected tag filter                            |
+| searchQuery           | string         | Live search input                                        |
+| sort / sortDir        | string         | Sort field and direction                                 |
+| viewMode              | string         | List or grid                                             |
+| motionLevel           | string         | full / reduced / minimal                                 |
+| darkModeLevel         | string         | soft / default / oled                                    |
+| colorblindMode        | string         | none / protanopia / tritanopia                           |
+| selectedNoteId        | string \| null | Currently open note                                      |
+| selectedQuickBitId    | string \| null | Currently open quick bit                                 |
+| mobileView            | string         | Which panel is visible on mobile                         |
+| Panel open states     | boolean        | Version history, AI panel, settings, etc.                |
+| Panel widths          | number         | Draggable divider positions                              |
+| vaultUnlocked         | boolean        | Whether vault PIN has been entered                       |
+| AI setup state        | object         | Setup modal step, provider selection                     |
+| Template picker state | object         | Open state + context (note/quickbit)                     |
+| Demo mode note IDs    | string[]       | IDs of demo-seeded notes for E2E                         |
 
 The store is exposed on `window.__ZUSTAND_STORE__` in non-production environments for Playwright E2E test access.
 
@@ -501,29 +544,29 @@ Demo mode is entered via the "Enter demo mode" button on the login screen. It is
 
 ## Third-Party Dependencies
 
-| Package | Purpose |
-|---|---|
-| `@supabase/supabase-js` | Auth (Google/Apple OAuth, email/password). PostgREST is NOT used for data queries. |
-| `drizzle-orm` | Type-safe SQL queries against Supabase PostgreSQL |
-| `@tiptap/*` | Rich text editor (extensions: StarterKit, Table, Math, Image, TaskList, SlashCommand, etc.) |
-| `framer-motion` | Gesture-driven and spring animations; layout animations |
-| `@tanstack/react-query` v5 | Server state, cache management |
-| `zustand` | Client UI state |
-| `@sentry/nextjs` v10 | Error tracking (client + server + edge) |
-| `posthog-js` / `posthog-node` | Product analytics |
-| `jose` | JWT validation in middleware (JWKS) |
-| `bcryptjs` | Vault PIN hashing (12 rounds) |
-| `html2pdf.js` | PDF export |
-| `turndown` + `turndown-plugin-gfm` | HTML → Markdown export |
-| `diff-match-patch` | Version history diff computation |
-| `katex` | Math rendering |
-| `lowlight` | Code block syntax highlighting |
-| `geist` | Geist Sans font (self-hosted via npm package) |
-| `radix-ui` | Accessible headless UI primitives |
-| `sonner` | Toast notifications |
-| `vaul` | Drawer component |
-| `next-themes` | Theme persistence |
-| `orval` | OpenAPI → React Query + Zod codegen |
+| Package                            | Purpose                                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------------------------- |
+| `@supabase/supabase-js`            | Auth (Google/Apple OAuth, email/password). PostgREST is NOT used for data queries.          |
+| `drizzle-orm`                      | Type-safe SQL queries against Supabase PostgreSQL                                           |
+| `@tiptap/*`                        | Rich text editor (extensions: StarterKit, Table, Math, Image, TaskList, SlashCommand, etc.) |
+| `framer-motion`                    | Gesture-driven and spring animations; layout animations                                     |
+| `@tanstack/react-query` v5         | Server state, cache management                                                              |
+| `zustand`                          | Client UI state                                                                             |
+| `@sentry/nextjs` v10               | Error tracking (client + server + edge)                                                     |
+| `posthog-js` / `posthog-node`      | Product analytics                                                                           |
+| `jose`                             | JWT validation in middleware (JWKS)                                                         |
+| `bcryptjs`                         | Vault PIN hashing (12 rounds)                                                               |
+| `html2pdf.js`                      | PDF export                                                                                  |
+| `turndown` + `turndown-plugin-gfm` | HTML → Markdown export                                                                      |
+| `diff-match-patch`                 | Version history diff computation                                                            |
+| `katex`                            | Math rendering                                                                              |
+| `lowlight`                         | Code block syntax highlighting                                                              |
+| `geist`                            | Geist Sans font (self-hosted via npm package)                                               |
+| `radix-ui`                         | Accessible headless UI primitives                                                           |
+| `sonner`                           | Toast notifications                                                                         |
+| `vaul`                             | Drawer component                                                                            |
+| `next-themes`                      | Theme persistence                                                                           |
+| `orval`                            | OpenAPI → React Query + Zod codegen                                                         |
 
 ---
 

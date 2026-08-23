@@ -10,8 +10,12 @@ const mocks = vi.hoisted(() => ({
   createSignedUrl: vi.fn(),
   removeStorage: vi.fn(),
   uploadStorage: vi.fn(),
+  createUploadReservation: vi.fn(),
+  finalizeUploadReservation: vi.fn(),
+  cleanupFailedUpload: vi.fn(),
   db: {
     select: vi.fn(),
+    insert: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
   },
@@ -39,6 +43,22 @@ vi.mock("@/lib/supabase-admin", () => ({
     },
   },
 }));
+vi.mock("@/lib/attachment-upload-reservation", () => {
+  class UploadReservationError extends Error {
+    constructor(readonly code: "reservation_unavailable" | "note_unavailable") {
+      super(code);
+    }
+  }
+  return {
+    UploadReservationError,
+    createUploadReservation: (...args: unknown[]) =>
+      mocks.createUploadReservation(...args),
+    finalizeUploadReservation: (...args: unknown[]) =>
+      mocks.finalizeUploadReservation(...args),
+    cleanupFailedUpload: (...args: unknown[]) =>
+      mocks.cleanupFailedUpload(...args),
+  };
+});
 vi.mock("@workspace/db", () => ({
   db: mocks.db,
   notesTable: {
@@ -51,6 +71,7 @@ vi.mock("@workspace/db", () => ({
     content: "content",
   },
   foldersTable: { userId: "userId" },
+  usersTable: { id: "id", storageTier: "storageTier" },
   noteVersionsTable: { id: "id", noteId: "noteId", createdAt: "createdAt" },
   attachmentsTable: {
     id: "id",
@@ -79,6 +100,36 @@ function query(result: unknown) {
   });
 }
 
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+function uploadForm() {
+  const form = new FormData();
+  form.set("note_id", "1");
+  form.set(
+    "file",
+    new File(["synthetic"], "PRIVATE-FILENAME.txt", { type: "text/plain" }),
+  );
+  return form;
+}
+
+function mockUploadParent() {
+  mocks.db.select
+    .mockReturnValueOnce(
+      query([{ id: 1, deletedAt: null, autoDeleteAt: null }]),
+    )
+    .mockReturnValueOnce(query([{ storageTier: "admin" }]));
+}
+
+function capturedTelemetry(): string {
+  return JSON.stringify(mocks.captureException.mock.calls);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getAuthUser.mockResolvedValue({ user: { id: "synthetic-owner" } });
@@ -93,6 +144,11 @@ beforeEach(() => {
   });
   mocks.removeStorage.mockResolvedValue({ error: null });
   mocks.uploadStorage.mockResolvedValue({ error: null });
+  mocks.createUploadReservation.mockResolvedValue({
+    id: "reservation",
+    leaseToken: "lease",
+  });
+  mocks.cleanupFailedUpload.mockResolvedValue(true);
 });
 
 describe("note data boundary", () => {
@@ -241,6 +297,184 @@ describe("note data boundary", () => {
 
     expect(response.status).toBe(409);
     expect(mocks.uploadStorage).not.toHaveBeenCalled();
+  });
+
+  it("does not leak upload identity when reservation creation fails", async () => {
+    mockUploadParent();
+    mocks.createUploadReservation.mockRejectedValue(
+      new Error("PRIVATE-FILENAME.txt synthetic-owner/1/private-path"),
+    );
+    const { POST } = await import("@/app/api/attachments/upload/route");
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/attachments/upload", {
+        method: "POST",
+        body: uploadForm(),
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(mocks.captureException).toHaveBeenCalled();
+    expect(capturedTelemetry()).not.toMatch(
+      /PRIVATE-FILENAME|synthetic-owner|private-path/,
+    );
+  });
+
+  it("does not leak provider errors or upload identity when Storage fails", async () => {
+    mockUploadParent();
+    mocks.uploadStorage.mockResolvedValue({
+      error: {
+        message: "PRIVATE-FILENAME.txt synthetic-owner/1/private-path",
+      },
+    });
+    const { POST } = await import("@/app/api/attachments/upload/route");
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/attachments/upload", {
+        method: "POST",
+        body: uploadForm(),
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(capturedTelemetry()).not.toMatch(
+      /PRIVATE-FILENAME|synthetic-owner|private-path/,
+    );
+  });
+
+  it("does not leak raw finalization or cleanup exceptions", async () => {
+    mockUploadParent();
+    mocks.finalizeUploadReservation.mockRejectedValue(
+      new Error("FINALIZE PRIVATE-FILENAME.txt synthetic-owner/1/private-path"),
+    );
+    mocks.cleanupFailedUpload.mockRejectedValue(
+      new Error("CLEANUP PRIVATE-FILENAME.txt synthetic-owner/1/private-path"),
+    );
+    const { POST } = await import("@/app/api/attachments/upload/route");
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/attachments/upload", {
+        method: "POST",
+        body: uploadForm(),
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(mocks.captureException).toHaveBeenCalled();
+    expect(capturedTelemetry()).not.toMatch(
+      /PRIVATE-FILENAME|synthetic-owner|private-path|FINALIZE|CLEANUP/,
+    );
+  });
+
+  it("does not orphan an upload that passed validation while its note is permanently purged", async () => {
+    const uploadReachedStorage = deferred();
+    const releaseUpload = deferred();
+    const storagePaths = new Set<string>();
+    let noteExists = true;
+    let attachmentCommitted = false;
+
+    mocks.db.select.mockImplementation(
+      (selection: Record<string, unknown> | undefined) => {
+        if (selection && "deletedAt" in selection) {
+          return query(
+            noteExists ? [{ id: 1, deletedAt: null, autoDeleteAt: null }] : [],
+          );
+        }
+        if (selection && "storageTier" in selection) {
+          return query([{ storageTier: "admin" }]);
+        }
+        if (selection && "vaulted" in selection) {
+          return query(noteExists ? [{ id: 1, vaulted: false }] : []);
+        }
+        // Cleanup snapshots and post-cleanup child rechecks are empty while the
+        // upload is paused before its attachment insert.
+        return query([]);
+      },
+    );
+    mocks.uploadStorage.mockImplementation(async (storagePath: string) => {
+      uploadReachedStorage.resolve();
+      await releaseUpload.promise;
+      storagePaths.add(storagePath);
+      return { error: null };
+    });
+    mocks.removeStorage.mockImplementation(async (paths: string[]) => {
+      paths.forEach((path) => storagePaths.delete(path));
+      return { error: null };
+    });
+    mocks.finalizeUploadReservation.mockImplementation(async () => {
+      if (!noteExists) {
+        const { UploadReservationError } =
+          await import("@/lib/attachment-upload-reservation");
+        throw new UploadReservationError("note_unavailable");
+      }
+      attachmentCommitted = true;
+      return {
+        id: "concurrent-attachment",
+        noteId: 1,
+        fileName: "synthetic.txt",
+        fileType: "text/plain",
+        fileSize: 9,
+        storagePath: "synthetic-path",
+        createdAt: new Date(),
+      };
+    });
+    mocks.cleanupFailedUpload.mockImplementation(
+      async (_reservation, uploadDraft) => {
+        const paths = [
+          uploadDraft.storagePath,
+          uploadDraft.masterPath,
+          uploadDraft.proxyPath,
+        ].filter(Boolean);
+        paths.forEach((path: string) => storagePaths.delete(path));
+        return true;
+      },
+    );
+    mocks.db.delete.mockReturnValue({
+      where: async () => {
+        noteExists = false;
+        return [];
+      },
+    });
+
+    const form = new FormData();
+    form.set("note_id", "1");
+    form.set(
+      "file",
+      new File(["synthetic"], "synthetic.txt", { type: "text/plain" }),
+    );
+
+    const { POST } = await import("@/app/api/attachments/upload/route");
+    const { DELETE } = await import("@/app/api/notes/[id]/permanent/route");
+    const uploadPromise = POST(
+      new NextRequest("http://localhost/api/attachments/upload", {
+        method: "POST",
+        body: form,
+      }),
+    );
+
+    await uploadReachedStorage.promise;
+    const deleteResponse = await DELETE(
+      new NextRequest("http://localhost/api/notes/1/permanent", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
+      }),
+      { params: Promise.resolve({ id: "1" }) },
+    );
+    releaseUpload.resolve();
+    const uploadResponse = await uploadPromise;
+
+    const parentWasDeleted = deleteResponse.status === 200;
+    expect({
+      bothRoutesReportedSuccess:
+        parentWasDeleted && uploadResponse.status === 201,
+      orphanAttachment: parentWasDeleted && attachmentCommitted,
+      orphanStoragePaths: parentWasDeleted ? [...storagePaths] : [],
+    }).toEqual({
+      bothRoutesReportedSuccess: false,
+      orphanAttachment: false,
+      orphanStoragePaths: [],
+    });
   });
 
   it("does not offer an unconfirmed hard-delete route", async () => {
