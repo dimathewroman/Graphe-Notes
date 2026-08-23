@@ -250,12 +250,22 @@ test.describe("Mobile touch editor contracts", () => {
   });
 
   test("font-size touch action preserves and formats the selected text", async ({ page }) => {
+    await page.goBack();
+    await expect(page.getByTestId("mobile-view-list")).toBeVisible();
+    await page.getByTestId("new-note-btn").tap();
+
     const editor = page.getByTestId("editor-content-area").locator(".ProseMirror");
+    await expect(editor).toHaveText("");
     await editor.tap();
     await page.keyboard.type("selected range only");
-    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.press("Shift+Home");
+    await expect.poll(() => editor.evaluate(() => window.getSelection()?.toString() ?? ""))
+      .toBe("selected range only");
+    const currentFontSize = Number(await page.getByTestId("font-size-value").textContent());
+    expect(currentFontSize).toBeGreaterThan(0);
     await page.getByTestId("font-size-increase").tap();
 
-    await expect(editor.locator('span[style*="font-size: 17px"]')).toContainText("selected range only");
+    await expect(editor.locator(`span[style*="font-size: ${currentFontSize + 1}px"]`))
+      .toContainText("selected range only");
   });
 });
