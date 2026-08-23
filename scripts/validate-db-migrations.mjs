@@ -274,7 +274,7 @@ async function waitForScalar(database, statement, expected, label) {
 }
 
 async function validateFinalizeDeleteRace(database) {
-  for (const id of [1, 2]) {
+  for (const id of [1, 2, 3, 4]) {
     sql(
       database,
       `insert into notes(id,user_id,title) values (${id},'user-1','race');`,
@@ -384,16 +384,113 @@ async function validateFinalizeDeleteRace(database) {
       `finalization-winning invariant failed: ${finalizationWinning}`,
     );
 
-  const hardDelete = runPsqlAsync(database, "delete from notes where id=2;");
-  const hardDeleteResult = await hardDelete.done;
-  if (hardDeleteResult.status === 0)
-    throw new Error("hard delete bypassed attachment RESTRICT FK");
-  const hardDeleteState = scalar(
+  // Hard delete wins: hold the DELETE after it owns the row lock. The
+  // concurrent finalizer must wait, then observe no active parent and leave
+  // its no-FK reservation durable for cleanup.
+  const releaseHardDeleteGate = await acquireGate(database, 710003);
+  const hardDeleteWinner = runPsqlAsync(
     database,
-    "select concat_ws(',',(select count(*) from notes where id=2),(select count(*) from attachments where note_id=2));",
+    `/* hard_delete_winning */ begin;
+    delete from notes where id=3;
+    select pg_advisory_lock(710003); commit;`,
   );
-  if (hardDeleteState !== "1,1")
-    throw new Error(`hard-delete FK invariant failed: ${hardDeleteState}`);
+  await waitForScalar(
+    database,
+    "select count(*) from pg_locks where locktype='advisory' and objid=710003 and not granted;",
+    "1",
+    "hard-delete winner",
+  );
+  const hardDeleteLosingFinalizer = runPsqlAsync(
+    database,
+    `/* finalizer_hard_delete_winning */ begin;
+    select id from private.attachment_upload_reservations where id='00000000-0000-0000-0000-000000000003' and state='uploading' for update;
+    select id from notes where id=3 and user_id='user-1' and deleted_at is null and auto_delete_at is null for update;
+    rollback;`,
+  );
+  await waitForScalar(
+    database,
+    "select count(*) from pg_stat_activity where query like '/* finalizer_hard_delete_winning */%' and wait_event_type='Lock';",
+    "1",
+    "blocked hard-delete losing finalizer",
+  );
+  await releaseHardDeleteGate();
+  const [hardDeleteWinnerResult, hardDeleteLosingFinalizerResult] =
+    await Promise.all([hardDeleteWinner.done, hardDeleteLosingFinalizer.done]);
+  if (
+    hardDeleteWinnerResult.status !== 0 ||
+    hardDeleteLosingFinalizerResult.status !== 0
+  ) {
+    throw new Error(
+      `hard-delete-winning sessions failed\n${hardDeleteWinnerResult.stderr}\n${hardDeleteLosingFinalizerResult.stderr}`,
+    );
+  }
+  const hardDeleteWinning = scalar(
+    database,
+    `select concat_ws(',',
+      (select count(*) from notes where id=3),
+      (select count(*) from attachments where note_id=3),
+      (select count(*) from private.attachment_upload_reservations where note_id=3));`,
+  );
+  if (hardDeleteWinning !== "0,0,1") {
+    throw new Error(
+      `hard-delete-winning invariant failed: ${hardDeleteWinning}`,
+    );
+  }
+
+  // Finalization wins against hard delete: hold both row locks, prove DELETE
+  // waits, commit the attachment, then require DELETE to fail on RESTRICT.
+  const releaseHardFinalizeGate = await acquireGate(database, 710004);
+  const hardDeleteWinningFinalizer = runPsqlAsync(
+    database,
+    `/* finalizer_winning_hard_delete */ begin;
+    select id from private.attachment_upload_reservations where id='00000000-0000-0000-0000-000000000004' and lease_token='00000000-0000-0000-0000-000000000044' and state='uploading' and lease_expires_at>now() for update;
+    select id from notes where id=4 and user_id='user-1' and deleted_at is null and auto_delete_at is null for update;
+    select pg_advisory_lock(710004);
+    insert into attachments(note_id,user_id,file_name,file_type,file_size,storage_path) values (4,'user-1','fixture','text/plain',1,'object-4');
+    delete from private.attachment_upload_reservations where id='00000000-0000-0000-0000-000000000004' and lease_token='00000000-0000-0000-0000-000000000044'; commit;`,
+  );
+  await waitForScalar(
+    database,
+    "select count(*) from pg_locks where locktype='advisory' and objid=710004 and not granted;",
+    "1",
+    "hard-delete finalization winner",
+  );
+  const serializedHardDelete = runPsqlAsync(
+    database,
+    "/* hard_delete_after_finalizer */ delete from notes where id=4;",
+  );
+  await waitForScalar(
+    database,
+    "select count(*) from pg_stat_activity where query like '/* hard_delete_after_finalizer */%' and wait_event_type='Lock';",
+    "1",
+    "serialized hard delete",
+  );
+  await releaseHardFinalizeGate();
+  const [hardDeleteFinalizerResult, serializedHardDeleteResult] =
+    await Promise.all([
+      hardDeleteWinningFinalizer.done,
+      serializedHardDelete.done,
+    ]);
+  if (
+    hardDeleteFinalizerResult.status !== 0 ||
+    serializedHardDeleteResult.status === 0
+  ) {
+    throw new Error(
+      `hard-delete finalization-winning sessions failed\n${hardDeleteFinalizerResult.stderr}\n${serializedHardDeleteResult.stderr}`,
+    );
+  }
+  const hardDeleteFinalizationWinning = scalar(
+    database,
+    `select concat_ws(',',
+      (select count(*) from notes where id=4),
+      (select count(*) from attachments where note_id=4),
+      (select count(*) from private.attachment_upload_reservations where note_id=4));`,
+  );
+  if (hardDeleteFinalizationWinning !== "1,1,0") {
+    throw new Error(
+      `hard-delete finalization-winning invariant failed: ${hardDeleteFinalizationWinning}`,
+    );
+  }
 }
 
 try {
@@ -484,7 +581,7 @@ try {
   expectHostedPreflightFailure("hosted_execute_negative");
 
   console.log(
-    "migration validation passed: exact tuples/checksums/policies, fresh and 0006-equivalent upgrade, mutated-policy and client-EXECUTE negatives, synchronized soft-delete serial order, hard-delete RESTRICT, hosted preflight SQL (local only)",
+    "migration validation passed: exact tuples/checksums/policies, fresh and 0006-equivalent upgrade, mutated-policy and client-EXECUTE negatives, synchronized soft-delete and hard-delete serial orders, hosted preflight SQL (local only)",
   );
 } finally {
   spawnSync("pg_ctl", ["-D", dataDir, "-m", "fast", "-w", "stop"], {
