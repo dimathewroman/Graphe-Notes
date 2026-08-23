@@ -100,7 +100,10 @@ apply production SQL. After the operator migration/grant and before app
 deployment, `pnpm run db:hosted-preflight` requires a separately supplied URL
 and expected role, runs read-only, and reports the actual `current_user` plus
 privilege/security checks without printing credentials. It is not run
-implicitly, and no hosted result or owner-role assumption is proven here.
+implicitly, and no hosted result or owner-role assumption is proven here. Both
+the migration and hosted check compare exact normalized RLS policy definitions,
+not policy counts, and fail if PUBLIC, `anon`, or `authenticated` can execute the
+RLS helper.
 
 **`templates`** — SELECT policy allows reading preset rows across users: `user_id = auth.uid()::text OR is_preset = true`. This allows the template picker to show global preset templates while still restricting access to other users' custom templates.
 

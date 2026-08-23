@@ -30,6 +30,11 @@ disposable local PostgreSQL (never a configured Supabase database):
 pnpm run db:migrations:validate
 ```
 
+The validator uses tuples-only output with exact parsing and lock-state
+handshakes for both soft-delete race orders. It separately proves hard-delete FK
+rejection and rejects a mutated `USING (true)` policy or explicit client-role
+EXECUTE grant.
+
 `pnpm run db:hosted-preflight` is a separate deployment-only, read-only check.
 It requires both `GRAPHE_HOSTED_PREFLIGHT_DB_URL` and the independently proven
 `GRAPHE_EXPECTED_RUNTIME_DB_ROLE`; local/CI validation never invokes it.

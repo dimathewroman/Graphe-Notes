@@ -12,7 +12,14 @@ SELECT json_build_object(
       ]::text[]
     AND (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
           WHERE n.nspname='public' AND c.relkind='r' AND c.relrowsecurity) = 13
-    AND (SELECT count(*) FROM pg_policies WHERE schemaname='public') = 52
+    AND (SELECT md5(string_agg(
+          concat_ws('|', schemaname, tablename, policyname, cmd,
+            array_to_string(roles, ','),
+            regexp_replace(coalesce(qual,''), '\s+', '', 'g'),
+            regexp_replace(coalesce(with_check,''), '\s+', '', 'g')),
+          E'\n' ORDER BY schemaname, tablename, policyname))
+         FROM pg_policies WHERE schemaname='public') =
+        '341e79862c6b3e82458bb54ca3b46d76'
     AND (SELECT count(*) FROM pg_indexes WHERE schemaname='public' AND indexname IN (
           'attachments_user_id_idx','attachments_note_id_idx',
           'attachments_note_id_created_at_idx','note_versions_user_id_idx',
@@ -22,11 +29,20 @@ SELECT json_build_object(
           AND confdeltype='r') = 2,
   'publicExecuteRevoked',
     to_regprocedure('public.rls_auto_enable()') IS NOT NULL
+    AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon')
+    AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated')
     AND NOT EXISTS (
       SELECT 1 FROM pg_proc p
       CROSS JOIN LATERAL aclexplode(coalesce(p.proacl, acldefault('f',p.proowner))) acl
       WHERE p.oid='public.rls_auto_enable()'::regprocedure
-        AND acl.grantee=0 AND acl.privilege_type='EXECUTE'),
+        AND acl.grantee=0 AND acl.privilege_type='EXECUTE')
+    AND CASE
+      WHEN EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon')
+       AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated')
+      THEN NOT has_function_privilege('anon','public.rls_auto_enable()','EXECUTE')
+       AND NOT has_function_privilege('authenticated','public.rls_auto_enable()','EXECUTE')
+      ELSE false
+    END,
   'privateTableReady',
     to_regclass('private.attachment_upload_reservations') IS NOT NULL
     AND (SELECT relrowsecurity FROM pg_class

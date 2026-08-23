@@ -62,7 +62,7 @@
       "migrationFiles": [
         {
           "path": "0007_attachment_upload_reservations.sql",
-          "sha256": "8ee85bb9c356e528d7a7ef56a7dad1cb432e0f5afd0d42178480386c885e8742"
+          "sha256": "7628b69814f1274fa4155f14249c8c500978851bf0a0f9b4ba02a4c75d51b3b1"
         }
       ]
     },

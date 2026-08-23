@@ -13,13 +13,18 @@ inventory. It separates evidence with different meanings:
   marks that broken historical sequence as non-replayable.
 - `productionUpgrade` creates an explicitly checksummed synthetic
   production-equivalent-`0006` fixture, then proves that `0007` accepts that
-  complete public table/RLS/policy/revoke/index/constraint fingerprint.
+  complete public table/RLS/policy/revoke/index/constraint fingerprint. Policy
+  identity includes schema, table, name, command, roles, normalized `qual`, and
+  normalized `with_check`; counts alone are not accepted.
 - `fresh` creates the complete current schema, establishes current public RLS
   policies, and hardens the private upload-cleanup inventory.
 
 Run `pnpm run db:migrations:validate` before integration. It uses disposable
 local PostgreSQL databases and proves both tracks plus the fail-closed negative
-case. It never reads `SUPABASE_DB_URL`.
+cases for policy mutation and client-role function grants. Its upload race uses
+observed advisory/row-lock handshakes and exact tuples-only scalar parsing; no
+formatted row-count text or timing sleep is an oracle. It never reads
+`SUPABASE_DB_URL`.
 
 Applying SQL to a hosted database remains a separate operator action. Before
 deploying the app, an operator must apply the reviewed SQL, prove the exact

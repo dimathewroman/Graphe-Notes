@@ -3,6 +3,7 @@
 DO $baseline$
 DECLARE
   actual_tables text[];
+  actual_policy_fingerprint text;
 BEGIN
   IF to_regclass('private.attachment_upload_reservations') IS NOT NULL THEN
     RAISE EXCEPTION 'unexpected baseline: attachment upload reservations already exists';
@@ -42,18 +43,16 @@ BEGIN
     RAISE EXCEPTION 'unexpected baseline: public RLS is incomplete';
   END IF;
 
-  IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public') <> 52
-     OR EXISTS (
-       SELECT table_name
-       FROM information_schema.tables
-       WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-       EXCEPT
-       SELECT tablename
-       FROM pg_policies
-       WHERE schemaname = 'public'
-       GROUP BY tablename
-       HAVING count(*) = 4
-     ) THEN
+  SELECT md5(string_agg(
+           concat_ws('|', schemaname, tablename, policyname, cmd,
+             array_to_string(roles, ','),
+             regexp_replace(coalesce(qual, ''), '\s+', '', 'g'),
+             regexp_replace(coalesce(with_check, ''), '\s+', '', 'g')),
+           E'\n' ORDER BY schemaname, tablename, policyname))
+    INTO actual_policy_fingerprint
+    FROM pg_policies
+   WHERE schemaname = 'public';
+  IF actual_policy_fingerprint IS DISTINCT FROM '341e79862c6b3e82458bb54ca3b46d76' THEN
     RAISE EXCEPTION 'unexpected baseline: public policy fingerprint differs';
   END IF;
 
@@ -66,7 +65,12 @@ BEGIN
     RAISE EXCEPTION 'unexpected baseline: required attachment/note indexes are absent';
   END IF;
 
-  IF to_regprocedure('public.rls_auto_enable()') IS NULL OR EXISTS (
+  IF to_regprocedure('public.rls_auto_enable()') IS NULL
+     OR NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon')
+     OR NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated')
+     OR has_function_privilege('anon', 'public.rls_auto_enable()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'public.rls_auto_enable()', 'EXECUTE')
+     OR EXISTS (
     SELECT 1
     FROM pg_proc p
     CROSS JOIN LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
