@@ -84,10 +84,6 @@ Initial full-stack release. Covers the complete build period through April 2026.
 - Two-layer auth: JWT middleware (JWKS validation) + per-route `getAuthUser()` with 60s LRU cache
 - Demo mode — full app experience with no sign-in, no API calls, data seeded in React Query cache
 
-**Onboarding**
-- 4-step first-run onboarding flow for authenticated and demo users
-- Onboarding completion tracked in `user_settings`; demo mode uses sessionStorage
-
 **UI and design system**
 - Three-panel desktop layout (sidebar / note list / editor) with draggable dividers
 - Mobile single-panel with drawer sidebar
