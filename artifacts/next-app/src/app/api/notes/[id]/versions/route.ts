@@ -16,6 +16,7 @@ import { eq, and, desc, count } from "drizzle-orm";
 import { z } from "zod";
 import { db, noteVersionsTable, notesTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
+import { canAccessVaultedNote } from "@/lib/vault-note-authorization";
 import * as Sentry from "@sentry/nextjs";
 
 const routeParamsSchema = z.object({
@@ -40,7 +41,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { user } = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const parsed = routeParamsSchema.safeParse(await params);
   if (!parsed.success) {
@@ -50,11 +52,19 @@ export async function GET(
 
   try {
     const [note] = await db
-      .select({ id: notesTable.id })
+      .select({ id: notesTable.id, vaulted: notesTable.vaulted })
       .from(notesTable)
       .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
       .limit(1);
-    if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    if (!note)
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+
+    if (!(await canAccessVaultedNote(request, user.id, note.vaulted))) {
+      return NextResponse.json(
+        { error: "Vault unlock required" },
+        { status: 403 },
+      );
+    }
 
     const versions = await db
       .select({
@@ -74,7 +84,10 @@ export async function GET(
     return NextResponse.json({ versions });
   } catch (err) {
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
 
@@ -83,7 +96,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { user } = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const parsed = routeParamsSchema.safeParse(await params);
   if (!parsed.success) {
@@ -116,6 +130,13 @@ export async function POST(
       return NextResponse.json({ error: "Note not found" }, { status: 404 });
     }
 
+    if (!(await canAccessVaultedNote(request, user.id, note.vaulted))) {
+      return NextResponse.json(
+        { error: "Vault unlock required" },
+        { status: 403 },
+      );
+    }
+
     // Auto-save uses a meaningful-change threshold to avoid hundreds of trivial
     // versions during an active editing session. All other sources bypass it.
     if (source === "auto_save") {
@@ -135,9 +156,13 @@ export async function POST(
         const currLen = note.contentText?.length ?? 0;
         const delta = Math.abs(currLen - prevLen);
         const meetsThreshold =
-          age >= AUTO_SAVE_MIN_INTERVAL_MS || delta > AUTO_SAVE_CHAR_DELTA_THRESHOLD;
+          age >= AUTO_SAVE_MIN_INTERVAL_MS ||
+          delta > AUTO_SAVE_CHAR_DELTA_THRESHOLD;
         if (!meetsThreshold) {
-          return NextResponse.json({ created: false, reason: "below_threshold" });
+          return NextResponse.json({
+            created: false,
+            reason: "below_threshold",
+          });
         }
       }
     }
@@ -169,13 +194,18 @@ export async function POST(
         .orderBy(desc(noteVersionsTable.createdAt))
         .offset(MAX_VERSIONS);
       for (const row of oldest) {
-        await db.delete(noteVersionsTable).where(eq(noteVersionsTable.id, row.id));
+        await db
+          .delete(noteVersionsTable)
+          .where(eq(noteVersionsTable.id, row.id));
       }
     }
 
     return NextResponse.json({ created: true, version: created });
   } catch (err) {
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

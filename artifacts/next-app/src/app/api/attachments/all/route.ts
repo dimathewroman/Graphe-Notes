@@ -2,12 +2,14 @@ import { type NextRequest, NextResponse } from "next/server";
 import { eq, desc, and, isNull, or, sql } from "drizzle-orm";
 import { db, attachmentsTable, notesTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
+import { canAccessVaultedNote } from "@/lib/vault-note-authorization";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import * as Sentry from "@sentry/nextjs";
 
 export async function GET(request: NextRequest) {
   const { user } = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const rows = await db
@@ -23,6 +25,7 @@ export async function GET(request: NextRequest) {
         masterFormat: attachmentsTable.masterFormat,
         createdAt: attachmentsTable.createdAt,
         noteTitle: notesTable.title,
+        vaulted: notesTable.vaulted,
       })
       .from(attachmentsTable)
       .innerJoin(notesTable, eq(attachmentsTable.noteId, notesTable.id))
@@ -35,26 +38,38 @@ export async function GET(request: NextRequest) {
           // embedded in the note content. Non-image files are always shown.
           or(
             sql`${attachmentsTable.fileType} NOT LIKE 'image/%'`,
-            sql`${notesTable.content} LIKE '%' || COALESCE(${attachmentsTable.proxyPath}, ${attachmentsTable.storagePath}) || '%'`
-          )
-        )
+            sql`${notesTable.content} LIKE '%' || COALESCE(${attachmentsTable.proxyPath}, ${attachmentsTable.storagePath}) || '%'`,
+          ),
+        ),
       )
       .orderBy(desc(attachmentsTable.createdAt));
 
+    const accessibleRows = [];
+    for (const row of rows) {
+      if (await canAccessVaultedNote(request, user.id, row.vaulted)) {
+        accessibleRows.push(row);
+      }
+    }
+
     const withUrls = await Promise.all(
-      rows.map(async (row) => {
+      accessibleRows.map(async (row) => {
         // v2: proxy for display; v1: storagePath
         const displayPath = row.proxyPath ?? row.storagePath;
         const { data } = displayPath
-          ? await supabaseAdmin.storage.from("note-attachments").createSignedUrl(displayPath, 604800)
+          ? await supabaseAdmin.storage
+              .from("note-attachments")
+              .createSignedUrl(displayPath, 604800)
           : { data: null };
         return { ...row, url: data?.signedUrl ?? null };
-      })
+      }),
     );
 
     return NextResponse.json(withUrls);
   } catch (err) {
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

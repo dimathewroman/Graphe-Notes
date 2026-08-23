@@ -7,6 +7,7 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { db, noteVersionsTable, notesTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
+import { canAccessVaultedNote } from "@/lib/vault-note-authorization";
 import * as Sentry from "@sentry/nextjs";
 
 const routeParamsSchema = z.object({
@@ -19,7 +20,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string; versionId: string }> },
 ) {
   const { user } = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const parsed = routeParamsSchema.safeParse(await params);
   if (!parsed.success) {
@@ -29,17 +31,28 @@ export async function GET(
 
   try {
     const [note] = await db
-      .select({ id: notesTable.id })
+      .select({ id: notesTable.id, vaulted: notesTable.vaulted })
       .from(notesTable)
       .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
       .limit(1);
-    if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    if (!note)
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+
+    if (!(await canAccessVaultedNote(request, user.id, note.vaulted))) {
+      return NextResponse.json(
+        { error: "Vault unlock required" },
+        { status: 403 },
+      );
+    }
 
     const [version] = await db
       .select()
       .from(noteVersionsTable)
       .where(
-        and(eq(noteVersionsTable.id, versionIdNum), eq(noteVersionsTable.noteId, noteId)),
+        and(
+          eq(noteVersionsTable.id, versionIdNum),
+          eq(noteVersionsTable.noteId, noteId),
+        ),
       );
 
     if (!version) {
@@ -49,7 +62,10 @@ export async function GET(
     return NextResponse.json({ version });
   } catch (err) {
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
 
@@ -58,7 +74,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; versionId: string }> },
 ) {
   const { user } = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const parsed = routeParamsSchema.safeParse(await params);
   if (!parsed.success) {
@@ -84,17 +101,28 @@ export async function PATCH(
 
   try {
     const [note] = await db
-      .select({ id: notesTable.id })
+      .select({ id: notesTable.id, vaulted: notesTable.vaulted })
       .from(notesTable)
       .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
       .limit(1);
-    if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    if (!note)
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+
+    if (!(await canAccessVaultedNote(request, user.id, note.vaulted))) {
+      return NextResponse.json(
+        { error: "Vault unlock required" },
+        { status: 403 },
+      );
+    }
 
     const [updated] = await db
       .update(noteVersionsTable)
       .set({ label: normalised })
       .where(
-        and(eq(noteVersionsTable.id, versionIdNum), eq(noteVersionsTable.noteId, noteId)),
+        and(
+          eq(noteVersionsTable.id, versionIdNum),
+          eq(noteVersionsTable.noteId, noteId),
+        ),
       )
       .returning();
 
@@ -105,7 +133,10 @@ export async function PATCH(
     return NextResponse.json({ version: updated });
   } catch (err) {
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
 
@@ -114,7 +145,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; versionId: string }> },
 ) {
   const { user } = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const parsed = routeParamsSchema.safeParse(await params);
   if (!parsed.success) {
@@ -124,21 +156,35 @@ export async function DELETE(
 
   try {
     const [note] = await db
-      .select({ id: notesTable.id })
+      .select({ id: notesTable.id, vaulted: notesTable.vaulted })
       .from(notesTable)
       .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
       .limit(1);
-    if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    if (!note)
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+
+    if (!(await canAccessVaultedNote(request, user.id, note.vaulted))) {
+      return NextResponse.json(
+        { error: "Vault unlock required" },
+        { status: 403 },
+      );
+    }
 
     await db
       .delete(noteVersionsTable)
       .where(
-        and(eq(noteVersionsTable.id, versionIdNum), eq(noteVersionsTable.noteId, noteId)),
+        and(
+          eq(noteVersionsTable.id, versionIdNum),
+          eq(noteVersionsTable.noteId, noteId),
+        ),
       );
 
     return NextResponse.json({ deleted: true });
   } catch (err) {
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

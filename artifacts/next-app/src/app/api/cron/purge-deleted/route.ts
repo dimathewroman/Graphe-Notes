@@ -24,10 +24,30 @@ export async function GET(request: NextRequest) {
     const notesToPurge = await db
       .select({ id: notesTable.id })
       .from(notesTable)
-      .where(and(isNotNull(notesTable.autoDeleteAt), lte(notesTable.autoDeleteAt, now)));
+      .where(
+        and(
+          isNotNull(notesTable.autoDeleteAt),
+          lte(notesTable.autoDeleteAt, now),
+        ),
+      );
     const purgeIds = notesToPurge.map((n) => n.id);
 
     const childCleanup = await purgeNoteChildren(purgeIds);
+
+    if (!childCleanup.complete) {
+      Sentry.captureException(
+        new Error(
+          `[purge-deleted] Note child cleanup incomplete (${childCleanup.storageErrors} batches)`,
+        ),
+      );
+      return NextResponse.json(
+        {
+          error: "Note child cleanup incomplete; retry later",
+          storageErrors: childCleanup.storageErrors,
+        },
+        { status: 503 },
+      );
+    }
 
     const purgedNotes =
       purgeIds.length > 0
@@ -38,16 +58,23 @@ export async function GET(request: NextRequest) {
         : [];
 
     // 2. Hard-purge soft-deleted attachments older than 30 days
-    const cutoff = new Date(now.getTime() - ATTACHMENT_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+    const cutoff = new Date(
+      now.getTime() - ATTACHMENT_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+    );
     const expiredAttachments = await db
-      .delete(attachmentsTable)
-      .where(and(isNotNull(attachmentsTable.deletedAt), lte(attachmentsTable.deletedAt, cutoff)))
-      .returning({
+      .select({
         id: attachmentsTable.id,
         storagePath: attachmentsTable.storagePath,
         masterPath: attachmentsTable.masterPath,
         proxyPath: attachmentsTable.proxyPath,
-      });
+      })
+      .from(attachmentsTable)
+      .where(
+        and(
+          isNotNull(attachmentsTable.deletedAt),
+          lte(attachmentsTable.deletedAt, cutoff),
+        ),
+      );
 
     // Collect all unique storage paths for each attachment:
     // v1 rows have storagePath; v2 rows have masterPath + proxyPath.
@@ -62,14 +89,36 @@ export async function GET(request: NextRequest) {
     const paths = Array.from(pathSet);
 
     // Remove the actual files from Supabase Storage in batches of 100
-    let storageErrors = childCleanup.storageErrors;
+    let storageErrors = 0;
     for (let i = 0; i < paths.length; i += 100) {
       const batch = paths.slice(i, i + 100);
-      const { error } = await supabaseAdmin.storage.from("note-attachments").remove(batch);
+      const { error } = await supabaseAdmin.storage
+        .from("note-attachments")
+        .remove(batch);
       if (error) {
-        Sentry.captureException(new Error(`[purge-deleted] Storage remove error: ${error.message}`));
+        Sentry.captureException(
+          new Error(`[purge-deleted] Storage remove error: ${error.message}`),
+        );
         storageErrors++;
       }
+    }
+
+    if (storageErrors > 0) {
+      return NextResponse.json(
+        { error: "Attachment cleanup incomplete; retry later", storageErrors },
+        { status: 503 },
+      );
+    }
+
+    if (expiredAttachments.length > 0) {
+      await db
+        .delete(attachmentsTable)
+        .where(
+          and(
+            isNotNull(attachmentsTable.deletedAt),
+            lte(attachmentsTable.deletedAt, cutoff),
+          ),
+        );
     }
 
     return NextResponse.json({
@@ -79,6 +128,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

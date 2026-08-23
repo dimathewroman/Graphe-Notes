@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { eq, and, isNull } from "drizzle-orm";
-import { db, attachmentsTable } from "@workspace/db";
+import { db, attachmentsTable, notesTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
+import { canAccessVaultedNote } from "@/lib/vault-note-authorization";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import * as Sentry from "@sentry/nextjs";
 
@@ -20,10 +21,12 @@ const DISPLAY_URL_TTL_SECONDS = 60 * 60; // 1 hour
  */
 export async function GET(request: NextRequest) {
   const { user } = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const id = request.nextUrl.searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+  if (!id)
+    return NextResponse.json({ error: "id is required" }, { status: 400 });
 
   try {
     const [attachment] = await db
@@ -31,24 +34,36 @@ export async function GET(request: NextRequest) {
         storagePath: attachmentsTable.storagePath,
         proxyPath: attachmentsTable.proxyPath,
         masterPath: attachmentsTable.masterPath,
+        vaulted: notesTable.vaulted,
       })
       .from(attachmentsTable)
+      .innerJoin(notesTable, eq(notesTable.id, attachmentsTable.noteId))
       .where(
         and(
           eq(attachmentsTable.id, id),
           eq(attachmentsTable.userId, user.id),
+          eq(notesTable.userId, user.id),
           isNull(attachmentsTable.deletedAt),
         ),
       )
       .limit(1);
 
-    if (!attachment) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (!attachment)
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    if (!(await canAccessVaultedNote(request, user.id, attachment.vaulted))) {
+      return NextResponse.json(
+        { error: "Vault unlock required" },
+        { status: 403 },
+      );
+    }
 
     // Prefer the display proxy (webp) for v2 rows; fall back to the v1 single path
     // or the master.
     const displayPath =
       attachment.proxyPath ?? attachment.storagePath ?? attachment.masterPath;
-    if (!displayPath) return NextResponse.json({ error: "File not found" }, { status: 404 });
+    if (!displayPath)
+      return NextResponse.json({ error: "File not found" }, { status: 404 });
 
     const { data, error } = await supabaseAdmin.storage
       .from("note-attachments")
@@ -61,6 +76,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ url: data.signedUrl });
   } catch (err) {
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

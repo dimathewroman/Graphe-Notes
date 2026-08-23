@@ -4,9 +4,14 @@ import { db, attachmentsTable, notesTable, usersTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import {
-  ALLOWED_MIME_TYPES, HEIC_MIME_TYPES, IMAGE_MIME_TYPES,
-  TIER_LIMITS, type StorageTier, formatBytes,
-  ANIMATED_GIF_MAX_BYTES, ANIMATED_GIF_MAX_FRAMES,
+  ALLOWED_MIME_TYPES,
+  HEIC_MIME_TYPES,
+  IMAGE_MIME_TYPES,
+  TIER_LIMITS,
+  type StorageTier,
+  formatBytes,
+  ANIMATED_GIF_MAX_BYTES,
+  ANIMATED_GIF_MAX_FRAMES,
 } from "@/lib/attachment-limits";
 import { randomUUID } from "crypto";
 import * as Sentry from "@sentry/nextjs";
@@ -21,7 +26,17 @@ function hasHeicMagicBytes(buf: Buffer): boolean {
   const ftyp = buf.toString("ascii", 4, 8);
   if (ftyp !== "ftyp") return false;
   const brand = buf.toString("ascii", 8, 12);
-  return ["heic", "heis", "hevx", "heim", "heix", "hevc", "hevs", "mif1", "msf1"].includes(brand);
+  return [
+    "heic",
+    "heis",
+    "hevx",
+    "heim",
+    "heix",
+    "hevc",
+    "hevs",
+    "mif1",
+    "msf1",
+  ].includes(brand);
 }
 
 function isHeicInput(mimeType: string, filename: string, buf: Buffer): boolean {
@@ -40,7 +55,9 @@ function isHeicInput(mimeType: string, filename: string, buf: Buffer): boolean {
  */
 function imageMagicMatches(mimeType: string, buf: Buffer): boolean {
   if (mimeType === "image/jpeg") {
-    return buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+    return (
+      buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff
+    );
   }
   if (mimeType === "image/png") {
     const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -65,9 +82,14 @@ async function toMaster(
   buf: Buffer,
   mimeType: string,
   isHeic: boolean,
-): Promise<{ masterBuffer: Buffer; masterFormat: Exclude<MasterFormat, "gif"> }> {
-  if (mimeType === "image/jpeg") return { masterBuffer: buf, masterFormat: "jpg" };
-  if (mimeType === "image/png") return { masterBuffer: buf, masterFormat: "png" };
+): Promise<{
+  masterBuffer: Buffer;
+  masterFormat: Exclude<MasterFormat, "gif">;
+}> {
+  if (mimeType === "image/jpeg")
+    return { masterBuffer: buf, masterFormat: "jpg" };
+  if (mimeType === "image/png")
+    return { masterBuffer: buf, masterFormat: "png" };
 
   const sharp = (await import("sharp")).default;
 
@@ -79,7 +101,7 @@ async function toMaster(
       // libheif not available on this runtime — fall back to heic-convert
       const heicConvert = (await import("heic-convert")).default;
       const jpegBuf = Buffer.from(
-        await heicConvert({ buffer: buf, format: "JPEG", quality: 0.95 })
+        await heicConvert({ buffer: buf, format: "JPEG", quality: 0.95 }),
       );
       return { masterBuffer: jpegBuf, masterFormat: "jpg" };
     }
@@ -107,7 +129,10 @@ async function toMaster(
  * Detect if a GIF buffer is animated (more than 1 frame).
  * Uses sharp metadata `pages` field which counts GIF frames.
  */
-async function detectAnimatedGif(mimeType: string, buf: Buffer): Promise<{ isAnimated: boolean; frameCount: number }> {
+async function detectAnimatedGif(
+  mimeType: string,
+  buf: Buffer,
+): Promise<{ isAnimated: boolean; frameCount: number }> {
   if (mimeType !== "image/gif") return { isAnimated: false, frameCount: 1 };
   try {
     const sharp = (await import("sharp")).default;
@@ -119,10 +144,10 @@ async function detectAnimatedGif(mimeType: string, buf: Buffer): Promise<{ isAni
   }
 }
 
-
 export async function POST(request: NextRequest) {
   const { user } = await getAuthUser(request);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   let formData: FormData;
   try {
@@ -134,8 +159,10 @@ export async function POST(request: NextRequest) {
   const file = formData.get("file") as File | null;
   const noteIdRaw = formData.get("note_id");
 
-  if (!file) return NextResponse.json({ error: "No file provided" }, { status: 400 });
-  if (!noteIdRaw) return NextResponse.json({ error: "note_id is required" }, { status: 400 });
+  if (!file)
+    return NextResponse.json({ error: "No file provided" }, { status: 400 });
+  if (!noteIdRaw)
+    return NextResponse.json({ error: "note_id is required" }, { status: 400 });
 
   const noteId = Number(noteIdRaw);
   if (!Number.isInteger(noteId) || noteId <= 0) {
@@ -144,16 +171,30 @@ export async function POST(request: NextRequest) {
 
   const mimeType = file.type || "application/octet-stream";
   if (!ALLOWED_MIME_TYPES.has(mimeType)) {
-    return NextResponse.json({ error: "This file type isn't supported." }, { status: 422 });
+    return NextResponse.json(
+      { error: "This file type isn't supported." },
+      { status: 422 },
+    );
   }
 
   try {
     const [note] = await db
-      .select({ id: notesTable.id })
+      .select({
+        id: notesTable.id,
+        deletedAt: notesTable.deletedAt,
+        autoDeleteAt: notesTable.autoDeleteAt,
+      })
       .from(notesTable)
       .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, user.id)))
       .limit(1);
-    if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    if (!note)
+      return NextResponse.json({ error: "Note not found" }, { status: 404 });
+    if (note.deletedAt || note.autoDeleteAt) {
+      return NextResponse.json(
+        { error: "Note is unavailable for attachments" },
+        { status: 409 },
+      );
+    }
 
     const [userRow] = await db
       .select({ storageTier: usersTable.storageTier })
@@ -161,14 +202,14 @@ export async function POST(request: NextRequest) {
       .where(eq(usersTable.id, user.id))
       .limit(1);
 
-    const tier = ((userRow?.storageTier ?? "free") as StorageTier);
+    const tier = (userRow?.storageTier ?? "free") as StorageTier;
     const limits = TIER_LIMITS[tier] ?? TIER_LIMITS.free;
 
     // Size check against original upload size (pre-conversion)
     if (limits.maxFileSize !== Infinity && file.size > limits.maxFileSize) {
       return NextResponse.json(
         { error: `File exceeds the ${formatBytes(limits.maxFileSize)} limit` },
-        { status: 422 }
+        { status: 422 },
       );
     }
 
@@ -178,14 +219,19 @@ export async function POST(request: NextRequest) {
         .from(attachmentsTable)
         // X-A3: only live bytes count toward the quota — soft-deleted (and
         // pending-purge) attachments must not permanently shrink the cap.
-        .where(and(eq(attachmentsTable.userId, user.id), isNull(attachmentsTable.deletedAt)));
+        .where(
+          and(
+            eq(attachmentsTable.userId, user.id),
+            isNull(attachmentsTable.deletedAt),
+          ),
+        );
       const currentUsage = Number(usageRow?.total ?? 0);
       if (currentUsage + file.size > limits.maxTotalStorage) {
         const used = formatBytes(currentUsage);
         const max = formatBytes(limits.maxTotalStorage);
         return NextResponse.json(
           { error: `You've used ${used} of your ${max} storage` },
-          { status: 422 }
+          { status: 422 },
         );
       }
     }
@@ -209,10 +255,17 @@ export async function POST(request: NextRequest) {
 
       const { error: uploadError } = await supabaseAdmin.storage
         .from("note-attachments")
-        .upload(storagePath, uploadBuffer, { contentType: mimeType, upsert: false });
+        .upload(storagePath, uploadBuffer, {
+          contentType: mimeType,
+          upsert: false,
+        });
 
       if (uploadError) {
-        Sentry.captureException(new Error(`[attachments] Storage upload error: ${uploadError.message}`));
+        Sentry.captureException(
+          new Error(
+            `[attachments] Storage upload error: ${uploadError.message}`,
+          ),
+        );
         return NextResponse.json({ error: "Upload failed" }, { status: 500 });
       }
 
@@ -243,26 +296,33 @@ export async function POST(request: NextRequest) {
           createdAt: attachment.createdAt,
           url: signedData?.signedUrl ?? null,
         },
-        { status: 201 }
+        { status: 201 },
       );
     }
 
     // ── Animated GIF path ────────────────────────────────────────────────────
     if (mimeType === "image/gif") {
-      const { isAnimated, frameCount } = await detectAnimatedGif(mimeType, uploadBuffer);
+      const { isAnimated, frameCount } = await detectAnimatedGif(
+        mimeType,
+        uploadBuffer,
+      );
 
       if (isAnimated) {
         // Pre-encode caps (protect server memory / timeout budget)
         if (uploadBuffer.length > ANIMATED_GIF_MAX_BYTES) {
           return NextResponse.json(
-            { error: `Animated GIFs must be under ${formatBytes(ANIMATED_GIF_MAX_BYTES)}` },
-            { status: 422 }
+            {
+              error: `Animated GIFs must be under ${formatBytes(ANIMATED_GIF_MAX_BYTES)}`,
+            },
+            { status: 422 },
           );
         }
         if (frameCount > ANIMATED_GIF_MAX_FRAMES) {
           return NextResponse.json(
-            { error: `Animated GIFs must have fewer than ${ANIMATED_GIF_MAX_FRAMES} frames` },
-            { status: 422 }
+            {
+              error: `Animated GIFs must have fewer than ${ANIMATED_GIF_MAX_FRAMES} frames`,
+            },
+            { status: 422 },
           );
         }
 
@@ -272,7 +332,7 @@ export async function POST(request: NextRequest) {
         const fileId = randomUUID();
         const baseName = sanitizeFilename(file.name).replace(/\.[^.]+$/, "");
         const masterPath = `${user.id}/${noteId}/${fileId}/${baseName}.gif`;
-        const proxyPath  = `${user.id}/${noteId}/${fileId}/${baseName}.webp`;
+        const proxyPath = `${user.id}/${noteId}/${fileId}/${baseName}.webp`;
 
         // Proxy = animated WebP. Encodes in <1s vs 5–15s for AVIF, no timeout needed.
         // Quality difference between WebP and AVIF is imperceptible at note-app scale;
@@ -291,30 +351,49 @@ export async function POST(request: NextRequest) {
           width = meta.width;
           height = meta.pageHeight ?? meta.height; // pageHeight = single frame height
         } catch (convErr) {
-          Sentry.captureException(convErr, { extra: { originalMimeType: mimeType } });
-          return NextResponse.json({ error: "Image conversion failed" }, { status: 422 });
+          Sentry.captureException(convErr, {
+            extra: { originalMimeType: mimeType },
+          });
+          return NextResponse.json(
+            { error: "Image conversion failed" },
+            { status: 422 },
+          );
         }
 
         // Upload master and proxy in parallel
         const [masterUpload, proxyUpload] = await Promise.all([
           supabaseAdmin.storage
             .from("note-attachments")
-            .upload(masterPath, masterBuffer, { contentType: "image/gif", upsert: false }),
+            .upload(masterPath, masterBuffer, {
+              contentType: "image/gif",
+              upsert: false,
+            }),
           supabaseAdmin.storage
             .from("note-attachments")
-            .upload(proxyPath, proxyBuffer, { contentType: "image/webp", upsert: false }),
+            .upload(proxyPath, proxyBuffer, {
+              contentType: "image/webp",
+              upsert: false,
+            }),
         ]);
 
         if (masterUpload.error || proxyUpload.error) {
           const err = masterUpload.error ?? proxyUpload.error;
-          Sentry.captureException(new Error(`[attachments] GIF upload error: ${err!.message}`));
-          if (!masterUpload.error) await supabaseAdmin.storage.from("note-attachments").remove([masterPath]);
-          if (!proxyUpload.error) await supabaseAdmin.storage.from("note-attachments").remove([proxyPath]);
+          Sentry.captureException(
+            new Error(`[attachments] GIF upload error: ${err!.message}`),
+          );
+          if (!masterUpload.error)
+            await supabaseAdmin.storage
+              .from("note-attachments")
+              .remove([masterPath]);
+          if (!proxyUpload.error)
+            await supabaseAdmin.storage
+              .from("note-attachments")
+              .remove([proxyPath]);
           return NextResponse.json({ error: "Upload failed" }, { status: 500 });
         }
 
         const masterSizeBytes = masterBuffer.length;
-        const proxySizeBytes  = proxyBuffer.length;
+        const proxySizeBytes = proxyBuffer.length;
 
         const [attachment] = await db
           .insert(attachmentsTable)
@@ -338,8 +417,12 @@ export async function POST(request: NextRequest) {
           .returning();
 
         const [proxySign, masterSign] = await Promise.all([
-          supabaseAdmin.storage.from("note-attachments").createSignedUrl(proxyPath, 604800),
-          supabaseAdmin.storage.from("note-attachments").createSignedUrl(masterPath, 604800),
+          supabaseAdmin.storage
+            .from("note-attachments")
+            .createSignedUrl(proxyPath, 604800),
+          supabaseAdmin.storage
+            .from("note-attachments")
+            .createSignedUrl(masterPath, 604800),
         ]);
 
         return NextResponse.json(
@@ -361,7 +444,7 @@ export async function POST(request: NextRequest) {
             url: proxySign.data?.signedUrl ?? null,
             masterUrl: masterSign.data?.signedUrl ?? null,
           },
-          { status: 201 }
+          { status: 201 },
         );
       }
       // Static GIF falls through to normal JPEG-master path below
@@ -373,10 +456,19 @@ export async function POST(request: NextRequest) {
     let masterBuffer: Buffer;
     let masterFormat: Exclude<MasterFormat, "gif">;
     try {
-      ({ masterBuffer, masterFormat } = await toMaster(uploadBuffer, mimeType, heic));
+      ({ masterBuffer, masterFormat } = await toMaster(
+        uploadBuffer,
+        mimeType,
+        heic,
+      ));
     } catch (convErr) {
-      Sentry.captureException(convErr, { extra: { originalMimeType: mimeType } });
-      return NextResponse.json({ error: "Image conversion failed" }, { status: 422 });
+      Sentry.captureException(convErr, {
+        extra: { originalMimeType: mimeType },
+      });
+      return NextResponse.json(
+        { error: "Image conversion failed" },
+        { status: 422 },
+      );
     }
 
     const sharp = (await import("sharp")).default;
@@ -401,7 +493,9 @@ export async function POST(request: NextRequest) {
         const meta = await sharp(masterBuffer).metadata();
         width = meta.width;
         height = meta.height;
-      } catch { /* non-critical */ }
+      } catch {
+        /* non-critical */
+      }
     } else {
       // Generate WebP proxy from JPEG/PNG master.
       // WebP is chosen over AVIF for static images: encoding is ~10x faster (no
@@ -419,8 +513,13 @@ export async function POST(request: NextRequest) {
         width = metadata.width;
         height = metadata.height;
       } catch (convErr) {
-        Sentry.captureException(convErr, { extra: { originalMimeType: mimeType } });
-        return NextResponse.json({ error: "Image conversion failed" }, { status: 422 });
+        Sentry.captureException(convErr, {
+          extra: { originalMimeType: mimeType },
+        });
+        return NextResponse.json(
+          { error: "Image conversion failed" },
+          { status: 422 },
+        );
       }
       proxyPath = `${user.id}/${noteId}/${fileId}/${baseName}.webp`;
       proxyFormat = "webp";
@@ -430,32 +529,53 @@ export async function POST(request: NextRequest) {
     // When AVIF is stored as-is, master and proxy share the same path
     const resolvedProxyPath = sameFileForProxy ? masterPath : proxyPath;
 
-    const masterMime = masterFormat === "png" ? "image/png" : masterFormat === "avif" ? "image/avif" : "image/jpeg";
+    const masterMime =
+      masterFormat === "png"
+        ? "image/png"
+        : masterFormat === "avif"
+          ? "image/avif"
+          : "image/jpeg";
 
     // Upload master (and proxy if it's a separate file)
-    const uploadTasks: Promise<{ error: { message: string } | null; which: string }>[] = [
+    const uploadTasks: Promise<{
+      error: { message: string } | null;
+      which: string;
+    }>[] = [
       supabaseAdmin.storage
         .from("note-attachments")
-        .upload(masterPath, masterBuffer, { contentType: masterMime, upsert: false })
-        .then(r => ({ error: r.error, which: "master" })),
+        .upload(masterPath, masterBuffer, {
+          contentType: masterMime,
+          upsert: false,
+        })
+        .then((r) => ({ error: r.error, which: "master" })),
     ];
     if (!sameFileForProxy) {
       uploadTasks.push(
         supabaseAdmin.storage
           .from("note-attachments")
-          .upload(resolvedProxyPath, proxyBuffer, { contentType: `image/${proxyFormat}`, upsert: false })
-          .then(r => ({ error: r.error, which: "proxy" }))
+          .upload(resolvedProxyPath, proxyBuffer, {
+            contentType: `image/${proxyFormat}`,
+            upsert: false,
+          })
+          .then((r) => ({ error: r.error, which: "proxy" })),
       );
     }
 
     const uploadResults = await Promise.all(uploadTasks);
-    const failedUpload = uploadResults.find(r => r.error);
+    const failedUpload = uploadResults.find((r) => r.error);
     if (failedUpload) {
       const err = failedUpload.error!;
-      Sentry.captureException(new Error(`[attachments] Storage upload error (${failedUpload.which}): ${err.message}`));
+      Sentry.captureException(
+        new Error(
+          `[attachments] Storage upload error (${failedUpload.which}): ${err.message}`,
+        ),
+      );
       // Best-effort cleanup
-      const toRemove = uploadResults.filter(r => !r.error).map(r => r.which === "master" ? masterPath : resolvedProxyPath);
-      if (toRemove.length) await supabaseAdmin.storage.from("note-attachments").remove(toRemove);
+      const toRemove = uploadResults
+        .filter((r) => !r.error)
+        .map((r) => (r.which === "master" ? masterPath : resolvedProxyPath));
+      if (toRemove.length)
+        await supabaseAdmin.storage.from("note-attachments").remove(toRemove);
       return NextResponse.json({ error: "Upload failed" }, { status: 500 });
     }
 
@@ -485,8 +605,12 @@ export async function POST(request: NextRequest) {
 
     // Generate signed URLs (1 hr) for proxy (display) and master (download)
     const [proxySign, masterSign] = await Promise.all([
-      supabaseAdmin.storage.from("note-attachments").createSignedUrl(resolvedProxyPath, 604800),
-      supabaseAdmin.storage.from("note-attachments").createSignedUrl(masterPath, 604800),
+      supabaseAdmin.storage
+        .from("note-attachments")
+        .createSignedUrl(resolvedProxyPath, 604800),
+      supabaseAdmin.storage
+        .from("note-attachments")
+        .createSignedUrl(masterPath, 604800),
     ]);
 
     return NextResponse.json(
@@ -505,13 +629,16 @@ export async function POST(request: NextRequest) {
         width: attachment.width,
         height: attachment.height,
         createdAt: attachment.createdAt,
-        url: proxySign.data?.signedUrl ?? null,       // proxy — for display
+        url: proxySign.data?.signedUrl ?? null, // proxy — for display
         masterUrl: masterSign.data?.signedUrl ?? null, // master — for download
       },
-      { status: 201 }
+      { status: 201 },
     );
   } catch (err) {
     Sentry.captureException(err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
