@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db, userApiKeysTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { encryptApiKey } from "@lib/encryption";
-import { isSafeExternalUrl } from "@lib/url-guard";
+import { validateSafeExternalUrl } from "@lib/url-guard";
 import * as Sentry from "@sentry/nextjs";
 
 const VALID_PROVIDERS = [
@@ -95,9 +95,11 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         );
       }
-      if (!isSafeExternalUrl(endpointUrl.trim())) {
+      try {
+        await validateSafeExternalUrl(endpointUrl.trim());
+      } catch {
         return NextResponse.json(
-          { error: "endpointUrl must be a public https/http URL (internal and loopback addresses are not allowed)" },
+          { error: "endpointUrl must be a publicly routable HTTPS URL" },
           { status: 400 },
         );
       }
