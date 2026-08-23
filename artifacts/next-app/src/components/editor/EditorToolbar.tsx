@@ -62,6 +62,7 @@ function ImageUrlButton({ editor }: { editor: ReturnType<typeof useEditor> }) {
     <div className="relative shrink-0">
       <button
         ref={btnRef}
+        data-testid="toolbar-insert-image-url"
         onClick={() => { setOpen(v => !v); setUrl(""); }}
         title="Insert image from URL"
         className={`min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 p-2.5 md:p-1.5 rounded-md text-muted-foreground hover:bg-panel hover:text-foreground transition-all duration-[var(--motion-duration-micro)] hover:scale-[1.08] active:scale-[0.95] shrink-0 flex items-center justify-center${open ? " bg-primary/10 text-primary" : ""}`}

@@ -108,6 +108,7 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
     <Popover open={dropdownOpen} onOpenChange={(open) => { if (!open) closeDropdown(); }}>
       <div className="flex items-center shrink-0 rounded border border-panel-border">
         <button
+          data-testid="font-size-decrease"
           onPointerDown={preserveFocus}
           onClick={() => nudge(-1)}
           className="min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 md:w-5 md:h-6 flex items-center justify-center text-muted-foreground hover:bg-panel hover:text-foreground transition-colors text-sm px-1"
@@ -134,6 +135,7 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
           <PopoverAnchor asChild>
             <button
               ref={valueRef}
+              data-testid="font-size-value"
               onPointerDown={preserveFocus}
               onClick={handleValueClick}
               onMouseEnter={handleHoverEnter}
@@ -149,6 +151,7 @@ export function FontSizeWidget({ editor }: { editor: ReturnType<typeof useEditor
         <div className="w-px h-3.5 bg-panel-border" />
 
         <button
+          data-testid="font-size-increase"
           onPointerDown={preserveFocus}
           onClick={() => nudge(1)}
           className="min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 md:w-5 md:h-6 flex items-center justify-center text-muted-foreground hover:bg-panel hover:text-foreground transition-colors text-sm px-1"

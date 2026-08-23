@@ -134,6 +134,16 @@ Requires `TEST_EMAIL` and `TEST_PASSWORD` in `.env` (see `.env.example`). The te
 
 All tests use `data-testid` attributes for selectors — never CSS classes or element structure.
 
+### Touch-editor regression boundary
+
+`11-editor-enhancements.spec.ts` also runs deterministic 390×844 coarse-pointer
+Chromium coverage for the font-size controls’ 44px targets, Pointer Event image
+resize, `selectionchange` keeping the mobile selection menu actionable, and
+formatting a selected range through the font-size control. It uses controlled
+events and state-based waits only. This is browser emulation, not proof of
+Safari auto-zoom or physical Android soft-keyboard/visual-viewport behavior;
+those remain manual-device acceptance gates.
+
 Tests run serially (`workers: 1`). The Next.js dev server cannot reliably handle concurrent workers.
 
 ---

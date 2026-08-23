@@ -22,6 +22,21 @@ export async function enterDemoMode(page: Page) {
 }
 
 /**
+ * Enter demo mode through the mobile drawer. Mobile initially renders Quick
+ * Bits with the sidebar closed, so desktop's directly visible nav item is not
+ * a truthful entry path here.
+ */
+export async function enterDemoModeOnMobile(page: Page) {
+  await page.goto("/");
+  await page.getByTestId("demo-mode-btn").tap();
+  await page.getByText("You're in demo mode").waitFor({ state: "visible" });
+
+  await page.getByTestId("mobile-sidebar-open").tap();
+  await page.getByTestId("nav-all-notes").tap();
+  await page.getByTestId("note-list").waitFor({ state: "visible" });
+}
+
+/**
  * Navigate to the app using a saved auth session (storageState is injected
  * by the "authenticated" Playwright project — no manual login needed).
  *

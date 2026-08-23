@@ -174,6 +174,7 @@ export function QuickBitList() {
           <div className="flex items-center gap-2 min-w-0">
             {bp !== "desktop" && (
               <button
+                data-testid="mobile-sidebar-open"
                 onClick={() => setSidebarOpen(true)}
                 className="min-w-[44px] min-h-[44px] -ml-1 mr-1 rounded-lg hover:bg-panel transition-colors flex items-center justify-center"
               >
