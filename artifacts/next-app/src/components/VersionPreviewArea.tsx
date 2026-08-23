@@ -91,7 +91,7 @@ export function VersionPreviewArea({
     : "max-w-3xl mx-auto px-6 py-8";
 
   return (
-    <div className={cn(rootClass)}>
+    <div className={cn(rootClass, "ph-no-capture")}>
       {/* Banner */}
       <div className="shrink-0 border-b border-panel-border bg-panel/60 backdrop-blur-sm">
         <div className={bannerInnerClass}>
