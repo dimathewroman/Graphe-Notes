@@ -2,7 +2,7 @@
 // All tests run in demo mode — no auth required.
 
 import { test, expect } from "@playwright/test";
-import { enterDemoMode } from "./helpers";
+import { enterDemoMode, enterDemoModeOnMobile } from "./helpers";
 
 test.describe("Editor enhancements", () => {
   test.beforeEach(async ({ page }) => {
@@ -178,7 +178,7 @@ test.describe("Mobile touch editor contracts", () => {
   });
 
   test.beforeEach(async ({ page }) => {
-    await enterDemoMode(page);
+    await enterDemoModeOnMobile(page);
     await page.getByTestId("note-item").first().tap();
     await expect(page.getByTestId("editor-content-area").locator(".ProseMirror")).toBeVisible();
   });
@@ -200,7 +200,7 @@ test.describe("Mobile touch editor contracts", () => {
     const imageUrl = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect width='400' height='200' fill='%234F46E5'/%3E%3C/svg%3E";
     await page.getByTestId("toolbar-insert-image-url").tap();
     await page.getByPlaceholder("https://…").fill(imageUrl);
-    await page.getByRole("button", { name: "Insert", exact: true }).tap();
+    await page.getByPlaceholder("https://…").press("Enter");
 
     const editor = page.getByTestId("editor-content-area").locator(".ProseMirror");
     const image = editor.locator("img").first();
@@ -216,13 +216,26 @@ test.describe("Mobile touch editor contracts", () => {
 
     const startX = handleBox!.x + handleBox!.width / 2;
     const startY = handleBox!.y + handleBox!.height / 2;
-    const pointer = { pointerId: 7, pointerType: "touch", isPrimary: true, button: 0 };
-    await handle.dispatchEvent("pointerdown", { ...pointer, clientX: startX, clientY: startY });
-    await page.locator("body").dispatchEvent("pointermove", { ...pointer, clientX: startX + 80, clientY: startY });
-    await page.locator("body").dispatchEvent("pointerup", { ...pointer, clientX: startX + 80, clientY: startY });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x: startX, y: startY, id: 7 }],
+    });
+    // The image begins max-width clamped on a 390px viewport. Shrinking it
+    // below that cap proves a visible resize rather than only a style update.
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: startX - 80, y: startY, id: 7 }],
+    });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
 
-    await expect.poll(async () => image.evaluate((el) => parseFloat((el as HTMLElement).style.width) || 0))
-      .toBeGreaterThan(imageBox!.width + 40);
+    await expect.poll(async () => (await image.boundingBox())?.width ?? 0)
+      .toBeLessThan(imageBox!.width - 40);
+    const persistedWidth = await image.evaluate((el) => parseFloat((el as HTMLElement).style.width) || 0);
+    const resizedBox = await image.boundingBox();
+    expect(resizedBox).not.toBeNull();
+    expect(persistedWidth).toBeLessThan(imageBox!.width - 40);
+    expect(Math.abs(persistedWidth - resizedBox!.width)).toBeLessThanOrEqual(1);
   });
 
   test("selectionchange keeps the mobile selection menu actionable", async ({ page }) => {
