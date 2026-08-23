@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { purgeNoteChildren } from "@/lib/note-cleanup";
 import { verifyCronAuth } from "@/lib/cron-auth";
 import * as Sentry from "@sentry/nextjs";
+import { cleanupExpiredUploadReservations } from "@/lib/attachment-upload-reservation";
 
 const ATTACHMENT_RETENTION_DAYS = 30;
 
@@ -121,10 +122,26 @@ export async function GET(request: NextRequest) {
         );
     }
 
+    const uploadReservations = await cleanupExpiredUploadReservations();
+    if (uploadReservations.failed > 0) {
+      Sentry.captureException(
+        new Error("[purge-deleted] Upload reservation cleanup incomplete"),
+        { extra: { failedReservationCount: uploadReservations.failed } },
+      );
+      return NextResponse.json(
+        {
+          error: "Upload cleanup incomplete; retry later",
+          uploadReservations,
+        },
+        { status: 503 },
+      );
+    }
+
     return NextResponse.json({
       purgedNotes: purgedNotes.length,
       purgedAttachments: expiredAttachments.length,
       storageErrors,
+      uploadReservations,
     });
   } catch (err) {
     Sentry.captureException(err);

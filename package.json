@@ -10,11 +10,15 @@
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
     "check": "pnpm run typecheck && pnpm run test",
+    "db:migrations:validate": "node scripts/validate-db-migrations.mjs",
     "claude-proxy": "node scripts/claude-proxy.mjs"
   },
   "private": true,
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "sharp"],
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ],
     "overrides": {
       "protobufjs": ">=8.0.2",
       "@protobufjs/utf8": ">=1.1.1",

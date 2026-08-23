@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   verifyCronAuth: vi.fn(),
   purgeNoteChildren: vi.fn(),
+  cleanupExpiredUploadReservations: vi.fn(),
   captureException: vi.fn(),
   db: { select: vi.fn(), delete: vi.fn() },
 }));
@@ -14,6 +15,10 @@ vi.mock("@/lib/cron-auth", () => ({
 }));
 vi.mock("@/lib/note-cleanup", () => ({
   purgeNoteChildren: (...args: unknown[]) => mocks.purgeNoteChildren(...args),
+}));
+vi.mock("@/lib/attachment-upload-reservation", () => ({
+  cleanupExpiredUploadReservations: (...args: unknown[]) =>
+    mocks.cleanupExpiredUploadReservations(...args),
 }));
 vi.mock("@sentry/nextjs", () => ({ captureException: mocks.captureException }));
 vi.mock("@/lib/supabase-admin", () => ({
@@ -43,6 +48,11 @@ function query(result: unknown) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.verifyCronAuth.mockReturnValue({ ok: true });
+  mocks.cleanupExpiredUploadReservations.mockResolvedValue({
+    claimed: 0,
+    cleaned: 0,
+    failed: 0,
+  });
   mocks.db.select.mockReturnValue(query([{ id: 1 }]));
 });
 

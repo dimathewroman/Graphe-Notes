@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   createSignedUrl: vi.fn(),
   removeStorage: vi.fn(),
   uploadStorage: vi.fn(),
+  createUploadReservation: vi.fn(),
+  finalizeUploadReservation: vi.fn(),
+  cleanupFailedUpload: vi.fn(),
   db: {
     select: vi.fn(),
     insert: vi.fn(),
@@ -40,6 +43,22 @@ vi.mock("@/lib/supabase-admin", () => ({
     },
   },
 }));
+vi.mock("@/lib/attachment-upload-reservation", () => {
+  class UploadReservationError extends Error {
+    constructor(readonly code: "reservation_unavailable" | "note_unavailable") {
+      super(code);
+    }
+  }
+  return {
+    UploadReservationError,
+    createUploadReservation: (...args: unknown[]) =>
+      mocks.createUploadReservation(...args),
+    finalizeUploadReservation: (...args: unknown[]) =>
+      mocks.finalizeUploadReservation(...args),
+    cleanupFailedUpload: (...args: unknown[]) =>
+      mocks.cleanupFailedUpload(...args),
+  };
+});
 vi.mock("@workspace/db", () => ({
   db: mocks.db,
   notesTable: {
@@ -103,6 +122,11 @@ beforeEach(() => {
   });
   mocks.removeStorage.mockResolvedValue({ error: null });
   mocks.uploadStorage.mockResolvedValue({ error: null });
+  mocks.createUploadReservation.mockResolvedValue({
+    id: "reservation",
+    leaseToken: "lease",
+  });
+  mocks.cleanupFailedUpload.mockResolvedValue(true);
 });
 
 describe("note data boundary", () => {
@@ -264,9 +288,7 @@ describe("note data boundary", () => {
       (selection: Record<string, unknown> | undefined) => {
         if (selection && "deletedAt" in selection) {
           return query(
-            noteExists
-              ? [{ id: 1, deletedAt: null, autoDeleteAt: null }]
-              : [],
+            noteExists ? [{ id: 1, deletedAt: null, autoDeleteAt: null }] : [],
           );
         }
         if (selection && "storageTier" in selection) {
@@ -290,28 +312,39 @@ describe("note data boundary", () => {
       paths.forEach((path) => storagePaths.delete(path));
       return { error: null };
     });
+    mocks.finalizeUploadReservation.mockImplementation(async () => {
+      if (!noteExists) {
+        const { UploadReservationError } =
+          await import("@/lib/attachment-upload-reservation");
+        throw new UploadReservationError("note_unavailable");
+      }
+      attachmentCommitted = true;
+      return {
+        id: "concurrent-attachment",
+        noteId: 1,
+        fileName: "synthetic.txt",
+        fileType: "text/plain",
+        fileSize: 9,
+        storagePath: "synthetic-path",
+        createdAt: new Date(),
+      };
+    });
+    mocks.cleanupFailedUpload.mockImplementation(
+      async (_reservation, uploadDraft) => {
+        const paths = [
+          uploadDraft.storagePath,
+          uploadDraft.masterPath,
+          uploadDraft.proxyPath,
+        ].filter(Boolean);
+        paths.forEach((path: string) => storagePaths.delete(path));
+        return true;
+      },
+    );
     mocks.db.delete.mockReturnValue({
       where: async () => {
         noteExists = false;
         return [];
       },
-    });
-    mocks.db.insert.mockReturnValue({
-      values: (values: Record<string, unknown>) => ({
-        returning: async () => {
-          if (!noteExists) {
-            throw new Error("synthetic attachments_note_id_fkey violation");
-          }
-          attachmentCommitted = true;
-          return [
-            {
-              id: "concurrent-attachment",
-              ...values,
-              createdAt: new Date("2026-08-23T00:00:00.000Z"),
-            },
-          ];
-        },
-      }),
     });
 
     const form = new FormData();

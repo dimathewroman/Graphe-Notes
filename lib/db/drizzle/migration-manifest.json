@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "tracks": {
+    "productionUpgrade": {
+      "baseline": "production-equivalent-0006",
+      "files": [
+        {
+          "path": "0000_dashing_felicia_hardy.sql",
+          "sha256": "f039bc49cd000188bbaff209290ad7349c9046c6a96516f800090d4d11020fb6"
+        },
+        {
+          "path": "0001_enable_rls_all_tables.sql",
+          "sha256": "d428c925533b8103b6223c9d90cce576a25bdb8b779c16e32db64b6d0837b0ae"
+        },
+        {
+          "path": "0002_note_versions_user_id.sql",
+          "sha256": "c5767bfe9a88cb65287aaccdc02559f8ffbe6280506c32c4ea509abf54cd3656"
+        },
+        {
+          "path": "0003_templates_rls_policies.sql",
+          "sha256": "5a6256390e4759f24d1869162519056fc335ca78009d0c4234af3f39a59ac412"
+        },
+        {
+          "path": "0004_rls_auth_uid_performance.sql",
+          "sha256": "d0622f7448119a1c1ce13ca6dfd155fc6571ad8264a7952f5108028250d4f974"
+        },
+        {
+          "path": "0005_revoke_rls_auto_enable.sql",
+          "sha256": "554b04e2d08d8300b110a855c2b1dcfc9d5246cc4872ca05c3ecaa7e103eb124"
+        },
+        {
+          "path": "0006_note_children_fks.sql",
+          "sha256": "8cf0757036c3abacedbf393e41b35e6cf2f96630459db1c4bede8e0d649646f9"
+        },
+        {
+          "path": "0007_attachment_upload_reservations.sql",
+          "sha256": "200b499faf731819df61bf73389fbe31c7d6eaa8481549983d76a378b50192ba"
+        }
+      ]
+    },
+    "fresh": {
+      "baseline": "empty-postgresql-with-supabase-auth-schema",
+      "files": [
+        {
+          "path": "fresh/0000_current_schema.sql",
+          "sha256": "4d1510b371d6a4792fe01336006bb86f6e7908b9ddf62ed319256861ee73bdc7"
+        },
+        {
+          "path": "0001_enable_rls_all_tables.sql",
+          "sha256": "d428c925533b8103b6223c9d90cce576a25bdb8b779c16e32db64b6d0837b0ae"
+        },
+        {
+          "path": "0003_templates_rls_policies.sql",
+          "sha256": "5a6256390e4759f24d1869162519056fc335ca78009d0c4234af3f39a59ac412"
+        },
+        {
+          "path": "0004_rls_auth_uid_performance.sql",
+          "sha256": "d0622f7448119a1c1ce13ca6dfd155fc6571ad8264a7952f5108028250d4f974"
+        },
+        {
+          "path": "fresh/0001_private_security.sql",
+          "sha256": "c751e5cce657d338cd15fae650aaea714208c11097ff35057c0cb5ea86d1bb0e"
+        }
+      ]
+    }
+  }
+}

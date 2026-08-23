@@ -15,6 +15,12 @@ import {
 } from "@/lib/attachment-limits";
 import { randomUUID } from "crypto";
 import * as Sentry from "@sentry/nextjs";
+import {
+  cleanupFailedUpload,
+  createUploadReservation,
+  finalizeUploadReservation,
+  UploadReservationError,
+} from "@/lib/attachment-upload-reservation";
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200);
@@ -67,66 +73,6 @@ function imageMagicMatches(mimeType: string, buf: Buffer): boolean {
 }
 
 type MasterFormat = "jpg" | "png" | "gif" | "avif";
-
-const STORAGE_BUCKET = "note-attachments";
-
-/**
- * Remove files that were uploaded before their attachment row could be made
- * durable. A failed removal is observable in Sentry; it must never obscure the
- * original validation or database failure.
- */
-async function cleanupUploadedPaths(paths: string[]): Promise<void> {
-  const uniquePaths = [...new Set(paths)];
-  if (uniquePaths.length === 0) return;
-
-  try {
-    const { error } = await supabaseAdmin.storage
-      .from(STORAGE_BUCKET)
-      .remove(uniquePaths);
-    if (error) {
-      Sentry.captureException(
-        new Error(`[attachments] Storage cleanup error: ${error.message}`),
-        { extra: { storagePathCount: uniquePaths.length } },
-      );
-    }
-  } catch (error) {
-    Sentry.captureException(error, {
-      extra: { storagePathCount: uniquePaths.length },
-    });
-  }
-}
-
-async function noteIsStillAvailable(
-  noteId: number,
-  userId: string,
-): Promise<boolean> {
-  const [note] = await db
-    .select({
-      id: notesTable.id,
-      deletedAt: notesTable.deletedAt,
-      autoDeleteAt: notesTable.autoDeleteAt,
-    })
-    .from(notesTable)
-    .where(and(eq(notesTable.id, noteId), eq(notesTable.userId, userId)))
-    .limit(1);
-
-  return Boolean(note && !note.deletedAt && !note.autoDeleteAt);
-}
-
-async function validateParentAfterUpload(
-  noteId: number,
-  userId: string,
-  uploadedPaths: string[],
-): Promise<boolean> {
-  try {
-    const available = await noteIsStillAvailable(noteId, userId);
-    if (!available) await cleanupUploadedPaths(uploadedPaths);
-    return available;
-  } catch (validationError) {
-    await cleanupUploadedPaths(uploadedPaths);
-    throw validationError;
-  }
-}
 
 /**
  * Produce the master buffer for non-GIF images.
@@ -312,6 +258,23 @@ export async function POST(request: NextRequest) {
       const sanitized = sanitizeFilename(file.name);
       const fileId = randomUUID();
       const storagePath = `${user.id}/${noteId}/${fileId}-${sanitized}`;
+      const draft = {
+        noteId,
+        userId: user.id,
+        fileName: file.name,
+        fileType: mimeType,
+        fileSize: uploadBuffer.length,
+        storagePath,
+      };
+      let reservation;
+      try {
+        reservation = await createUploadReservation(draft);
+      } catch {
+        return NextResponse.json(
+          { error: "Upload temporarily unavailable" },
+          { status: 503 },
+        );
+      }
 
       const { error: uploadError } = await supabaseAdmin.storage
         .from("note-attachments")
@@ -326,36 +289,36 @@ export async function POST(request: NextRequest) {
             `[attachments] Storage upload error: ${uploadError.message}`,
           ),
         );
+        await cleanupFailedUpload(reservation, draft, "storage_upload_failed");
         return NextResponse.json({ error: "Upload failed" }, { status: 500 });
-      }
-
-      if (
-        !(await validateParentAfterUpload(noteId, user.id, [storagePath]))
-      ) {
-        return NextResponse.json(
-          { error: "Note is unavailable for attachments" },
-          { status: 409 },
-        );
       }
 
       let attachment;
       try {
-        const attachments = await db
-          .insert(attachmentsTable)
-          .values({
-            noteId,
-            userId: user.id,
-            fileName: file.name,
-            fileType: mimeType,
-            fileSize: uploadBuffer.length,
-            storagePath,
-          })
-          .returning();
-        attachment = attachments[0];
-        if (!attachment)
-          throw new Error("[attachments] Attachment insert returned no row");
+        attachment = await finalizeUploadReservation(reservation, draft);
       } catch (insertError) {
-        await cleanupUploadedPaths([storagePath]);
+        await cleanupFailedUpload(
+          reservation,
+          draft,
+          insertError instanceof UploadReservationError
+            ? insertError.code
+            : "finalize_failed",
+        );
+        if (
+          insertError instanceof UploadReservationError &&
+          insertError.code === "note_unavailable"
+        ) {
+          return NextResponse.json(
+            { error: "Note is unavailable for attachments" },
+            { status: 409 },
+          );
+        }
+        if (insertError instanceof UploadReservationError) {
+          return NextResponse.json(
+            { error: "Upload temporarily unavailable" },
+            { status: 503 },
+          );
+        }
         throw insertError;
       }
 
@@ -438,6 +401,35 @@ export async function POST(request: NextRequest) {
           );
         }
 
+        const masterSizeBytes = masterBuffer.length;
+        const proxySizeBytes = proxyBuffer.length;
+        const draft = {
+          noteId,
+          userId: user.id,
+          fileName: file.name,
+          fileType: "image/gif",
+          fileSize: masterSizeBytes + proxySizeBytes,
+          storagePath: null,
+          masterPath,
+          proxyPath,
+          masterFormat,
+          proxyFormat: "webp",
+          isAnimated: true,
+          masterSizeBytes,
+          proxySizeBytes,
+          width: width ?? null,
+          height: height ?? null,
+        };
+        let reservation;
+        try {
+          reservation = await createUploadReservation(draft);
+        } catch {
+          return NextResponse.json(
+            { error: "Upload temporarily unavailable" },
+            { status: 503 },
+          );
+        }
+
         // Upload master and proxy in parallel
         const [masterUpload, proxyUpload] = await Promise.all([
           supabaseAdmin.storage
@@ -459,53 +451,36 @@ export async function POST(request: NextRequest) {
           Sentry.captureException(
             new Error(`[attachments] GIF upload error: ${err!.message}`),
           );
-          await cleanupUploadedPaths([
-            ...(!masterUpload.error ? [masterPath] : []),
-            ...(!proxyUpload.error ? [proxyPath] : []),
-          ]);
-          return NextResponse.json({ error: "Upload failed" }, { status: 500 });
-        }
-
-        const masterSizeBytes = masterBuffer.length;
-        const proxySizeBytes = proxyBuffer.length;
-
-        const uploadedPaths = [masterPath, proxyPath];
-        if (
-          !(await validateParentAfterUpload(noteId, user.id, uploadedPaths))
-        ) {
-          return NextResponse.json(
-            { error: "Note is unavailable for attachments" },
-            { status: 409 },
+          await cleanupFailedUpload(
+            reservation,
+            draft,
+            "storage_upload_failed",
           );
+          return NextResponse.json({ error: "Upload failed" }, { status: 500 });
         }
 
         let attachment;
         try {
-          const attachments = await db
-            .insert(attachmentsTable)
-            .values({
-              noteId,
-              userId: user.id,
-              fileName: file.name,
-              fileType: "image/gif",
-              fileSize: masterSizeBytes + proxySizeBytes,
-              storagePath: null,
-              masterPath,
-              proxyPath,
-              masterFormat,
-              proxyFormat: "webp",
-              isAnimated: true,
-              masterSizeBytes,
-              proxySizeBytes,
-              width: width ?? null,
-              height: height ?? null,
-            })
-            .returning();
-          attachment = attachments[0];
-          if (!attachment)
-            throw new Error("[attachments] Attachment insert returned no row");
+          attachment = await finalizeUploadReservation(reservation, draft);
         } catch (insertError) {
-          await cleanupUploadedPaths(uploadedPaths);
+          await cleanupFailedUpload(
+            reservation,
+            draft,
+            insertError instanceof UploadReservationError
+              ? insertError.code
+              : "finalize_failed",
+          );
+          if (insertError instanceof UploadReservationError) {
+            return NextResponse.json(
+              {
+                error:
+                  insertError.code === "note_unavailable"
+                    ? "Note is unavailable for attachments"
+                    : "Upload temporarily unavailable",
+              },
+              { status: insertError.code === "note_unavailable" ? 409 : 503 },
+            );
+          }
           throw insertError;
         }
 
@@ -628,6 +603,34 @@ export async function POST(request: NextRequest) {
         : masterFormat === "avif"
           ? "image/avif"
           : "image/jpeg";
+    const masterSizeBytes = masterBuffer.length;
+    const proxySizeBytes = sameFileForProxy ? 0 : proxyBuffer.length;
+    const draft = {
+      noteId,
+      userId: user.id,
+      fileName: file.name,
+      fileType: masterMime,
+      fileSize: masterSizeBytes + proxySizeBytes,
+      storagePath: null,
+      masterPath,
+      proxyPath: resolvedProxyPath,
+      masterFormat,
+      proxyFormat,
+      isAnimated: false,
+      masterSizeBytes,
+      proxySizeBytes,
+      width: width ?? null,
+      height: height ?? null,
+    };
+    let reservation;
+    try {
+      reservation = await createUploadReservation(draft);
+    } catch {
+      return NextResponse.json(
+        { error: "Upload temporarily unavailable" },
+        { status: 503 },
+      );
+    }
 
     // Upload master (and proxy if it's a separate file)
     const uploadTasks: Promise<{
@@ -663,51 +666,32 @@ export async function POST(request: NextRequest) {
           `[attachments] Storage upload error (${failedUpload.which}): ${err.message}`,
         ),
       );
-      const toRemove = uploadResults
-        .filter((r) => !r.error)
-        .map((r) => (r.which === "master" ? masterPath : resolvedProxyPath));
-      await cleanupUploadedPaths(toRemove);
+      await cleanupFailedUpload(reservation, draft, "storage_upload_failed");
       return NextResponse.json({ error: "Upload failed" }, { status: 500 });
-    }
-
-    const masterSizeBytes = masterBuffer.length;
-    const proxySizeBytes = sameFileForProxy ? 0 : proxyBuffer.length;
-
-    const uploadedPaths = [masterPath, resolvedProxyPath];
-    if (!(await validateParentAfterUpload(noteId, user.id, uploadedPaths))) {
-      return NextResponse.json(
-        { error: "Note is unavailable for attachments" },
-        { status: 409 },
-      );
     }
 
     let attachment;
     try {
-      const attachments = await db
-        .insert(attachmentsTable)
-        .values({
-          noteId,
-          userId: user.id,
-          fileName: file.name,
-          fileType: masterMime,
-          fileSize: masterSizeBytes + proxySizeBytes,
-          storagePath: null,
-          masterPath,
-          proxyPath: resolvedProxyPath,
-          masterFormat,
-          proxyFormat,
-          isAnimated: false,
-          masterSizeBytes,
-          proxySizeBytes,
-          width: width ?? null,
-          height: height ?? null,
-        })
-        .returning();
-      attachment = attachments[0];
-      if (!attachment)
-        throw new Error("[attachments] Attachment insert returned no row");
+      attachment = await finalizeUploadReservation(reservation, draft);
     } catch (insertError) {
-      await cleanupUploadedPaths(uploadedPaths);
+      await cleanupFailedUpload(
+        reservation,
+        draft,
+        insertError instanceof UploadReservationError
+          ? insertError.code
+          : "finalize_failed",
+      );
+      if (insertError instanceof UploadReservationError) {
+        return NextResponse.json(
+          {
+            error:
+              insertError.code === "note_unavailable"
+                ? "Note is unavailable for attachments"
+                : "Upload temporarily unavailable",
+          },
+          { status: insertError.code === "note_unavailable" ? 409 : 503 },
+        );
+      }
       throw insertError;
     }
 

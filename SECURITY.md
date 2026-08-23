@@ -12,6 +12,7 @@ Graphe Notes uses a defense-in-depth approach with multiple independent security
 2. **Per-route auth** — each handler independently extracts and validates the authenticated user
 3. **Service-role DB access** — route handlers use the Supabase service role key which bypasses RLS; the route handler is the primary authorization gate
 4. **Row Level Security** — all 13 Supabase tables have RLS enabled with policies that restrict direct PostgREST access to the owning user
+5. **Private cleanup inventory** — upload reservations live outside the public API schema, have RLS enabled, and grant no access to PUBLIC, anon, or authenticated
 
 No component of this system is intended to be the sole security boundary — the goal is that a bypass of any single layer still fails at the next.
 
@@ -84,6 +85,19 @@ CREATE POLICY "table_delete" ON public.table_name
 
 ### Special cases
 
+**`private.attachment_upload_reservations`** — has no user/note foreign keys so
+parent deletion cannot destroy orphan-cleanup evidence. Routes use app-generated
+UUIDs and a one-hour fencing lease. Cleanup rotates the token, excludes paths
+referenced by completed attachments, treats missing objects as success, and
+retains every failed attempt with bounded error codes and backoff. Storage paths
+are never included in telemetry.
+
+Migration 0007 deliberately does not guess the direct database runtime role.
+The release operator must prove the role used by `SUPABASE_DB_URL`, then grant
+only that exact role `USAGE` on schema `private` and CRUD on the reservation
+table. Until then access fails closed. The source migration is not permission to
+apply production SQL.
+
 **`templates`** — SELECT policy allows reading preset rows across users: `user_id = auth.uid()::text OR is_preset = true`. This allows the template picker to show global preset templates while still restricting access to other users' custom templates.
 
 **`note_versions`** — has a denormalized `user_id varchar NOT NULL` column backfilled from `notes.user_id`. Policies use a direct equality check (same pattern as other tables). The index `note_versions_user_id_idx` keeps RLS scans fast.
@@ -102,10 +116,12 @@ This prevents a user from self-promoting their storage tier via a direct PostgRE
 - `lib/db/drizzle/0001_enable_rls_all_tables.sql` — RLS + policies for 12 tables
 - `lib/db/drizzle/0002_note_versions_user_id.sql` — adds denormalized `user_id` to `note_versions`, replaces JOIN-based policies with direct column check
 - `lib/db/drizzle/0003_templates_rls_policies.sql` — RLS + policies for `templates` table
+- `lib/db/drizzle/0007_attachment_upload_reservations.sql` — private cleanup inventory and revoked public/client access
 
 ### Adding new tables
 
 When adding a new table:
+
 1. Add RLS enable + all four CRUD policies in the Drizzle migration file
 2. Verify policies in the Supabase dashboard before merging
 3. Document the table in ARCHITECTURE.md
@@ -167,10 +183,10 @@ User-provided AI provider keys (OpenAI, Anthropic, Google AI Studio) are encrypt
 
 Two rate limiting systems with different backends:
 
-| System | Backend | Scope | Limits |
-|---|---|---|---|
-| AI free tier | Database (`ai_usage` table) | Per user (hourly) + global (monthly) | 5 req/hour per user; 100k req/month global |
-| Vault operations | In-memory Map | Per user, per instance | 5/15min (unlock); 3/1hr (setup) |
+| System           | Backend                     | Scope                                | Limits                                     |
+| ---------------- | --------------------------- | ------------------------------------ | ------------------------------------------ |
+| AI free tier     | Database (`ai_usage` table) | Per user (hourly) + global (monthly) | 5 req/hour per user; 100k req/month global |
+| Vault operations | In-memory Map               | Per user, per instance               | 5/15min (unlock); 3/1hr (setup)            |
 
 The AI rate limiter is DB-backed and survives serverless restarts and scales across instances. The vault rate limiter does not — see the Known Limitation note above.
 
@@ -198,14 +214,14 @@ HTML content from the Tiptap editor is stored as-is in the `content` column. It 
 
 Set in `artifacts/next-app/next.config.ts` on all routes:
 
-| Header | Value | Purpose |
-|---|---|---|
-| `Content-Security-Policy` | Restrictive allowlist | Limits injection attack surface |
-| `X-Frame-Options` | `DENY` | Prevents clickjacking |
-| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Forces HTTPS |
-| `X-Content-Type-Options` | `nosniff` | Prevents MIME sniffing |
-| `Referrer-Policy` | `strict-origin-when-cross-origin` | Controls referrer leakage |
-| `Permissions-Policy` | Restrictive | Disables unused browser features |
+| Header                      | Value                                 | Purpose                          |
+| --------------------------- | ------------------------------------- | -------------------------------- |
+| `Content-Security-Policy`   | Restrictive allowlist                 | Limits injection attack surface  |
+| `X-Frame-Options`           | `DENY`                                | Prevents clickjacking            |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Forces HTTPS                     |
+| `X-Content-Type-Options`    | `nosniff`                             | Prevents MIME sniffing           |
+| `Referrer-Policy`           | `strict-origin-when-cross-origin`     | Controls referrer leakage        |
+| `Permissions-Policy`        | Restrictive                           | Disables unused browser features |
 
 When adding integrations with new external domains (CDNs, APIs, fonts), update the CSP `connect-src` and relevant other directives in `next.config.ts`.
 
@@ -264,10 +280,11 @@ The `master` branch protection allowed merges to proceed even with failing CI. R
 
 **SSRF via user-supplied AI provider endpoint (Phase 9.2)**
 Adding plug-and-play OpenAI-compatible providers introduced a `custom_openai` provider whose base URL is user-supplied, and a model-discovery route that fetched a user-supplied endpoint server-side. An authenticated user could have aimed the server at internal hosts (`169.254.169.254`, private ranges, loopback). Resolved before merge (caught by CodeQL):
+
 - The `/api/ai/models` discovery route now fetches **only fixed, provider-owned base URLs**. Discovery for user-controlled endpoints (local LLM, custom) runs **client-side** in the browser, so no user URL reaches a server-side fetch.
 - The `custom_openai` base URL (fetched server-side by the generate route) is validated at save time with `isSafeExternalUrl()` in `lib/url-guard.ts`, which rejects loopback, private, link-local, carrier-grade-NAT, multicast, and cloud-metadata addresses and non-http(s) schemes.
 
-**Pattern to avoid:** never `fetch()` a user-supplied URL server-side without an SSRF barrier. Prefer fixed provider-owned URLs; when a user must supply an upstream the server will call, validate it through `isSafeExternalUrl()` before storing/using it. When the target is legitimately the *user's own* host (a local LLM), do the fetch client-side instead. Also never gate behavior on `url.includes("somehost")` — a substring match is bypassable (`https://somehost.evil.com`); key on the provider identity instead.
+**Pattern to avoid:** never `fetch()` a user-supplied URL server-side without an SSRF barrier. Prefer fixed provider-owned URLs; when a user must supply an upstream the server will call, validate it through `isSafeExternalUrl()` before storing/using it. When the target is legitimately the _user's own_ host (a local LLM), do the fetch client-side instead. Also never gate behavior on `url.includes("somehost")` — a substring match is bypassable (`https://somehost.evil.com`); key on the provider identity instead.
 
 ---
 
@@ -292,6 +309,7 @@ The Content Security Policy includes `unsafe-inline` and `unsafe-eval` in the `s
 
 **Resolve Sentry dev-build noise**
 As of the May 2026 security audit, there are 15 unresolved errors in Sentry, all from dev builds (hydration errors, Framer Motion keyframe warnings, build-time CSS/component errors). None are security-relevant, but they clutter the dashboard and could mask real production errors. Steps:
+
 1. Go to the Sentry dashboard → Issues
 2. Filter by project `javascript-nextjs`
 3. Select all unresolved dev-build issues (hydration, motion keyframe, build errors)
@@ -314,6 +332,7 @@ All three are zero-config, no infrastructure needed, and free for public repos.
 
 **Optional: clean up stale branch**
 The remote branch `fix/ipad-touch-cursor-input` has 12 unmerged commits dating back to early in the project. No secrets in the diff, but branches accumulating on a public repo are visible. Either open a PR to merge the work or delete the branch:
+
 ```bash
 git push origin --delete fix/ipad-touch-cursor-input
 ```
