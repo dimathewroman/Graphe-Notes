@@ -167,3 +167,82 @@ test.describe("Editor enhancements", () => {
     expect(committedWidth).toBeGreaterThan(initialWidth + 50);
   });
 });
+
+// Touch emulation covers the browser-visible pointer and selection contracts.
+// It cannot emulate Safari auto-zoom or a physical Android soft keyboard.
+test.describe("Mobile touch editor contracts", () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+
+  test.beforeEach(async ({ page }) => {
+    await enterDemoMode(page);
+    await page.getByTestId("note-item").first().tap();
+    await expect(page.getByTestId("editor-content-area").locator(".ProseMirror")).toBeVisible();
+  });
+
+  test("coarse-pointer font-size controls retain 44px targets", async ({ page }) => {
+    for (const control of [
+      page.getByTestId("font-size-decrease"),
+      page.getByTestId("font-size-value"),
+      page.getByTestId("font-size-increase"),
+    ]) {
+      const box = await control.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.width).toBeGreaterThanOrEqual(44);
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test("touch Pointer Events commit an image resize", async ({ page }) => {
+    const imageUrl = "data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200'%3E%3Crect width='400' height='200' fill='%234F46E5'/%3E%3C/svg%3E";
+    await page.getByTestId("toolbar-insert-image-url").tap();
+    await page.getByPlaceholder("https://…").fill(imageUrl);
+    await page.getByRole("button", { name: "Insert", exact: true }).tap();
+
+    const editor = page.getByTestId("editor-content-area").locator(".ProseMirror");
+    const image = editor.locator("img").first();
+    await expect(image).toBeVisible();
+    await image.tap();
+
+    const handle = page.getByTestId("resize-handle-right").first();
+    await expect(handle).toBeVisible();
+    const imageBox = await image.boundingBox();
+    const handleBox = await handle.boundingBox();
+    expect(imageBox).not.toBeNull();
+    expect(handleBox).not.toBeNull();
+
+    const startX = handleBox!.x + handleBox!.width / 2;
+    const startY = handleBox!.y + handleBox!.height / 2;
+    const pointer = { pointerId: 7, pointerType: "touch", isPrimary: true, button: 0 };
+    await handle.dispatchEvent("pointerdown", { ...pointer, clientX: startX, clientY: startY });
+    await page.locator("body").dispatchEvent("pointermove", { ...pointer, clientX: startX + 80, clientY: startY });
+    await page.locator("body").dispatchEvent("pointerup", { ...pointer, clientX: startX + 80, clientY: startY });
+
+    await expect.poll(async () => image.evaluate((el) => parseFloat((el as HTMLElement).style.width) || 0))
+      .toBeGreaterThan(imageBox!.width + 40);
+  });
+
+  test("selectionchange keeps the mobile selection menu actionable", async ({ page }) => {
+    const editor = page.getByTestId("editor-content-area").locator(".ProseMirror");
+    await editor.tap();
+    await page.keyboard.type("selectionchange contract text");
+    await page.keyboard.press("ControlOrMeta+a");
+    await editor.evaluate(() => document.dispatchEvent(new Event("selectionchange")));
+
+    await expect(page.getByRole("button", { name: "Copy" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Delete" })).toBeVisible();
+  });
+
+  test("font-size touch action preserves and formats the selected text", async ({ page }) => {
+    const editor = page.getByTestId("editor-content-area").locator(".ProseMirror");
+    await editor.tap();
+    await page.keyboard.type("selected range only");
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.getByTestId("font-size-increase").tap();
+
+    await expect(editor.locator('span[style*="font-size: 17px"]')).toContainText("selected range only");
+  });
+});
