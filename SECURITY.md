@@ -144,10 +144,13 @@ Notes can be vaulted (locked) and require a PIN to access.
 Browser PostHog is deliberate-event-only: its initializer disables autocapture,
 session recording, automatic pageview/pageleave events, and rage-click
 collection. Product analytics must use an explicit `posthog.capture()` event
-documented in `OBSERVABILITY.md`. Existing exception capture and its scrubbed
-Sentry reporting path remain enabled. The complete note title/body/editor DOM
-and every vault PIN-pad descendant carry PostHog's `ph-no-capture` marker as a
-defense-in-depth boundary if automatic capture or replay is ever re-enabled.
+documented in `OBSERVABILITY.md`. PostHog exception capture passes through a
+`before_send` allowlist that retains only event identity, timestamp, SDK
+identity, and a generic error type for grouping; it drops message, stack,
+user-authored context, and arbitrary attributes. The complete note
+title/body/editor/version/list/recently-deleted DOM and every vault PIN-pad
+descendant carry PostHog's `ph-no-capture` marker as a defense-in-depth
+boundary if automatic capture or replay is ever re-enabled.
 
 ### PIN hashing
 

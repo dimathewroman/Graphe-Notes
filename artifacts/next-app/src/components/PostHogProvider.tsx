@@ -3,6 +3,28 @@
 import posthog from "posthog-js";
 import { PostHogProvider } from "posthog-js/react";
 import { useEffect } from "react";
+import type { CaptureResult, Properties } from "posthog-js";
+
+function scrubExceptionBeforeSend(event: CaptureResult | null): CaptureResult | null {
+  if (!event || event.event !== "$exception") return event;
+
+  const properties: Properties = {
+    // Keep a generic type for PostHog error grouping without sending the raw
+    // error message, stack, user-authored context, or arbitrary attributes.
+    $exception_list: [{ type: "Error" }],
+  };
+  for (const key of ["$lib", "$lib_version"] as const) {
+    const value = event.properties[key];
+    if (typeof value === "string") properties[key] = value;
+  }
+
+  return {
+    uuid: event.uuid,
+    event: "$exception",
+    properties,
+    ...(event.timestamp ? { timestamp: event.timestamp } : {}),
+  };
+}
 
 export function PHProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -22,6 +44,7 @@ export function PHProvider({ children }: { children: React.ReactNode }) {
       capture_pageleave: false,
       rageclick: false,
       capture_exceptions: true,
+      before_send: scrubExceptionBeforeSend,
       loaded: (ph) => {
         if (process.env.NODE_ENV === "development") {
           ph.debug();

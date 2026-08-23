@@ -264,7 +264,7 @@ export function RecentlyDeleted() {
                   key={note.id}
                   onClick={() => { selectNote(note.id); if (bp === "mobile") setMobileView("editor"); }}
                   className={cn(
-                    "p-3 rounded-xl cursor-pointer border transition-all duration-200 group",
+                    "ph-no-capture p-3 rounded-xl cursor-pointer border transition-all duration-200 group",
                     selectedNoteId === note.id
                       ? "bg-panel border-primary/50 shadow-sm"
                       : "bg-transparent border-transparent hover:bg-panel hover:border-panel-border"

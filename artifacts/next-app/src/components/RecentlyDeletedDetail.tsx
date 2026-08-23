@@ -290,7 +290,7 @@ export function RecentlyDeletedDetail() {
       </AlertDialog>
 
       {/* Content */}
-      <div className={cn("flex-1 overflow-y-auto", bp === "mobile" && "pb-28")}>
+      <div className={cn("ph-no-capture flex-1 overflow-y-auto", bp === "mobile" && "pb-28")}>
         <div className="max-w-3xl mx-auto px-4 py-6 md:px-8 md:py-12">
           <h1 className="text-2xl md:text-4xl font-bold text-foreground mb-4 tracking-tight">
             {note.title || "Untitled Note"}
