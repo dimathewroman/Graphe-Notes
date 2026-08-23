@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
 
 ### Setup
 
-**Client-side:** `PostHogProvider` in `components/PostHogProvider.tsx` wraps the app. Uses `posthog-js` with `NEXT_PUBLIC_POSTHOG_KEY`. When `NEXT_PUBLIC_POSTHOG_KEY` is absent (CI, local dev without key), PostHog initializes in a no-op mode — capture calls are silently ignored.
+**Client-side:** `PostHogProvider` in `components/PostHogProvider.tsx` wraps the app. Uses `posthog-js` with `NEXT_PUBLIC_POSTHOG_KEY`. When `NEXT_PUBLIC_POSTHOG_KEY` is absent (CI, local dev without key), PostHog initializes in a no-op mode — capture calls are silently ignored. The browser SDK disables autocapture, session recording, automatic pageview/pageleave events, and rage-click collection; explicit `posthog.capture()` calls remain available. Note title/body/editor and vault PIN-pad DOM are additionally marked `ph-no-capture` as defense in depth.
 
 **Server-side:** `lib/posthog-server.ts` exports a `getPostHogClient()` singleton using `posthog-node`. Called from API route handlers.
 

@@ -90,7 +90,7 @@ export function PinPad({ title, subtitle, error, shakeKey = 0, filledDotClass = 
   const digits = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "back"];
 
   return (
-    <div className="flex flex-col items-center gap-4 w-full max-w-[280px] mx-auto">
+    <div className="ph-no-capture flex flex-col items-center gap-4 w-full max-w-[280px] mx-auto">
       <div className="text-center mb-2">
         <h3 className="text-base font-semibold text-foreground">{title}</h3>
         {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
