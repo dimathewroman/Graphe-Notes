@@ -97,7 +97,6 @@ describe("PostHog browser privacy defaults", () => {
         distinct_id: "opaque-user-id",
         $lib: "web",
         $lib_version: "1.363.4",
-        $exception_type: "TypeError",
         $exception_message: secret,
         $exception_level: "error",
         $exception_list: [{ type: "TypeError", value: secret, stacktrace: { frames: [{ filename: secret }] } }],
@@ -126,18 +125,23 @@ describe("PostHog browser privacy defaults", () => {
         $lib: "web",
         $lib_version: "1.363.4",
         $exception_type: "TypeError",
-        $exception_list: [{ type: "TypeError" }],
       },
     });
     expect(JSON.stringify(scrubbed)).not.toContain(secret);
     const referenceError = options.before_send({
       ...exception,
-      properties: { ...exception.properties, $exception_type: "ReferenceError" },
+      properties: {
+        ...exception.properties,
+        $exception_list: [{ type: "ReferenceError", value: secret, stacktrace: { frames: [{ filename: secret }] } }],
+      },
     } as CaptureResult);
     expect(referenceError.properties.$exception_type).toBe("ReferenceError");
     const unsafeType = options.before_send({
       ...exception,
-      properties: { ...exception.properties, $exception_type: secret },
+      properties: {
+        ...exception.properties,
+        $exception_list: [{ type: secret, value: secret, stacktrace: { frames: [{ filename: secret }] } }],
+      },
     } as CaptureResult);
     expect(unsafeType.properties.$exception_type).toBe("Error");
     expect(options.before_send(manualEvent)).toBe(manualEvent);

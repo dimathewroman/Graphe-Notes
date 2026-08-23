@@ -13,7 +13,13 @@ const SAFE_EXCEPTION_TYPES = new Set([
 ]);
 
 function safeExceptionType(properties: Properties): string {
-  const type = properties.$exception_type;
+  const exceptionList = properties.$exception_list;
+  if (!Array.isArray(exceptionList)) return "Error";
+
+  const firstException = exceptionList[0];
+  if (!firstException || typeof firstException !== "object" || Array.isArray(firstException)) return "Error";
+
+  const type = (firstException as Record<string, unknown>).type;
   return typeof type === "string" && SAFE_EXCEPTION_TYPES.has(type) ? type : "Error";
 }
 
@@ -25,7 +31,6 @@ function scrubExceptionBeforeSend(event: CaptureResult | null): CaptureResult | 
     // Preserve only a standard error class for grouping. Never pass through
     // message, stack, filenames, paths, or arbitrary caller properties.
     $exception_type: exceptionType,
-    $exception_list: [{ type: exceptionType }],
   };
   for (const key of ["token", "$token", "distinct_id", "$lib", "$lib_version"] as const) {
     const value = event.properties[key];
