@@ -82,7 +82,7 @@ describe("PostHog browser privacy defaults", () => {
     }));
   });
 
-  it("removes all private exception detail but leaves deliberate custom events unchanged", () => {
+  it("retains only transport identity and a safe exception type", () => {
     process.env.NEXT_PUBLIC_POSTHOG_KEY = "test-key";
     render(createElement(PHProvider, { children: null }));
 
@@ -93,14 +93,20 @@ describe("PostHog browser privacy defaults", () => {
       event: "$exception",
       timestamp: new Date("2026-08-23T00:00:00.000Z"),
       properties: {
+        token: "phc_project_token",
+        distinct_id: "opaque-user-id",
         $lib: "web",
         $lib_version: "1.363.4",
-        $exception_list: [{ type: "Error", value: secret, stacktrace: { frames: [{ filename: secret }] } }],
-        message: secret,
-        stack: secret,
+        $exception_type: "TypeError",
+        $exception_message: secret,
+        $exception_level: "error",
+        $exception_list: [{ type: "TypeError", value: secret, stacktrace: { frames: [{ filename: secret }] } }],
+        $current_url: `https://app.example.test/notes/${secret}?provider=${secret}`,
+        $pathname: `/notes/${secret}`,
         note_content: secret,
       },
       $set: { private_note_title: secret },
+      $set_once: { private_provider: secret },
     } as unknown as CaptureResult;
     const manualEvent = {
       uuid: "manual-uuid",
@@ -115,12 +121,25 @@ describe("PostHog browser privacy defaults", () => {
       event: "$exception",
       timestamp: exception.timestamp,
       properties: {
+        token: "phc_project_token",
+        distinct_id: "opaque-user-id",
         $lib: "web",
         $lib_version: "1.363.4",
-        $exception_list: [{ type: "Error" }],
+        $exception_type: "TypeError",
+        $exception_list: [{ type: "TypeError" }],
       },
     });
     expect(JSON.stringify(scrubbed)).not.toContain(secret);
+    const referenceError = options.before_send({
+      ...exception,
+      properties: { ...exception.properties, $exception_type: "ReferenceError" },
+    } as CaptureResult);
+    expect(referenceError.properties.$exception_type).toBe("ReferenceError");
+    const unsafeType = options.before_send({
+      ...exception,
+      properties: { ...exception.properties, $exception_type: secret },
+    } as CaptureResult);
+    expect(unsafeType.properties.$exception_type).toBe("Error");
     expect(options.before_send(manualEvent)).toBe(manualEvent);
   });
 });
