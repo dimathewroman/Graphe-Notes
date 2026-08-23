@@ -15,13 +15,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  try {
-    const now = new Date();
+  const now = new Date();
+  const failures: string[] = [];
+  let purgedNotes = 0;
+  let purgedAttachments = 0;
+  let storageErrors = 0;
+  let uploadReservations = { claimed: 0, cleaned: 0, failed: 0 };
 
-    // 1. Hard-delete recently-deleted notes past their auto-delete date.
-    //    X-R1/X-R2: purge each note's attachments (rows + storage) and version
-    //    snapshots FIRST — the child FKs are ON DELETE RESTRICT, so deleting a
-    //    note that still has children would throw.
+  // Each phase is independent and runs once. A failure gates only that phase's
+  // destructive row delete; it must not starve the durable reservation worker.
+  try {
     const notesToPurge = await db
       .select({ id: notesTable.id })
       .from(notesTable)
@@ -31,38 +34,28 @@ export async function GET(request: NextRequest) {
           lte(notesTable.autoDeleteAt, now),
         ),
       );
-    const purgeIds = notesToPurge.map((n) => n.id);
-
+    const purgeIds = notesToPurge.map((note) => note.id);
     const childCleanup = await purgeNoteChildren(purgeIds);
-
+    storageErrors += childCleanup.storageErrors;
     if (!childCleanup.complete) {
-      Sentry.captureException(
-        new Error(
-          `[purge-deleted] Note child cleanup incomplete (${childCleanup.storageErrors} batches)`,
-        ),
-      );
-      return NextResponse.json(
-        {
-          error: "Note child cleanup incomplete; retry later",
-          storageErrors: childCleanup.storageErrors,
-        },
-        { status: 503 },
-      );
+      failures.push("note_child_cleanup");
+    } else if (purgeIds.length > 0) {
+      purgedNotes = (
+        await db
+          .delete(notesTable)
+          .where(inArray(notesTable.id, purgeIds))
+          .returning({ id: notesTable.id })
+      ).length;
     }
+  } catch {
+    failures.push("note_cleanup_exception");
+  }
 
-    const purgedNotes =
-      purgeIds.length > 0
-        ? await db
-            .delete(notesTable)
-            .where(inArray(notesTable.id, purgeIds))
-            .returning({ id: notesTable.id })
-        : [];
-
-    // 2. Hard-purge soft-deleted attachments older than 30 days
+  try {
     const cutoff = new Date(
       now.getTime() - ATTACHMENT_RETENTION_DAYS * 24 * 60 * 60 * 1000,
     );
-    const expiredAttachments = await db
+    const expired = await db
       .select({
         id: attachmentsTable.id,
         storagePath: attachmentsTable.storagePath,
@@ -76,42 +69,30 @@ export async function GET(request: NextRequest) {
           lte(attachmentsTable.deletedAt, cutoff),
         ),
       );
-
-    // Collect all unique storage paths for each attachment:
-    // v1 rows have storagePath; v2 rows have masterPath + proxyPath.
-    // For animated GIF fallback, proxyPath === masterPath — use a Set to deduplicate.
-    const pathSet = new Set<string>();
-    for (const a of expiredAttachments) {
-      const candidates = [a.storagePath, a.masterPath, a.proxyPath];
-      for (const p of candidates) {
-        if (p) pathSet.add(p);
-      }
-    }
-    const paths = Array.from(pathSet);
-
-    // Remove the actual files from Supabase Storage in batches of 100
-    let storageErrors = 0;
-    for (let i = 0; i < paths.length; i += 100) {
-      const batch = paths.slice(i, i + 100);
+    const paths = [
+      ...new Set(
+        expired.flatMap((attachment) =>
+          [
+            attachment.storagePath,
+            attachment.masterPath,
+            attachment.proxyPath,
+          ].filter((path): path is string => Boolean(path)),
+        ),
+      ),
+    ];
+    let attachmentStorageErrors = 0;
+    for (let index = 0; index < paths.length; index += 100) {
       const { error } = await supabaseAdmin.storage
         .from("note-attachments")
-        .remove(batch);
+        .remove(paths.slice(index, index + 100));
       if (error) {
-        Sentry.captureException(
-          new Error(`[purge-deleted] Storage remove error: ${error.message}`),
-        );
-        storageErrors++;
+        attachmentStorageErrors += 1;
+        storageErrors += 1;
       }
     }
-
-    if (storageErrors > 0) {
-      return NextResponse.json(
-        { error: "Attachment cleanup incomplete; retry later", storageErrors },
-        { status: 503 },
-      );
-    }
-
-    if (expiredAttachments.length > 0) {
+    if (attachmentStorageErrors > 0) {
+      failures.push("attachment_storage_cleanup");
+    } else if (expired.length > 0) {
       await db
         .delete(attachmentsTable)
         .where(
@@ -120,34 +101,45 @@ export async function GET(request: NextRequest) {
             lte(attachmentsTable.deletedAt, cutoff),
           ),
         );
+      purgedAttachments = expired.length;
     }
+  } catch {
+    failures.push("attachment_cleanup_exception");
+  }
 
-    const uploadReservations = await cleanupExpiredUploadReservations();
+  try {
+    uploadReservations = await cleanupExpiredUploadReservations();
     if (uploadReservations.failed > 0) {
-      Sentry.captureException(
-        new Error("[purge-deleted] Upload reservation cleanup incomplete"),
-        { extra: { failedReservationCount: uploadReservations.failed } },
-      );
-      return NextResponse.json(
-        {
-          error: "Upload cleanup incomplete; retry later",
-          uploadReservations,
-        },
-        { status: 503 },
-      );
+      failures.push("upload_reservation_cleanup");
     }
+  } catch {
+    failures.push("upload_reservation_cleanup_exception");
+  }
 
-    return NextResponse.json({
-      purgedNotes: purgedNotes.length,
-      purgedAttachments: expiredAttachments.length,
-      storageErrors,
-      uploadReservations,
+  if (failures.length > 0) {
+    Sentry.captureException(new Error("[purge-deleted] cleanup_incomplete"), {
+      fingerprint: ["purge-deleted", "cleanup-incomplete"],
+      extra: {
+        failureCount: failures.length,
+        storageErrors,
+        failedReservationCount: uploadReservations.failed,
+      },
     });
-  } catch (err) {
-    Sentry.captureException(err);
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
+      {
+        error: "Cleanup incomplete; retry later",
+        failures,
+        storageErrors,
+        uploadReservations,
+      },
+      { status: 503 },
     );
   }
+
+  return NextResponse.json({
+    purgedNotes,
+    purgedAttachments,
+    storageErrors,
+    uploadReservations,
+  });
 }

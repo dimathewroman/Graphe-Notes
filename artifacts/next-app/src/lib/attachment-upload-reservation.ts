@@ -3,7 +3,6 @@ import {
   attachmentUploadReservationsTable,
   attachmentsTable,
   db,
-  notesTable,
 } from "@workspace/db";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { randomUUID } from "crypto";
@@ -67,19 +66,20 @@ export async function finalizeUploadReservation(
       throw new UploadReservationError("reservation_unavailable");
     }
 
-    const [note] = await tx
-      .select({ id: notesTable.id })
-      .from(notesTable)
-      .where(
-        and(
-          eq(notesTable.id, draft.noteId),
-          eq(notesTable.userId, draft.userId),
-          sql`${notesTable.deletedAt} is null`,
-          sql`${notesTable.autoDeleteAt} is null`,
-        ),
-      )
-      .limit(1);
-    if (!note) throw new UploadReservationError("note_unavailable");
+    // Serialize finalization against soft/hard deletion. If deletion commits
+    // first this returns no row; if finalization locks first, its attachment
+    // commit defines the serial order and the existing RESTRICT FK protects it.
+    const noteLock = await tx.execute(
+      sql`select id from public.notes
+          where id = ${draft.noteId}
+            and user_id = ${draft.userId}
+            and deleted_at is null
+            and auto_delete_at is null
+          for update`,
+    );
+    if (noteLock.rows.length !== 1) {
+      throw new UploadReservationError("note_unavailable");
+    }
 
     const [attachment] = await tx
       .insert(attachmentsTable)

@@ -21,12 +21,18 @@ pnpm --filter @workspace/next-app exec vitest run src/__tests__/security/attachm
 ```
 
 Database migrations have two explicit checksummed tracks: current fresh install
-and production-equivalent 0006 upgrade. Validate both using disposable local
-PostgreSQL (never a configured Supabase database):
+and a synthetic production-equivalent 0006 fixture plus upgrade. Historical
+0000-0006 files are immutable provenance and explicitly non-replayable. Validate
+the source tracks, negative baseline, and finalization/delete serial order using
+disposable local PostgreSQL (never a configured Supabase database):
 
 ```bash
 pnpm run db:migrations:validate
 ```
+
+`pnpm run db:hosted-preflight` is a separate deployment-only, read-only check.
+It requires both `GRAPHE_HOSTED_PREFLIGHT_DB_URL` and the independently proven
+`GRAPHE_EXPECTED_RUNTIME_DB_ROLE`; local/CI validation never invokes it.
 
 ---
 

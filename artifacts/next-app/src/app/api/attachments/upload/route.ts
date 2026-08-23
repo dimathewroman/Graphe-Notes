@@ -74,6 +74,31 @@ function imageMagicMatches(mimeType: string, buf: Buffer): boolean {
 
 type MasterFormat = "jpg" | "png" | "gif" | "avif";
 
+function captureUploadFailure(
+  code: string,
+  extra?: Record<string, string | number | boolean>,
+): void {
+  Sentry.captureException(new Error(`[attachments] ${code}`), {
+    fingerprint: ["attachment-upload", code],
+    ...(extra ? { extra } : {}),
+  });
+}
+
+async function safelyCleanupFailedUpload(
+  reservation: Parameters<typeof cleanupFailedUpload>[0],
+  draft: Parameters<typeof cleanupFailedUpload>[1],
+  code: string,
+): Promise<void> {
+  try {
+    const cleaned = await cleanupFailedUpload(reservation, draft, code);
+    if (!cleaned) captureUploadFailure("cleanup_deferred");
+  } catch {
+    // The reservation remains durable and will become claimable after its
+    // lease. Never forward a provider/DB exception or path-bearing cause.
+    captureUploadFailure("cleanup_attempt_failed");
+  }
+}
+
 /**
  * Produce the master buffer for non-GIF images.
  *
@@ -270,6 +295,7 @@ export async function POST(request: NextRequest) {
       try {
         reservation = await createUploadReservation(draft);
       } catch {
+        captureUploadFailure("reservation_create_failed");
         return NextResponse.json(
           { error: "Upload temporarily unavailable" },
           { status: 503 },
@@ -284,12 +310,12 @@ export async function POST(request: NextRequest) {
         });
 
       if (uploadError) {
-        Sentry.captureException(
-          new Error(
-            `[attachments] Storage upload error: ${uploadError.message}`,
-          ),
+        captureUploadFailure("storage_upload_failed");
+        await safelyCleanupFailedUpload(
+          reservation,
+          draft,
+          "storage_upload_failed",
         );
-        await cleanupFailedUpload(reservation, draft, "storage_upload_failed");
         return NextResponse.json({ error: "Upload failed" }, { status: 500 });
       }
 
@@ -297,7 +323,7 @@ export async function POST(request: NextRequest) {
       try {
         attachment = await finalizeUploadReservation(reservation, draft);
       } catch (insertError) {
-        await cleanupFailedUpload(
+        await safelyCleanupFailedUpload(
           reservation,
           draft,
           insertError instanceof UploadReservationError
@@ -391,10 +417,8 @@ export async function POST(request: NextRequest) {
           proxyBuffer = proxyBuf;
           width = meta.width;
           height = meta.pageHeight ?? meta.height; // pageHeight = single frame height
-        } catch (convErr) {
-          Sentry.captureException(convErr, {
-            extra: { originalMimeType: mimeType },
-          });
+        } catch {
+          captureUploadFailure("gif_conversion_failed");
           return NextResponse.json(
             { error: "Image conversion failed" },
             { status: 422 },
@@ -424,6 +448,7 @@ export async function POST(request: NextRequest) {
         try {
           reservation = await createUploadReservation(draft);
         } catch {
+          captureUploadFailure("reservation_create_failed");
           return NextResponse.json(
             { error: "Upload temporarily unavailable" },
             { status: 503 },
@@ -447,11 +472,12 @@ export async function POST(request: NextRequest) {
         ]);
 
         if (masterUpload.error || proxyUpload.error) {
-          const err = masterUpload.error ?? proxyUpload.error;
-          Sentry.captureException(
-            new Error(`[attachments] GIF upload error: ${err!.message}`),
-          );
-          await cleanupFailedUpload(
+          captureUploadFailure("storage_upload_failed", {
+            failedObjectCount:
+              Number(Boolean(masterUpload.error)) +
+              Number(Boolean(proxyUpload.error)),
+          });
+          await safelyCleanupFailedUpload(
             reservation,
             draft,
             "storage_upload_failed",
@@ -463,7 +489,7 @@ export async function POST(request: NextRequest) {
         try {
           attachment = await finalizeUploadReservation(reservation, draft);
         } catch (insertError) {
-          await cleanupFailedUpload(
+          await safelyCleanupFailedUpload(
             reservation,
             draft,
             insertError instanceof UploadReservationError
@@ -529,10 +555,8 @@ export async function POST(request: NextRequest) {
         mimeType,
         heic,
       ));
-    } catch (convErr) {
-      Sentry.captureException(convErr, {
-        extra: { originalMimeType: mimeType },
-      });
+    } catch {
+      captureUploadFailure("master_conversion_failed");
       return NextResponse.json(
         { error: "Image conversion failed" },
         { status: 422 },
@@ -580,10 +604,8 @@ export async function POST(request: NextRequest) {
         proxyBuffer = proxyBuf;
         width = metadata.width;
         height = metadata.height;
-      } catch (convErr) {
-        Sentry.captureException(convErr, {
-          extra: { originalMimeType: mimeType },
-        });
+      } catch {
+        captureUploadFailure("proxy_conversion_failed");
         return NextResponse.json(
           { error: "Image conversion failed" },
           { status: 422 },
@@ -626,6 +648,7 @@ export async function POST(request: NextRequest) {
     try {
       reservation = await createUploadReservation(draft);
     } catch {
+      captureUploadFailure("reservation_create_failed");
       return NextResponse.json(
         { error: "Upload temporarily unavailable" },
         { status: 503 },
@@ -660,13 +683,14 @@ export async function POST(request: NextRequest) {
     const uploadResults = await Promise.all(uploadTasks);
     const failedUpload = uploadResults.find((r) => r.error);
     if (failedUpload) {
-      const err = failedUpload.error!;
-      Sentry.captureException(
-        new Error(
-          `[attachments] Storage upload error (${failedUpload.which}): ${err.message}`,
-        ),
+      captureUploadFailure("storage_upload_failed", {
+        failedObjectCount: 1,
+      });
+      await safelyCleanupFailedUpload(
+        reservation,
+        draft,
+        "storage_upload_failed",
       );
-      await cleanupFailedUpload(reservation, draft, "storage_upload_failed");
       return NextResponse.json({ error: "Upload failed" }, { status: 500 });
     }
 
@@ -674,7 +698,7 @@ export async function POST(request: NextRequest) {
     try {
       attachment = await finalizeUploadReservation(reservation, draft);
     } catch (insertError) {
-      await cleanupFailedUpload(
+      await safelyCleanupFailedUpload(
         reservation,
         draft,
         insertError instanceof UploadReservationError
@@ -726,8 +750,8 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 },
     );
-  } catch (err) {
-    Sentry.captureException(err);
+  } catch {
+    captureUploadFailure("upload_request_failed");
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 },

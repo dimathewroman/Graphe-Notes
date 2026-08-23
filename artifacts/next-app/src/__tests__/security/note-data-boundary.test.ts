@@ -108,6 +108,28 @@ function deferred() {
   return { promise, resolve };
 }
 
+function uploadForm() {
+  const form = new FormData();
+  form.set("note_id", "1");
+  form.set(
+    "file",
+    new File(["synthetic"], "PRIVATE-FILENAME.txt", { type: "text/plain" }),
+  );
+  return form;
+}
+
+function mockUploadParent() {
+  mocks.db.select
+    .mockReturnValueOnce(
+      query([{ id: 1, deletedAt: null, autoDeleteAt: null }]),
+    )
+    .mockReturnValueOnce(query([{ storageTier: "admin" }]));
+}
+
+function capturedTelemetry(): string {
+  return JSON.stringify(mocks.captureException.mock.calls);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getAuthUser.mockResolvedValue({ user: { id: "synthetic-owner" } });
@@ -275,6 +297,73 @@ describe("note data boundary", () => {
 
     expect(response.status).toBe(409);
     expect(mocks.uploadStorage).not.toHaveBeenCalled();
+  });
+
+  it("does not leak upload identity when reservation creation fails", async () => {
+    mockUploadParent();
+    mocks.createUploadReservation.mockRejectedValue(
+      new Error("PRIVATE-FILENAME.txt synthetic-owner/1/private-path"),
+    );
+    const { POST } = await import("@/app/api/attachments/upload/route");
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/attachments/upload", {
+        method: "POST",
+        body: uploadForm(),
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(mocks.captureException).toHaveBeenCalled();
+    expect(capturedTelemetry()).not.toMatch(
+      /PRIVATE-FILENAME|synthetic-owner|private-path/,
+    );
+  });
+
+  it("does not leak provider errors or upload identity when Storage fails", async () => {
+    mockUploadParent();
+    mocks.uploadStorage.mockResolvedValue({
+      error: {
+        message: "PRIVATE-FILENAME.txt synthetic-owner/1/private-path",
+      },
+    });
+    const { POST } = await import("@/app/api/attachments/upload/route");
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/attachments/upload", {
+        method: "POST",
+        body: uploadForm(),
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(capturedTelemetry()).not.toMatch(
+      /PRIVATE-FILENAME|synthetic-owner|private-path/,
+    );
+  });
+
+  it("does not leak raw finalization or cleanup exceptions", async () => {
+    mockUploadParent();
+    mocks.finalizeUploadReservation.mockRejectedValue(
+      new Error("FINALIZE PRIVATE-FILENAME.txt synthetic-owner/1/private-path"),
+    );
+    mocks.cleanupFailedUpload.mockRejectedValue(
+      new Error("CLEANUP PRIVATE-FILENAME.txt synthetic-owner/1/private-path"),
+    );
+    const { POST } = await import("@/app/api/attachments/upload/route");
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/attachments/upload", {
+        method: "POST",
+        body: uploadForm(),
+      }),
+    );
+
+    expect(response.status).toBe(500);
+    expect(mocks.captureException).toHaveBeenCalled();
+    expect(capturedTelemetry()).not.toMatch(
+      /PRIVATE-FILENAME|synthetic-owner|private-path|FINALIZE|CLEANUP/,
+    );
   });
 
   it("does not orphan an upload that passed validation while its note is permanently purged", async () => {

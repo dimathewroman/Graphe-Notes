@@ -388,7 +388,7 @@ Route handlers use the service role key which bypasses RLS — RLS is a defense-
 - `lib/db/drizzle/0002_*` — note_versions user_id backfill
 - `lib/db/drizzle/0003_templates_rls_policies.sql` — RLS policies for templates table
 - `lib/db/drizzle/0007_attachment_upload_reservations.sql` — fail-closed upgrade from the verified 0006-equivalent baseline
-- `lib/db/drizzle/migration-manifest.json` — ordered SHA-256 inventory for legacy/upgrade and fresh-install tracks
+- `lib/db/drizzle/migration-manifest.json` — separates non-replayable legacy provenance hashes from the checksummed production fixture/upgrade and fresh-install tracks
 - `lib/db/drizzle/fresh/*` — current complete fresh-install schema and private-table hardening
 
 Run `pnpm run db:migrations:validate` to validate checksums, a disposable fresh
@@ -396,6 +396,12 @@ database, a production-equivalent 0006 upgrade, and rejection of an unexpected
 baseline. Rollback is app-first: disable the writer/cleaner while retaining the
 private table until its inventory is empty; dropping cleanup evidence is a
 separate destructive operation.
+
+The local fixture is evidence about source SQL, not the hosted database. After
+an operator applies the reviewed migration and exact-role grant, the explicit
+read-only `pnpm run db:hosted-preflight` command must validate the hosted public
+fingerprint, private RLS/revokes, current role, and role privileges before app
+deployment. That live evidence is currently unproven.
 
 ---
 

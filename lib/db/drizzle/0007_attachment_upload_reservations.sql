@@ -1,6 +1,8 @@
 -- Ordered migration after the production-equivalent 0006 baseline. This
 -- preflight intentionally fails closed if the known safety baseline is absent.
 DO $baseline$
+DECLARE
+  actual_tables text[];
 BEGIN
   IF to_regclass('private.attachment_upload_reservations') IS NOT NULL THEN
     RAISE EXCEPTION 'unexpected baseline: attachment upload reservations already exists';
@@ -17,6 +19,62 @@ BEGIN
       AND confdeltype = 'r'
   ) THEN
     RAISE EXCEPTION 'unexpected baseline: required 0006 RESTRICT constraints are absent';
+  END IF;
+
+  SELECT array_agg(c.relname::text ORDER BY c.relname)
+    INTO actual_tables
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+   WHERE n.nspname = 'public' AND c.relkind = 'r';
+  IF actual_tables IS DISTINCT FROM ARRAY[
+    'ai_usage', 'attachments', 'folders', 'note_versions', 'notes',
+    'quick_bit_settings', 'quick_bits', 'smart_folders', 'templates',
+    'user_api_keys', 'user_settings', 'users', 'vault_settings'
+  ]::text[] THEN
+    RAISE EXCEPTION 'unexpected baseline: public table fingerprint differs';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity
+  ) THEN
+    RAISE EXCEPTION 'unexpected baseline: public RLS is incomplete';
+  END IF;
+
+  IF (SELECT count(*) FROM pg_policies WHERE schemaname = 'public') <> 52
+     OR EXISTS (
+       SELECT table_name
+       FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+       EXCEPT
+       SELECT tablename
+       FROM pg_policies
+       WHERE schemaname = 'public'
+       GROUP BY tablename
+       HAVING count(*) = 4
+     ) THEN
+    RAISE EXCEPTION 'unexpected baseline: public policy fingerprint differs';
+  END IF;
+
+  IF to_regclass('public.attachments_user_id_idx') IS NULL
+     OR to_regclass('public.attachments_note_id_idx') IS NULL
+     OR to_regclass('public.attachments_note_id_created_at_idx') IS NULL
+     OR to_regclass('public.note_versions_user_id_idx') IS NULL
+     OR to_regclass('public.note_versions_note_id_created_at_idx') IS NULL
+     OR to_regclass('public.notes_user_id_deleted_at_idx') IS NULL THEN
+    RAISE EXCEPTION 'unexpected baseline: required attachment/note indexes are absent';
+  END IF;
+
+  IF to_regprocedure('public.rls_auto_enable()') IS NULL OR EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    CROSS JOIN LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+    WHERE p.oid = 'public.rls_auto_enable()'::regprocedure
+      AND acl.grantee = 0
+      AND acl.privilege_type = 'EXECUTE'
+  ) THEN
+    RAISE EXCEPTION 'unexpected baseline: rls_auto_enable revoke is absent';
   END IF;
 END
 $baseline$;

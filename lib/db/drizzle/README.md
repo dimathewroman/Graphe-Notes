@@ -6,12 +6,14 @@ ledger: migrations `0001` through `0006` were historically applied or recorded
 outside that journal. Rewriting it would make an existing database appear safe
 to replay when that has not been proven.
 
-`migration-manifest.json` is the authoritative source-controlled ordering and
-SHA-256 inventory:
+`migration-manifest.json` is the authoritative source-controlled SHA-256
+inventory. It separates evidence with different meanings:
 
-- `productionUpgrade` preserves the historical SQL hashes and permits `0007`
-  only after its SQL preflight proves the production-equivalent `0006`
-  `ON DELETE RESTRICT` baseline.
+- `legacyProvenance` preserves hashes for `0000` through `0006` and explicitly
+  marks that broken historical sequence as non-replayable.
+- `productionUpgrade` creates an explicitly checksummed synthetic
+  production-equivalent-`0006` fixture, then proves that `0007` accepts that
+  complete public table/RLS/policy/revoke/index/constraint fingerprint.
 - `fresh` creates the complete current schema, establishes current public RLS
   policies, and hardens the private upload-cleanup inventory.
 
@@ -20,7 +22,17 @@ local PostgreSQL databases and proves both tracks plus the fail-closed negative
 case. It never reads `SUPABASE_DB_URL`.
 
 Applying SQL to a hosted database remains a separate operator action. Before
-applying `0007`, prove the direct runtime database role and grant only that role
-`USAGE` on `private` and CRUD on
-`private.attachment_upload_reservations`. Do not drop the table during app
-rollback; retain it until the cleanup inventory is empty.
+deploying the app, an operator must apply the reviewed SQL, prove the exact
+direct runtime role, grant only that role `USAGE` on `private` and CRUD on the
+reservation table, then explicitly run the read-only hosted check:
+
+```bash
+GRAPHE_HOSTED_PREFLIGHT_DB_URL='...' \
+GRAPHE_EXPECTED_RUNTIME_DB_ROLE='proven-role' \
+pnpm run db:hosted-preflight
+```
+
+The command is never invoked by local validation, builds, or deployment hooks;
+it runs a read-only transaction and does not print the URL. Its live result and
+runtime-role ownership remain unproven in source. Do not drop the table during
+app rollback; retain it until the cleanup inventory is empty.

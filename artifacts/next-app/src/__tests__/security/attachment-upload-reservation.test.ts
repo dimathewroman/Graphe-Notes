@@ -204,10 +204,42 @@ describe("durable attachment upload reservation", () => {
     expect(tx.insert).not.toHaveBeenCalled();
   });
 
+  it("locks the active parent note before inserting the attachment", async () => {
+    const committed = { id: "attachment-1", ...draft };
+    const tx = {
+      execute: vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [{ id: reservation.id }] })
+        .mockResolvedValueOnce({ rows: [{ id: draft.noteId }] }),
+      select: vi.fn(),
+      insert: vi.fn().mockReturnValue(chain([committed])),
+      delete: vi.fn().mockReturnValue(chain([{ id: reservation.id }])),
+    };
+    mocks.transaction.mockImplementation((callback) => callback(tx));
+    const { finalizeUploadReservation } =
+      await import("@/lib/attachment-upload-reservation");
+
+    await expect(
+      finalizeUploadReservation(reservation, draft),
+    ).resolves.toEqual(committed);
+    expect(tx.execute).toHaveBeenCalledTimes(2);
+    const noteLock = tx.execute.mock.calls[1]![0] as { parts: string[] };
+    const noteLockSql = noteLock.parts.join(" ");
+    expect(noteLockSql).toContain("from public.notes");
+    expect(noteLockSql).toContain("user_id =");
+    expect(noteLockSql).toContain("deleted_at is null");
+    expect(noteLockSql).toContain("auto_delete_at is null");
+    expect(noteLockSql).toContain("for update");
+    expect(tx.insert).toHaveBeenCalledAfter(tx.execute);
+  });
+
   it("atomically inserts the attachment and consumes the current reservation", async () => {
     const committed = { id: "attachment-1", ...draft };
     const tx = {
-      execute: vi.fn().mockResolvedValue({ rows: [{ id: reservation.id }] }),
+      execute: vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [{ id: reservation.id }] })
+        .mockResolvedValueOnce({ rows: [{ id: draft.noteId }] }),
       select: vi.fn().mockReturnValue(chain([{ id: draft.noteId }])),
       insert: vi.fn().mockReturnValue(chain([committed])),
       delete: vi.fn().mockReturnValue(chain([{ id: reservation.id }])),

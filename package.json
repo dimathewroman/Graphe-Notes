@@ -11,6 +11,7 @@
     "test": "pnpm -r --if-present run test",
     "check": "pnpm run typecheck && pnpm run test",
     "db:migrations:validate": "node scripts/validate-db-migrations.mjs",
+    "db:hosted-preflight": "node scripts/preflight-hosted-db.mjs",
     "claude-proxy": "node scripts/claude-proxy.mjs"
   },
   "private": true,

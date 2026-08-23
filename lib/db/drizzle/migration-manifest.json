@@ -1,8 +1,9 @@
 {
   "schemaVersion": 1,
   "tracks": {
-    "productionUpgrade": {
-      "baseline": "production-equivalent-0006",
+    "legacyProvenance": {
+      "replayable": false,
+      "description": "Immutable hashes only; the historical Drizzle journal is incomplete.",
       "files": [
         {
           "path": "0000_dashing_felicia_hardy.sql",
@@ -31,10 +32,37 @@
         {
           "path": "0006_note_children_fks.sql",
           "sha256": "8cf0757036c3abacedbf393e41b35e6cf2f96630459db1c4bede8e0d649646f9"
+        }
+      ]
+    },
+    "productionUpgrade": {
+      "baseline": "checksummed-production-equivalent-0006-fixture",
+      "fixtureFiles": [
+        {
+          "path": "fixtures/production_equivalent_0006.sql",
+          "sha256": "6cd20cf08c0beba39b3f2431038916a77614b1198c9ba530be4ce8ce1ea8fe07"
         },
         {
+          "path": "0001_enable_rls_all_tables.sql",
+          "sha256": "d428c925533b8103b6223c9d90cce576a25bdb8b779c16e32db64b6d0837b0ae"
+        },
+        {
+          "path": "0003_templates_rls_policies.sql",
+          "sha256": "5a6256390e4759f24d1869162519056fc335ca78009d0c4234af3f39a59ac412"
+        },
+        {
+          "path": "0004_rls_auth_uid_performance.sql",
+          "sha256": "d0622f7448119a1c1ce13ca6dfd155fc6571ad8264a7952f5108028250d4f974"
+        },
+        {
+          "path": "fixtures/production_equivalent_0006_security.sql",
+          "sha256": "596cc4aadea740776751df7de11a2accc3882965f370f5bea76038d5840ae053"
+        }
+      ],
+      "migrationFiles": [
+        {
           "path": "0007_attachment_upload_reservations.sql",
-          "sha256": "200b499faf731819df61bf73389fbe31c7d6eaa8481549983d76a378b50192ba"
+          "sha256": "8ee85bb9c356e528d7a7ef56a7dad1cb432e0f5afd0d42178480386c885e8742"
         }
       ]
     },
