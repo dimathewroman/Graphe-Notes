@@ -1,4 +1,4 @@
-import { IndexeddbPersistence } from "y-indexeddb";
+import { fetchUpdates, type IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
 import type { CollaborationPersistenceAdapter } from "./collaboration-document";
 
@@ -9,7 +9,7 @@ const CUSTOM_STORE = "custom";
 
 interface IndexeddbSession {
   document: Y.Doc;
-  persistence: IndexeddbPersistence;
+  persistence: LocalIndexeddbProvider;
 }
 
 function verifyIndexeddbAvailability(): Promise<void> {
@@ -42,9 +42,15 @@ function verifyIndexeddbAvailability(): Promise<void> {
   });
 }
 
-function initializeDocumentDatabase(name: string): Promise<void> {
+function openDocumentDatabase(name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = globalThis.indexedDB.open(name);
+    let request: IDBOpenDBRequest;
+    try {
+      request = globalThis.indexedDB.open(name);
+    } catch (error) {
+      reject(error);
+      return;
+    }
     request.onupgradeneeded = () => {
       const database = request.result;
       if (!database.objectStoreNames.contains(UPDATES_STORE)) {
@@ -69,15 +75,76 @@ function initializeDocumentDatabase(name: string): Promise<void> {
       } catch {
         initialized = false;
       }
-      database.close();
 
       if (!initialized) {
+        database.close();
         reject(new Error("IndexedDB collaboration database is missing required object stores."));
         return;
       }
-      resolve();
+      database.onversionchange = () => database.close();
+      resolve(database);
     };
   });
+}
+
+function initializeDocumentDatabase(name: string): Promise<void> {
+  return openDocumentDatabase(name).then((database) => database.close());
+}
+
+function replacePersistedState(database: IDBDatabase, state: Uint8Array): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let transaction: IDBTransaction;
+    try {
+      transaction = database.transaction(UPDATES_STORE, "readwrite");
+      const updates = transaction.objectStore(UPDATES_STORE);
+      updates.clear();
+      updates.add(state);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    transaction.onerror = () => reject(transaction.error ?? new Error("IndexedDB write failed."));
+    transaction.onabort = () => reject(transaction.error ?? new Error("IndexedDB write failed."));
+    transaction.oncomplete = () => resolve();
+  });
+}
+
+class LocalIndexeddbProvider {
+  readonly doc: Y.Doc;
+  db: IDBDatabase | null = null;
+  _dbref = 0;
+  _dbsize = 0;
+  _destroyed = false;
+  readonly ready: Promise<void>;
+  private destroyPromise: Promise<void> | undefined;
+
+  constructor(name: string, document: Y.Doc) {
+    this.doc = document;
+    this.ready = openDocumentDatabase(name).then(async (database) => {
+      this.db = database;
+      // fetchUpdates only reads the provider fields implemented by this local wrapper.
+      await fetchUpdates(this as unknown as IndexeddbPersistence);
+    });
+  }
+
+  async persist(state: Uint8Array): Promise<void> {
+    await this.ready;
+    if (this._destroyed || !this.db) return;
+
+    Y.applyUpdate(this.doc, state);
+    await replacePersistedState(this.db, Y.encodeStateAsUpdate(this.doc));
+  }
+
+  destroy(): Promise<void> {
+    if (this.destroyPromise) return this.destroyPromise;
+
+    this._destroyed = true;
+    this.destroyPromise = this.ready
+      .catch(() => undefined)
+      .then(() => this.db?.close());
+    return this.destroyPromise;
+  }
 }
 
 export function createIndexeddbCollaborationPersistence(): CollaborationPersistenceAdapter {
@@ -100,7 +167,7 @@ class IndexeddbCollaborationPersistence implements CollaborationPersistenceAdapt
     if (this.destroyed) return;
 
     const session = await this.getSession(documentId);
-    if (!this.destroyed) Y.applyUpdate(session.document, state);
+    if (!this.destroyed) await session.persistence.persist(state);
   }
 
   destroy(): Promise<void> {
@@ -126,10 +193,10 @@ class IndexeddbCollaborationPersistence implements CollaborationPersistenceAdapt
       .then(() => initializeDocumentDatabase(databaseName))
       .then(() => {
         const document = new Y.Doc({ guid: documentId });
-        const persistence = new IndexeddbPersistence(databaseName, document);
+        const persistence = new LocalIndexeddbProvider(databaseName, document);
         const session = { document, persistence };
         this.session = session;
-        return persistence.whenSynced.then(() => session);
+        return persistence.ready.then(() => session);
       });
     return this.sessionReady;
   }

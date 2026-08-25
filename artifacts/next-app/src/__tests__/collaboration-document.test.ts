@@ -189,6 +189,44 @@ describe("collaboration document", () => {
     expect(readBody(document.exportState())).toBe("");
   }, 250);
 
+  it("fails closed when the third target IndexedDB open fails", async () => {
+    const nativeOpen = globalThis.indexedDB.open.bind(globalThis.indexedDB);
+    let opens = 0;
+    const open = vi.spyOn(globalThis.indexedDB, "open").mockImplementation((name, version) => {
+      opens += 1;
+      if (opens === 3) throw new Error("Provider database is unavailable");
+      return version === undefined ? nativeOpen(name) : nativeOpen(name, version);
+    });
+    let providerConnections = 0;
+    const document = createCollaborationDocument({
+      documentId: "provider-open-failure",
+      persistence: createIndexeddbCollaborationPersistence(),
+      provider: {
+        connect() {
+          providerConnections += 1;
+          return { send() {}, destroy() {} };
+        },
+      },
+    });
+
+    try {
+      await expect(document.ready).rejects.toThrow("Provider database is unavailable");
+
+      const firstDestroy = document.destroy();
+      const repeatedDestroy = document.destroy();
+      expect(repeatedDestroy).toBe(firstDestroy);
+      await expect(firstDestroy).rejects.toThrow("Provider database is unavailable");
+
+      document.applyLocalUpdate(seededUpdates().seed);
+      document.applyRemoteUpdate(seededUpdates().seed);
+      expect(opens).toBe(3);
+      expect(providerConnections).toBe(0);
+      expect(readBody(document.exportState())).toBe("");
+    } finally {
+      open.mockRestore();
+    }
+  }, 250);
+
   it("converges two documents after differently ordered local and remote updates", async () => {
     const left = createCollaborationDocument({ documentId: "note-1" });
     const right = createCollaborationDocument({ documentId: "note-1" });
