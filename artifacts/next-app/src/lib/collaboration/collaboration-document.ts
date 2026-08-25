@@ -81,10 +81,15 @@ export function createCollaborationDocument({
       documentId,
       applyRemoteUpdate,
       setConnectionState(state) {
-        connectionState = state;
+        if (!destroyed) connectionState = state;
       },
     });
   });
+  const waitForPersistence = () =>
+    Promise.allSettled([restored, persisted]).then((results) => {
+      const rejected = results.find((result) => result.status === "rejected");
+      if (rejected?.status === "rejected") throw rejected.reason;
+    });
 
   return {
     ready,
@@ -117,7 +122,7 @@ export function createCollaborationDocument({
       destroyPromise = Promise.all([
         providerConnection ? Promise.resolve().then(() => providerConnection.destroy()) : undefined,
         persistence
-          ? persisted.finally(() => persistence.destroy())
+          ? waitForPersistence().finally(() => persistence.destroy())
           : undefined,
       ]).then(() => undefined);
       return destroyPromise;

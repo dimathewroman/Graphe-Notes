@@ -51,6 +51,42 @@ class MemoryPersistence implements CollaborationPersistenceAdapter {
   }
 }
 
+function deferred<Value>() {
+  let resolve: (value: Value) => void;
+  const promise = new Promise<Value>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return {
+    promise,
+    resolve(value: Value) {
+      resolve(value);
+    },
+  };
+}
+
+class PendingRestorePersistence implements CollaborationPersistenceAdapter {
+  private readonly pendingRestore = deferred<Uint8Array | null>();
+  restoreSettled = false;
+  destroyCalls = 0;
+  destroyedBeforeRestoreSettled = false;
+
+  restore(): Promise<Uint8Array | null> {
+    return this.pendingRestore.promise;
+  }
+
+  async persist(): Promise<void> {}
+
+  async destroy(): Promise<void> {
+    this.destroyCalls += 1;
+    this.destroyedBeforeRestoreSettled ||= !this.restoreSettled;
+  }
+
+  finishRestore(state: Uint8Array | null) {
+    this.restoreSettled = true;
+    this.pendingRestore.resolve(state);
+  }
+}
+
 describe("collaboration document", () => {
   it("converges two documents after differently ordered local and remote updates", async () => {
     const left = createCollaborationDocument({ documentId: "note-1" });
@@ -170,5 +206,81 @@ describe("collaboration document", () => {
     expect(readBody(document.exportState())).toBe("left-core");
     expect(persistence.persistCalls).toBe(persistenceWritesBeforeDestroy);
     expect(sentUpdates).toHaveLength(sentUpdatesBeforeDestroy);
+  });
+
+  it("waits for pending persistence restore before releasing the adapter", async () => {
+    const persistence = new PendingRestorePersistence();
+    let providerConnections = 0;
+    const document = createCollaborationDocument({
+      documentId: "note-1",
+      persistence,
+      provider: {
+        connect() {
+          providerConnections += 1;
+          return { send() {}, destroy() {} };
+        },
+      },
+    });
+
+    const destroy = document.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(persistence.destroyCalls).toBe(0);
+    expect(persistence.destroyedBeforeRestoreSettled).toBe(false);
+
+    persistence.finishRestore(seededUpdates().seed);
+    await document.ready;
+    await destroy;
+
+    expect(persistence.destroyCalls).toBe(1);
+    expect(providerConnections).toBe(0);
+    expect(readBody(document.exportState())).toBe("");
+  });
+
+  it("ignores provider callbacks that arrive while teardown is pending", async () => {
+    const releaseConnection = deferred<void>();
+    const sentUpdates: Uint8Array[] = [];
+    let connectionDestroyCalls = 0;
+    let deliverRemoteUpdate: ((update: Uint8Array) => void) | undefined;
+    let setConnectionState: ((state: "disconnected" | "connecting" | "connected") => void) | undefined;
+    const document = createCollaborationDocument({
+      documentId: "note-1",
+      provider: {
+        connect(options) {
+          deliverRemoteUpdate = options.applyRemoteUpdate;
+          setConnectionState = options.setConnectionState;
+          options.setConnectionState("connected");
+          return {
+            send(update) {
+              sentUpdates.push(update);
+            },
+            destroy() {
+              connectionDestroyCalls += 1;
+              return releaseConnection.promise;
+            },
+          };
+        },
+      },
+    });
+    await document.ready;
+
+    const updates = seededUpdates();
+    expect(deliverRemoteUpdate).toBeDefined();
+    expect(setConnectionState).toBeDefined();
+    deliverRemoteUpdate!(updates.seed);
+    const sentUpdatesBeforeDestroy = sentUpdates.length;
+
+    const destroy = document.destroy();
+    setConnectionState!("connected");
+    deliverRemoteUpdate!(updates.left);
+    document.applyLocalUpdate(updates.right);
+
+    expect(document.connectionState()).toBe("disconnected");
+    expect(readBody(document.exportState())).toBe("core");
+    expect(sentUpdates).toHaveLength(sentUpdatesBeforeDestroy);
+
+    releaseConnection.resolve(undefined);
+    await destroy;
+    expect(connectionDestroyCalls).toBe(1);
   });
 });
