@@ -12,3 +12,7 @@ rules:
   - Include retries, review, repair, integration, and recovery in successful-task cost.
   - Do not enable recurring spend or a paid dependency without the applicable owner decision.
   - Stop unbounded retry loops and classify the failure before escalation.
+  - Material work runs in at-most-30-minute delivery slices separated by an owner-facing checkpoint report.
+  - Freeze acceptance, blocking severity, review scope, and the repair-round budget before mutation.
+  - Use focused checks during repair and one proportional combined gate on the accepted head.
+  - Defer adjacent nonblocking findings to a named backlog or audit instead of reopening an accepted slice.

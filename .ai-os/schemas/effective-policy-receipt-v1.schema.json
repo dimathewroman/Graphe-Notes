@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://personal-ai-os.local/schemas/effective-policy-receipt-v1.schema.json",
+  "title": "Personal AI OS Effective Policy Receipt V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "resolver_version", "receipt_id", "protected_baseline",
+    "repository_profile", "runtime_profile", "model_catalog", "task_contract",
+    "caller_context", "selected_routes", "allowed_effects",
+    "prohibited_effects", "repository_scope", "resolved_read_grants",
+    "git_permissions", "budget_status", "canary", "conflicts", "warnings",
+    "input_digest", "receipt_digest"
+  ],
+  "properties": {
+    "schema_version": {"enum": [1]},
+    "resolver_version": {"type": "string", "minLength": 1},
+    "receipt_id": {"type": "string", "minLength": 1},
+    "protected_baseline": {"type": "object", "additionalProperties": false, "required": ["identity", "digest"], "properties": {"identity": {"type": "string", "minLength": 1}, "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}},
+    "repository_profile": {"type": "object", "additionalProperties": false, "required": ["identity", "digest"], "properties": {"identity": {"type": "string", "minLength": 1}, "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}},
+    "runtime_profile": {"type": "object", "additionalProperties": false, "required": ["identity", "digest"], "properties": {"identity": {"type": "string", "minLength": 1}, "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}},
+    "model_catalog": {"type": "object", "additionalProperties": false, "required": ["identity", "digest"], "properties": {"identity": {"type": "string", "minLength": 1}, "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}},
+    "task_contract": {"type": "object", "additionalProperties": false, "required": ["identity", "digest"], "properties": {"identity": {"type": "string", "minLength": 1}, "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}},
+    "caller_context": {"type": "object", "additionalProperties": false, "required": ["identity", "digest"], "properties": {"identity": {"type": "string", "minLength": 1}, "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}},
+    "selected_routes": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["role", "runtime_profile_id", "provider_model_id", "native_effort", "mapping_confidence"],
+        "properties": {
+          "role": {"type": "string", "minLength": 1},
+          "runtime_profile_id": {"type": "string", "minLength": 1},
+          "provider_model_id": {"type": ["string", "null"]},
+          "native_effort": {"type": ["string", "null"]},
+          "mapping_confidence": {"enum": ["verified", "compatible_inference", "unknown", "unsupported"]}
+        }
+      }
+    },
+    "allowed_effects": {"type": "array", "items": {"enum": ["observe", "propose", "reversible_write", "external_write", "destructive"]}},
+    "prohibited_effects": {"type": "array", "items": {"enum": ["observe", "propose", "reversible_write", "external_write", "destructive"]}},
+    "repository_scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repository_id", "worktree_roots"],
+      "properties": {
+        "repository_id": {"type": "string", "minLength": 1},
+        "worktree_roots": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "resolved_read_grants": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["grant_id", "resource"],
+        "properties": {
+          "grant_id": {"type": "string", "minLength": 1},
+          "resource": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "git_permissions": {
+      "type": "object", "additionalProperties": false,
+      "required": ["endpoints", "operations"],
+      "properties": {
+        "endpoints": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "operations": {
+          "type": "array",
+          "items": {"enum": ["local_commit", "push_branch", "create_draft_pr", "update_issue", "merge", "tag_release"]}
+        }
+      }
+    },
+    "budget_status": {"enum": ["known", "partial", "unknown", "exhausted"]},
+    "canary": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "required": ["identity", "state", "digest"],
+      "properties": {
+        "identity": {"type": "string", "minLength": 1},
+        "state": {"enum": ["candidate", "trial_active", "canary_passed", "locally_committed_candidate", "project_integrated", "active", "rolled_back", "retired"]},
+        "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["conflict_id", "scope", "resolution", "rationale"],
+        "properties": {
+          "conflict_id": {"type": "string", "minLength": 1},
+          "scope": {"type": "string", "minLength": 1},
+          "resolution": {"enum": ["resolved", "deferred", "owner_decision_required"]},
+          "rationale": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "warnings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "input_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "receipt_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

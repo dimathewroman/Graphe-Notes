@@ -17,6 +17,11 @@ owner's latest decision remain authoritative. The project profile is
 project-owned after its first installation and must be reconciled against live
 repository evidence.
 
+`.ai-os/UPSTREAM.json` is the machine-readable adoption receipt. Before material
+work, read its exact PAIOS and bundled-framework identities and validate the
+checksum-pinned copied runtime with the command below. A mutable PAIOS source
+checkout is not the repository's active guidance.
+
 ## Working contract
 
 - Audit existing owners and reuse before creating an equivalent component,
@@ -48,6 +53,13 @@ Private personal context, other project profiles, local repository paths, raw
 prompts, run traces, model logs, credentials, communications, and the Personal
 AI OS diary are intentionally excluded from the managed distribution. New run
 records and model logs remain repository-local under ignored private paths.
+Runtime validation checks managed files, control files, schemas, and approved
+runtime content. It does not enter or read declared machine-local roots
+(`runs/`, `local/`, `data/`, `cache/`, `generated/local/`, or bytecode caches)
+or OS junk such as `.DS_Store`; an excluded symlink is never followed. A
+symlink or private marker in approved runtime content remains a validation
+failure. A tampered managed-file declaration targeting excluded local state is
+rejected before the validator reads or hashes that path.
 
 Validate the installed package with:
 

@@ -1,6 +1,6 @@
 ---
 name: unslop-prose
-description: Edit user-facing prose, product copy, messages, and narrative documentation to remove generic AI phrasing while preserving voice, facts, citations, and technical meaning. Do not use for code, configuration, schemas, SQL, API references, specifications, ADRs, test plans, evidence reports, or machine-readable artifacts unless explicitly requested.
+description: Edit eligible human-facing prose, product copy, messages, and narrative documentation to remove generic AI phrasing while preserving voice, facts, citations, and technical meaning. Do not use for technical truth artifacts, even when explicitly requested.
 ---
 
 # Unslop prose
@@ -22,11 +22,23 @@ Do not use it automatically for:
 
 - source code or comments whose wording is part of an interface;
 - configuration, commands, SQL, schemas, or structured data;
-- specifications, ADRs, threat models, test plans, runbooks, evidence reports, or changelogs;
+- specifications;
+- ADRs;
+- test plans;
+- evidence reports;
+- security reports;
+- provenance reports;
+- machine-readable artifacts;
+- schemas;
+- contracts;
+- other technical truth artifacts;
 - quoted material;
 - text governed by a legal, compliance, localization, or accessibility requirement.
 
-An explicit request may extend the scope, but preserve the artifact's required vocabulary and structure.
+An explicit request does not extend this boundary. These protected artifacts
+are hard non-eligible for this skill. For a human-facing changelog or release
+note, use this skill only after its technical meaning is frozen and preserve its
+exact technical and provenance terms.
 
 ## Process
 

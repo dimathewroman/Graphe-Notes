@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://personal-ai-os.local/schemas/dispatch-receipt-v1.schema.json",
+  "title": "Personal AI OS Dispatch Receipt V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "dispatch_id", "plan_id", "orchestration_run_id",
+    "task_id", "unit_id", "capability_role", "executor_task_id",
+    "executor_identity", "creation", "topology", "expected_route",
+    "requested_route", "actual_route", "verification", "worktree",
+    "recorded_at"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "dispatch_id": {"type": "string", "minLength": 1},
+    "plan_id": {"type": "string", "minLength": 1},
+    "orchestration_run_id": {"type": "string", "minLength": 1},
+    "task_id": {"type": "string", "minLength": 1},
+    "unit_id": {"type": "string", "minLength": 1},
+    "capability_role": {"enum": ["builder", "independent_reviewer"]},
+    "executor_task_id": {"type": "string", "minLength": 1},
+    "executor_identity": {"type": "string", "minLength": 1},
+    "creation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "route_request_mode", "runtime_accepted", "fork_inheritance"],
+      "properties": {
+        "method": {"enum": ["create_thread", "fork_thread"]},
+        "route_request_mode": {"enum": ["explicit", "inherited"]},
+        "runtime_accepted": {"const": true},
+        "fork_inheritance": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["deliberate", "inherited_route", "equality_verified", "evidence_reference"],
+          "properties": {
+            "deliberate": {"const": true},
+            "inherited_route": {"$ref": "#/$defs/route"},
+            "equality_verified": {"const": true},
+            "evidence_reference": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "topology": {"const": "visible_user_owned_worktree"},
+    "expected_route": {"$ref": "#/$defs/route"},
+    "requested_route": {"$ref": "#/$defs/route"},
+    "actual_route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observability", "provider", "model", "effort"],
+      "properties": {
+        "observability": {"enum": ["observed", "unexposed"]},
+        "provider": {"type": ["string", "null"]},
+        "model": {"type": ["string", "null"]},
+        "effort": {"type": ["string", "null"]}
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "evidence_reference", "verified_at", "confidence"],
+      "properties": {
+        "source": {"enum": ["runtime_request_acceptance_receipt", "authoritative_task_metadata", "runtime_ui"]},
+        "evidence_reference": {"type": "string", "minLength": 1},
+        "verified_at": {"type": "string", "format": "date-time"},
+        "confidence": {"enum": ["accepted_request", "observed_actual"]}
+      }
+    },
+    "worktree": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "branch", "base_commit"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "branch": {"type": "string", "minLength": 1},
+        "base_commit": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+      }
+    },
+    "recorded_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model", "effort"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "effort": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://personal-ai-os.local/schemas/caller-context-v1.schema.json",
+  "title": "Personal AI OS Authenticated Caller Context V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "principal_id", "principal_kind",
+    "authentication_method", "proof_reference", "authorization_grant_id",
+    "authorization_grant_digest", "task_contract_id", "task_contract_digest",
+    "allowed_operation", "allowed_scope", "operation_id", "issued_at",
+    "expires_at", "nonce", "replay_window_seconds"
+  ],
+  "properties": {
+    "schema_version": {"enum": [1]},
+    "principal_id": {"type": "string", "minLength": 1},
+    "principal_kind": {"enum": ["owner", "enrolled_runtime", "enrolled_device"]},
+    "authentication_method": {"type": "string", "minLength": 1},
+    "proof_reference": {"type": "string", "minLength": 1},
+    "authorization_grant_id": {"type": "string", "minLength": 1},
+    "authorization_grant_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "task_contract_id": {"type": "string", "minLength": 1},
+    "task_contract_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "allowed_operation": {"enum": ["open", "advance", "decide", "inspect"]},
+    "allowed_scope": {"enum": ["task", "repository", "device", "global"]},
+    "operation_id": {"type": "string", "minLength": 1},
+    "issued_at": {"type": "string", "format": "date-time"},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "nonce": {"type": "string", "minLength": 1},
+    "replay_window_seconds": {"type": "integer", "minimum": 0}
+  }
+}

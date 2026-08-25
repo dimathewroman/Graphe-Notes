@@ -66,6 +66,15 @@ UNIT_TRANSITIONS = {
     "escalation_required": frozenset(),
     "cancelled": frozenset(),
 }
+_DISPATCH_ROLES = frozenset({"builder", "independent_reviewer"})
+_VISIBLE_TOPOLOGY = "visible_user_owned_worktree"
+_ARCHIVAL_ALPHA7_MESSAGE = (
+    "Run is archival/read-only: alpha.7-shaped history cannot supply alpha.8 execution authority."
+)
+_INVALID_RECEIPT_TOPOLOGY_MESSAGE = (
+    "Run has invalid receipt topology: dispatches and cleanup must both be real, "
+    "non-symlink directories for active alpha.8 execution."
+)
 
 
 class RunLedgerError(ValueError):
@@ -161,15 +170,118 @@ def _validate_record_content(
         raise RunLedgerError("Run record contains secret-like material; redact it first.")
 
 
+@contextmanager
+def _open_real_directory(path: Path, label: str):
+    if path.is_symlink() or not path.is_dir():
+        raise RunLedgerError(f"{label} must be one real, non-symlink directory.")
+    flags = os.O_RDONLY
+    if hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as error:
+        raise RunLedgerError(f"{label} must be one real, non-symlink directory.") from error
+    try:
+        opened = os.fstat(descriptor)
+        if not stat.S_ISDIR(opened.st_mode):
+            raise RunLedgerError(f"{label} must be one real, non-symlink directory.")
+        yield descriptor
+    finally:
+        os.close(descriptor)
+
+
+def _managed_receipt_directory(run: Path, name: str) -> Path:
+    directory = run / name
+    with _open_real_directory(directory, f"Managed receipt directory {name}"):
+        pass
+    return directory
+
+
+def _receipt_topology(run: Path) -> str:
+    """Classify the two authority-bearing receipt directories without following links."""
+    states: list[str] = []
+    for name in ("dispatches", "cleanup"):
+        directory = run / name
+        if directory.is_symlink():
+            states.append("unsafe")
+        elif not directory.exists():
+            states.append("absent")
+        else:
+            try:
+                _managed_receipt_directory(run, name)
+            except RunLedgerError:
+                states.append("unsafe")
+            else:
+                states.append("real")
+    if states == ["real", "real"]:
+        return "active_alpha8_layout"
+    if states == ["absent", "absent"]:
+        return "archival_read_only_alpha7_shaped"
+    return "invalid_receipt_topology"
+
+
+def _require_active_execution(run: Path) -> None:
+    topology = _receipt_topology(run)
+    if topology == "archival_read_only_alpha7_shaped":
+        raise RunLedgerError(_ARCHIVAL_ALPHA7_MESSAGE)
+    if topology != "active_alpha8_layout":
+        raise RunLedgerError(_INVALID_RECEIPT_TOPOLOGY_MESSAGE)
+
+
+def inspect_run(runtime_root: Path, run_id: str) -> dict[str, object]:
+    """Classify one run without treating archived history as active evidence."""
+    root = _runtime_root(runtime_root)
+    run = _run_root(root, run_id)
+    with _run_lock(run, exclusive=False):
+        topology = _receipt_topology(run)
+        if topology == "archival_read_only_alpha7_shaped":
+            return {
+                "run_id": run_id,
+                "classification": topology,
+                "authoritative_execution": False,
+                "reason": _ARCHIVAL_ALPHA7_MESSAGE,
+            }
+        if topology == "invalid_receipt_topology":
+            return {
+                "run_id": run_id,
+                "classification": topology,
+                "authoritative_execution": False,
+                "reason": _INVALID_RECEIPT_TOPOLOGY_MESSAGE,
+            }
+        return {
+            "run_id": run_id,
+            "classification": topology,
+            "authoritative_execution": True,
+        }
+
+
 def _write_new_json(path: Path, document: object) -> None:
-    if path.exists() or path.is_symlink():
-        raise RunLedgerError(f"Refusing to replace existing record: {path.name}")
-    with path.open("x", encoding="utf-8") as handle:
-        json.dump(document, handle, indent=2, sort_keys=True, ensure_ascii=False)
-        handle.write("\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-    path.chmod(0o600)
+    if path.name in {"", ".", ".."} or path.name != Path(path.name).name:
+        raise RunLedgerError("Managed record name is unsafe.")
+    with _open_real_directory(path.parent, "Managed record directory") as parent:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        try:
+            descriptor = os.open(path.name, flags, 0o600, dir_fd=parent)
+        except FileExistsError as error:
+            raise RunLedgerError(f"Refusing to replace existing record: {path.name}") from error
+        except OSError as error:
+            raise RunLedgerError(f"Cannot create managed record: {path.name}") from error
+        try:
+            os.fchmod(descriptor, 0o600)
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                descriptor = -1
+                json.dump(document, handle, indent=2, sort_keys=True, ensure_ascii=False)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.fsync(parent)
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
 
 
 def _replace_json(path: Path, document: object) -> None:
@@ -387,6 +499,194 @@ def _load_execution(
     return plan, state
 
 
+def _dispatch_path(run: Path, dispatch_id: str) -> Path:
+    return run / "dispatches" / f"{_safe_identifier(dispatch_id, 'dispatch ID')}.json"
+
+
+def _load_dispatch(run: Path, dispatch_id: str) -> dict[str, object]:
+    _managed_receipt_directory(run, "dispatches")
+    record = _read_json(_dispatch_path(run, dispatch_id))
+    return record
+
+
+def _route_values(route: object, label: str) -> tuple[str, str, str | None]:
+    if not isinstance(route, dict):
+        raise RunLedgerError(f"{label} route must be an object.")
+    provider = route.get("provider")
+    model = route.get("model")
+    effort = route.get("effort")
+    if not isinstance(provider, str) or not provider.strip():
+        raise RunLedgerError(f"{label} route provider is invalid.")
+    if not isinstance(model, str) or not model.strip():
+        raise RunLedgerError(f"{label} route model is invalid.")
+    if effort is not None and (not isinstance(effort, str) or not effort.strip()):
+        raise RunLedgerError(f"{label} route effort is invalid.")
+    return provider.strip(), model.strip(), effort.strip() if isinstance(effort, str) else None
+
+
+def _expected_dispatch_route(planned: dict[str, object], role: str) -> dict[str, object]:
+    if role == "builder":
+        route = planned.get("route")
+    elif role == "independent_reviewer":
+        review = planned.get("review")
+        route = review.get("route") if isinstance(review, dict) else None
+    else:
+        raise RunLedgerError("Dispatch capability role is unsupported.")
+    _route_values(route, "frozen")
+    return _deep_copy(route)
+
+
+def _review_route_evidence(dispatch: dict[str, object]) -> dict[str, object]:
+    creation = dispatch.get("creation")
+    actual = dispatch.get("actual_route")
+    verification = dispatch.get("verification")
+    if not isinstance(creation, dict) or not isinstance(actual, dict) or not isinstance(verification, dict):
+        raise RunLedgerError("Reviewer dispatch route evidence is malformed.")
+    if creation.get("runtime_accepted") is not True:
+        raise RunLedgerError("Reviewer dispatch has no accepted runtime route request.")
+    return {
+        "expected_route": _deep_copy(dispatch.get("expected_route")),
+        "requested_route": _deep_copy(dispatch.get("requested_route")),
+        "runtime_accepted": True,
+        "actual_route": _deep_copy(actual),
+        "verification": _deep_copy(verification),
+    }
+
+
+def _validate_dispatch_record(
+    root: Path,
+    plan: dict[str, object],
+    state: dict[str, object],
+    record: dict[str, object],
+    *,
+    verify_worktree: bool,
+) -> tuple[dict[str, object], dict[str, object], str]:
+    _validate_document(root, "dispatch-receipt-v1.schema.json", record)
+    _validate_record_content(
+        record, label="Dispatch receipt", maximum_bytes=MAX_EXECUTION_REVIEW_BYTES
+    )
+    if record.get("plan_id") != plan.get("plan_id"):
+        raise RunLedgerError("Dispatch receipt references another execution plan.")
+    if record.get("orchestration_run_id") != plan.get("orchestration_run_id"):
+        raise RunLedgerError("Dispatch receipt references another orchestration run.")
+    if record.get("task_id") != plan.get("task_id"):
+        raise RunLedgerError("Dispatch receipt references another task.")
+    planned = _unit_by_id(plan, str(record.get("unit_id", "")))
+    current = _unit_by_id(state, str(record.get("unit_id", "")))
+    role = str(record.get("capability_role", ""))
+    if role not in _DISPATCH_ROLES:
+        raise RunLedgerError("Dispatch receipt capability role is invalid.")
+    frozen_route = _expected_dispatch_route(planned, role)
+    if _route_values(record.get("expected_route"), "expected") != _route_values(
+        frozen_route, "frozen"
+    ):
+        raise RunLedgerError("Dispatch expected route does not match the frozen plan.")
+    if _route_values(record.get("requested_route"), "requested") != _route_values(
+        frozen_route, "frozen"
+    ):
+        raise RunLedgerError("Dispatch requested route does not match the frozen plan.")
+    creation = record.get("creation")
+    if not isinstance(creation, dict) or creation.get("runtime_accepted") is not True:
+        raise RunLedgerError("Dispatch has no accepted runtime route request.")
+    method = creation.get("method")
+    mode = creation.get("route_request_mode")
+    inheritance = creation.get("fork_inheritance")
+    if method == "create_thread":
+        if mode != "explicit" or inheritance is not None:
+            raise RunLedgerError("Explicit task creation requires an explicit route request.")
+    elif method == "fork_thread":
+        if mode != "inherited" or not isinstance(inheritance, dict):
+            raise RunLedgerError("Fork dispatch requires deliberate inherited-route evidence.")
+        if inheritance.get("deliberate") is not True or inheritance.get("equality_verified") is not True:
+            raise RunLedgerError("Fork dispatch lacks deliberate route-equality evidence.")
+        if _route_values(inheritance.get("inherited_route"), "inherited") != _route_values(
+            frozen_route, "frozen"
+        ):
+            raise RunLedgerError("Fork inherited route does not equal the frozen plan.")
+    else:
+        raise RunLedgerError("Dispatch task-creation method is unsupported.")
+    if record.get("topology") != _VISIBLE_TOPOLOGY:
+        raise RunLedgerError("Visible builder/reviewer dispatch cannot use a hidden topology.")
+    actual = record.get("actual_route")
+    verification = record.get("verification")
+    if not isinstance(actual, dict) or not isinstance(verification, dict):
+        raise RunLedgerError("Dispatch route verification is malformed.")
+    observation = actual.get("observability")
+    confidence = verification.get("confidence")
+    verification_source = verification.get("source")
+    if observation == "unexposed":
+        if any(actual.get(field) is not None for field in ("provider", "model", "effort")):
+            raise RunLedgerError("Unexposed actual route must not claim observed route values.")
+        if confidence != "accepted_request":
+            raise RunLedgerError("Unexposed actual route requires accepted-request confidence.")
+        if verification_source != "runtime_request_acceptance_receipt":
+            raise RunLedgerError(
+                "Unexposed actual route requires the runtime request-acceptance receipt."
+            )
+    elif observation == "observed":
+        if _route_values(actual, "actual") != _route_values(frozen_route, "frozen"):
+            raise RunLedgerError("Observed actual route does not match the frozen plan.")
+        if confidence != "observed_actual":
+            raise RunLedgerError("Observed actual route requires observed-actual confidence.")
+        if verification_source not in {"authoritative_task_metadata", "runtime_ui"}:
+            raise RunLedgerError(
+                "Observed actual route requires authoritative runtime metadata or UI evidence."
+            )
+    else:
+        raise RunLedgerError("Dispatch actual-route observability is invalid.")
+    if _parse_time(verification.get("verified_at"), "dispatch verification time") > _parse_time(
+        record.get("recorded_at"), "dispatch receipt time"
+    ):
+        raise RunLedgerError("Dispatch verification time cannot be later than receipt recording.")
+    worktree = record.get("worktree")
+    if not isinstance(worktree, dict):
+        raise RunLedgerError("Dispatch worktree identity is malformed.")
+    worktree_path = Path(str(worktree.get("path", "")))
+    branch = str(worktree.get("branch", ""))
+    base_commit = str(worktree.get("base_commit", "")).lower()
+    if verify_worktree:
+        _verify_worktree(root, worktree_path, branch=branch, expected_head=base_commit)
+    return planned, current, role
+
+
+def record_execution_dispatch(
+    runtime_root: Path,
+    run_id: str,
+    dispatch: dict[str, object],
+    *,
+    now: datetime | None = None,
+) -> dict[str, object]:
+    """Record one externally created visible task before its material work begins."""
+    root = _runtime_root(runtime_root)
+    run = _run_root(root, run_id)
+    record = _deep_copy(dispatch)
+    if "recorded_at" in record:
+        raise RunLedgerError("Dispatch receipt recorded_at is runtime-owned.")
+    record["recorded_at"] = _utc_text(now or datetime.now(timezone.utc))
+    with _run_lock(run, exclusive=True):
+        _require_active_execution(run)
+        plan, state = _load_execution(root, run)
+        planned, current, role = _validate_dispatch_record(
+            root, plan, state, record, verify_worktree=True
+        )
+        if role == "builder" and current.get("status") != "planned":
+            raise RunLedgerError("Builder dispatch must be recorded before assignment.")
+        if role == "independent_reviewer" and current.get("status") != "ready_for_review":
+            raise RunLedgerError("Reviewer dispatch must be recorded before review work.")
+        dispatch_id = _safe_identifier(str(record.get("dispatch_id", "")), "dispatch ID")
+        dispatches = _managed_receipt_directory(run, "dispatches")
+        for path in dispatches.glob("*.json"):
+            existing = _read_json(path)
+            if (
+                existing.get("unit_id") == record.get("unit_id")
+                and existing.get("capability_role") == role
+                and role == "builder"
+            ):
+                raise RunLedgerError("Execution unit already has a builder dispatch receipt.")
+        _write_new_json(_dispatch_path(run, dispatch_id), record)
+    return record
+
+
 def _unit_by_id(document: dict[str, object], unit_id: str) -> dict[str, object]:
     identifier = _safe_identifier(unit_id, "execution unit ID")
     units = document.get("units")
@@ -456,7 +756,7 @@ def create_run(
         model_log = temporary / "model-runs.jsonl"
         model_log.touch(mode=0o600, exist_ok=False)
         (temporary / ".ledger.lock").touch(mode=0o600, exist_ok=False)
-        for name in ("reviews", "evidence", "integration"):
+        for name in ("reviews", "evidence", "integration", "dispatches", "cleanup"):
             (temporary / name).mkdir(mode=0o700)
         os.replace(temporary, destination)
         directory = os.open(runs, os.O_RDONLY)
@@ -492,6 +792,7 @@ def transition_run(
     if not note or len(note) > 2_000:
         raise RunLedgerError("A concise transition summary is required.")
     with _run_lock(run, exclusive=True):
+        _require_active_execution(run)
         record = _read_json(run / "status.json")
         _validate_document(
             _runtime_root(runtime_root), "run-status.schema.json", record
@@ -502,6 +803,11 @@ def transition_run(
         current = str(record.get("status"))
         if next_status not in TRANSITIONS.get(current, frozenset()):
             raise RunLedgerError(f"Invalid run transition: {current} -> {next_status}")
+        if next_status == "done":
+            task = _read_json(run / "task.json")
+            _require_execution_completion(
+                _runtime_root(runtime_root), run, run_id, task.get("task_id")
+            )
         changed = _utc_text(now or datetime.now(timezone.utc))
         history = record.get("history")
         if not isinstance(history, list):
@@ -583,6 +889,7 @@ def prepare_execution(
         state, label="Execution state", maximum_bytes=MAX_EXECUTION_STATE_BYTES
     )
     with _run_lock(run, exclusive=True):
+        _require_active_execution(run)
         _write_new_json(run / "execution-plan.json", plan)
         try:
             _write_new_json(run / "unit-state.json", state)
@@ -599,6 +906,7 @@ def assign_execution_unit(
     *,
     executor_task_id: str,
     executor_identity: str,
+    dispatch_id: str,
     worktree_path: Path,
     branch: str,
     base_commit: str,
@@ -612,6 +920,7 @@ def assign_execution_unit(
     expected_branch = _concise(branch, "branch name")
     changed = _utc_text(now or datetime.now(timezone.utc))
     with _run_lock(run, exclusive=True):
+        _require_active_execution(run)
         plan, state = _load_execution(root, run)
         planned = _unit_by_id(plan, unit_id)
         current = _unit_by_id(state, unit_id)
@@ -628,9 +937,26 @@ def assign_execution_unit(
                 "Execution dependencies must be approved before assignment: "
                 + ", ".join(str(item) for item in pending_dependencies)
             )
+        dispatch = _load_dispatch(run, dispatch_id)
+        _, _, dispatch_role = _validate_dispatch_record(
+            root, plan, state, dispatch, verify_worktree=True
+        )
+        if dispatch_role != "builder":
+            raise RunLedgerError("Execution assignment requires a builder dispatch receipt.")
+        if dispatch.get("unit_id") != unit_id:
+            raise RunLedgerError("Builder dispatch receipt references another execution unit.")
+        if dispatch.get("executor_task_id") != executor_task or dispatch.get("executor_identity") != executor:
+            raise RunLedgerError("Builder dispatch identity does not match the assignment.")
         worktree = _verify_worktree(
             root, worktree_path, branch=expected_branch, expected_head=base_commit
         )
+        dispatch_worktree = dispatch.get("worktree")
+        if not isinstance(dispatch_worktree, dict) or (
+            worktree != Path(str(dispatch_worktree.get("path", ""))).resolve()
+            or expected_branch != dispatch_worktree.get("branch")
+            or base_commit.lower() != str(dispatch_worktree.get("base_commit", "")).lower()
+        ):
+            raise RunLedgerError("Builder dispatch worktree identity does not match the assignment.")
         for other in state["units"]:
             assignment = other.get("assignment")
             if not isinstance(assignment, dict):
@@ -682,6 +1008,7 @@ def transition_execution_unit(
     note = _concise(summary, "unit transition summary")
     changed = _utc_text(now or datetime.now(timezone.utc))
     with _run_lock(run, exclusive=True):
+        _require_active_execution(run)
         _, state = _load_execution(root, run)
         current = _unit_by_id(state, unit_id)
         current_status = str(current.get("status"))
@@ -723,9 +1050,7 @@ def record_execution_review(
     *,
     reviewer_task_id: str,
     reviewer_identity: str,
-    provider: str,
-    model: str,
-    effort: str | None,
+    dispatch_id: str,
     frozen_head: str,
     verdict: str,
     findings: list[str],
@@ -749,6 +1074,7 @@ def record_execution_review(
     note = _concise(summary, "review summary")
     reviewed_at = _utc_text(now or datetime.now(timezone.utc))
     with _run_lock(run, exclusive=True):
+        _require_active_execution(run)
         plan, state = _load_execution(root, run)
         planned = _unit_by_id(plan, unit_id)
         current = _unit_by_id(state, unit_id)
@@ -765,10 +1091,21 @@ def record_execution_review(
         route = review.get("route") if isinstance(review, dict) else None
         if not isinstance(route, dict):
             raise RunLedgerError("Execution unit has no frozen review route.")
-        observed_route = (provider.strip(), model.strip(), effort)
-        expected_route = (route.get("provider"), route.get("model"), route.get("effort"))
-        if observed_route != expected_route:
-            raise RunLedgerError("Reviewer model route does not match the frozen plan.")
+        dispatch = _load_dispatch(run, dispatch_id)
+        _, _, dispatch_role = _validate_dispatch_record(
+            root, plan, state, dispatch, verify_worktree=True
+        )
+        if dispatch_role != "independent_reviewer":
+            raise RunLedgerError("Execution review requires a reviewer dispatch receipt.")
+        if dispatch.get("unit_id") != unit_id:
+            raise RunLedgerError("Reviewer dispatch receipt references another execution unit.")
+        if dispatch.get("executor_task_id") != reviewer_task or dispatch.get("executor_identity") != reviewer:
+            raise RunLedgerError("Reviewer dispatch identity does not match the review.")
+        route_evidence = _review_route_evidence(dispatch)
+        if _route_values(route_evidence.get("expected_route"), "review evidence expected") != _route_values(
+            route, "frozen"
+        ):
+            raise RunLedgerError("Reviewer dispatch route evidence does not match the frozen plan.")
         head = frozen_head.strip().lower()
         if head != current.get("head_commit"):
             raise RunLedgerError("Review head does not match the frozen builder head.")
@@ -791,7 +1128,7 @@ def record_execution_review(
             f"REV-{unit_id}-{review_number:02d}", "execution review ID"
         )
         record: dict[str, object] = {
-            "schema_version": 1,
+            "schema_version": 2,
             "review_id": review_id,
             "review_number": review_number,
             "plan_id": plan["plan_id"],
@@ -800,9 +1137,8 @@ def record_execution_review(
             "unit_id": unit_id,
             "reviewer_task_id": reviewer_task,
             "reviewer_identity": reviewer,
-            "provider": observed_route[0],
-            "model": observed_route[1],
-            "effort": effort,
+            "dispatch_id": _safe_identifier(dispatch_id, "dispatch ID"),
+            "route_evidence": route_evidence,
             "frozen_head": head,
             "verdict": decision,
             "findings": [item.strip() for item in findings],
@@ -811,10 +1147,11 @@ def record_execution_review(
             "unit_status": unit_status,
             "independent": True,
         }
-        _validate_document(root, "execution-review.schema.json", record)
+        _validate_document(root, "execution-review-v2.schema.json", record)
         _validate_record_content(
             record, label="Execution review", maximum_bytes=MAX_EXECUTION_REVIEW_BYTES
         )
+        _managed_receipt_directory(run, "reviews")
         _write_new_json(run / "reviews" / f"{review_id}.json", record)
         current["review_count"] = review_number
         current["last_review_verdict"] = decision
@@ -832,6 +1169,70 @@ def record_execution_review(
     return record
 
 
+def _validate_execution_review_record(
+    root: Path,
+    plan: dict[str, object],
+    dispatches: dict[str, dict[str, object]],
+    reviewer_dispatches: dict[tuple[str, str, str], list[dict[str, object]]],
+    record: dict[str, object],
+) -> str:
+    schema_version = record.get("schema_version")
+    if schema_version == 2:
+        _validate_document(root, "execution-review-v2.schema.json", record)
+    elif schema_version == 1:
+        _validate_document(root, "execution-review.schema.json", record)
+    else:
+        raise RunLedgerError("Execution review schema version is unsupported.")
+    _validate_record_content(
+        record, label="Execution review", maximum_bytes=MAX_EXECUTION_REVIEW_BYTES
+    )
+    unit_id = _safe_identifier(str(record.get("unit_id", "")), "execution unit ID")
+    if (
+        record.get("orchestration_run_id") != plan.get("orchestration_run_id")
+        or record.get("task_id") != plan.get("task_id")
+        or record.get("plan_id") != plan.get("plan_id")
+    ):
+        raise RunLedgerError("Execution review references another run, task, or plan.")
+    reviewer_key = (
+        unit_id,
+        str(record.get("reviewer_task_id")),
+        str(record.get("reviewer_identity")),
+    )
+    if schema_version == 2:
+        dispatch_id = _safe_identifier(str(record.get("dispatch_id", "")), "dispatch ID")
+        dispatch = dispatches.get(dispatch_id)
+        if dispatch is None:
+            raise RunLedgerError("Execution review has no matching visible reviewer dispatch receipt.")
+        if (
+            dispatch.get("capability_role") != "independent_reviewer"
+            or dispatch.get("unit_id") != unit_id
+            or dispatch.get("executor_task_id") != reviewer_key[1]
+            or dispatch.get("executor_identity") != reviewer_key[2]
+        ):
+            raise RunLedgerError("Execution review dispatch does not match its reviewer identity.")
+        if record.get("route_evidence") != _review_route_evidence(dispatch):
+            raise RunLedgerError("Execution review route evidence does not match its dispatch receipt.")
+    else:
+        candidates = reviewer_dispatches.get(reviewer_key, [])
+        legacy_route = (
+            record.get("provider"),
+            record.get("model"),
+            record.get("effort"),
+        )
+        observed = [
+            dispatch
+            for dispatch in candidates
+            if isinstance(dispatch.get("actual_route"), dict)
+            and dispatch["actual_route"].get("observability") == "observed"
+            and _route_values(dispatch.get("actual_route"), "legacy actual") == legacy_route
+        ]
+        if len(observed) != 1:
+            raise RunLedgerError(
+                "Legacy execution review cannot establish one authoritative observed dispatch route."
+            )
+    return unit_id
+
+
 def execution_integration_plan(
     runtime_root: Path, run_id: str
 ) -> dict[str, object]:
@@ -839,7 +1240,9 @@ def execution_integration_plan(
     root = _runtime_root(runtime_root)
     run = _run_root(root, run_id)
     with _run_lock(run, exclusive=False):
+        _require_active_execution(run)
         plan, state = _load_execution(root, run)
+        _validate_execution_records(root, run, run_id, plan.get("task_id"))
         blocked = [
             str(unit["unit_id"])
             for unit in state["units"]
@@ -918,6 +1321,7 @@ def record_model_run(
     _validate_model_semantics(record)
     model_run_id = _safe_identifier(str(record.get("run_id")), "model run ID")
     with _run_lock(run, exclusive=True):
+        _require_active_execution(run)
         existing = _model_records(root, run, already_locked=True)
         if any(str(item.get("run_id")) == model_run_id for item in existing):
             raise RunLedgerError(f"Model run already exists: {model_run_id}")
@@ -986,6 +1390,7 @@ def summarize_model_runs(runtime_root: Path) -> dict[str, object]:
     if not candidate.exists() and not candidate.is_symlink():
         return {
             "orchestration_runs": 0,
+            "archival_runs": 0,
             "model_runs": 0,
             "result_counts": {},
             "first_pass_success_rate": None,
@@ -997,6 +1402,7 @@ def summarize_model_runs(runtime_root: Path) -> dict[str, object]:
     runs = _runs_root(root, create=False)
     records: list[dict[str, object]] = []
     run_count = 0
+    archival_runs = 0
     for run in sorted(runs.iterdir()):
         if run.name.startswith("."):
             continue
@@ -1004,6 +1410,8 @@ def summarize_model_runs(runtime_root: Path) -> dict[str, object]:
         if run.is_symlink() or not run.is_dir():
             raise RunLedgerError(f"Unsafe entry in runs root: {run.name}")
         run_count += 1
+        if _receipt_topology(run) == "archival_read_only_alpha7_shaped":
+            archival_runs += 1
         records.extend(_model_records(root, run))
 
     result_counts = Counter(str(item["result"]) for item in records)
@@ -1038,6 +1446,7 @@ def summarize_model_runs(runtime_root: Path) -> dict[str, object]:
 
     return {
         "orchestration_runs": run_count,
+        "archival_runs": archival_runs,
         "model_runs": len(records),
         "result_counts": dict(sorted(result_counts.items())),
         "first_pass_success_rate": (
@@ -1055,6 +1464,220 @@ def summarize_model_runs(runtime_root: Path) -> dict[str, object]:
             for key, value in sorted(by_task_class_records.items())
         },
     }
+
+
+def _visible_task_ids_for_unit(
+    root: Path,
+    run: Path,
+    plan: dict[str, object],
+    state: dict[str, object],
+    unit_id: str,
+) -> set[str]:
+    visible_task_ids: set[str] = set()
+    dispatch_directory = _managed_receipt_directory(run, "dispatches")
+    for path in sorted(dispatch_directory.glob("*.json")):
+        dispatch = _read_json(path)
+        if dispatch.get("unit_id") != unit_id:
+            continue
+        _validate_dispatch_record(root, plan, state, dispatch, verify_worktree=False)
+        visible_task_ids.add(
+            _safe_identifier(str(dispatch.get("executor_task_id", "")), "visible task ID")
+        )
+    if not visible_task_ids:
+        raise RunLedgerError("Cleanup requires visible builder/reviewer dispatch receipts.")
+    return visible_task_ids
+
+
+def _git_worktree_paths(repository: Path) -> set[str]:
+    paths: set[str] = set()
+    for line in _git(repository, "worktree", "list", "--porcelain").splitlines():
+        if line.startswith("worktree "):
+            paths.add(str(Path(line.removeprefix("worktree ")).resolve()))
+    if not paths:
+        raise RunLedgerError("Git worktree inventory is unexpectedly empty.")
+    return paths
+
+
+def _validate_cleanup_record(
+    root: Path,
+    run: Path,
+    plan: dict[str, object],
+    state: dict[str, object],
+    record: dict[str, object],
+    *,
+    verify_live_git_inventory: bool,
+) -> str:
+    _validate_document(root, "cleanup-receipt-v1.schema.json", record)
+    _validate_record_content(
+        record, label="Cleanup receipt", maximum_bytes=MAX_EXECUTION_REVIEW_BYTES
+    )
+    if (
+        record.get("plan_id") != plan.get("plan_id")
+        or record.get("orchestration_run_id") != plan.get("orchestration_run_id")
+        or record.get("task_id") != plan.get("task_id")
+    ):
+        raise RunLedgerError("Cleanup receipt does not belong to the execution plan.")
+    unit_id = _safe_identifier(str(record.get("unit_id", "")), "execution unit ID")
+    current = _unit_by_id(state, unit_id)
+    if current.get("status") != "approved":
+        raise RunLedgerError("Cleanup requires an accepted independent review.")
+    assignment = current.get("assignment")
+    if not isinstance(assignment, dict):
+        raise RunLedgerError("Cleanup requires a verified visible builder assignment.")
+    builder_task_id = _safe_identifier(
+        str(assignment.get("executor_task_id", "")), "visible builder task ID"
+    )
+    if record.get("visible_task_id") != builder_task_id:
+        raise RunLedgerError("Cleanup task does not match the visible builder task.")
+    expected_visible_task_ids = _visible_task_ids_for_unit(root, run, plan, state, unit_id)
+    archived_raw = record.get("archived_visible_task_ids")
+    if not isinstance(archived_raw, list):
+        raise RunLedgerError("Cleanup archived visible task IDs are malformed.")
+    archived_task_ids = {
+        _safe_identifier(str(value), "archived visible task ID") for value in archived_raw
+    }
+    if len(archived_task_ids) != len(archived_raw) or archived_task_ids != expected_visible_task_ids:
+        raise RunLedgerError(
+            "Cleanup must archive exactly the visible builder/reviewer task IDs for its unit."
+        )
+    worktree = record.get("worktree")
+    if not isinstance(worktree, dict):
+        raise RunLedgerError("Cleanup worktree record is malformed.")
+    if (
+        worktree.get("path") != assignment.get("worktree_path")
+        or worktree.get("branch") != assignment.get("branch")
+        or worktree.get("head_commit") != current.get("head_commit")
+    ):
+        raise RunLedgerError("Cleanup worktree does not match the approved builder head.")
+    removed = Path(str(worktree.get("path")))
+    if removed.exists() or removed.is_symlink():
+        raise RunLedgerError("Cleanup requires the completed worktree to be removed first.")
+    repository = root.parent.resolve()
+    reference = _concise(str(worktree.get("recoverable_ref", "")), "recoverable ref")
+    recovered = _git(repository, "rev-parse", "--verify", f"{reference}^{{commit}}").lower()
+    if recovered != str(worktree.get("head_commit", "")).lower():
+        raise RunLedgerError("Cleanup recoverable ref does not preserve the approved head.")
+
+    integration = record.get("integration_evidence")
+    handoff = record.get("final_handoff")
+    archive = record.get("archive")
+    inventory = record.get("inventory")
+    if not all(isinstance(value, dict) for value in (integration, handoff, archive, inventory)):
+        raise RunLedgerError("Cleanup completion evidence is malformed.")
+    assert isinstance(integration, dict)
+    assert isinstance(handoff, dict)
+    assert isinstance(archive, dict)
+    assert isinstance(inventory, dict)
+    integration_at = _parse_time(integration.get("verified_at"), "integration evidence time")
+    handoff_at = _parse_time(handoff.get("recorded_at"), "final handoff time")
+    archived_at = _parse_time(archive.get("archived_at"), "task archive time")
+    removed_at = _parse_time(worktree.get("removed_at"), "worktree removal time")
+    recorded_at = _parse_time(record.get("recorded_at"), "cleanup receipt time")
+    if integration_at > archived_at or handoff_at > archived_at:
+        raise RunLedgerError("Cleanup archives visible tasks before final handoff/integration evidence.")
+    if archived_at > removed_at:
+        raise RunLedgerError("Cleanup records Git worktree removal before visible task archival.")
+
+    git_inventory = inventory.get("git_worktrees")
+    task_inventory = inventory.get("codex_open_tasks")
+    if not isinstance(git_inventory, dict) or not isinstance(task_inventory, dict):
+        raise RunLedgerError("Cleanup inventories are malformed.")
+    git_observed_at = _parse_time(git_inventory.get("observed_at"), "Git inventory time")
+    tasks_observed_at = _parse_time(task_inventory.get("observed_at"), "Codex task inventory time")
+    if git_observed_at < removed_at or tasks_observed_at < archived_at:
+        raise RunLedgerError("Cleanup inventory predates the corresponding closure action.")
+    if git_observed_at > recorded_at or tasks_observed_at > recorded_at:
+        raise RunLedgerError("Cleanup inventory cannot be recorded after its receipt.")
+
+    registered_raw = git_inventory.get("registered_paths")
+    if not isinstance(registered_raw, list):
+        raise RunLedgerError("Git worktree inventory paths are malformed.")
+    registered_paths: set[str] = set()
+    for value in registered_raw:
+        registered = Path(_concise(str(value), "Git worktree inventory path"))
+        if not registered.is_absolute():
+            raise RunLedgerError("Git worktree inventory paths must be absolute.")
+        registered_paths.add(str(registered.resolve()))
+    if len(registered_paths) != len(registered_raw):
+        raise RunLedgerError("Git worktree inventory paths are not uniquely resolved.")
+    if str(removed) in registered_paths:
+        raise RunLedgerError("Git worktree inventory still lists the completed worktree.")
+    if verify_live_git_inventory and registered_paths != _git_worktree_paths(repository):
+        raise RunLedgerError("Cleanup Git worktree inventory does not match the current repository.")
+
+    open_raw = task_inventory.get("open_task_ids")
+    if not isinstance(open_raw, list):
+        raise RunLedgerError("Codex open-task inventory is malformed.")
+    open_task_ids = {
+        _safe_identifier(str(value), "open Codex task ID") for value in open_raw
+    }
+    if len(open_task_ids) != len(open_raw):
+        raise RunLedgerError("Codex open-task inventory contains duplicate task IDs.")
+    if archived_task_ids & open_task_ids:
+        raise RunLedgerError(
+            "Cleanup cannot complete while visible builder/reviewer tasks remain open in Codex inventory."
+        )
+    coordinator_task_id = task_inventory.get("current_coordinator_task_id")
+    intentionally_open = task_inventory.get("current_coordinator_intentionally_open")
+    if coordinator_task_id is None:
+        if intentionally_open is not False:
+            raise RunLedgerError("A missing current coordinator task must not be marked intentionally open.")
+    else:
+        coordinator = _safe_identifier(str(coordinator_task_id), "current coordinator task ID")
+        if intentionally_open is not True or coordinator not in open_task_ids:
+            raise RunLedgerError(
+                "An intentionally open current coordinator task must remain in the Codex inventory."
+            )
+    return unit_id
+
+
+def _require_execution_completion(root: Path, run: Path, run_id: str, task_id: object) -> None:
+    plan_path = run / "execution-plan.json"
+    state_path = run / "unit-state.json"
+    if not plan_path.exists() and not plan_path.is_symlink() and not state_path.exists() and not state_path.is_symlink():
+        return
+    _validate_execution_records(root, run, run_id, task_id)
+    _, state = _load_execution(root, run)
+    unclosed = [str(item.get("unit_id")) for item in state["units"] if item.get("status") != "approved"]
+    if unclosed:
+        raise RunLedgerError("Cannot complete while execution units are not approved: " + ", ".join(unclosed))
+    cleanup_directory = _managed_receipt_directory(run, "cleanup")
+    cleanup_units = {
+        str(_read_json(path).get("unit_id")) for path in cleanup_directory.glob("*.json")
+    }
+    missing = [str(item["unit_id"]) for item in state["units"] if str(item["unit_id"]) not in cleanup_units]
+    if missing:
+        raise RunLedgerError("Cannot complete without cleanup receipts: " + ", ".join(missing))
+
+
+def record_execution_cleanup(
+    runtime_root: Path,
+    run_id: str,
+    cleanup: dict[str, object],
+    *,
+    now: datetime | None = None,
+) -> dict[str, object]:
+    """Record externally completed visible-task archival and worktree removal."""
+    root = _runtime_root(runtime_root)
+    run = _run_root(root, run_id)
+    record = _deep_copy(cleanup)
+    if "recorded_at" in record:
+        raise RunLedgerError("Cleanup receipt recorded_at is runtime-owned.")
+    record["recorded_at"] = _utc_text(now or datetime.now(timezone.utc))
+    with _run_lock(run, exclusive=True):
+        _require_active_execution(run)
+        plan, state = _load_execution(root, run)
+        unit_id = _validate_cleanup_record(
+            root, run, plan, state, record, verify_live_git_inventory=True
+        )
+        cleanup_id = _safe_identifier(str(record.get("cleanup_id", "")), "cleanup ID")
+        cleanup_directory = _managed_receipt_directory(run, "cleanup")
+        for path in cleanup_directory.glob("*.json"):
+            existing = _read_json(path)
+            if existing.get("unit_id") == unit_id:
+                raise RunLedgerError("Execution unit already has a cleanup receipt.")
+        _write_new_json(run / "cleanup" / f"{cleanup_id}.json", record)
+    return record
 
 
 def _validate_execution_records(
@@ -1080,22 +1703,42 @@ def _validate_execution_records(
     state_ids = [str(item["unit_id"]) for item in state["units"]]
     if state_ids != planned_ids:
         raise RunLedgerError("Execution state unit order does not match the plan.")
+    dispatches: dict[str, dict[str, object]] = {}
+    builder_dispatches: dict[str, dict[str, object]] = {}
+    reviewer_dispatches: dict[tuple[str, str, str], list[dict[str, object]]] = {}
+    dispatch_directory = _managed_receipt_directory(run, "dispatches")
+    for path in sorted(dispatch_directory.glob("*.json")):
+        record = _read_json(path)
+        _, _, role = _validate_dispatch_record(
+            root, plan, state, record, verify_worktree=False
+        )
+        dispatch_id = _safe_identifier(str(record.get("dispatch_id", "")), "dispatch ID")
+        if dispatch_id in dispatches:
+            raise RunLedgerError("Duplicate dispatch receipt ID.")
+        dispatches[dispatch_id] = record
+        unit_id = str(record.get("unit_id"))
+        if role == "builder":
+            if unit_id in builder_dispatches:
+                raise RunLedgerError("Execution unit has multiple builder dispatch receipts.")
+            builder_dispatches[unit_id] = record
+        else:
+            reviewer_key = (
+                unit_id,
+                str(record.get("executor_task_id")),
+                str(record.get("executor_identity")),
+            )
+            reviewer_dispatches.setdefault(reviewer_key, []).append(record)
     previous_state_time: datetime | None = None
     review_counts: Counter[str] = Counter()
     review_verdicts: dict[str, str] = {}
-    for path in sorted((run / "reviews").glob("REV-*.json")):
+    review_directory = _managed_receipt_directory(run, "reviews")
+    for path in sorted(review_directory.glob("REV-*.json")):
         record = _read_json(path)
-        _validate_document(root, "execution-review.schema.json", record)
-        _validate_record_content(
-            record, label="Execution review", maximum_bytes=MAX_EXECUTION_REVIEW_BYTES
+        unit_id = _validate_execution_review_record(
+            root, plan, dispatches, reviewer_dispatches, record
         )
-        unit_id = str(record.get("unit_id"))
         if unit_id not in planned_ids:
             raise RunLedgerError("Execution review references an unknown unit.")
-        if record.get("orchestration_run_id") != run_id or record.get("task_id") != task_id:
-            raise RunLedgerError("Execution review references another run or task.")
-        if record.get("plan_id") != plan.get("plan_id"):
-            raise RunLedgerError("Execution review references another plan.")
         review_counts[unit_id] += 1
         if record.get("review_number") != review_counts[unit_id]:
             raise RunLedgerError("Execution review numbering is not contiguous.")
@@ -1133,6 +1776,28 @@ def _validate_execution_records(
         expected_verdict = review_verdicts.get(unit_id)
         if item.get("last_review_verdict") != expected_verdict:
             raise RunLedgerError("Execution state last verdict does not match review records.")
+        assignment = item.get("assignment")
+        if isinstance(assignment, dict):
+            dispatch = builder_dispatches.get(unit_id)
+            if dispatch is None:
+                raise RunLedgerError("Execution assignment has no visible builder dispatch receipt.")
+            if (
+                dispatch.get("executor_task_id") != assignment.get("executor_task_id")
+                or dispatch.get("executor_identity") != assignment.get("executor_identity")
+            ):
+                raise RunLedgerError("Builder dispatch receipt does not match the execution assignment.")
+    cleanup_units: set[str] = set()
+    cleanup_directory = _managed_receipt_directory(run, "cleanup")
+    for path in sorted(cleanup_directory.glob("*.json")):
+        record = _read_json(path)
+        unit_id = _validate_cleanup_record(
+            root, run, plan, state, record, verify_live_git_inventory=False
+        )
+        if unit_id not in planned_ids:
+            raise RunLedgerError("Cleanup receipt references an unknown unit.")
+        if unit_id in cleanup_units:
+            raise RunLedgerError("Execution unit has multiple cleanup receipts.")
+        cleanup_units.add(unit_id)
     if previous_state_time is not None and _parse_time(state.get("updated_at"), "execution updated_at") != previous_state_time:
         raise RunLedgerError("Execution updated_at does not match the latest unit history.")
 
@@ -1143,6 +1808,11 @@ def validate_run(runtime_root: Path, run_id: str) -> list[str]:
         root = _runtime_root(runtime_root)
         run = _run_root(root, run_id)
         with _run_lock(run, exclusive=False):
+            topology = _receipt_topology(run)
+            if topology == "archival_read_only_alpha7_shaped":
+                return [_ARCHIVAL_ALPHA7_MESSAGE]
+            if topology != "active_alpha8_layout":
+                return [_INVALID_RECEIPT_TOPOLOGY_MESSAGE]
             task = _read_json(run / "task.json")
             status = _read_json(run / "status.json")
             _validate_document(root, "task-packet.schema.json", task)
@@ -1182,11 +1852,11 @@ def validate_run(runtime_root: Path, run_id: str) -> list[str]:
                 raise RunLedgerError("Current status does not match the last history entry.")
             if _parse_time(status.get("updated_at"), "updated_at") != previous_time:
                 raise RunLedgerError("updated_at does not match the last history entry.")
-            for directory in ("reviews", "evidence", "integration"):
-                path = run / directory
-                if path.is_symlink() or not path.is_dir():
-                    raise RunLedgerError(f"Missing safe run directory: {directory}")
+            for directory in ("reviews", "evidence", "integration", "dispatches", "cleanup"):
+                _managed_receipt_directory(run, directory)
             _validate_execution_records(root, run, run_id, task.get("task_id"))
+            if status.get("status") == "done":
+                _require_execution_completion(root, run, run_id, task.get("task_id"))
             records = _model_records(root, run, already_locked=True)
             seen: set[str] = set()
             for record in records:
@@ -1243,6 +1913,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     prepare.add_argument("--run-id", required=True)
     prepare.add_argument("--document", required=True)
+    dispatch = commands.add_parser(
+        "record-dispatch",
+        help="Record one visible builder or reviewer dispatch before material work.",
+    )
+    dispatch.add_argument("--run-id", required=True)
+    dispatch.add_argument("--document", required=True)
     assign = commands.add_parser(
         "assign-unit", help="Bind a unit to an externally created Git worktree."
     )
@@ -1250,6 +1926,7 @@ def build_parser() -> argparse.ArgumentParser:
     assign.add_argument("--unit-id", required=True)
     assign.add_argument("--executor-task-id", required=True)
     assign.add_argument("--executor-identity", required=True)
+    assign.add_argument("--dispatch-id", required=True)
     assign.add_argument("--worktree", required=True)
     assign.add_argument("--branch", required=True)
     assign.add_argument("--base-commit", required=True)
@@ -1270,9 +1947,7 @@ def build_parser() -> argparse.ArgumentParser:
     review.add_argument("--unit-id", required=True)
     review.add_argument("--reviewer-task-id", required=True)
     review.add_argument("--reviewer-identity", required=True)
-    review.add_argument("--provider", required=True)
-    review.add_argument("--model", required=True)
-    review.add_argument("--effort")
+    review.add_argument("--dispatch-id", required=True)
     review.add_argument("--frozen-head", required=True)
     review.add_argument("--verdict", choices=("PASS", "BLOCK"), required=True)
     review.add_argument("--findings", required=True)
@@ -1281,6 +1956,16 @@ def build_parser() -> argparse.ArgumentParser:
         "integration-plan", help="Emit exact approved heads without integrating."
     )
     integration.add_argument("--run-id", required=True)
+    cleanup = commands.add_parser(
+        "record-cleanup",
+        help="Record externally completed visible-task archival and worktree removal.",
+    )
+    cleanup.add_argument("--run-id", required=True)
+    cleanup.add_argument("--document", required=True)
+    inspect = commands.add_parser(
+        "inspect", help="Classify an active or archival run without mutating it."
+    )
+    inspect.add_argument("--run-id", required=True)
     validate = commands.add_parser("validate", help="Validate one durable run record.")
     validate.add_argument("--run-id", required=True)
     commands.add_parser("summary", help="Summarize model reliability and cost telemetry.")
@@ -1300,6 +1985,8 @@ def main(argv: list[str] | None = None) -> int:
             result = record_model_run(root, args.run_id, _load_document(args.document))
         elif args.command == "prepare-execution":
             result = prepare_execution(root, args.run_id, _load_document(args.document))
+        elif args.command == "record-dispatch":
+            result = record_execution_dispatch(root, args.run_id, _load_document(args.document))
         elif args.command == "assign-unit":
             result = assign_execution_unit(
                 root,
@@ -1307,6 +1994,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.unit_id,
                 executor_task_id=args.executor_task_id,
                 executor_identity=args.executor_identity,
+                dispatch_id=args.dispatch_id,
                 worktree_path=Path(args.worktree),
                 branch=args.branch,
                 base_commit=args.base_commit,
@@ -1327,9 +2015,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.unit_id,
                 reviewer_task_id=args.reviewer_task_id,
                 reviewer_identity=args.reviewer_identity,
-                provider=args.provider,
-                model=args.model,
-                effort=args.effort,
+                dispatch_id=args.dispatch_id,
                 frozen_head=args.frozen_head,
                 verdict=args.verdict,
                 findings=_load_string_list(args.findings),
@@ -1337,6 +2023,10 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "integration-plan":
             result = execution_integration_plan(root, args.run_id)
+        elif args.command == "record-cleanup":
+            result = record_execution_cleanup(root, args.run_id, _load_document(args.document))
+        elif args.command == "inspect":
+            result = inspect_run(root, args.run_id)
         elif args.command == "validate":
             errors = validate_run(root, args.run_id)
             result = {"run_id": args.run_id, "valid": not errors, "errors": errors}

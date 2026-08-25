@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://personal-ai-os.local/schemas/execution-review-v2.schema.json",
+  "title": "Personal AI OS Execution Review V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "review_id", "review_number", "plan_id",
+    "orchestration_run_id", "task_id", "unit_id", "reviewer_task_id",
+    "reviewer_identity", "dispatch_id", "route_evidence", "frozen_head",
+    "verdict", "findings", "summary", "reviewed_at", "unit_status", "independent"
+  ],
+  "properties": {
+    "schema_version": {"const": 2},
+    "review_id": {"type": "string", "minLength": 1},
+    "review_number": {"type": "integer", "minimum": 1},
+    "plan_id": {"type": "string", "minLength": 1},
+    "orchestration_run_id": {"type": "string", "minLength": 1},
+    "task_id": {"type": "string", "minLength": 1},
+    "unit_id": {"type": "string", "minLength": 1},
+    "reviewer_task_id": {"type": "string", "minLength": 1},
+    "reviewer_identity": {"type": "string", "minLength": 1},
+    "dispatch_id": {"type": "string", "minLength": 1},
+    "route_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_route", "requested_route", "runtime_accepted",
+        "actual_route", "verification"
+      ],
+      "properties": {
+        "expected_route": {"$ref": "#/$defs/route"},
+        "requested_route": {"$ref": "#/$defs/route"},
+        "runtime_accepted": {"const": true},
+        "actual_route": {"$ref": "#/$defs/actual_route"},
+        "verification": {"$ref": "#/$defs/verification"}
+      }
+    },
+    "frozen_head": {"type": "string", "minLength": 1},
+    "verdict": {"enum": ["PASS", "BLOCK"]},
+    "findings": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "summary": {"type": "string", "minLength": 1},
+    "reviewed_at": {"type": "string", "format": "date-time"},
+    "unit_status": {"enum": ["approved", "review_blocked", "escalation_required"]},
+    "independent": {"const": true}
+  },
+  "$defs": {
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "model", "effort"],
+      "properties": {
+        "provider": {"type": "string", "minLength": 1},
+        "model": {"type": "string", "minLength": 1},
+        "effort": {"type": ["string", "null"]}
+      }
+    },
+    "actual_route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observability", "provider", "model", "effort"],
+      "properties": {
+        "observability": {"enum": ["observed", "unexposed"]},
+        "provider": {"type": ["string", "null"]},
+        "model": {"type": ["string", "null"]},
+        "effort": {"type": ["string", "null"]}
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "evidence_reference", "verified_at", "confidence"],
+      "properties": {
+        "source": {
+          "enum": [
+            "runtime_request_acceptance_receipt",
+            "authoritative_task_metadata",
+            "runtime_ui"
+          ]
+        },
+        "evidence_reference": {"type": "string", "minLength": 1},
+        "verified_at": {"type": "string", "format": "date-time"},
+        "confidence": {"enum": ["accepted_request", "observed_actual"]}
+      }
+    }
+  }
+}

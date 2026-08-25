@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://personal-ai-os.local/schemas/review-disposition-v2.schema.json",
+  "title": "Personal AI OS Review Disposition V2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "disposition_id", "execution_review_v1_id",
+    "execution_review_v1_digest", "finding_id", "finding_index",
+    "finding_digest", "severity", "release_impact",
+    "disposition", "authority", "rationale", "owner", "milestone_or_due",
+    "recheck_trigger", "compensating_controls", "state", "aggregate_verdict",
+    "aggregation_rationale"
+  ],
+  "properties": {
+    "schema_version": {"enum": [2]},
+    "disposition_id": {"type": "string", "minLength": 1},
+    "execution_review_v1_id": {"type": "string", "minLength": 1},
+    "execution_review_v1_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "finding_id": {"type": "string", "minLength": 1},
+    "finding_index": {"type": "integer", "minimum": 0},
+    "finding_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "severity": {"enum": ["P1", "P2", "advisory", "unclassified"]},
+    "release_impact": {"enum": ["blocking", "nonblocking", "unknown"]},
+    "disposition": {"enum": ["repair_now", "defer", "accept_risk", "false_positive"]},
+    "authority": {
+      "type": "object", "additionalProperties": false,
+      "required": ["principal_id", "decision_reference", "decision_digest"],
+      "properties": {
+        "principal_id": {"type": "string", "minLength": 1},
+        "decision_reference": {"type": "string", "minLength": 1},
+        "decision_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "rationale": {"type": "string", "minLength": 1},
+    "owner": {"type": "string", "minLength": 1},
+    "milestone_or_due": {"type": "string", "minLength": 1},
+    "recheck_trigger": {"type": "string", "minLength": 1},
+    "compensating_controls": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "state": {"enum": ["open", "resolved", "superseded"]},
+    "aggregate_verdict": {"enum": ["PASS", "BLOCK"]},
+    "aggregation_rationale": {"type": "string", "minLength": 1}
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "required": ["release_impact"],
+        "properties": {"release_impact": {"const": "blocking"}}
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "disposition": {"enum": ["repair_now", "accept_risk", "false_positive"]},
+          "aggregate_verdict": {"const": "BLOCK"}
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": ["severity"],
+        "properties": {"severity": {"const": "P1"}}
+      },
+      "then": {
+        "type": "object",
+        "properties": {"release_impact": {"const": "blocking"}, "aggregate_verdict": {"const": "BLOCK"}}
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "required": ["severity"],
+        "properties": {"severity": {"const": "unclassified"}}
+      },
+      "then": {
+        "type": "object",
+        "properties": {"release_impact": {"const": "unknown"}, "aggregate_verdict": {"const": "BLOCK"}}
+      }
+    }
+  ]
+}

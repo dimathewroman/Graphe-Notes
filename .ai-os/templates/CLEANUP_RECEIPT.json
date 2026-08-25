@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "cleanup_id": "CLEANUP-ID",
+  "plan_id": "PLAN-ID",
+  "orchestration_run_id": "RUN-ID",
+  "task_id": "TASK-ID",
+  "unit_id": "UNIT-ID",
+  "visible_task_id": "VISIBLE-BUILDER-TASK-ID",
+  "archived_visible_task_ids": [
+    "VISIBLE-BUILDER-TASK-ID",
+    "VISIBLE-REVIEWER-TASK-ID"
+  ],
+  "integration_evidence": {
+    "evidence_reference": "Sanitized accepted integration evidence reference.",
+    "verified_at": "2026-08-23T12:00:00Z"
+  },
+  "final_handoff": {
+    "evidence_reference": "Sanitized final handoff/evidence reference recorded before archival.",
+    "recorded_at": "2026-08-23T12:00:00Z"
+  },
+  "archive": {
+    "status": "archived",
+    "evidence_reference": "Sanitized visible-task archive receipt reference.",
+    "archived_at": "2026-08-23T12:00:00Z"
+  },
+  "worktree": {
+    "path": "/absolute/path/to/removed/worktree",
+    "branch": "branch-name",
+    "head_commit": "0000000000000000000000000000000000000000",
+    "recoverable_ref": "refs/heads/branch-name",
+    "removed_at": "2026-08-23T12:00:00Z"
+  },
+  "inventory": {
+    "git_worktrees": {
+      "source": "git_worktree_list",
+      "evidence_reference": "Sanitized Git worktree inventory after removal.",
+      "observed_at": "2026-08-23T12:00:00Z",
+      "registered_paths": ["/absolute/path/to/main/checkout"]
+    },
+    "codex_open_tasks": {
+      "source": "codex_open_task_inventory",
+      "evidence_reference": "Sanitized visible Codex open-task inventory after archival.",
+      "observed_at": "2026-08-23T12:00:00Z",
+      "open_task_ids": ["CURRENT-COORDINATOR-TASK-ID"],
+      "current_coordinator_task_id": "CURRENT-COORDINATOR-TASK-ID",
+      "current_coordinator_intentionally_open": true
+    }
+  }
+}

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -25,6 +26,18 @@ PRIVATE_PATTERNS = (
     re.compile(r"\bghp_" + r"[A-Za-z0-9]{20,}\b"),
     re.compile(r"\bsk-" + r"[A-Za-z0-9_-]{20,}\b"),
 )
+_LOCAL_RUNTIME_ROOTS = frozenset(
+    {
+        ("runs",),
+        ("local",),
+        ("data",),
+        ("cache",),
+        ("generated", "local"),
+    }
+)
+_BYTECODE_CACHE_COMPONENT = "__pycache__"
+_BYTECODE_CACHE_SUFFIXES = frozenset({".pyc", ".pyo"})
+_OS_JUNK_FILENAMES = frozenset({".DS_Store"})
 
 
 def sha256(data: bytes) -> str:
@@ -61,6 +74,56 @@ def managed_path(repository: Path, relative_value: object) -> Path:
     return repository / relative
 
 
+def is_excluded_local_runtime_path(relative: Path) -> bool:
+    """Return whether a runtime-relative path is declared machine-local state."""
+    parts = relative.parts
+    if (
+        _BYTECODE_CACHE_COMPONENT in parts
+        or relative.suffix.lower() in _BYTECODE_CACHE_SUFFIXES
+    ):
+        return True
+    if relative.name in _OS_JUNK_FILENAMES:
+        return True
+    return any(parts[: len(root)] == root for root in _LOCAL_RUNTIME_ROOTS)
+
+
+def is_excluded_managed_path(relative_value: object) -> bool:
+    """Apply the runtime scan exclusion contract to a managed-file declaration."""
+    if not isinstance(relative_value, str):
+        return False
+    relative = Path(relative_value)
+    if not relative.parts or relative.parts[0] != ".ai-os" or len(relative.parts) == 1:
+        return False
+    return is_excluded_local_runtime_path(Path(*relative.parts[1:]))
+
+
+def approved_runtime_files(runtime_root: Path) -> tuple[list[Path], list[str]]:
+    """List approved regular files without entering declared machine-local roots."""
+    files: list[Path] = []
+    errors: list[str] = []
+    pending = [runtime_root]
+    while pending:
+        directory = pending.pop()
+        try:
+            entries = list(os.scandir(directory))
+        except OSError as error:
+            relative = directory.relative_to(runtime_root)
+            errors.append(f"Managed runtime directory is unreadable: {relative}: {error}")
+            continue
+        for entry in entries:
+            path = Path(entry.path)
+            relative = path.relative_to(runtime_root)
+            if is_excluded_local_runtime_path(relative):
+                continue
+            if entry.is_symlink():
+                errors.append(f"Managed runtime contains a symlink: {relative}")
+            elif entry.is_dir(follow_symlinks=False):
+                pending.append(path)
+            elif entry.is_file(follow_symlinks=False):
+                files.append(path)
+    return files, errors
+
+
 def validate(runtime_root: Path) -> list[str]:
     errors: list[str] = []
     if runtime_root.is_symlink():
@@ -80,6 +143,9 @@ def validate(runtime_root: Path) -> list[str]:
     for relative, expected in managed.items():
         if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
             errors.append(f"Invalid managed hash: {relative}")
+            continue
+        if is_excluded_managed_path(relative):
+            errors.append(f"Managed path is excluded local runtime state: {relative}")
             continue
         if relative == "AGENTS.md#PERSONAL-AI-OS":
             path = repository / "AGENTS.md"
@@ -130,14 +196,11 @@ def validate(runtime_root: Path) -> list[str]:
             json.loads(candidate.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
             errors.append(f"Invalid schema {relative}: {error}")
-    for path in runtime_root.rglob("*"):
+    approved_files, scan_errors = approved_runtime_files(runtime_root)
+    errors.extend(scan_errors)
+    for path in approved_files:
         relative = path.relative_to(runtime_root)
-        if "__pycache__" in relative.parts or path.suffix.lower() in {".pyc", ".pyo"}:
-            continue
-        if path.is_symlink():
-            errors.append(f"Managed runtime contains a symlink: {relative}")
-            continue
-        if not path.is_file() or path == upstream_path:
+        if path == upstream_path:
             continue
         try:
             text = path.read_text(encoding="utf-8")

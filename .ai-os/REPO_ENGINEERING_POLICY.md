@@ -14,6 +14,11 @@ record. A task record identifies the outcome, non-goals, risk, ownership,
 contracts, verification, evidence, budget, approvals, and stop conditions. It
 does not become product authority merely because an agent generated it.
 
+For adaptive orchestration candidates, preserve that v1 packet and link it
+through the strict contracts and bundle validator documented in
+`ADAPTIVE_CONTRACTS.md`. A schema-valid record is not proof that authentication,
+dispatch, telemetry, installation, or activation occurred.
+
 ## Evidence
 
 Use `schemas/evidence-receipt.schema.json` and
