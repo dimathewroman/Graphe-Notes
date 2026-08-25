@@ -91,13 +91,12 @@ function initializeDocumentDatabase(name: string): Promise<void> {
   return openDocumentDatabase(name).then((database) => database.close());
 }
 
-function replacePersistedState(database: IDBDatabase, state: Uint8Array): Promise<void> {
+function appendPersistedState(database: IDBDatabase, state: Uint8Array): Promise<void> {
   return new Promise((resolve, reject) => {
     let transaction: IDBTransaction;
     try {
       transaction = database.transaction(UPDATES_STORE, "readwrite");
       const updates = transaction.objectStore(UPDATES_STORE);
-      updates.clear();
       updates.add(state);
     } catch (error) {
       reject(error);
@@ -133,7 +132,7 @@ class LocalIndexeddbProvider {
     if (this._destroyed || !this.db) return;
 
     Y.applyUpdate(this.doc, state);
-    await replacePersistedState(this.db, Y.encodeStateAsUpdate(this.doc));
+    await appendPersistedState(this.db, Y.encodeStateAsUpdate(this.doc));
   }
 
   destroy(): Promise<void> {

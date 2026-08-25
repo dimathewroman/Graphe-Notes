@@ -136,6 +136,38 @@ describe("collaboration document", () => {
     await Promise.all([reopenedFirst.destroy(), reopenedSecond.destroy()]);
   });
 
+  it("merges ordered writes from separate adapters for the same document", async () => {
+    const updates = seededUpdates();
+    const first = createCollaborationDocument({
+      documentId: "shared-note",
+      persistence: createIndexeddbCollaborationPersistence(),
+    });
+    const second = createCollaborationDocument({
+      documentId: "shared-note",
+      persistence: createIndexeddbCollaborationPersistence(),
+    });
+    await Promise.all([first.ready, second.ready]);
+
+    first.applyLocalUpdate(updates.seed);
+    await first.flush();
+    second.applyLocalUpdate(updates.seed);
+    await second.flush();
+    first.applyLocalUpdate(updates.left);
+    await first.flush();
+    second.applyLocalUpdate(updates.right);
+    await second.flush();
+    await Promise.all([first.destroy(), second.destroy()]);
+
+    const reopened = createCollaborationDocument({
+      documentId: "shared-note",
+      persistence: createIndexeddbCollaborationPersistence(),
+    });
+    await reopened.ready;
+
+    expect(readBody(reopened.exportState())).toBe("left-core-right");
+    await reopened.destroy();
+  });
+
   it("fails closed and releases the document when IndexedDB cannot open", async () => {
     const open = vi.spyOn(globalThis.indexedDB, "open").mockImplementation(() => {
       throw new Error("IndexedDB is unavailable");
