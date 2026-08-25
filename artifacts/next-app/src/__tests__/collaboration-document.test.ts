@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import "fake-indexeddb/auto";
+import { describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
 import {
   createCollaborationDocument,
   type CollaborationProviderAdapter,
   type CollaborationPersistenceAdapter,
 } from "@/lib/collaboration/collaboration-document";
+import { createIndexeddbCollaborationPersistence } from "@/lib/collaboration/indexeddb-persistence";
 
 function readBody(update: Uint8Array): string {
   const document = new Y.Doc();
@@ -88,6 +90,66 @@ class PendingRestorePersistence implements CollaborationPersistenceAdapter {
 }
 
 describe("collaboration document", () => {
+  it("restores isolated documents after browser persistence is reopened", async () => {
+    const updates = seededUpdates();
+    const first = createCollaborationDocument({
+      documentId: "note-1",
+      persistence: createIndexeddbCollaborationPersistence(),
+    });
+    const second = createCollaborationDocument({
+      documentId: "note-2",
+      persistence: createIndexeddbCollaborationPersistence(),
+    });
+    await Promise.all([first.ready, second.ready]);
+
+    first.applyLocalUpdate(updates.seed);
+    first.applyLocalUpdate(updates.left);
+    second.applyLocalUpdate(updates.seed);
+    second.applyLocalUpdate(updates.right);
+    await Promise.all([first.flush(), second.flush()]);
+    await Promise.all([first.destroy(), second.destroy()]);
+
+    const reopenedFirst = createCollaborationDocument({
+      documentId: "note-1",
+      persistence: createIndexeddbCollaborationPersistence(),
+    });
+    const reopenedSecond = createCollaborationDocument({
+      documentId: "note-2",
+      persistence: createIndexeddbCollaborationPersistence(),
+    });
+    await Promise.all([reopenedFirst.ready, reopenedSecond.ready]);
+
+    expect(readBody(reopenedFirst.exportState())).toBe("left-core");
+    expect(readBody(reopenedSecond.exportState())).toBe("core-right");
+
+    await Promise.all([reopenedFirst.destroy(), reopenedSecond.destroy()]);
+  });
+
+  it("fails closed and releases the document when IndexedDB cannot open", async () => {
+    const open = vi.spyOn(globalThis.indexedDB, "open").mockImplementation(() => {
+      throw new Error("IndexedDB is unavailable");
+    });
+    let providerConnections = 0;
+    const document = createCollaborationDocument({
+      documentId: "note-1",
+      persistence: createIndexeddbCollaborationPersistence(),
+      provider: {
+        connect() {
+          providerConnections += 1;
+          return { send() {}, destroy() {} };
+        },
+      },
+    });
+
+    await expect(document.ready).rejects.toThrow("IndexedDB is unavailable");
+    await expect(document.destroy()).rejects.toThrow("IndexedDB is unavailable");
+
+    document.applyLocalUpdate(seededUpdates().seed);
+    expect(providerConnections).toBe(0);
+    expect(readBody(document.exportState())).toBe("");
+    open.mockRestore();
+  });
+
   it("converges two documents after differently ordered local and remote updates", async () => {
     const left = createCollaborationDocument({ documentId: "note-1" });
     const right = createCollaborationDocument({ documentId: "note-1" });
