@@ -66,6 +66,17 @@ function deferred<Value>() {
   };
 }
 
+function createEmptyIndexeddbDatabase(name: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = globalThis.indexedDB.open(name);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      request.result.close();
+      resolve();
+    };
+  });
+}
+
 class PendingRestorePersistence implements CollaborationPersistenceAdapter {
   private readonly pendingRestore = deferred<Uint8Array | null>();
   restoreSettled = false;
@@ -149,6 +160,34 @@ describe("collaboration document", () => {
     expect(readBody(document.exportState())).toBe("");
     open.mockRestore();
   });
+
+  it("rejects a malformed document database and releases the document", async () => {
+    const documentId = "malformed-note";
+    await createEmptyIndexeddbDatabase(`graphe-collaboration:${documentId}`);
+
+    let providerConnections = 0;
+    const document = createCollaborationDocument({
+      documentId,
+      persistence: createIndexeddbCollaborationPersistence(),
+      provider: {
+        connect() {
+          providerConnections += 1;
+          return { send() {}, destroy() {} };
+        },
+      },
+    });
+
+    await expect(document.ready).rejects.toThrow("required object stores");
+
+    const firstDestroy = document.destroy();
+    const repeatedDestroy = document.destroy();
+    expect(repeatedDestroy).toBe(firstDestroy);
+    await expect(firstDestroy).rejects.toThrow("required object stores");
+
+    document.applyLocalUpdate(seededUpdates().seed);
+    expect(providerConnections).toBe(0);
+    expect(readBody(document.exportState())).toBe("");
+  }, 250);
 
   it("converges two documents after differently ordered local and remote updates", async () => {
     const left = createCollaborationDocument({ documentId: "note-1" });

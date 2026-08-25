@@ -4,6 +4,8 @@ import type { CollaborationPersistenceAdapter } from "./collaboration-document";
 
 const DATABASE_PREFIX = "graphe-collaboration:";
 const AVAILABILITY_DATABASE = "graphe-collaboration-availability";
+const UPDATES_STORE = "updates";
+const CUSTOM_STORE = "custom";
 
 interface IndexeddbSession {
   document: Y.Doc;
@@ -36,6 +38,44 @@ function verifyIndexeddbAvailability(): Promise<void> {
       } catch {
         resolve();
       }
+    };
+  });
+}
+
+function initializeDocumentDatabase(name: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = globalThis.indexedDB.open(name);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains(UPDATES_STORE)) {
+        database.createObjectStore(UPDATES_STORE, { autoIncrement: true });
+      }
+      if (!database.objectStoreNames.contains(CUSTOM_STORE)) {
+        database.createObjectStore(CUSTOM_STORE);
+      }
+    };
+    request.onerror = () => reject(request.error ?? new Error("IndexedDB is unavailable."));
+    request.onsuccess = () => {
+      const database = request.result;
+      let initialized = false;
+      try {
+        const updates = database.transaction(UPDATES_STORE, "readonly").objectStore(UPDATES_STORE);
+        const custom = database.transaction(CUSTOM_STORE, "readonly").objectStore(CUSTOM_STORE);
+        initialized =
+          updates.autoIncrement &&
+          updates.keyPath === null &&
+          !custom.autoIncrement &&
+          custom.keyPath === null;
+      } catch {
+        initialized = false;
+      }
+      database.close();
+
+      if (!initialized) {
+        reject(new Error("IndexedDB collaboration database is missing required object stores."));
+        return;
+      }
+      resolve();
     };
   });
 }
@@ -81,13 +121,16 @@ class IndexeddbCollaborationPersistence implements CollaborationPersistenceAdapt
     if (this.sessionReady) return this.sessionReady;
 
     this.documentId = documentId;
-    this.sessionReady = verifyIndexeddbAvailability().then(() => {
-      const document = new Y.Doc({ guid: documentId });
-      const persistence = new IndexeddbPersistence(`${DATABASE_PREFIX}${documentId}`, document);
-      const session = { document, persistence };
-      this.session = session;
-      return persistence.whenSynced.then(() => session);
-    });
+    const databaseName = `${DATABASE_PREFIX}${documentId}`;
+    this.sessionReady = verifyIndexeddbAvailability()
+      .then(() => initializeDocumentDatabase(databaseName))
+      .then(() => {
+        const document = new Y.Doc({ guid: documentId });
+        const persistence = new IndexeddbPersistence(databaseName, document);
+        const session = { document, persistence };
+        this.session = session;
+        return persistence.whenSynced.then(() => session);
+      });
     return this.sessionReady;
   }
 }
