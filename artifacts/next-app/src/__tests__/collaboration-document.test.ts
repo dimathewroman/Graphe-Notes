@@ -34,13 +34,20 @@ function seededUpdates() {
 
 class MemoryPersistence implements CollaborationPersistenceAdapter {
   private readonly states = new Map<string, Uint8Array>();
+  persistCalls = 0;
+  destroyCalls = 0;
 
   async restore(documentId: string): Promise<Uint8Array | null> {
     return this.states.get(documentId) ?? null;
   }
 
   async persist(documentId: string, state: Uint8Array): Promise<void> {
+    this.persistCalls += 1;
     this.states.set(documentId, state);
+  }
+
+  async destroy(): Promise<void> {
+    this.destroyCalls += 1;
   }
 }
 
@@ -97,6 +104,7 @@ describe("collaboration document", () => {
           send(update) {
             sentUpdates.push(update);
           },
+          destroy() {},
         };
       },
     };
@@ -113,5 +121,54 @@ describe("collaboration document", () => {
     expect(document.connectionState()).toBe("connected");
     expect(readBody(document.exportState())).toBe("left-core");
     expect(sentUpdates).toHaveLength(1);
+  });
+
+  it("releases adapters once and ignores updates after destruction", async () => {
+    const persistence = new MemoryPersistence();
+    const sentUpdates: Uint8Array[] = [];
+    const connection = {
+      destroyCalls: 0,
+      send(update: Uint8Array) {
+        sentUpdates.push(update);
+      },
+      destroy() {
+        connection.destroyCalls += 1;
+      },
+    };
+    let deliverRemoteUpdate: ((update: Uint8Array) => void) | undefined;
+    const provider: CollaborationProviderAdapter = {
+      connect({ applyRemoteUpdate, setConnectionState }) {
+        deliverRemoteUpdate = applyRemoteUpdate;
+        setConnectionState("connected");
+        return connection;
+      },
+    };
+    const document = createCollaborationDocument({
+      documentId: "note-1",
+      persistence,
+      provider,
+    });
+    await document.ready;
+
+    const updates = seededUpdates();
+    expect(deliverRemoteUpdate).toBeDefined();
+    deliverRemoteUpdate!(updates.seed);
+    document.applyLocalUpdate(updates.left);
+    await document.flush();
+    const persistenceWritesBeforeDestroy = persistence.persistCalls;
+    const sentUpdatesBeforeDestroy = sentUpdates.length;
+
+    const destroy = document.destroy();
+    document.applyLocalUpdate(updates.right);
+    deliverRemoteUpdate!(updates.right);
+    await destroy;
+    await document.destroy();
+
+    expect(connection.destroyCalls).toBe(1);
+    expect(persistence.destroyCalls).toBe(1);
+    expect(document.connectionState()).toBe("disconnected");
+    expect(readBody(document.exportState())).toBe("left-core");
+    expect(persistence.persistCalls).toBe(persistenceWritesBeforeDestroy);
+    expect(sentUpdates).toHaveLength(sentUpdatesBeforeDestroy);
   });
 });
