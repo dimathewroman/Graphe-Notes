@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import sharp from "sharp";
 
 const mocks = vi.hoisted(() => ({
   getAuthUser: vi.fn(),
@@ -126,6 +127,73 @@ function mockUploadParent() {
     .mockReturnValueOnce(query([{ storageTier: "admin" }]));
 }
 
+// 3×2 HEIC encoded with libheif. Keeping this tiny real fixture inline makes
+// the route test independent of host HEVC encoder availability.
+const HEIC_FIXTURE_BASE64 =
+  "AAAAGGZ0eXBoZWljAAAAAG1pZjFoZWljAAABem1ldGEAAAAAAAAAIWhkbHIAAAAAAAAAAHBpY3QAAAAAAAAAAAAAAAAAAAAAImlsb2MAAAAAREAAAQABAAAAAAGaAAEAAAAAAAAAMwAAACNpaW5mAAAAAAABAAAAFWluZmUCAAAAAAEAAGh2YzEAAAAADnBpdG0AAAAAAAEAAAD6aXBycAAAANppcGNvAAAAdWh2Y0MBA3AAAAAAAAAAAAAe8AD8/fj4AAAPA2AAAQAYQAEMAf//A3AAAAMAkAAAAwAAAwAeugJAYQABAClCAQEDcAAAAwCQAAADAAADAB6gIIEFluqumubgIaDAgAAADIAAAAMAhGIAAQAGRAHBc8GJAAAAE2NvbHJuY2x4AAEADQAGgAAAABRpc3BlAAAAAAAAAEAAAABAAAAAKGNsYXAAAAADAAAAAQAAAAIAAAAB////wwAAAAL////CAAAAAgAAAA5waXhpAAAAAAEIAAAAGGlwbWEAAAAAAAAAAQABBYECAwWEAAAAO21kYXQAAAAvKAGvEyFkY0D4EPdn//UpFsGlAj9/senOyEdAwNIggJtASJNdUAsWEICHdqVW3Pg=";
+
+async function syntheticImageFile(
+  format: "jpeg" | "png" | "webp" | "avif" | "heic",
+  name: string,
+  type: string,
+): Promise<File> {
+  if (format === "heic") {
+    return new File(
+      [Uint8Array.from(Buffer.from(HEIC_FIXTURE_BASE64, "base64"))],
+      name,
+      { type },
+    );
+  }
+  const source = sharp({
+    create: {
+      width: 3,
+      height: 2,
+      channels: 3,
+      background: { r: 20, g: 40, b: 60 },
+    },
+  });
+  const bytes = await source.toFormat(format).toBuffer();
+  return new File([Uint8Array.from(bytes)], name, { type });
+}
+
+async function uploadImage(file: File) {
+  mockUploadParent();
+  const stored: Array<{
+    path: string;
+    bytes: Buffer;
+    contentType: string | undefined;
+  }> = [];
+  mocks.uploadStorage.mockImplementation(
+    async (
+      path: string,
+      bytes: Buffer,
+      options: { contentType?: string },
+    ) => {
+      stored.push({ path, bytes, contentType: options.contentType });
+      return { error: null };
+    },
+  );
+  mocks.finalizeUploadReservation.mockImplementation(
+    async (_reservation, draft) => ({
+      id: "canonical-attachment",
+      ...draft,
+      createdAt: new Date("2026-08-25T00:00:00.000Z"),
+    }),
+  );
+
+  const form = new FormData();
+  form.set("note_id", "1");
+  form.set("file", file);
+  const { POST } = await import("@/app/api/attachments/upload/route");
+  const response = await POST(
+    new NextRequest("http://localhost/api/attachments/upload", {
+      method: "POST",
+      body: form,
+    }),
+  );
+  return { response, stored };
+}
+
 function capturedTelemetry(): string {
   return JSON.stringify(mocks.captureException.mock.calls);
 }
@@ -152,6 +220,75 @@ beforeEach(() => {
 });
 
 describe("note data boundary", () => {
+  it.each([
+    ["JPEG", "jpeg", "ordinary.jpg", "image/jpeg"],
+    ["WebP", "webp", "source.webp", "image/webp"],
+    ["AVIF", "avif", "already.avif", "image/avif"],
+    ["HEIC", "heic", "camera.heic", "image/heic"],
+    ["HEIF", "heic", "camera.heif", "image/heif"],
+  ] as const)(
+    "stores a %s input as one real canonical AVIF object",
+    async (_label, format, fileName, fileType) => {
+      const { response, stored } = await uploadImage(
+        await syntheticImageFile(format, fileName, fileType),
+      );
+
+      expect(response.status).toBe(201);
+      expect(stored).toHaveLength(1);
+      const [object] = stored;
+      expect(object?.path).toMatch(/\.avif$/);
+      expect(object?.contentType).toBe("image/avif");
+      expect(object?.bytes.subarray(4, 12).toString("ascii")).toBe("ftypavif");
+      await expect(sharp(object?.bytes).metadata()).resolves.toMatchObject({
+        format: "heif",
+        compression: "av1",
+        width: 3,
+        height: 2,
+      });
+      const body = await response.json();
+      expect(body).toMatchObject({
+        fileName,
+        fileType: "image/avif",
+        masterFormat: "avif",
+        proxyFormat: "avif",
+        isAnimated: false,
+        width: 3,
+        height: 2,
+      });
+      expect(body).toMatchObject({
+        masterPath: object?.path,
+        proxyPath: object?.path,
+        fileSize: object?.bytes.length,
+      });
+    },
+  );
+
+  it("returns the stable conversion error before creating a reservation or object", async () => {
+    mockUploadParent();
+    const form = new FormData();
+    form.set("note_id", "1");
+    form.set(
+      "file",
+      new File(["not a WebP image"], "invalid.webp", { type: "image/webp" }),
+    );
+    const { POST } = await import("@/app/api/attachments/upload/route");
+
+    const response = await POST(
+      new NextRequest("http://localhost/api/attachments/upload", {
+        method: "POST",
+        body: form,
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toEqual({
+      error: "Image conversion failed",
+    });
+    expect(mocks.createUploadReservation).not.toHaveBeenCalled();
+    expect(mocks.uploadStorage).not.toHaveBeenCalled();
+    expect(mocks.cleanupFailedUpload).not.toHaveBeenCalled();
+  });
+
   it("does not mutate a vaulted note without its owner's valid proof", async () => {
     mocks.db.select.mockReturnValue(query([{ id: 1, vaulted: true }]));
     mocks.db.update.mockReturnValue({

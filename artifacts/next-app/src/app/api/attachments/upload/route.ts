@@ -72,7 +72,7 @@ function imageMagicMatches(mimeType: string, buf: Buffer): boolean {
   return true;
 }
 
-type MasterFormat = "jpg" | "png" | "gif" | "avif";
+type MasterFormat = "gif" | "avif";
 
 function captureUploadFailure(
   code: string,
@@ -100,60 +100,52 @@ async function safelyCleanupFailedUpload(
 }
 
 /**
- * Produce the master buffer for non-GIF images.
- *
- * JPEG / PNG → byte-identical (no re-encoding).
- * HEIC / HEIF → q=95 JPEG via sharp; heic-convert fallback if libheif missing.
- * WebP / other → q=95 JPEG via sharp.
- * AVIF → try q=95 JPEG via sharp; if the AVIF codec isn't available on this
- *         runtime (e.g. macOS dev with limited libheif), fall back to storing
- *         the original AVIF byte-identical (it's already browser-renderable).
+ * Decode each non-animated image into the single canonical AVIF representation.
+ * HEIC/HEIF retries through heic-convert when Sharp's libheif decoder is absent;
+ * a source image is never retained or relabelled as AVIF on conversion failure.
  */
 async function toMaster(
   buf: Buffer,
-  mimeType: string,
+  _mimeType: string,
   isHeic: boolean,
 ): Promise<{
   masterBuffer: Buffer;
   masterFormat: Exclude<MasterFormat, "gif">;
+  width: number;
+  height: number;
 }> {
-  if (mimeType === "image/jpeg")
-    return { masterBuffer: buf, masterFormat: "jpg" };
-  if (mimeType === "image/png")
-    return { masterBuffer: buf, masterFormat: "png" };
-
   const sharp = (await import("sharp")).default;
+  const encodeAvif = async (source: Buffer) => {
+    const { data, info } = await sharp(source)
+      .avif({ quality: 85 })
+      .toBuffer({ resolveWithObject: true });
+    if (!info.width || !info.height) {
+      throw new Error("AVIF dimensions unavailable");
+    }
+    return {
+      masterBuffer: data,
+      masterFormat: "avif" as const,
+      width: info.width,
+      height: info.height,
+    };
+  };
 
-  if (isHeic) {
+  try {
+    return await encodeAvif(buf);
+  } catch (sharpError) {
+    if (!isHeic) throw sharpError;
     try {
-      const masterBuffer = await sharp(buf).jpeg({ quality: 95 }).toBuffer();
-      return { masterBuffer, masterFormat: "jpg" };
-    } catch {
-      // libheif not available on this runtime — fall back to heic-convert
+      // libheif is unavailable in this Sharp build; use the existing HEIC
+      // decoder fallback, then run its pixels through the canonical encoder.
       const heicConvert = (await import("heic-convert")).default;
       const jpegBuf = Buffer.from(
         await heicConvert({ buffer: buf, format: "JPEG", quality: 0.95 }),
       );
-      return { masterBuffer: jpegBuf, masterFormat: "jpg" };
-    }
-  }
-
-  // AVIF: try JPEG conversion; fall back to storing as-is if codec unavailable
-  if (mimeType === "image/avif") {
-    try {
-      const masterBuffer = await sharp(buf).jpeg({ quality: 95 }).toBuffer();
-      return { masterBuffer, masterFormat: "jpg" };
+      return await encodeAvif(jpegBuf);
     } catch {
-      // AVIF decode not supported on this runtime — store byte-identical.
-      // The original AVIF is already compressed and browser-renderable; it
-      // will serve as both master (download) and proxy (display).
-      return { masterBuffer: buf, masterFormat: "avif" };
+      throw sharpError;
     }
   }
-
-  // WebP or other — convert to JPEG master
-  const masterBuffer = await sharp(buf).jpeg({ quality: 95 }).toBuffer();
-  return { masterBuffer, masterFormat: "jpg" };
 }
 
 /**
@@ -541,7 +533,7 @@ export async function POST(request: NextRequest) {
           { status: 201 },
         );
       }
-      // Static GIF falls through to normal JPEG-master path below
+      // Static GIF falls through to the canonical AVIF path below.
     }
 
     // ── Standard image path (JPEG, PNG, HEIC, WebP, AVIF, static GIF) ───────
@@ -549,8 +541,10 @@ export async function POST(request: NextRequest) {
 
     let masterBuffer: Buffer;
     let masterFormat: Exclude<MasterFormat, "gif">;
+    let width: number;
+    let height: number;
     try {
-      ({ masterBuffer, masterFormat } = await toMaster(
+      ({ masterBuffer, masterFormat, width, height } = await toMaster(
         uploadBuffer,
         mimeType,
         heic,
@@ -563,70 +557,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const sharp = (await import("sharp")).default;
     const fileId = randomUUID();
     const baseName = sanitizeFilename(file.name).replace(/\.[^.]+$/, ""); // strip extension, keep original name
 
-    let proxyBuffer: Buffer;
-    let width: number | undefined;
-    let height: number | undefined;
-    let proxyPath: string;
-    let proxyFormat: string;
-    let sameFileForProxy = false;
-
-    if (masterFormat === "avif") {
-      // Input was AVIF and could not be transcoded — reuse master as proxy.
-      // AVIF is already browser-renderable and well-compressed; no re-encoding needed.
-      proxyBuffer = masterBuffer;
-      proxyPath = `${user.id}/${noteId}/${fileId}/${baseName}.avif`; // same name, set below as masterPath
-      proxyFormat = "avif";
-      sameFileForProxy = true;
-      try {
-        const meta = await sharp(masterBuffer).metadata();
-        width = meta.width;
-        height = meta.height;
-      } catch {
-        /* non-critical */
-      }
-    } else {
-      // Generate WebP proxy from JPEG/PNG master.
-      // WebP is chosen over AVIF for static images: encoding is ~10x faster (no
-      // perceptible wait), codec support is rock-solid across all Sharp builds, and
-      // quality 85 is visually indistinguishable from the original at 25–35% smaller
-      // than JPEG. AVIF is reserved for animated GIFs where its compression advantage
-      // over animated WebP is substantial and the async encoding cost is acceptable.
-      try {
-        const sharpMaster = sharp(masterBuffer);
-        const [proxyBuf, metadata] = await Promise.all([
-          sharpMaster.clone().webp({ quality: 85 }).toBuffer(),
-          sharpMaster.clone().metadata(),
-        ]);
-        proxyBuffer = proxyBuf;
-        width = metadata.width;
-        height = metadata.height;
-      } catch {
-        captureUploadFailure("proxy_conversion_failed");
-        return NextResponse.json(
-          { error: "Image conversion failed" },
-          { status: 422 },
-        );
-      }
-      proxyPath = `${user.id}/${noteId}/${fileId}/${baseName}.webp`;
-      proxyFormat = "webp";
-    }
-
     const masterPath = `${user.id}/${noteId}/${fileId}/${baseName}.${masterFormat}`;
-    // When AVIF is stored as-is, master and proxy share the same path
-    const resolvedProxyPath = sameFileForProxy ? masterPath : proxyPath;
-
-    const masterMime =
-      masterFormat === "png"
-        ? "image/png"
-        : masterFormat === "avif"
-          ? "image/avif"
-          : "image/jpeg";
+    // Static image display and download both use the canonical AVIF object.
+    const resolvedProxyPath = masterPath;
+    const masterMime = "image/avif";
     const masterSizeBytes = masterBuffer.length;
-    const proxySizeBytes = sameFileForProxy ? 0 : proxyBuffer.length;
+    const proxySizeBytes = 0;
     const draft = {
       noteId,
       userId: user.id,
@@ -637,12 +576,12 @@ export async function POST(request: NextRequest) {
       masterPath,
       proxyPath: resolvedProxyPath,
       masterFormat,
-      proxyFormat,
+      proxyFormat: "avif",
       isAnimated: false,
       masterSizeBytes,
       proxySizeBytes,
-      width: width ?? null,
-      height: height ?? null,
+      width,
+      height,
     };
     let reservation;
     try {
@@ -655,7 +594,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upload master (and proxy if it's a separate file)
+    // Upload the single canonical object after its cleanup reservation exists.
     const uploadTasks: Promise<{
       error: { message: string } | null;
       which: string;
@@ -668,18 +607,6 @@ export async function POST(request: NextRequest) {
         })
         .then((r) => ({ error: r.error, which: "master" })),
     ];
-    if (!sameFileForProxy) {
-      uploadTasks.push(
-        supabaseAdmin.storage
-          .from("note-attachments")
-          .upload(resolvedProxyPath, proxyBuffer, {
-            contentType: `image/${proxyFormat}`,
-            upsert: false,
-          })
-          .then((r) => ({ error: r.error, which: "proxy" })),
-      );
-    }
-
     const uploadResults = await Promise.all(uploadTasks);
     const failedUpload = uploadResults.find((r) => r.error);
     if (failedUpload) {
