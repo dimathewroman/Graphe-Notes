@@ -119,6 +119,11 @@ because their findings and chronology are still useful evidence.
   copies/synchronizes that build into Android/iOS projects. A wrapper is therefore
   a separate packaging and native-build concern, not a persistence feature.
   [Capacitor workflow](https://capacitorjs.com/docs/basics/workflow).
+- **[External fact]** Capacitor production configuration names `webDir` as the
+  compiled web-asset directory containing the final `index.html`. Its `server.url`
+  is expressly for live-reload and is not intended for production. [Capacitor
+  configuration](https://capacitorjs.com/docs/config) and [Capacitor live
+  reload](https://capacitorjs.com/docs/guides/live-reload).
 - **[External fact]** Capacitor exposes app state, deep-link, restore-result, and
   Android back-button events. Handling `backButton` replaces the default Android
   behavior and the documentation recommends routing it deliberately (for example,
@@ -142,7 +147,7 @@ because their findings and chronology are still useful evidence.
 | Area | Finding and decision |
 | --- | --- |
 | Product and targets | Graphe Notes is a cloud-backed, personal rich-text web app. Stage 3 must first support current desktop/mobile browsers and their multiple tabs/devices. A future Capacitor wrapper targets Android and iOS. This is **not** an Android implementation yet; no emulator, physical Vivo, install, or app-store claim is in scope. |
-| Hosts and packaging | The deployed Next app has server-side `/api` handlers and service-role-only behavior. **[Inference]** it cannot simply become a fully static Capacitor payload without separating those server routes; Capacitor's normal workflow copies an already-built web bundle. The later wrapper spike must choose and verify either a static client that calls the hosted API or an explicitly approved remote-origin WebView configuration. Do not treat `next build` as proof of either shape. |
+| Hosts and packaging | The deployed Next app has server-side `/api` handlers and service-role-only behavior. **[Inference]** it cannot simply become a fully static Capacitor payload without separating those server routes. The **only production Capacitor candidate** is a bundled `webDir` static client calling the hosted authenticated API. If the current Next build cannot produce that client, stop and obtain a separate client-build feasibility decision; `server.url`, cleartext traffic, and live reload are development-only and must not become a production fallback. Do not treat `next build` as proof that this shape exists. |
 | Existing third parties | Continue using existing Supabase Auth/Postgres/Storage, Vercel/Next route handlers, Tiptap, Sentry, and PostHog. The proposed first slice adds only open-source Yjs/Tiptap collaboration libraries and no managed collaboration service. A persistent WebSocket host, Tiptap hosted collaboration, native plugins, push, file-system access, and a new MCP are out of scope. |
 | Data/infrastructure | Add a server-owned, authenticated Y-update log and compaction snapshot only after a reviewed migration/RLS design. Keep the current `notes` row as the query/read model and retain version and attachment ownership. Do not use Supabase Realtime as the durable source of document content. |
 | Auth/secrets/compliance | Each sync request must resolve the authenticated user server-side, enforce note ownership/deletion/vault status, and never expose a service key. The first slice excludes vault replicas and demo mode. Native redirects, keychain/secure-store policy, privacy manifests, and encrypted offline vault need separate approved design and evidence. |
@@ -187,36 +192,109 @@ for a document database.
 | Concurrent edits | Merge body edits through Yjs update semantics. There is no user-facing "pick winner" dialog for normal text operations. The UI reports *durable locally*, *syncing*, *synced*, or a specific blocked/error state; it does not call a network-delivered save "saved" prematurely. |
 | Metadata | Keep folder, tags, pin, favorite, deletion, and attachment metadata on their existing authenticated server paths initially. Do not imply they work offline. A later offline metadata design needs explicit operation semantics and test cases, not a generic queue. |
 | Title | The pilot may keep title online-only to keep the first conversion constrained. Before broad offline rollout, make title either a separately specified Y text field or an explicitly versioned metadata operation; do not use accidental last-write-wins behavior. |
-| Version history | Existing HTML snapshots remain valid user checkpoints. Synchronization must not create a version per CRDT update. Explicit save, pre-AI, restore, and threshold checkpoint policy remains server-controlled. A restore converts the selected historical HTML into a **new** current-document change; it never overwrites or mutates old Y updates. |
-| Deletion | A deleted/permanently removed note is terminal for the sync transport. A queued client receives a non-retryable response, stops sending, retains a local recovery/export option until the product's retention policy says otherwise, and never recreates the parent implicitly. |
+| Version history | Existing HTML snapshots remain valid user checkpoints. Synchronization must not create a version per CRDT update. A version/export request first crosses the exact server-sequence barrier defined below, then records/exports that same accepted state. A restore creates a **new epoch** from the selected authoritative state; it never overwrites or mutates old Y updates. |
+| Deletion | A soft delete closes the current epoch atomically. A queued client for that epoch receives a terminal result even if the note is later restored; it never recreates the parent implicitly. Restoration creates a new epoch from selected authoritative state, not from a stale replica. |
+
+### Per-document serialized acknowledgement invariant
+
+**[Proposal]** This is the required commit contract for every production sync
+write. It is deliberately more exact than an "eventually materialized" update log.
+For a note's current document epoch `E`, `N` means the resulting per-document
+server sequence. The document record holds three sequence watermarks:
+`acceptedThrough`, `reducedThrough`, and `projectedThrough`.
+
+
+1. In one database transaction, acquire the per-`{noteId,E}` transaction/row lock.
+   Resolve the authenticated user again; fence owner, active/non-deleted note,
+   vault proof, `E`, format version, payload limit, and idempotency identity before
+   accepting any update.
+2. If the idempotency identity already exists, its canonical update digest must
+   match the supplied bytes. A mismatch is a terminal idempotency error. A match is
+   not acknowledged yet: first bring the document through that record's sequence
+   barrier as steps 4–6 require.
+3. Starting from the retained verified snapshot plus all accepted updates after its
+   covered sequence, decode/apply the candidate update to an isolated reducer
+   document. Materialize and validate the candidate against the supported Tiptap
+   schema before it is authoritative. A decode, apply, or materialization/validation
+   failure inserts no update, advances no watermark, and returns no `synced` result.
+4. Append the opaque update idempotently, assigning the next server sequence `N`.
+   The log records epoch, update digest/idempotency identity, byte count, and
+   accepted timestamp, but no telemetry plaintext. Reduce the accepted state through
+   `N` while still holding the same lock.
+5. In that same transaction, update the retained snapshot/state vector and set
+   `acceptedThrough = reducedThrough = projectedThrough = N`; materialize the same
+   state into `notes.content`, `notes.content_text`, and `notes.updated_at`. Commit
+   only after all of those writes succeed.
+6. Return `syncedThrough: N` only after the transaction commits. If the process
+   crashes before commit, the database rolls back the append and projection together.
+   If it crashes after commit but before the response, the duplicate retry finds the
+   matching record at `N`, verifies the barrier, and returns the same acknowledgement.
+
+The serialized lock is per document, not global. It defines acknowledgement order;
+Yjs's commutative/idempotent updates define merge semantics inside that order. A
+client may call its state `durable-local` after IndexedDB persistence, but may call
+it `synced` only after this exact `syncedThrough: N` acknowledgement.
+
+### Read, version, export, and compaction barriers
+
+- A current-content/list/search read may return the materialized projection only
+  when `projectedThrough = acceptedThrough`. If it observes a lagging projection,
+  it acquires the same document lock, reduces through the accepted head, and commits
+  the projection before returning. It never silently serves a known stale projection
+  as current.
+- An explicit version, pre-AI checkpoint, restore source read, or export asks for a
+  barrier through head `N`. Under the same lock it first completes the invariant,
+  then derives the version/export from exactly the reducer state and projection at
+  `N`; record that `throughSequence` with the version/export metadata. A version is
+  never written from a pre-sync HTML cache after the API has acknowledged `N`.
+- A compaction creates a **new**, checksum-verified snapshot whose encoded state and
+  vector cover one precise sequence `C`, under the same lock. Only after the
+  snapshot pointer and coverage metadata commit may the server remove update rows
+  `<= C`, and then only under the approved recovery/export retention policy. It
+  never mutates an old snapshot, crosses an epoch boundary, or discards the sole
+  recoverable representation. Compaction failure leaves the previous pointer and
+  update log intact.
 
 ### Server update-log shape
 
-**[Proposal]** This is a data direction, not a schema ready to apply:
+**[Proposal]** The later reviewed schema implements the invariant above:
 
 - A per-note document record has `note_id`, owner identity, `document_epoch`,
-  `format_version`, a compacted binary Yjs snapshot/state vector, and compaction
-  metadata.
-- An append-only update record has a server sequence, note/epoch, opaque binary
-  update bytes, accepted timestamp, byte count, and a non-sensitive client/update
-  identity for idempotency. It does not store note plaintext separately for
-  observability.
-- A server-only reducer/compactor applies accepted updates, validates the document
-  can materialize through the supported Tiptap schema, updates the current HTML/text
-  projection atomically enough for a reader to see a consistent accepted state, and
-  retains the recovery window decided by the owner.
-- `pull(stateVector)` returns a verified snapshot or only missing update bytes.
-  `push(update, idempotencyKey)` authenticates, checks note ownership, deletion,
-  epoch, vault policy, payload/queue quotas, and then accepts the update exactly
-  once. Duplicate Yjs updates and duplicate requests are safe; malformed updates,
-  wrong epoch, unauthorized/vault-locked, deleted, or oversized writes are not.
-- Compaction never changes the resulting document state. It may discard only
-  updates already represented by a retained snapshot and only after the recovery/
-  export retention decision is met.
+  `format_version`, retained snapshot/state vector, the three watermarks, lifecycle
+  state (`active` or closed/tombstoned), and compaction metadata.
+- An append-only update record has epoch/server sequence, opaque binary update,
+  canonical digest/idempotency identity, accepted timestamp, and byte count. It
+  does not store note plaintext separately for observability.
+- `pull(stateVector, E)` returns a snapshot or missing update bytes only for the
+  active authenticated epoch. `push(update, idempotencyKey, E)` follows the
+  serialized invariant; malformed, mismatched-idempotency, wrong-epoch,
+  unauthorized/vault-locked, deleted, or oversized writes are terminal.
 
 This uses the useful Yjs property that update application is idempotent, not an
 assumption that HTTP order is a conflict policy. The particular schema, byte caps,
 retention, and compaction cadence must come from the first spike's measured data.
+
+### Epoch fencing for deletion and restoration
+
+**[Proposal]** `E` is never reopened. While holding the same per-document lock,
+soft delete first completes the accepted/reduced/projected head `H` for active epoch
+`E`, then atomically marks `E` closed/tombstoned through `H` and sets the note's
+soft-delete state. Every later `push(..., E)` returns terminal
+`document_epoch_closed`, including after the note is restored; old local replicas
+are export-only and may not mount, enumerate, or auto-rebase.
+
+Restore selects an authoritative version or tombstoned state at head `H`, seeds a
+fresh active epoch `E + 1`, validates/materializes it, and switches the note's
+current-document pointer in one transaction. A client must bootstrap `E + 1` after
+auth; it cannot replay `E` into it. Permanent deletion closes the active epoch and
+applies the separately approved retention/disposition policy before any data is
+purged.
+
+Migration follows the same rule: an active legacy note seeds exactly one initial
+active epoch after HTML conversion/validation; a legacy deleted note does not gain
+an active epoch merely because a stale client appears. Restoring either legacy or
+migrated deleted content creates a new epoch. No migration mutates an existing
+epoch's update history in place.
 
 ### Vault, attachments, identity, retry, recovery, and observability
 
@@ -224,10 +302,37 @@ retention, and compaction cadence must come from the first spike's measured data
 | --- | --- |
 | Vault/encryption | **Exclude vaulted notes from the offline pilot.** Current vault authorization returns plaintext to an unlocked client but does not establish a device-held encryption key or encrypted IndexedDB dataset. Offline vault therefore requires an owner-approved threat model, key derivation/recovery/rotation, secure native storage policy, lock-on-background behavior, and independent R3 review. Do not call the existing PIN proof end-to-end encryption. |
 | Attachments | Keep attachments online-only for the pilot. The CRDT stores stable attachment references, never signed URLs, blobs, or base64. Offline capture/upload needs a separate durable blob store, quota/eviction handling, staged encryption decision, retryable upload reservation, and a recovery UX; Capacitor Preferences cannot provide it. |
-| Identity/device | Supabase user identity authorizes every sync call. A persisted random device installation ID may aid idempotency/diagnostics but is neither authentication nor a Yjs `clientID`. Scope browser replicas by `{userId, noteId, documentEpoch}` and clear/disconnect on logout or account switch only after pending local recovery is handled. Demo mode remains in-memory and gets no real replica. |
+| Identity/device | Supabase user identity authorizes every sync call. A persisted random device installation ID may aid idempotency/diagnostics but is neither authentication nor a Yjs `clientID`. Scope browser replicas by `{userId, noteId, documentEpoch}`. Demo mode remains in-memory and gets no real replica. The plaintext-cache decision and exact auth-boundary disposition contract below are mandatory before this scope is enabled. |
 | Retry/quotas | Persist local Y updates before network attempts. `401`, `403`, deleted-note, invalid-update, and incompatible-epoch responses halt automatic retry and surface a recovery action. `429`/transient server/network failures use bounded exponential backoff with jitter and resume on foreground/connectivity; `413` or local quota exhaustion requires compaction/export/recovery UI, never silent loss. Server byte, document-count, retention, and request quotas are configuration with observable reason codes, not magic client constants. |
 | Recovery/export | A user can export the current materialized document as HTML and a portable document-backup form that includes format/epoch metadata and encoded state. Clearing local cache must recover from the server's retained snapshot/update set; loss of the server set is not rescued by an individual browser cache. Export/import compatibility needs a separate format/version decision before promising it. |
 | Privacy/observability | Sentry/PostHog may record only lifecycle event names, sanitized reason codes, retry count, latency, and coarse byte buckets. Never record Y update bytes, document IDs that are public identifiers, titles, text, attachment names, vault proof, tokens, raw URLs, or local storage keys. Existing privacy controls remain a minimum, not proof for the new path. |
+
+### Owner decision: plaintext IndexedDB for non-vaulted notes
+
+**Decision required before implementation:** may a non-vaulted note body persist as
+plaintext in this browser profile's IndexedDB? The recommended default is **no local
+replica on a shared browser/device profile** and an explicit opt-in only for a
+personal profile. This is a privacy/disposition decision, not an implementation
+detail and does not apply to vaulted notes.
+
+If approved, the following is the testable retention/disposition contract. It makes
+no silent choice between retaining and removing locally durable note data:
+
+| Event | Required disposition |
+| --- | --- |
+| Voluntary logout | Close/unmount every session before auth state changes. If any locally durable update is not acknowledged, require the user to choose **export recovery bundle then erase** or **discard pending local changes then erase**. If all are acknowledged, disclose and confirm erase. The app may not leave plaintext replicas mounted after logout. |
+| Forced expiry/revocation | Immediately stop rendering/editing/syncing the current session and show a recovery interstitial on return. Before a different account can become active, require the same explicit export-or-discard path for pending data. Re-authentication as the identical user may resume only after identity equality is verified; it must still expose the pending state. |
+| Account switch or second login | Before account B becomes active, close all A sessions. For pending A data, block the switch until the user chooses **export then erase** or **discard then erase**; for fully acknowledged A data, disclose and confirm erase. Then prove the A namespace is absent and enumerate only B's `{userId, noteId, epoch}` namespace. B must never mount, enumerate, render, search, or receive an A replica. Only a verified same-user re-authentication may resume a retained session before this switch boundary. |
+| Shared-device mode | Local persistence is disabled by default. Enabling it requires the owner's approved personal-profile policy and a user-facing disclosure that note bodies are plaintext in this browser profile. Logging out returns to the voluntary-logout disposition; it is not a privacy wipe that may silently lose pending edits. |
+| Soft deletion / restoration | Receipt of an epoch tombstone immediately unmounts and hides the old replica from ordinary UI; it is export-only under the deletion retention policy. It cannot remount merely because the server restores the note. Restoration must bootstrap its new epoch. |
+| Permanent deletion / retention expiry | Before local replica removal, present the approved export-or-discard disposition if a recovery export is permitted by deletion policy; otherwise state the policy's irreversible purge consequence and require the explicit destructive confirmation. The implementation must not quietly retain a deleted plaintext replica. |
+| User-selected cache clear | Show the exact account/document scope and pending count. Pending local updates require export-or-discard before clearing; after confirmation, prove the selected IndexedDB namespace is absent. Browser eviction is treated as unexpected loss: recover from server or surface a failed recovery, never claim success. |
+
+Required tests cover every row above, plus a direct account-A-to-account-B attempt
+that proves B cannot discover A's IndexedDB records through application code or UI.
+The browser cannot make plaintext storage safe against a person who already controls
+the same browser profile; that is why shared-device use is an owner stop, not a
+feature claim.
 
 ## The smallest stable seam
 
@@ -254,7 +359,9 @@ Its **interface invariants** are:
 - `open` never exposes editable content before the local replica has finished
   loading and the binding's required `UniqueID` ordering is safe;
 - `flush` may resolve `durable-local` while offline, but may resolve `synced` only
-  after a server acceptance response for the current epoch;
+  after the committed serialized acknowledgement `syncedThrough: N` for the
+  current epoch; it reports that sequence rather than treating a transport receipt
+  as a commit;
 - remote updates and bootstrap/import transactions are never put in the local
   UndoManager's tracked origin set; explicit AI/restore actions call
   `stopCapturing()` at user-visible boundaries;
@@ -263,10 +370,10 @@ Its **interface invariants** are:
 - no session accepts a legacy direct HTML save for its migrated note.
 
 Its **error modes** are intentionally finite: unavailable local storage, bootstrap
-authorization/vault block, incompatible epoch/format, invalid server update,
-quota/exhausted local storage, deleted note, transient offline/retry, and unexpected
-reducer failure. The shell maps these to a user-visible action; it does not need to
-understand update encoding, browser events, reconnection, or compaction.
+authorization/vault block, incompatible or closed epoch/format, invalid server
+update, quota/exhausted local storage, deleted note, transient offline/retry, and
+unexpected reducer failure. The shell maps these to a user-visible action; it does
+not need to understand update encoding, browser events, reconnection, or compaction.
 
 Its **configuration** is injected as a small concrete configuration object:
 document format/epoch, authenticated endpoint base, bounded retry policy, and
@@ -293,30 +400,43 @@ store is approved should an adapter interface be extracted and independently tes
    paragraphs.
 3. **Browser durability spike.** Use `y-indexeddb` in Chromium, Safari/WebKit, and
    Android WebView-equivalent coverage. Test initial load, refresh, background,
-   quota/eviction behavior, logout/account switch, and two tabs. Measure update
-   volume; do not set quotas by intuition.
+   quota/eviction behavior, every plaintext-cache disposition in the owner contract,
+   and two tabs. In particular, test export-or-discard before account switch and
+   prove an account-B session cannot mount, enumerate, search, or render
+   account-A's replica. Measure update volume; do not set quotas by intuition.
 4. **Server sync/recovery spike.** Build no public feature until two independent
    authenticated contexts can edit one non-vaulted fixture note offline, reconnect
    in either order, converge, then recover after local cache clearing. Exercise
-   duplicate update, deletion while offline, 401/403, 429/5xx, failed compaction,
-   legacy-client block, and export/reimport.
+   duplicate update, two concurrent pushes serialized at `N`/`N+1`, injected reducer
+   crashes before and after transaction commit, a deliberately stale projection read,
+   a version/export requested immediately after `syncedThrough: N`, deletion while
+   offline, delete/push and delete/restore/push races, 401/403, 429/5xx, failed
+   compaction, legacy-client block, and export/reimport. The evidence must prove
+   that a failure neither acknowledges nor makes an invalid update authoritative.
 5. **Web implementation slice.** Gate only new/opt-in non-vaulted note bodies;
    add the PWA shell cache needed for cold offline launch and the exact RLS,
    migration, cross-user, reducer, and privacy tests. Keep un-migrated notes on the
    current truthful online save path.
-6. **Controlled migration.** Add a document epoch/version, seed each note exactly
-   once from its existing HTML, verify the materialized projection, and disable the
-   legacy writer for the migrated note. Never rewrite historical `note_versions` or
-   in-place Y updates. Roll forward with a new epoch; rollback by disabling the
-   session/writer while retaining update data and current HTML projection.
+6. **Controlled migration.** Add a document epoch/version, seed each active note
+   exactly once from its existing HTML into one initial epoch, verify the materialized
+   projection, and disable the legacy writer for the migrated note. A legacy deleted
+   note has no active epoch; any restore creates the next epoch from an authoritative
+   state. Never rewrite historical `note_versions` or in-place Y updates. Roll
+   forward with a new epoch; rollback by disabling the session/writer while retaining
+   update data and current HTML projection.
 7. **Broad web acceptance.** Complete browser multi-tab, slow/offline, PWA,
    accessibility, performance, export, privacy, and recovery evidence before
    offering a native build.
-8. **Capacitor feasibility spike, then wrapper.** Decide static-client versus
-   approved remote-origin packaging; test Supabase OAuth/email-reset redirect,
-   `appUrlOpen`/launch URL, Android back, app pause/resume, network changes,
-   keyboard/safe-area, and native auth/session storage. Add only the plugins proven
-   necessary. Use the existing history module rather than a new parallel navigator.
+8. **Capacitor feasibility spike, then wrapper.** The only production candidate is
+   a bundled `webDir` static client whose final `index.html` calls the hosted
+   authenticated API. First prove that the current Next application can build that
+   client. If it cannot, stop for a separate client-build feasibility decision;
+   `server.url`, cleartext traffic, `allowNavigation`, and live reload are
+   development-only and cannot be a release fallback. Then test Supabase OAuth/email-
+   reset redirect, `appUrlOpen`/launch URL, Android back, app pause/resume, network
+   changes, keyboard/safe-area, and native auth/session storage. Add only the plugins
+   proven necessary. Use the existing history module rather than a new parallel
+   navigator.
 9. **Native acceptance.** After Android/iOS emulator evidence, run proportionate
    physical-device/OEM evidence only for claims a browser cannot prove. Push,
    notifications, offline files, biometric/keychain vault, and store release are
@@ -333,11 +453,17 @@ the following occurs:
   recover after quota/eviction;
 - a server provider cannot enforce owner, deletion, vault, rate, and epoch checks
   without sending private update data to telemetry or a client service key;
+- the implementation cannot atomically commit an accepted update, its reducer state,
+  its projection, and its acknowledgement barrier, or cannot preserve that invariant
+  through compaction/crash recovery;
+- the owner does not approve the plaintext IndexedDB retention/disposition contract,
+  or an account boundary test lets a second account discover a prior-account replica;
 - sync needs shared cursors, collaborators, sub-second presence, or a persistent
   WebSocket host;
 - owner requests offline vault, end-to-end encryption, offline attachments, native
   background transfer, push, or cross-user sharing;
-- a Next/Capacitor packaging spike cannot serve the same authenticated API contract;
+- a Next/Capacitor packaging spike cannot produce the bundled static client that
+  serves the same authenticated API contract;
 - hosted RLS/preflight, retention, pricing/quota, or privacy requirements differ
   from the assumptions in this document.
 
@@ -357,9 +483,28 @@ path, rather than a mock queue.
   shell offline, and converges after reconnect without a content-loss overwrite.
 - Two authenticated browser contexts make distinct offline edits, reconnect in
   either order, and converge to the same body. Duplicate delivery is harmless.
+- Two simultaneous authenticated pushes serialize through committed sequences `N`
+  and `N+1`; each returned `syncedThrough` is backed by the same committed reducer
+  state, snapshot/state vector, and HTML/text/`updated_at` projection. Injected
+  reducer failures before commit leave no append/projection/acknowledgement, and a
+  crash after commit retries idempotently to the same sequence.
+- A deliberately stale projection read first crosses the reducer barrier before it
+  returns. A version, restore-source read, or export requested after
+  `syncedThrough: N` records/returns the exact state through `N`, not a prior HTML
+  projection. A failed compaction preserves the prior snapshot pointer and update
+  rows; a successful one proves checksum/coverage before eligible prefix removal.
+- In both delete/push orderings, closing epoch `E` is terminal for that push. In a
+  delete/restore/push race, every old-`E` push remains terminal and the restore
+  bootstraps a validated `E+1`; an old replica is export-only and cannot mount or
+  rebase into `E+1`.
 - The server rejects cross-user, vaulted-without-proof, deleted, malformed,
   incompatible-epoch, and oversized updates; the client does not retry terminal
   failures automatically.
+- The approved plaintext-cache disposition is exercised for voluntary logout,
+  forced expiry, account switching, shared-device mode, delete/restore, permanent
+  deletion, and explicit cache clearing. Pending data always receives the explicit
+  export-or-discard path. An account-B session cannot mount, enumerate, render,
+  search, or receive account-A replica data.
 - Current list/search/export read the server-materialized HTML/text projection;
   no full-list query fires on each keystroke; no document data enters Sentry or
   PostHog.
@@ -395,8 +540,14 @@ support this fallback is not ready to ship.
    backed by existing Supabase/Postgres, with no new managed collaboration vendor or
    WebSocket host. Any later host/subscription/spend requires current-pricing review
    and separate approval.
-6. Approve a narrow opt-in/PWA browser pilot before adding Capacitor. Native
-   packaging, Android/iOS projects, authentication redirect registration, app-store
+6. Approve or reject plaintext IndexedDB persistence for non-vaulted note bodies,
+   including the explicit export-or-discard and account-isolation contract above. If
+   rejected or undecided, use memory-only editing and do not begin the offline pilot.
+7. Approve a narrow opt-in/PWA browser pilot before adding Capacitor. The sole
+   production Capacitor path is a bundled `webDir` static client calling the hosted
+   authenticated API; if the current Next build cannot create it, authorize a
+   separate client-build feasibility decision before native work. Native packaging,
+   Android/iOS projects, authentication redirect registration, app-store
    distribution, and device installs remain separate authority gates.
 
 ## Risks that remain after this plan
@@ -409,6 +560,9 @@ support this fallback is not ready to ship.
 - The present server-side vault model is not sufficient for encrypted offline data.
 - Materialization and compaction can introduce projection lag or corruption if they
   are not transactional/replayable and independently tested.
+- Plaintext browser replicas trade offline resilience for profile-local exposure;
+  account fencing and explicit disposition reduce application leakage but cannot
+  protect data from someone who controls the same browser profile.
 - A native wrapper adds deployment, native lifecycle, OAuth redirect, privacy
   manifest, keyboard, WebView, and review responsibilities; it remains downstream.
 
