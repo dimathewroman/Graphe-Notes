@@ -498,7 +498,8 @@ The following manifesto features are documented but not yet implemented:
 | Per-note editor font selection | Mentioned | System-wide font picker only |
 | Content width toggle (700/900/full) | Specified | Not implemented |
 | `lib/design-tokens.ts` | Specified as source of truth | Tokens are CSS vars in globals.css instead |
-| Canvas / spreadsheet / drawing note types | Roadmap | Not implemented |
+| Canvas notes | Roadmap | Locked future Excalidraw direction, after Capacitor; no package, schema, or code yet |
+| Spreadsheet note types | Roadmap | Not implemented |
 | Toolbar personality moments (paint bucket tilt, link jiggle) | Specified in §6.4 | Unknown implementation status |
 | Geist Mono for code blocks | Specified in §3 | JetBrains Mono used instead |
 | Self-hosting all fonts | Specified | Google CDN for JetBrains Mono and editor fonts |

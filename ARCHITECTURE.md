@@ -591,7 +591,7 @@ Several subsystems assume a browser runtime:
 - **GrapheEditor** = content renderer — content-type-agnostic
 - **EditorToolbar** = rich-text-specific chrome
 
-A new content type (canvas, spreadsheet, code-only) would need a new shell or a toolbar abstraction that swaps based on content type. The `NoteBody.tsx` and `AttachmentPanel.tsx` assume rich text content structure. The Tiptap extensions themselves are all loaded for every note regardless of content type — lazy extension loading would be needed at scale.
+A new content type (canvas, spreadsheet, code-only) would need a new shell or a toolbar abstraction that swaps based on content type. The locked future canvas direction is **Excalidraw**, after Capacitor, with an engine-opaque `canvas_doc(note_id, engine, payload)` direction; it must not be rendered through Tiptap or forced into an HTML document format. The `NoteBody.tsx` and `AttachmentPanel.tsx` assume rich text content structure. The Tiptap extensions themselves are all loaded for every note regardless of content type — lazy extension loading would be needed at scale. See the Stage 3 feasibility record for the planned shared identity/epoch/recovery concepts and the format-specific payload seam.
 
 ### 3. Single-user data assumptions
 
@@ -612,7 +612,7 @@ Authenticated mode has no offline capability:
 - No offline queue, no optimistic persistence beyond in-memory cache
 - Demo mode is fully offline — it never calls the API
 
-An offline-capable authenticated mode would require a local-first storage layer (e.g. IndexedDB via Dexie) with a sync queue, plus conflict resolution for concurrent edits.
+The reviewed first offline-capable authenticated direction is a web-first Yjs document pilot: `y-indexeddb` is a durable browser replica, while an authenticated HTTP/Postgres update log remains the cross-device recovery authority. It is not a generic offline queue, and it does not make browser storage the authority for new notes. A later native offline-only/local-authority model requires its own post-Capacitor encryption, backup, export, and recovery decision. See `docs/audit/2026-08-24-stage3-offline-mobile-feasibility.md`.
 
 ### 5. Data layer portability
 

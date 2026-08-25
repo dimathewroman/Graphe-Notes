@@ -15,6 +15,11 @@ change is proposed as completed by this document.
   2026-08-24.
 - **[Inference]** is a conclusion from those facts.
 - **[Proposal]** is a future design, not an existing contract or owner decision.
+- **[Roadmap-locked]** is a sanitized product/architecture decision confirmed
+  read-only from the canonical private roadmap on 2026-08-25. It is not copied
+  from private notes and does not authorize implementation by itself.
+- **[Owner infrastructure fact]** is availability information, not a production
+  topology decision or authorization to set up a service.
 
 ## Decision
 
@@ -26,8 +31,8 @@ Build a narrowly scoped, non-vaulted note-body foundation in the existing web ap
 2. local `y-indexeddb` persistence under a user- and document-epoch-scoped name;
 3. an authenticated, durable HTTP update-log sync path backed by the existing
    Supabase/Postgres boundary; and
-4. a server-maintained HTML/text projection for current list, search, export, and
-   legacy-rendering callers.
+4. a server-maintained HTML/text projection for current rich-text list, search,
+   export, and legacy-rendering callers.
 
 Do not introduce live sharing, cursor presence, offline attachments, offline vault,
 or a native wrapper in the first slice. Add Capacitor only after that slice proves
@@ -38,6 +43,55 @@ make it reliable.
 This is deliberately a **device-sync CRDT**, not a promise of collaborative shared
 notes. If shared editing becomes a product goal, reassess the sync host, presence,
 authorization model, quotas, and privacy disclosure before enabling it.
+HTML is not a universal authoritative document format: it is a Tiptap-document
+compatibility projection in this pilot, never a prerequisite for a future canvas
+payload.
+
+## Canonical-roadmap crosswalk and order
+
+The canonical private **Graphe Notes Product Roadmap** names itself the roadmap
+source of truth and points to **Templates v2 Era — Foundation Architecture** as
+the canonical architecture narrative. This crosswalk preserves that owner-locked
+direction while keeping current repository evidence and this Stage 3 recommendation
+honest. It records no private URLs, personal content, or raw roadmap notes.
+
+| Category | Sanitized established direction | Reconciliation in this repository plan |
+| --- | --- | --- |
+| **[Roadmap-locked] data foundation** | Yjs is the data foundation; IndexedDB supplies the offline foundation; raw Tiptap stays. | The first slice remains a non-vaulted, single-owner web Yjs/IndexedDB pilot. It starts from the shared `GrapheEditor` owner rather than replacing Tiptap or adding a second editor. |
+| **[Roadmap-locked] Templates v2 sequencing** | Yjs foundation precedes Templates v2 note-type substrate, then modalities/polish, with collaboration activation later. | The pilot is the compatibility and recovery proof for the first Yjs step. It does not pull Templates v2 modalities, collaboration, or native code into the pilot. |
+| **[Roadmap-locked] canvas** | Excalidraw is the locked canvas engine. Canvas is a future era after Capacitor; its direction is an engine-opaque `canvas_doc(note_id, engine, payload)`. | Document notes stay Tiptap/Yjs. A future canvas note has an Excalidraw-owned payload; no Excalidraw package, schema, HTML projection, or canvas implementation is authorized now. |
+| **[Roadmap-locked] mobile** | Capacitor is the mobile wrapper direction. | The web pilot remains first. A bundled-`webDir` feasibility spike and then a wrapper are later gates, not evidence that a native project should start. |
+| **[Roadmap-locked] live collaboration** | Supabase Realtime is an initial later transport direction, with Yjs Awareness for presence and portability to another provider later. | The durable authenticated HTTP/Postgres update log remains first-pilot recovery authority. Realtime may later deliver wake-up/presence traffic only after its own capacity, security, authorization, and current-pricing spike; it never becomes the authoritative update log by implication. |
+| **[Current-code refinement]** | Current notes use HTML/text read models and direct save; no Yjs, durable browser replica, service worker, or Capacitor configuration is present. | HTML/text stays a materialized compatibility projection for Tiptap document notes only. The future envelope must not make HTML the universal authoritative payload format. |
+| **[Owner infrastructure fact]** | An almost-always-on Windows PC is available for optional experiments. | It is replaceable test/worker compute, never the production source of truth or sole durable sync authority. No setup is authorized. |
+| **[Future decision, not authorized]** | Native-local authority, encrypted offline vault, offline-only notes, backup/export, attachment outbox, production host topology, and any public/remote Windows service remain undecided. | Each requires a separate approved threat/recovery/operations design and R3 evidence before implementation or external access. |
+
+### Ordered path and contradiction rule
+
+1. **Disposable compatibility-only Yjs prototype** proves the rich-text document
+   path and the modality-neutral envelope boundary.
+2. **Web Yjs pilot and broader web acceptance** prove one-owner recovery,
+   IndexedDB replica behavior, and the authenticated durable HTTP/Postgres path.
+3. **Capacitor bundled-`webDir` feasibility**, then a separately authorized
+   wrapper, prove the native packaging and lifecycle boundary.
+4. **Native offline-only privacy notes** are considered only after the wrapper and
+   require a separate local-authority, encryption, backup, and export decision.
+5. **Excalidraw canvas era** follows Capacitor under the locked
+   engine-opaque-payload direction; it is not part of Templates v2 document-note
+   work by default.
+6. **Live collaboration** may later add Realtime delivery and Yjs Awareness after
+   a capacity/security/current-pricing spike; durable HTTP/Postgres recovery remains
+   authority unless a reviewed replacement decision says otherwise.
+7. **Windows-host experiments** may support long reconnect tests, local AI, test
+   services, staging relay, or compaction/worker experiments at any compatible
+   pre-production stage, never by becoming a hidden production dependency.
+
+There is no sequencing contradiction after separating the web pilot from the
+roadmap's later native-local model: the pilot's server recovery authority applies
+to web, while native local authority is explicitly deferred. A future roadmap
+change that moves canvas before Capacitor, makes Realtime the durable authority, or
+requires native-local authority in the web pilot is a stop-and-reconcile trigger,
+not a choice this document may make silently.
 
 ## Scoped roadmap-status correction
 
@@ -152,6 +206,7 @@ because their findings and chronology are still useful evidence.
 | Data/infrastructure | Add a server-owned, authenticated Y-update log and compaction snapshot only after a reviewed migration/RLS design. Keep the current `notes` row as the query/read model and retain version and attachment ownership. Do not use Supabase Realtime as the durable source of document content. |
 | Auth/secrets/compliance | Each sync request must resolve the authenticated user server-side, enforce note ownership/deletion/vault status, and never expose a service key. The first slice excludes vault replicas and demo mode. Native redirects, keychain/secure-store policy, privacy manifests, and encrypted offline vault need separate approved design and evidence. |
 | Offline behavior | A locally durable document is not the same as an offline-launchable app. Stage 3 needs both IndexedDB document persistence and a narrowly cached PWA shell before it may claim reopen-while-offline. The current warning remains the truthful fallback for un-migrated notes. |
+| Optional Windows host | An almost-always-on Windows PC may later run development/staging sync-relay, compaction/worker, long-reconnect, local-AI, or test-service experiments. It is replaceable compute only: never the production source of truth or sole durable sync authority. Off/on tolerance, authentication, encrypted transport, least privilege, secrets, remote access, monitoring, updates, backups, recovery, and network exposure need an approved design before any external access. No setup is authorized here. |
 | Devices/QA | Start browser-first: Playwright plus two independent authenticated browser contexts, reload/background simulation, browser storage clearing, and mobile-width checks. Before a wrapper ships, use Android emulator and iOS simulator; reserve physical Vivo evidence for later OEM/keyboard/lifecycle claims only. |
 | Cost and alternatives | The recommended first slice has no new managed vendor or paid-service commitment, but it adds Postgres storage/egress and server request/compaction work. A dedicated WebSocket host or managed collaboration provider adds operational or subscription cost; a custom operation log adds long-term implementation and verification cost. No current price is approved or asserted here: recheck official pricing, current quotas, and retention before selecting a host or enabling a cohort. |
 | Compatibility | Existing HTML must seed a Yjs ProseMirror fragment without silently changing custom nodes, attachments, or `UniqueID`. StarterKit history must be disabled for migrated sessions, existing HTML versions must remain readable, and legacy clients must not write directly to a migrated note. |
@@ -179,7 +234,9 @@ carry auth headers/cookies and awareness; it is a good recheck candidate only if
 real-time multi-user editing is accepted. [y-websocket](https://docs.yjs.dev/ecosystem/connection-provider/y-websocket).
 Supabase Broadcast may later be a wake-up signal or presence transport, but the
 client must still retrieve/commit the durable update set. It must not be mistaken
-for a document database.
+for a document database. The roadmap's later Supabase Realtime/Yjs Awareness
+direction is therefore compatible with this plan only as a separately spiked
+delivery/awareness layer, not as a replacement for the accepted durable authority.
 
 ## Proposed data and sync contract
 
@@ -187,8 +244,8 @@ for a document database.
 
 | Concern | Proposal |
 | --- | --- |
-| Rich-text body | A `Y.XmlFragment` (for example, `body`) in one `Y.Doc` per note/epoch is authoritative after the server accepts its binary update. The local IndexedDB copy is a durable replica/cache, not the cross-device recovery authority. |
-| Legacy read model | The server materializes the accepted CRDT state to the existing `notes.content`, `content_text`, and `updated_at` fields for current listing, search, export, and rollback. It must never accept a legacy direct HTML `PATCH` as a second writer after a note has migrated. |
+| Rich-text body | For a Tiptap document note, a `Y.XmlFragment` (for example, `body`) in one `Y.Doc` per note/epoch is authoritative after the server accepts its binary update. The local IndexedDB copy is a durable replica/cache, not the cross-device recovery authority. |
+| Legacy read model | For a Tiptap document note, the server materializes the accepted CRDT state to the existing `notes.content`, `content_text`, and `updated_at` fields for current listing, search, export, and rollback. It must never accept a legacy direct HTML `PATCH` as a second writer after a note has migrated. A future canvas payload neither requires nor receives this HTML materialization. |
 | Concurrent edits | Merge body edits through Yjs update semantics. There is no user-facing "pick winner" dialog for normal text operations. The UI reports *durable locally*, *syncing*, *synced*, or a specific blocked/error state; it does not call a network-delivered save "saved" prematurely. |
 | Metadata | Keep folder, tags, pin, favorite, deletion, and attachment metadata on their existing authenticated server paths initially. Do not imply they work offline. A later offline metadata design needs explicit operation semantics and test cases, not a generic queue. |
 | Title | The pilot may keep title online-only to keep the first conversion constrained. Before broad offline rollout, make title either a separately specified Y text field or an explicitly versioned metadata operation; do not use accidental last-write-wins behavior. |
@@ -334,6 +391,28 @@ The browser cannot make plaintext storage safe against a person who already cont
 the same browser profile; that is why shared-device use is an owner stop, not a
 feature claim.
 
+### Shared document envelope: reusable concepts, opaque payloads
+
+**[Roadmap-locked direction; Proposal contract shape]** The first data/schema/
+transport design may share a small **document envelope** across future modalities,
+but it must not claim that every payload is Tiptap, Yjs, or HTML. This is a
+conceptual interface for future review, not a schema, package, or implementation
+authorization:
+
+| Envelope concern | Shared meaning | Format-specific owner |
+| --- | --- | --- |
+| Identity and lifecycle | `noteId`, owner authorization, document epoch, format version, active/closed lifecycle, deletion and restore fencing. | The document or canvas implementation decides how its state is encoded and validated. |
+| Sync and recovery | Sync status, acknowledged recovery point, retry/terminal result, export/recovery disposition, and server authorization context. | Each modality defines the meaningful state vector, update unit, compaction, and recovery artifact. |
+| `engine` and `payload` | An explicit engine/format identifier selects an opaque payload contract. Callers do not decode a payload just because it belongs to a note. | A Tiptap document note may use Yjs state/updates; a later canvas note uses the locked `excalidraw` engine direction and its own payload. |
+| Compatibility projections | A projection exists only when that engine needs one. | Tiptap/Yjs may materialize HTML/text for existing readers. Canvas does **not** receive a forced HTML materialization or a Tiptap document-session. |
+
+For the later canvas era, `canvas_doc(note_id, engine, payload)` is the
+roadmap-locked, engine-opaque storage direction. It must not be added now, and it
+does not decide whether a future payload is bytes, a snapshot, an operation set, or
+another engine-native representation. The document and canvas paths can reuse
+identity, epoch, authentication, sync-status, recovery, and deletion concepts
+without sharing a shallow universal serializer or a false universal HTML contract.
+
 ## The smallest stable seam
 
 Do not add a speculative `StorageAdapter`, `SyncProvider`, or cross-platform
@@ -343,7 +422,8 @@ log); inventing an interface merely to anticipate a native database or WebSocket
 provider would create a shallow module.
 
 Instead, create one concrete, deep **`note-document-session` module** at the seam
-between `NoteShell`/`GrapheEditor` and persistence/sync. Its callers know only:
+between `NoteShell`/`GrapheEditor` and persistence/sync **for Tiptap document
+notes only**. Its callers know only:
 
 ```text
 open(note identity + authorized bootstrap) -> session
@@ -385,19 +465,56 @@ and compaction measurements before setting budgets.
 
 This module creates leverage and locality: one migration point replaces the
 currently duplicated direct save concern without making `GrapheEditor` learn
-database/auth/queue details. Only when a second real production transport or local
-store is approved should an adapter interface be extracted and independently tested.
+database/auth/queue details. It is not a canvas session and must not be widened to
+decode, materialize, or render the future Excalidraw payload. Only when a second
+real production transport or local store is approved should an adapter interface be
+extracted and independently tested.
+
+## Exact next bounded prototype
+
+**Next action after this reconciliation:** a separately authorized,
+compatibility-only, disposable **Tiptap/Yjs envelope prototype** in a new isolated
+worktree. It is non-production evidence, not the web pilot and not a migration.
+
+The prototype may use a sanitized representative Tiptap fixture containing the
+current supported custom nodes and `UniqueID` attributes. It mounts that fixture in
+a `Y.Doc`/`Y.XmlFragment` with the actual Tiptap collaboration configuration, then
+round-trips through the supported document serializer. Alongside it, it declares a
+second envelope fixture with `engine: "excalidraw"` and an opaque placeholder
+payload. The prototype must not import Excalidraw, parse the canvas payload, or
+manufacture HTML for it.
+
+**Acceptance boundaries:**
+
+- The Tiptap/Yjs fixture preserves supported node semantics, `UniqueID`, and
+  HTML/text round-trip expectations; normal Tiptap history is disabled in favor of
+  collaboration/Yjs history for the fixture.
+- The envelope can represent both a Tiptap/Yjs document payload and an opaque future
+  canvas payload without a required `html`, `contentText`, or Tiptap-session field.
+- No Supabase access, HTTP transport, IndexedDB durability, PWA/service worker,
+  production schema, migration, product route, real note, native project, hosted
+  service, credential, collaboration transport, or Excalidraw package is used.
+- The harness and any temporary dependency experiment are removed or retained only
+  as explicitly reviewed evidence; it does not become a production abstraction by
+  accident.
+
+Failure to preserve a supported document node or to express the opaque canvas
+fixture without a universal HTML requirement is a stop for data-model review. Passing
+this prototype does **not** approve implementation of the web pilot, Capacitor, or
+canvas mode.
 
 ## Correct sequencing
 
 1. **Freeze scope and decisions.** Record owner decisions below; verify the
    existing database hosted-preflight/role evidence before proposing any migration.
-2. **Compatibility spike.** In a throwaway, non-production fixture, migrate a
-   representative current HTML note through the actual Tiptap extension set into a
-   `Y.XmlFragment`, including custom image/task/table/details/math/video nodes and
-   `UniqueID`. Verify HTML/text round trip and explicitly configure collaboration
-   history. Stop if any supported node is lossy or initialization produces empty
-   paragraphs.
+2. **Compatibility spike.** Run the exact bounded prototype above. In a throwaway,
+   non-production fixture, migrate a representative current HTML note through the
+   actual Tiptap extension set into a `Y.XmlFragment`, including custom
+   image/task/table/details/math/video nodes and `UniqueID`. Verify HTML/text round
+   trip, explicitly configure collaboration history, and prove the shared envelope
+   carries an opaque future canvas payload without requiring HTML. Stop if any
+   supported node is lossy, initialization produces empty paragraphs, or the
+   envelope leaks a Tiptap requirement into canvas.
 3. **Browser durability spike.** Use `y-indexeddb` in Chromium, Safari/WebKit, and
    Android WebView-equivalent coverage. Test initial load, refresh, background,
    quota/eviction behavior, every plaintext-cache disposition in the owner contract,
@@ -461,18 +578,23 @@ the following occurs:
 - sync needs shared cursors, collaborators, sub-second presence, or a persistent
   WebSocket host;
 - owner requests offline vault, end-to-end encryption, offline attachments, native
-  background transfer, push, or cross-user sharing;
+  background transfer, offline-only native notes/local authority, push, or cross-user
+  sharing;
+- a proposed Windows-host experiment needs remote exposure, persistence beyond a
+  disposable test, production duties, or a secret/access expansion;
 - a Next/Capacitor packaging spike cannot produce the bundled static client that
   serves the same authenticated API contract;
 - hosted RLS/preflight, retention, pricing/quota, or privacy requirements differ
   from the assumptions in this document.
 
-## Small first implementation slice
+## First production implementation slice, not the next action
 
-**Slice:** one opt-in/new, non-vaulted personal note body in the web app; no sharing,
-AI mutation, attachments, title offline editing, folders/tags offline editing, or
-native code. It proves a real browser-local document plus a real server recovery
-path, rather than a mock queue.
+Only after the exact bounded prototype passes, the listed owner decisions are
+approved, and its dedicated spikes are authorized may this become the first
+production implementation slice: one opt-in/new, non-vaulted personal note body in
+the web app; no sharing, AI mutation, attachments, title offline editing,
+folders/tags offline editing, or native code. It proves a real browser-local document
+plus a real server recovery path, rather than a mock queue.
 
 ### Acceptance criteria
 
@@ -549,6 +671,18 @@ support this fallback is not ready to ship.
    separate client-build feasibility decision before native work. Native packaging,
    Android/iOS projects, authentication redirect registration, app-store
    distribution, and device installs remain separate authority gates.
+8. Acknowledge the roadmap-locked Excalidraw canvas direction without treating it
+   as authorization for a canvas package, `canvas_doc` schema, payload design, or
+   implementation. Those need their own post-Capacitor proposal and review.
+9. After a Capacitor wrapper is accepted, decide whether native offline-only notes
+   have local authority and approve the associated encryption, key recovery,
+   backup, export, retention, and device-loss design. The web pilot does not decide
+   this by precedent.
+10. Before any Windows-host experiment, approve its exact role and off/on-tolerant
+    topology. It may be a development/staging relay, compaction/worker experiment,
+    long-reconnect test, local-AI, or test service, but never a production source of
+    truth or sole durable sync authority. External access needs the security and
+    operations controls named in the feasibility preflight.
 
 ## Risks that remain after this plan
 
@@ -565,6 +699,9 @@ support this fallback is not ready to ship.
   protect data from someone who controls the same browser profile.
 - A native wrapper adds deployment, native lifecycle, OAuth redirect, privacy
   manifest, keyboard, WebView, and review responsibilities; it remains downstream.
+- A Windows PC is useful optional test/worker capacity, but its availability does
+  not supply the reliability, backup, failover, patching, or exposure design of a
+  production sync authority.
 
 ## Evidence and research record
 
@@ -589,3 +726,10 @@ The external references in this document are direct Yjs, Tiptap, Capacitor,
 Supabase, and Next.js documentation links, not third-party summaries. Pricing,
 hosting quotas, and browser/device behavior are intentionally not represented as
 verified until the bounded spikes and owner approvals above occur.
+
+Read-only canonical-roadmap verification on 2026-08-25 confirmed the product-roadmap
+source-of-truth relationship, Templates v2 canonical architecture, the locked Yjs /
+IndexedDB / raw-Tiptap / Capacitor / Excalidraw decisions, the post-Capacitor canvas
+order, and the later Realtime/Awareness collaboration direction. This document keeps
+only the sanitized decisions required for repository architecture; it stores no
+private URL, personal content, or raw private note.
