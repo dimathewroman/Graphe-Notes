@@ -13,6 +13,7 @@ import posthog from "posthog-js";
 import { ScrollArea } from "./ui/scroll-area";
 import { executeAiRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
 import { isDemoAiEnabled } from "@/lib/ai-demo-mock";
+import { evaluateAiCapability, type AiCapabilityEvaluation } from "@lib/ai-capabilities";
 
 interface AiSettingsResponse {
   activeAiProvider?: string | null;
@@ -20,6 +21,21 @@ interface AiSettingsResponse {
   localLlmEndpoint?: string | null;
   localLlmModel?: string | null;
 }
+
+function capabilityUnavailableMessage(
+  evaluation: Extract<AiCapabilityEvaluation, { status: "unavailable" }>,
+) {
+  switch (evaluation.code) {
+    case "no_active_provider":
+      return "AI isn't enabled. Choose a provider in Settings to continue.";
+    case "unsupported_provider":
+      return "Your selected AI provider is no longer supported. Please choose another provider in Settings.";
+    case "local_llm_unconfigured":
+      return "Local LLM endpoint not configured. Please check Settings.";
+  }
+}
+
+const SETTINGS_CONFIRMATION_ERROR = "Couldn't confirm your AI provider. Please check Settings and try again.";
 
 export function AIPanel() {
   // Atomic Zustand selectors (E1) — one subscription per value.
@@ -40,7 +56,13 @@ export function AIPanel() {
 
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState("");
+  const [error, setError] = useState("");
   const [isPending, setIsPending] = useState(false);
+
+  const showError = (message: string) => {
+    setResult("");
+    setError(message);
+  };
 
   const runGenerate = async (
     provider: string,
@@ -58,9 +80,10 @@ export function AIPanel() {
 
     setIsPending(true);
     setResult("");
+    setError("");
     try {
       // G8: shared request path. AIPanel keeps its 1024-token budget and shows the
-      // result — or the friendly error message — inline in the result area.
+      // result inline; failures stay as non-insertable alerts.
       const outcome = await executeAiRequest({
         provider,
         prompt: fullPrompt,
@@ -72,7 +95,11 @@ export function AIPanel() {
           : undefined,
         localMaxTokens: 1024,
       });
-      setResult(outcome.ok ? (outcome.text ?? "") : (outcome.message ?? "Error generating response. Please check your AI settings."));
+      if (outcome.ok) {
+        setResult(outcome.text ?? "");
+      } else {
+        showError(outcome.message ?? "Error generating response. Please check your AI settings.");
+      }
     } finally {
       setIsPending(false);
     }
@@ -81,11 +108,22 @@ export function AIPanel() {
   const handleComplete = async () => {
     if (!prompt.trim()) return;
 
-    let provider = "graphe_free";
+    let provider: string | undefined;
     let localLlmEndpoint: string | null = null;
     let localLlmModel: string | null = null;
 
-    if (!isDemo) {
+    if (isDemo) {
+      // The demo route is an explicit, flag-gated mock path, not a settings fallback.
+      const capability = evaluateAiCapability({
+        capability: "selection.transform.v1",
+        activeProvider: "graphe_free",
+      });
+      if (capability.status === "unavailable") {
+        showError(capabilityUnavailableMessage(capability));
+        return;
+      }
+      provider = capability.provider;
+    } else {
       try {
         // G16-partial: cached settings fetch (staleTime); invalidated on save.
         const settingsData = await queryClient.fetchQuery({
@@ -107,29 +145,59 @@ export function AIPanel() {
                 // Re-fetch settings for endpoint at execution time
                 const freshSettings = await authenticatedFetch("/api/ai/settings");
                 if (!freshSettings.ok) {
-                  setResult("Failed to fetch AI settings.");
+                  showError(SETTINGS_CONFIRMATION_ERROR);
                   return;
                 }
                 const freshData = await freshSettings.json() as AiSettingsResponse;
-                await runGenerate(resolvedProvider, capturedPrompt, capturedNote, {
+                const localCapability = evaluateAiCapability({
+                  capability: "selection.transform.v1",
+                  activeProvider: resolvedProvider,
+                  localEndpoint: freshData.localLlmEndpoint,
+                });
+                if (localCapability.status === "unavailable") {
+                  showError(capabilityUnavailableMessage(localCapability));
+                  return;
+                }
+                await runGenerate(localCapability.provider, capturedPrompt, capturedNote, {
                   endpoint: freshData.localLlmEndpoint ?? "",
                   model: freshData.localLlmModel ?? null,
                 });
                 return;
               }
-              await runGenerate(resolvedProvider, capturedPrompt, capturedNote);
+              const resolvedCapability = evaluateAiCapability({
+                capability: "selection.transform.v1",
+                activeProvider: resolvedProvider,
+              });
+              if (resolvedCapability.status === "unavailable") {
+                showError(capabilityUnavailableMessage(resolvedCapability));
+                return;
+              }
+              await runGenerate(resolvedCapability.provider, capturedPrompt, capturedNote);
             });
             setAiSetupModalOpen(true);
             return;
           }
 
-          if (!settingsData.activeAiProvider) return; // No AI mode
-          provider = settingsData.activeAiProvider;
           localLlmEndpoint = settingsData.localLlmEndpoint ?? null;
           localLlmModel = settingsData.localLlmModel ?? null;
+          const capability = evaluateAiCapability({
+            capability: "selection.transform.v1",
+            activeProvider: settingsData.activeAiProvider,
+            localEndpoint: localLlmEndpoint,
+          });
+          if (capability.status === "unavailable") {
+            showError(capabilityUnavailableMessage(capability));
+            return;
+          }
+          provider = capability.provider;
         }
-      } catch { /* use default */ }
+      } catch {
+        showError(SETTINGS_CONFIRMATION_ERROR);
+        return;
+      }
     }
+
+    if (!provider) return;
 
     if (provider !== "local_llm") {
       posthog.capture("ai_prompt_submitted", { provider });
@@ -197,7 +265,7 @@ export function AIPanel() {
 
           <ScrollArea className="flex-1 min-h-0">
           <div className="p-4 flex flex-col gap-4">
-            {!result && !isPending && (
+            {!result && !error && !isPending && (
               <div className="space-y-2 mb-4">
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-2">Quick Actions</p>
                 {presetPrompts.map(p => (
@@ -216,6 +284,12 @@ export function AIPanel() {
               <div className="flex flex-col items-center justify-center py-12 text-ai-accent gap-3">
                 <Loader2 className="w-8 h-8 animate-spin" />
                 <p className="text-sm font-medium animate-pulse">Thinking...</p>
+              </div>
+            )}
+
+            {error && !isPending && (
+              <div role="alert" className="bg-destructive/10 rounded-xl p-4 border border-destructive/20 text-sm text-foreground/90">
+                {error}
               </div>
             )}
 
