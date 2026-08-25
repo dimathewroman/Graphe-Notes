@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test --project=chromium",
+    "test:e2e:cross-platform": "playwright test --config=playwright.cross-platform.config.ts",
     "test:e2e:login": "playwright test --project=setup",
     "test:e2e:authenticated": "playwright test --project=authenticated"
   },
