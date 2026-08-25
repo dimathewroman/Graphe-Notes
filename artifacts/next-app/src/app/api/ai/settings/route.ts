@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { db, userSettingsTable, userApiKeysTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { decryptApiKey } from "@lib/encryption";
+import { isAiProvider } from "@lib/ai-capabilities";
 import * as Sentry from "@sentry/nextjs";
 
 // GET /api/ai/settings — returns the user's active AI provider preference
@@ -64,14 +65,15 @@ export async function PATCH(request: NextRequest) {
     const body = (await request.json()) as Record<string, unknown>;
     const { activeAiProvider, hasCompletedAiSetup } = body;
 
-    // activeAiProvider must be null or a non-empty string (if provided)
+    // Only a known explicit provider may become active. This prevents stale or
+    // malformed settings from being normalized into an implicit cloud fallback.
     if (
       "activeAiProvider" in body &&
       activeAiProvider !== null &&
-      (typeof activeAiProvider !== "string" || !activeAiProvider.trim())
+      !isAiProvider(activeAiProvider)
     ) {
       return NextResponse.json(
-        { error: "activeAiProvider must be a non-empty string or null" },
+        { error: "activeAiProvider must be a supported provider or null" },
         { status: 400 }
       );
     }

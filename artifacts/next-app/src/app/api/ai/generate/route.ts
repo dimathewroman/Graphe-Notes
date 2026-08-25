@@ -4,6 +4,7 @@ import { getAuthUser } from "@/lib/auth-server";
 import { getPostHogClient } from "@/lib/posthog-server";
 import { checkAndIncrementUsage, recordTokenUsage } from "@lib/ai-rate-limit";
 import { resolveModel, pickModelForTier, type TaskType, type Provider, GEMINI_FLASH_LITE } from "@lib/ai-model-router";
+import { isAiProvider } from "@lib/ai-capabilities";
 import { resolveFreeTierModel, invalidateFreeTierModel } from "@lib/gemini-model-discovery";
 import { parseGeminiError } from "@lib/ai-error-handler";
 import { type AiErrorCode, type AiErrorContext, resolveAiError, httpForCode } from "@lib/ai-errors";
@@ -18,21 +19,6 @@ import { safeExternalFetch } from "@lib/safe-external-fetch";
 import { eq, and } from "drizzle-orm";
 
 const VALID_TASK_TYPES = ["background", "manual", "deliberate"] as const;
-const VALID_PROVIDERS: Provider[] = [
-  "graphe_free",
-  "google_ai_studio",
-  "openai",
-  "anthropic",
-  "local_llm",
-  // G17 (9.2): OpenAI-compatible BYOK providers.
-  "openrouter",
-  "groq",
-  "mistral",
-  "together",
-  "fireworks",
-  "custom_openai",
-];
-
 // SSRF guard (§S / CodeQL js/request-forgery): routing.model can derive from a
 // user-supplied modelOverride and is interpolated into the upstream Gemini URL
 // path. Allow only bare model-id characters — no slashes, query chars, or `..`
@@ -152,10 +138,8 @@ export async function POST(request: NextRequest) {
     // creative ones varied. Derived server-side from the action name.
     const gen = generationSettingsFor(action ?? "");
 
-    const provider: Provider =
-      typeof rawProvider === "string" && VALID_PROVIDERS.includes(rawProvider as Provider)
-        ? (rawProvider as Provider)
-        : "graphe_free";
+    if (!isAiProvider(rawProvider)) return aiError("bad_request");
+    const provider: Provider = rawProvider;
 
     // local_llm never routes through the server (it's called client-side); a
     // request for it here is a malformed client, not a user-fixable condition.

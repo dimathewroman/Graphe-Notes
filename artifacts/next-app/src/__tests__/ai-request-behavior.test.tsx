@@ -82,6 +82,17 @@ describe("callAI behavior contract (Phase 8 → guarded for Phase 9)", () => {
     expect(r.current.aiError).toBe("Sign up to use AI features.");
   });
 
+  it("does not fall back to Graphe Free when the active provider cannot be confirmed", async () => {
+    authenticatedFetch.mockResolvedValueOnce(res(503, { error: "settings_unavailable" }));
+
+    const r = await run("improve");
+
+    expect(authenticatedFetch.mock.calls.map(([path]) => path)).toEqual(["/api/ai/settings"]);
+    expect(insertSpy).not.toHaveBeenCalled();
+    expect(streamSpy).not.toHaveBeenCalled();
+    expect(r.current.aiError).toBe("Couldn't confirm your AI provider. Please check Settings and try again.");
+  });
+
   it("cloud success streams the result into the editor", async () => {
     authenticatedFetch
       .mockResolvedValueOnce(res(200, { hasCompletedAiSetup: true, activeAiProvider: "graphe_free" }))

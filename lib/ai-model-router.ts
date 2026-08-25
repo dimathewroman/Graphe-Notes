@@ -1,21 +1,11 @@
+import type { AiProvider } from "./ai-capabilities";
+
 export const GEMINI_FLASH_LITE = "gemini-2.5-flash-lite";
 export const GEMINI_FLASH = "gemini-2.5-flash";
 export const GEMINI_PRO = "gemini-2.5-pro";
 
 export type TaskType = "background" | "manual" | "deliberate";
-export type Provider =
-  | "graphe_free"
-  | "google_ai_studio"
-  | "openai"
-  | "anthropic"
-  | "local_llm"
-  // G17 (9.2): OpenAI-compatible BYOK providers — one adapter serves them all.
-  | "openrouter"
-  | "groq"
-  | "mistral"
-  | "together"
-  | "fireworks"
-  | "custom_openai";
+export type Provider = AiProvider;
 
 export type ModelRoutingResult = {
   model: string;

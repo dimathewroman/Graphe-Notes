@@ -11,6 +11,7 @@ import { buildAiPrompt, wordCount, isLengthAcceptable, lengthCorrectionHint, tas
 import { getSelectionHtml } from "@/lib/editor-html";
 import { isDemoAiEnabled } from "@/lib/ai-demo-mock";
 import { resolveAiError } from "@lib/ai-errors";
+import { evaluateAiCapability } from "@lib/ai-capabilities";
 import { CLAUDE_PROXY_URL, shouldUseProxy, isClaudeProxyEnabled } from "@/hooks/use-claude-proxy";
 import { executeAiRequest, executeAiStreamRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
 
@@ -27,6 +28,17 @@ interface AiSettingsResponse {
 // keep their tighter caps to keep latency and cost predictable. (The request +
 // think-tag stripping now live in execute-ai-request.)
 const LOCAL_LLM_MAX_TOKENS = 4096;
+
+function capabilityUnavailableMessage(code: "no_active_provider" | "unsupported_provider" | "local_llm_unconfigured"): string {
+  switch (code) {
+    case "local_llm_unconfigured":
+      return "Local LLM endpoint not configured. Please check Settings.";
+    case "unsupported_provider":
+      return "Your selected AI provider is no longer supported. Please choose another provider in Settings.";
+    case "no_active_provider":
+      return "AI isn't enabled. Choose a provider in Settings to continue.";
+  }
+}
 
 // G5: generative actions produce NEW content derived from the selection (a summary,
 // extracted tasks). Inserting them *after* the selection preserves the source;
@@ -229,8 +241,9 @@ export function useAiAction(
     // pointed at the proxy URL — no account provider fetch, no setup modal.
     const useProxy = shouldUseProxy(claudeAiRouting, claudeProxyAvailable);
 
-    // Fetch active provider from server; default to graphe_free on any failure.
-    let provider = "graphe_free";
+    // Fetch the explicitly selected provider. A failed or incomplete lookup stays
+    // unavailable; it must never default note content to a cloud provider.
+    let provider: string | undefined;
     let localLlmEndpoint: string | null = null;
     let localLlmModel: string | null = null;
     let localLlmApiKey: string | null = null;
@@ -312,14 +325,29 @@ export function useAiAction(
             return;
           }
 
-          if (!settingsData.activeAiProvider) return; // No AI mode — silently cancel
-          provider = settingsData.activeAiProvider;
           localLlmEndpoint = settingsData.localLlmEndpoint ?? null;
           localLlmModel = settingsData.localLlmModel ?? null;
           localLlmApiKey = settingsData.localLlmApiKey ?? null;
+          const capability = evaluateAiCapability({
+            capability: "selection.transform.v1",
+            activeProvider: settingsData.activeAiProvider,
+            localEndpoint: LOCAL_LLM_DEV_ENDPOINT_OVERRIDE ?? localLlmEndpoint,
+          });
+          if (capability.status === "unavailable") {
+            setAiError(capabilityUnavailableMessage(capability.code));
+            setTimeout(() => setAiError(null), 5000);
+            return;
+          }
+          provider = capability.provider;
         }
-      } catch { /* use default */ }
+      } catch {
+        setAiError("Couldn't confirm your AI provider. Please check Settings and try again.");
+        setTimeout(() => setAiError(null), 5000);
+        return;
+      }
     }
+
+    if (!provider) return;
 
     // --- Local LLM: call inference server directly from the client ---
     if (provider === "local_llm") {

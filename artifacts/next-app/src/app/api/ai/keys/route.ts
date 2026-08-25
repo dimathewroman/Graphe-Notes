@@ -4,28 +4,13 @@ import { db, userApiKeysTable } from "@workspace/db";
 import { getAuthUser } from "@/lib/auth-server";
 import { encryptApiKey } from "@lib/encryption";
 import { validateSafeExternalUrl } from "@lib/url-guard";
+import { AI_PROVIDER_IDS, isAiProvider, type AiProvider } from "@lib/ai-capabilities";
 import * as Sentry from "@sentry/nextjs";
 
-const VALID_PROVIDERS = [
-  "graphe_free",
-  "google_ai_studio",
-  "openai",
-  "anthropic",
-  "local_llm",
-  // G17 (9.2): OpenAI-compatible BYOK providers. Fixed base URLs live in the
-  // adapter table; custom_openai additionally requires a user-supplied endpoint.
-  "openrouter",
-  "groq",
-  "mistral",
-  "together",
-  "fireworks",
-  "custom_openai",
-] as const;
+const VALID_PROVIDERS = AI_PROVIDER_IDS;
 
-type ValidProvider = (typeof VALID_PROVIDERS)[number];
-
-function isValidProvider(p: unknown): p is ValidProvider {
-  return typeof p === "string" && (VALID_PROVIDERS as readonly string[]).includes(p);
+function isValidProvider(p: unknown): p is AiProvider {
+  return isAiProvider(p);
 }
 
 // GET /api/ai/keys — returns key metadata (never the decrypted key)
