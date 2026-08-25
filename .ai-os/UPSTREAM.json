@@ -56,7 +56,7 @@
     ".ai-os/schemas/task-packet.schema.json": "2575af5a555a86cbd3f309d1faf2695a4e0b80625447eef638198265ab0ae203",
     ".ai-os/scripts/run_ledger.py": "8974433556bca69eb6a761581655ca283af0f26522def4389307e1ce22a874ed",
     ".ai-os/scripts/validate_adaptive_contracts.py": "7ec52db84cdfde6c0bc9336e191f88dc8811927276aa3a71f8ab85935833b233",
-    ".ai-os/scripts/validate_contract.py": "0705148f4efb14aba5bdd87cae4ed3dd76ae5472736dfe99870a4476e119c1b1",
+    ".ai-os/scripts/validate_contract.py": "aa7e75bf9fefef625d472817333ce72649a16075ce4c3053fa8eac9a339bad52",
     ".ai-os/scripts/validate_runtime.py": "3761d5fcabbef00791e0faceb165982aca4bdcff32fa030cd63d8cba4c90ce52",
     ".ai-os/templates/ADR.md": "a167b58a7c6a2cb45baeae5c686b1cdabee50002a248ac3e933be39ae3af6a06",
     ".ai-os/templates/CLEANUP_RECEIPT.json": "a9d9b12432905832eacec1926473647f73a5984122136ad3a29b0fc232127032",
@@ -81,7 +81,7 @@
   },
   "repository_key": "graphe",
   "schema_version": 1,
-  "source_commit": "1898a6f2921a2ed8b65754761c7725e7b72eb118",
+  "source_commit": "d5ebbfe45f17d688da3b0cef9b3d5a12da38c7fd",
   "source_repository": "https://github.com/dimathewroman/Personal-AI-Operating-System.git",
-  "synchronized_at": "2026-08-25T01:06:11.066858Z"
+  "synchronized_at": "2026-08-25T02:12:29.130093Z"
 }

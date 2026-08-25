@@ -29,8 +29,74 @@ def _type_matches(value: object, expected: str) -> bool:
     return isinstance(value, TYPE_MAP[expected])
 
 
+def _resolve_local_reference(
+    root_schema: dict[str, object], reference: object, location: str, references: tuple[str, ...]
+) -> tuple[dict[str, object] | None, list[str]]:
+    if not isinstance(reference, str) or (reference != "#" and not reference.startswith("#/")):
+        return None, [
+            f"{location}: unsupported $ref {reference!r}; only local JSON Pointer references are supported"
+        ]
+    if reference in references:
+        return None, [f"{location}: cyclic local $ref {references + (reference,)!r}"]
+    pointer = reference[1:]
+    tokens: list[str] = [] if pointer == "" else pointer[1:].split("/")
+    decoded_tokens: list[str] = []
+    for token in tokens:
+        decoded = ""
+        index = 0
+        while index < len(token):
+            if token[index] != "~":
+                decoded += token[index]
+                index += 1
+                continue
+            if index + 1 >= len(token) or token[index + 1] not in {"0", "1"}:
+                return None, [f"{location}: malformed local $ref {reference!r}"]
+            decoded += "~" if token[index + 1] == "0" else "/"
+            index += 2
+        decoded_tokens.append(decoded)
+    target: object = root_schema
+    for token in decoded_tokens:
+        if isinstance(target, dict):
+            if token not in target:
+                return None, [f"{location}: local $ref target is missing: {reference!r}"]
+            target = target[token]
+        elif isinstance(target, list):
+            if not token.isdigit() or (len(token) > 1 and token.startswith("0")):
+                return None, [f"{location}: local $ref target is missing: {reference!r}"]
+            index = int(token)
+            if index >= len(target):
+                return None, [f"{location}: local $ref target is missing: {reference!r}"]
+            target = target[index]
+        else:
+            return None, [f"{location}: local $ref target is missing: {reference!r}"]
+    if not isinstance(target, dict):
+        return None, [f"{location}: local $ref target is not a schema object: {reference!r}"]
+    return target, []
+
+
 def validate_instance(instance: object, schema: dict[str, object], location: str = "$") -> list[str]:
+    return _validate_instance(instance, schema, location, schema, ())
+
+
+def _validate_instance(
+    instance: object,
+    schema: dict[str, object],
+    location: str,
+    root_schema: dict[str, object],
+    references: tuple[str, ...],
+) -> list[str]:
     errors: list[str] = []
+    if "$ref" in schema:
+        reference = schema["$ref"]
+        target, reference_errors = _resolve_local_reference(
+            root_schema, reference, location, references
+        )
+        if reference_errors:
+            return reference_errors
+        assert isinstance(reference, str) and target is not None
+        errors.extend(
+            _validate_instance(instance, target, location, root_schema, references + (reference,))
+        )
     expected_type = schema.get("type")
     if expected_type is not None:
         choices = expected_type if isinstance(expected_type, list) else [expected_type]
@@ -44,13 +110,19 @@ def validate_instance(instance: object, schema: dict[str, object], location: str
     if isinstance(all_of, list):
         for child_schema in all_of:
             if isinstance(child_schema, dict):
-                errors.extend(validate_instance(instance, child_schema, location))
+                errors.extend(
+                    _validate_instance(instance, child_schema, location, root_schema, references)
+                )
     conditional = schema.get("if")
     if isinstance(conditional, dict):
-        branch_name = "then" if not validate_instance(instance, conditional, location) else "else"
+        branch_name = (
+            "then"
+            if not _validate_instance(instance, conditional, location, root_schema, references)
+            else "else"
+        )
         branch = schema.get(branch_name)
         if isinstance(branch, dict):
-            errors.extend(validate_instance(instance, branch, location))
+            errors.extend(_validate_instance(instance, branch, location, root_schema, references))
     if isinstance(instance, dict):
         required = schema.get("required", [])
         for key in required:
@@ -64,7 +136,11 @@ def validate_instance(instance: object, schema: dict[str, object], location: str
                     if schema.get("additionalProperties") is False:
                         errors.append(f"{location}: unexpected property {key!r}")
                     continue
-                errors.extend(validate_instance(value, child_schema, f"{location}.{key}"))
+                errors.extend(
+                    _validate_instance(
+                        value, child_schema, f"{location}.{key}", root_schema, references
+                    )
+                )
     if isinstance(instance, list):
         minimum_items = schema.get("minItems")
         if isinstance(minimum_items, int) and len(instance) < minimum_items:
@@ -72,7 +148,11 @@ def validate_instance(instance: object, schema: dict[str, object], location: str
         item_schema = schema.get("items")
         if isinstance(item_schema, dict):
             for index, value in enumerate(instance):
-                errors.extend(validate_instance(value, item_schema, f"{location}[{index}]"))
+                errors.extend(
+                    _validate_instance(
+                        value, item_schema, f"{location}[{index}]", root_schema, references
+                    )
+                )
         if schema.get("uniqueItems") is True:
             seen_items: set[str] = set()
             for index, value in enumerate(instance):
