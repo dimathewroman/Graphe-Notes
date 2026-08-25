@@ -153,6 +153,12 @@ title/body/editor/version/list/recently-deleted DOM and every vault PIN-pad
 descendant carry PostHog's `ph-no-capture` marker as a defense-in-depth
 boundary if automatic capture or replay is ever re-enabled.
 
+The browser-only note draft replica must never put note content, titles, owner
+identifiers, document identities, storage paths, filenames, or raw storage
+errors into analytics or error reports. Persistence failures use a generic
+Sentry error classification and a generic UI notice; server saving remains the
+canonical recovery path.
+
 ### PIN hashing
 
 - Stored as bcrypt with 12 salt rounds (OWASP recommended minimum)

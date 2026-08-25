@@ -455,7 +455,7 @@ Overlay components (rendered at app root, portal into body):
     templates/SaveAsTemplateDialog.tsx
 ```
 
-`GrapheEditor.tsx` is shared between `NoteShell` and `QuickBitShell`. It is never unmounted and remounted on content switch — content is updated via `editor.commands.setContent()`.
+`GrapheEditor.tsx` is shared between `NoteShell` and `QuickBitShell`. It is never unmounted and remounted on a normal content switch — content is updated via `editor.commands.setContent()`. Notes additionally own a browser-only Yjs session through `use-note-collaboration.ts`; its lifecycle coordinator destroys and fences the prior note before the next document activates. Quick Bits do not participate in this persistence path.
 
 ---
 
@@ -612,7 +612,7 @@ Authenticated mode has no offline capability:
 - No offline queue, no optimistic persistence beyond in-memory cache
 - Demo mode is fully offline — it never calls the API
 
-The reviewed first offline-capable authenticated direction is a web-first Yjs document pilot: `y-indexeddb` is a durable browser replica, while an authenticated HTTP/Postgres update log remains the cross-device recovery authority. It is not a generic offline queue, and it does not make browser storage the authority for new notes. A later native offline-only/local-authority model requires its own post-Capacitor encryption, backup, export, and recovery decision. See `docs/audit/2026-08-24-stage3-offline-mobile-feasibility.md`.
+The browser editor foundation keeps one isolated Yjs document per authenticated owner and note; demo mode uses a separate deterministic namespace. IndexedDB is only a local replica. The authenticated note API's HTML/contentText response and exact `updatedAt` revision remain authoritative: a local draft may restore only when its persisted base revision exactly equals the current server revision. Missing, malformed, or changed revisions clear the local replica and seed the server content. Revisions are opaque equality tokens, never client-clock ordering. This is not a generic offline queue, cross-device sync, awareness/presence, binary storage, or an authority change for new notes. A later native offline-only/local-authority model requires its own post-Capacitor encryption, backup, export, and recovery decision. See `docs/audit/2026-08-24-stage3-offline-mobile-feasibility.md`.
 
 ### 5. Data layer portability
 

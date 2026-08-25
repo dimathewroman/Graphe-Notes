@@ -118,21 +118,24 @@ Requires `TEST_EMAIL` and `TEST_PASSWORD` in `.env` (see `.env.example`). The te
 
 ## Test Files
 
-| File                                    | What it covers                                            |
-| --------------------------------------- | --------------------------------------------------------- |
-| `01-app-loads.spec.ts`                  | Login screen renders; demo mode boots; app shell visible  |
-| `02-notes.spec.ts`                      | Create, open, edit, delete, search notes                  |
-| `03-quick-bits.spec.ts`                 | Quick Bits list load, creation, navigation                |
-| `04-vault.spec.ts`                      | Vault setup, PIN entry, vaulting/unvaulting notes         |
-| `05-micro-interactions.spec.ts`         | Hover states, press feedback, panel toggles               |
-| `06-templates.spec.ts`                  | Template picker open/apply; save-as-template flow         |
-| `08-performance.spec.ts`                | Interaction timing baselines; threshold enforcement       |
-| `09-visual.spec.ts`                     | Visual regression snapshots                               |
-| `10-ordered-list-nesting.spec.ts`       | Ordered-list indent/outdent numbering                     |
-| `11-editor-enhancements.spec.ts`        | Editor toolbar/enhancement behaviors                      |
-| `12-data-integrity-regressions.spec.ts` | Cross-note undo, save-flush, orphan-on-delete regressions |
+| File                                    | What it covers                                                                                                                     |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `01-app-loads.spec.ts`                  | Login screen renders; demo mode boots; app shell visible                                                                           |
+| `02-notes.spec.ts`                      | Create, open, edit, delete, search notes                                                                                           |
+| `03-quick-bits.spec.ts`                 | Quick Bits list load, creation, navigation                                                                                         |
+| `04-vault.spec.ts`                      | Vault setup, PIN entry, vaulting/unvaulting notes                                                                                  |
+| `05-micro-interactions.spec.ts`         | Hover states, press feedback, panel toggles                                                                                        |
+| `06-templates.spec.ts`                  | Template picker open/apply; save-as-template flow                                                                                  |
+| `08-performance.spec.ts`                | Interaction timing baselines; threshold enforcement                                                                                |
+| `09-visual.spec.ts`                     | Visual regression snapshots                                                                                                        |
+| `10-ordered-list-nesting.spec.ts`       | Ordered-list indent/outdent numbering                                                                                              |
+| `11-editor-enhancements.spec.ts`        | Editor toolbar/enhancement behaviors                                                                                               |
+| `12-data-integrity-regressions.spec.ts` | Cross-note undo, save-flush, orphan-on-delete regressions                                                                          |
+| `14-collaboration-lifecycle.spec.ts`    | Real IndexedDB note isolation, A→B→A fencing, reload recovery, stale-base rejection, and keyboard undo/redo in Chromium and WebKit |
 
 All tests use `data-testid` attributes for selectors — never CSS classes or element structure.
+
+The collaboration lifecycle spec uses demo data only. It exercises local browser storage and offline/recovery behavior without authentication state or live credentials.
 
 ### Touch-editor regression boundary
 

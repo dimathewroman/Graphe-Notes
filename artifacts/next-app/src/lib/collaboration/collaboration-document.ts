@@ -12,10 +12,20 @@ export interface CollaborationPersistenceAdapter {
   destroy(): void | Promise<void>;
 }
 
-export type CollaborationConnectionState = "disconnected" | "connecting" | "connected";
+export interface RevisionedCollaborationPersistenceAdapter extends CollaborationPersistenceAdapter {
+  restoreBaseRevision(documentId: string): Promise<string | null>;
+  persistBaseRevision(documentId: string, revision: string): Promise<void>;
+}
+
+export type CollaborationConnectionState =
+  | "disconnected"
+  | "connecting"
+  | "connected";
 
 export interface CollaborationProviderAdapter {
-  connect(options: CollaborationProviderConnectOptions): CollaborationProviderConnection;
+  connect(
+    options: CollaborationProviderConnectOptions,
+  ): CollaborationProviderConnection;
 }
 
 export interface CollaborationProviderConnectOptions {
@@ -31,6 +41,7 @@ export interface CollaborationProviderConnection {
 
 export interface CollaborationDocument {
   readonly ready: Promise<void>;
+  getYDocument(): Y.Doc;
   applyLocalUpdate(update: Uint8Array): void;
   applyRemoteUpdate(update: Uint8Array): void;
   exportState(): Uint8Array;
@@ -65,14 +76,17 @@ export function createCollaborationDocument({
     if (origin === LOCAL_UPDATE_ORIGIN) connection?.send(update);
     if (persistence && origin !== RESTORE_UPDATE_ORIGIN) {
       const state = Y.encodeStateAsUpdate(document);
-      persisted = persisted.catch(() => undefined).then(() => persistence.persist(documentId, state));
+      persisted = persisted
+        .catch(() => undefined)
+        .then(() => persistence.persist(documentId, state));
     }
   };
   document.on("update", onUpdate);
 
   const restored = persistence
     ? persistence.restore(documentId).then((state) => {
-        if (!destroyed && state) Y.applyUpdate(document, state, RESTORE_UPDATE_ORIGIN);
+        if (!destroyed && state)
+          Y.applyUpdate(document, state, RESTORE_UPDATE_ORIGIN);
       })
     : Promise.resolve();
   const ready = restored.then(() => {
@@ -93,6 +107,9 @@ export function createCollaborationDocument({
 
   return {
     ready,
+    getYDocument() {
+      return document;
+    },
     applyLocalUpdate(update) {
       if (destroyed) return;
       Y.applyUpdate(document, update, LOCAL_UPDATE_ORIGIN);
@@ -120,7 +137,9 @@ export function createCollaborationDocument({
 
       const providerConnection = connection;
       destroyPromise = Promise.all([
-        providerConnection ? Promise.resolve().then(() => providerConnection.destroy()) : undefined,
+        providerConnection
+          ? Promise.resolve().then(() => providerConnection.destroy())
+          : undefined,
         persistence
           ? waitForPersistence().finally(() => persistence.destroy())
           : undefined,

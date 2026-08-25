@@ -3,12 +3,20 @@
 // find/replace panel, and clipboard paste handling. It knows nothing about save logic,
 // note metadata, folders, tags, timers, or navigation.
 
-import { useEffect, useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
 import { EditorState, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
+import Collaboration from "@tiptap/extension-collaboration";
 import UnderlineExt from "@tiptap/extension-underline";
 import { TextStyle, FontSize } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
@@ -30,7 +38,11 @@ import SubscriptExt from "@tiptap/extension-subscript";
 import Typography from "@tiptap/extension-typography";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
-import { Details, DetailsContent, DetailsSummary } from "@tiptap/extension-details";
+import {
+  Details,
+  DetailsContent,
+  DetailsSummary,
+} from "@tiptap/extension-details";
 import Emoji from "@tiptap/extension-emoji";
 import { InlineMath, BlockMath } from "@tiptap/extension-mathematics";
 import "katex/dist/katex.min.css";
@@ -49,6 +61,8 @@ import { MobileSelectionMenu } from "./MobileSelectionMenu";
 import { AiStatusIndicator } from "./AiStatusIndicator";
 import { useAiAction } from "@/hooks/use-ai-action";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
+import { useNoteCollaboration } from "@/hooks/use-note-collaboration";
+import type { NoteCollaborationIdentityInput } from "@/lib/collaboration/note-collaboration-lifecycle";
 import { IMAGE_MIME_TYPES } from "@/lib/attachment-limits";
 import { toast } from "sonner";
 
@@ -60,7 +74,11 @@ export interface GrapheEditorProps {
    * Pass note.id or quickBit.id so switching items reloads content correctly.
    */
   contentKey?: string | number;
-  onContentChange: (html: string, text: string) => void;
+  onContentChange: (
+    html: string,
+    text: string,
+    sourceContentKey?: string | number,
+  ) => void;
   placeholder?: string;
   mode: "note" | "quickbit";
   editable?: boolean;
@@ -70,7 +88,21 @@ export interface GrapheEditorProps {
    * The shell handles the upload and returns the resulting URL (if any).
    * GrapheEditor inserts the image into the editor if the file is an image type.
    */
-  onAttachFile?: (file: File) => Promise<{ url?: string; id?: string; masterPath?: string | null; fileType?: string; downloadUrl?: string; isAnimated?: boolean } | null | undefined>;
+  onAttachFile?: (
+    file: File,
+    sourceContentKey?: string | number,
+  ) => Promise<
+    | {
+        url?: string;
+        id?: string;
+        masterPath?: string | null;
+        fileType?: string;
+        downloadUrl?: string;
+        isAnimated?: boolean;
+      }
+    | null
+    | undefined
+  >;
   /**
    * Called once the TipTap editor instance is ready (or null when destroyed).
    * Shells that need the editor ref (e.g. for undo/redo in the header on mobile)
@@ -82,7 +114,13 @@ export interface GrapheEditorProps {
    * pre_ai_rewrite version snapshot so the user can always undo a model edit.
    * Quick bits don't have versions and pass nothing.
    */
-  onBeforeAiRewrite?: () => Promise<void> | void;
+  onBeforeAiRewrite?: (
+    sourceContentKey?: string | number,
+  ) => Promise<void> | void;
+  collaboration?: {
+    identity: NoteCollaborationIdentityInput | null;
+    serverRevision: string | null;
+  };
   /**
    * Render prop for the scrollable content area inside the editor chrome.
    * The shell is responsible for rendering its title input, tag rows, EditorContent, etc.
@@ -91,7 +129,10 @@ export interface GrapheEditorProps {
 }
 
 /** Find and return position of an imageUpload node by its UUID id attribute. */
-function findUploadNode(editor: Editor, uploadId: string): { pos: number; nodeSize: number } | null {
+function findUploadNode(
+  editor: Editor,
+  uploadId: string,
+): { pos: number; nodeSize: number } | null {
   let result: { pos: number; nodeSize: number } | null = null;
   editor.view.state.doc.descendants((node, pos): boolean | void => {
     if (result) return false;
@@ -107,17 +148,53 @@ export function GrapheEditor({
   content,
   contentKey,
   onContentChange,
+  mode,
   placeholder = "Start writing...",
   editable = true,
   isDemo = false,
   onAttachFile,
   onEditorReady,
   onBeforeAiRewrite,
+  collaboration,
   renderContent,
 }: GrapheEditorProps) {
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const [showFindReplace, setShowFindReplace] = useState(false);
+  const [collaborationRenderedDocumentId, setCollaborationRenderedDocumentId] =
+    useState<string | null>(null);
+  const [serverBaselineReadyDocumentId, setServerBaselineReadyDocumentId] =
+    useState<string | null>(null);
+  const persistenceWarningShown = useRef(false);
+  const onPersistenceFailure = useCallback(() => {
+    if (persistenceWarningShown.current) return;
+    persistenceWarningShown.current = true;
+    toast.error(
+      "Local draft cache is unavailable. Server saving remains available.",
+    );
+  }, []);
+  const noteCollaboration = useNoteCollaboration({
+    identity: mode === "note" ? (collaboration?.identity ?? null) : null,
+    serverRevision: collaboration?.serverRevision ?? null,
+    onPersistenceFailure,
+  });
+  const collaborationDocument =
+    mode === "note" ? noteCollaboration.yDocument : null;
+  const collaborationRequested =
+    mode === "note" &&
+    collaboration?.identity !== null &&
+    collaboration?.identity !== undefined;
+  const collaborationBootstrapComplete =
+    !collaborationRequested ||
+    noteCollaboration.status === "unavailable" ||
+    (noteCollaboration.status === "ready" &&
+      (noteCollaboration.bootstrapSource === "local" ||
+        serverBaselineReadyDocumentId === collaborationDocument?.guid));
+  const editorLifecycleKey =
+    collaborationDocument?.guid ??
+    (mode === "note" && collaborationRequested
+      ? `server-note:${contentKey ?? "none"}`
+      : "shared-editor");
 
   // Toolbar bottom position — debounced via setTimeout to avoid the resize→scroll race.
   // Chrome fires vv.resize (height changes) and vv.scroll (offsetTop/pan changes) as two
@@ -155,107 +232,237 @@ export function GrapheEditor({
   // Fix 1: stable extensions reference — useMemo([]) ensures the same array instance is
   // reused for the lifetime of the component, preventing TipTap from re-calling setOptions()
   // on every render (which would fire onUpdate and trigger accidental saves).
-  const editorExtensions = useMemo(() => [
-    StarterKit.configure({ heading: { levels: [1, 2, 3] }, underline: false, link: false, codeBlock: false }),
-    UnderlineExt,
-    TextStyle,
-    FontSize,
-    Color,
-    FontFamily,
-    // CustomImage (NOT bare Image) — React NodeView with selection UI, alt-text, source badges
-    CustomImage,
-    // ImageUploadExtension — atom placeholder during upload; no blob: URLs enter the document
-    ImageUploadExtension,
-    TextAlign.configure({ types: ["heading", "paragraph"] }),
-    Highlight.configure({ multicolor: true }),
-    Placeholder.configure({ placeholder }),
-    Table.configure({ resizable: true }),
-    TableRow,
-    TableHeader,
-    TableCell,
-    Link.configure({
-      openOnClick: false,
-      enableClickSelection: true,
-      HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" },
-    }),
-    TaskList,
-    // SmartTaskItem (NOT bare TaskItem) — auto-sort checked items, parent-uncheck cascading
-    SmartTaskItem.configure({ nested: true }),
-    SlashCommandExtension,
-    SuperscriptExt,
-    SubscriptExt,
-    FindReplaceExtension,
-    VideoEmbedExtension,
-    SwipeIndentExtension,
-    ListExitOnEnterExtension,
-    Typography,
-    CodeBlockLowlight.configure({ lowlight }),
-    Details,
-    DetailsContent,
-    DetailsSummary,
-    Emoji,
-    InlineMath,
-    BlockMath,
-    // FileHandler replaces the manual paste listener; configured below via ref to avoid
-    // stale closure (editorExtensions has [] deps but handleAttachFile is a useCallback).
-    FileHandler.configure({
-      allowedMimeTypes: Array.from(IMAGE_MIME_TYPES),
-      onPaste(_editor: Editor, files: File[]) {
-        files.forEach(file => { handleAttachFileRef.current?.(file); });
-      },
-      onDrop(_editor: Editor, files: File[]) {
-        files.forEach(file => { handleAttachFileRef.current?.(file); });
-      },
-    }),
-    // Selection: replaces browser's default ::selection with a themeable decoration
-    // so brand-color text selection works consistently cross-browser and in dark modes.
-    Selection,
-    // UniqueID: adds data-id (uuid) to each block node — required for Yjs stable IDs,
-    // block deep links, and future comment anchoring. Yjs-aware (skips y-sync$ txns).
-    UniqueID.configure({
-      types: [
-        "paragraph", "heading", "bulletList", "orderedList",
-        "taskList", "blockquote", "codeBlock", "details",
-      ],
-    }),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], []);
+  const editorExtensions = useMemo(
+    () => [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] },
+        underline: false,
+        link: false,
+        codeBlock: false,
+        // Collaboration supplies a Yjs-scoped UndoManager. Keeping StarterKit's
+        // ProseMirror history would merge undo stacks across note lifecycles.
+        undoRedo: collaborationDocument ? false : undefined,
+      }),
+      ...(collaborationDocument
+        ? [
+            Collaboration.configure({
+              document: collaborationDocument,
+              onFirstRender: () => {
+                setCollaborationRenderedDocumentId(collaborationDocument.guid);
+              },
+            }),
+          ]
+        : []),
+      UnderlineExt,
+      TextStyle,
+      FontSize,
+      Color,
+      FontFamily,
+      // CustomImage (NOT bare Image) — React NodeView with selection UI, alt-text, source badges
+      CustomImage,
+      // ImageUploadExtension — atom placeholder during upload; no blob: URLs enter the document
+      ImageUploadExtension,
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      Highlight.configure({ multicolor: true }),
+      Placeholder.configure({ placeholder }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Link.configure({
+        openOnClick: false,
+        enableClickSelection: true,
+        HTMLAttributes: { target: "_blank", rel: "noopener noreferrer" },
+      }),
+      TaskList,
+      // SmartTaskItem (NOT bare TaskItem) — auto-sort checked items, parent-uncheck cascading
+      SmartTaskItem.configure({ nested: true }),
+      SlashCommandExtension,
+      SuperscriptExt,
+      SubscriptExt,
+      FindReplaceExtension,
+      VideoEmbedExtension,
+      SwipeIndentExtension,
+      ListExitOnEnterExtension,
+      Typography,
+      CodeBlockLowlight.configure({ lowlight }),
+      Details,
+      DetailsContent,
+      DetailsSummary,
+      Emoji,
+      InlineMath,
+      BlockMath,
+      // FileHandler replaces the manual paste listener; configured below via ref to avoid
+      // stale closure (editorExtensions has [] deps but handleAttachFile is a useCallback).
+      FileHandler.configure({
+        allowedMimeTypes: Array.from(IMAGE_MIME_TYPES),
+        onPaste(_editor: Editor, files: File[]) {
+          files.forEach((file) => {
+            handleAttachFileRef.current?.(file);
+          });
+        },
+        onDrop(_editor: Editor, files: File[]) {
+          files.forEach((file) => {
+            handleAttachFileRef.current?.(file);
+          });
+        },
+      }),
+      // Selection: replaces browser's default ::selection with a themeable decoration
+      // so brand-color text selection works consistently cross-browser and in dark modes.
+      Selection,
+      // UniqueID: adds data-id (uuid) to each block node — required for Yjs stable IDs,
+      // block deep links, and future comment anchoring. Yjs-aware (skips y-sync$ txns).
+      UniqueID.configure({
+        types: [
+          "paragraph",
+          "heading",
+          "bulletList",
+          "orderedList",
+          "taskList",
+          "blockquote",
+          "codeBlock",
+          "details",
+        ],
+      }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    ],
+    [collaborationDocument, placeholder],
+  );
 
-  const editor = useEditor({
-    immediatelyRender: false,
-    shouldRerenderOnTransaction: false,
-    extensions: editorExtensions,
-    // Content intentionally omitted — TipTap v3 calls setOptions() on every render when
-    // content changes, firing onUpdate (accidental save) and potentially recreating the editor.
-    // Content is set imperatively via editor.commands.setContent() in the useEffect below.
-    content: "",
-    editable,
-    onUpdate: ({ editor }) => {
-      // imageUpload nodes have no src — they render as <div data-type="imageUpload">
-      // and are excluded from getHTML() output automatically (atom nodes render their
-      // renderHTML() output, not their NodeView). No blob: stripping needed.
-      onContentChange(editor.getHTML(), editor.getText());
-    },
-    editorProps: {
-      attributes: {
-        class: "ph-no-capture prose prose-invert max-w-none focus:outline-none",
-        // Suppress iPadOS / iOS Safari's password-autofill bar above the soft keyboard.
-        // Without this, focusing the contenteditable inside a task list (which contains
-        // <input type="checkbox"> nodes) makes iOS treat it like a form field and pop up
-        // the AutoFill toolbar.
-        autocomplete: "off",
-        autocorrect: "off",
-        autocapitalize: "off",
-        spellcheck: "true",
+  const editor = useEditor(
+    {
+      immediatelyRender: false,
+      shouldRerenderOnTransaction: false,
+      extensions: editorExtensions,
+      // Content intentionally omitted — TipTap v3 calls setOptions() on every render when
+      // content changes, firing onUpdate (accidental save) and potentially recreating the editor.
+      // Content is set imperatively via editor.commands.setContent() in the useEffect below.
+      // Collaboration must first render the persisted Yjs fragment. The
+      // authenticated server baseline is then seeded by the first-render effect
+      // below with addToHistory=false, so it cannot become an undo entry.
+      content: collaborationDocument ? "" : content,
+      editable: editable && collaborationBootstrapComplete,
+      onUpdate: ({ editor }) => {
+        // imageUpload nodes have no src — they render as <div data-type="imageUpload">
+        // and are excluded from getHTML() output automatically (atom nodes render their
+        // renderHTML() output, not their NodeView). No blob: stripping needed.
+        onContentChange(editor.getHTML(), editor.getText(), contentKey);
+      },
+      editorProps: {
+        attributes: {
+          class:
+            "ph-no-capture prose prose-invert max-w-none focus:outline-none",
+          // Suppress iPadOS / iOS Safari's password-autofill bar above the soft keyboard.
+          // Without this, focusing the contenteditable inside a task list (which contains
+          // <input type="checkbox"> nodes) makes iOS treat it like a form field and pop up
+          // the AutoFill toolbar.
+          autocomplete: "off",
+          autocorrect: "off",
+          autocapitalize: "off",
+          spellcheck: "true",
+        },
       },
     },
-  });
+    [editorLifecycleKey],
+  );
 
   // Notify shell when editor becomes available or is destroyed
   useEffect(() => {
     onEditorReady?.(editor ?? null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
+
+  // useEditor only rebuilds this expensive editor for a note/document switch.
+  // Apply the server-baseline readiness fence to the existing instance instead
+  // of rebuilding it when local persistence finishes bootstrapping.
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    editor.setEditable(editable && collaborationBootstrapComplete);
+  }, [collaborationBootstrapComplete, editable, editor]);
+
+  // Tiptap's Yjs sync plugin takes the document fragment as its initial source
+  // of truth. A server-first session deliberately cleared a stale fragment
+  // before this editor mounted, so seed that empty fragment once with the
+  // authenticated server HTML. A permitted local draft already has fragment
+  // content and must never pass through this path.
+  const serverBaselineRef = useRef<string | null>(null);
+  const recordedServerRevisionRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !editor ||
+      !collaborationDocument ||
+      noteCollaboration.bootstrapSource !== "server" ||
+      collaborationRenderedDocumentId !== collaborationDocument.guid
+    ) {
+      return;
+    }
+    const baselineKey = `${collaborationDocument.guid}:${contentKey ?? "none"}`;
+    if (serverBaselineRef.current === baselineKey) return;
+    if (editor.isDestroyed) return;
+    serverBaselineRef.current = baselineKey;
+    // The server baseline establishes a fresh Yjs document; it is not a user
+    // edit. Excluding it from history prevents the first Undo from clearing
+    // the note instead of undoing the user's local change.
+    editor
+      .chain()
+      .setContent(content, { emitUpdate: false })
+      .setMeta("addToHistory", false)
+      .run();
+
+    void (async () => {
+      const revision = collaboration?.serverRevision;
+      if (revision) {
+        await noteCollaboration.recordAuthoritativeServerRevision(revision);
+        recordedServerRevisionRef.current = revision;
+      }
+      // A late completion only records its own document id; it cannot unlock
+      // a different note because collaborationBootstrapComplete compares ids.
+      setServerBaselineReadyDocumentId(collaborationDocument.guid);
+    })();
+  }, [
+    collaboration?.serverRevision,
+    collaborationDocument,
+    collaborationRenderedDocumentId,
+    content,
+    contentKey,
+    editor,
+    noteCollaboration.recordAuthoritativeServerRevision,
+    noteCollaboration.bootstrapSource,
+  ]);
+
+  // A successful authenticated save returns a new authoritative server
+  // revision. Once the bootstrap baseline is established, record that exact
+  // opaque token for future reload recovery without rebuilding this editor.
+  useEffect(() => {
+    const revision = collaboration?.serverRevision;
+    if (
+      !collaborationDocument ||
+      noteCollaboration.status !== "ready" ||
+      !revision ||
+      recordedServerRevisionRef.current === revision ||
+      (noteCollaboration.bootstrapSource === "server" &&
+        serverBaselineReadyDocumentId !== collaborationDocument.guid)
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+    void noteCollaboration
+      .recordAuthoritativeServerRevision(revision)
+      .then(() => {
+        if (!cancelled) recordedServerRevisionRef.current = revision;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    collaboration?.serverRevision,
+    collaborationDocument,
+    noteCollaboration.bootstrapSource,
+    noteCollaboration.recordAuthoritativeServerRevision,
+    noteCollaboration.status,
+    serverBaselineReadyDocumentId,
+  ]);
 
   // Reset editor content when the active item changes (note switch / QB switch).
   // contentKey must be note.id or quickBit.id — changes when the user selects a different item.
@@ -264,17 +471,23 @@ export function GrapheEditor({
   const prevContentKeyRef = useRef<string | number | undefined>(undefined);
   useEffect(() => {
     if (!editor) return;
+    // A ready collaboration document is initialized from either an exact-base
+    // local Yjs draft or the server HTML supplied to useEditor. Calling
+    // setContent here would overwrite a permitted local draft.
+    if (collaborationDocument) return;
     // V1: skip the transient `undefined` contentKey while React Query loads — it
     // would set an empty doc (and, before this fix, added an extra undoable
     // empty-doc step). We only (re)load content once a real item is selected.
     if (contentKey === undefined) return;
     // Track whether this is a switch (not the initial load) so we can mask the
     // one-frame blank that appears between contentKey changing and setContent firing.
-    const isSwitch = prevContentKeyRef.current !== undefined && prevContentKeyRef.current !== contentKey;
+    const isSwitch =
+      prevContentKeyRef.current !== undefined &&
+      prevContentKeyRef.current !== contentKey;
     prevContentKeyRef.current = contentKey;
     // Defer outside React's commit phase — TipTap's ReactNodeViewRenderer calls
     // flushSync when editor.isInitialized, which React 19 forbids inside lifecycle methods.
-    setTimeout(() => {
+    const contentTimer = setTimeout(() => {
       if (!editor.isDestroyed) {
         const dom = editor.view.dom as HTMLElement;
         if (isSwitch) {
@@ -307,72 +520,104 @@ export function GrapheEditor({
         }
       }
     }, 0);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contentKey, editor]);
+    return () => clearTimeout(contentTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contentKey, collaborationDocument, editor]);
 
   // AI actions
-  const { callAI, cancelAI, aiLoading, aiError, captureSelection } = useAiAction(editor, {
-    isDemo,
-    onBeforeAiRewrite,
-  });
+  const handleBeforeAiRewrite = useCallback(
+    () => onBeforeAiRewrite?.(contentKey),
+    [contentKey, onBeforeAiRewrite],
+  );
+  const { callAI, cancelAI, aiLoading, aiError, captureSelection } =
+    useAiAction(editor, {
+      isDemo,
+      onBeforeAiRewrite: handleBeforeAiRewrite,
+    });
 
   // Attach-file: inserts an imageUpload atom node immediately (no blob: URL), then
   // replaces it with a real image node once the upload round-trip completes.
   // FileHandler extension (in editorExtensions) calls this for both paste and drop,
   // replacing the former manual document.addEventListener("paste", ...) useEffect.
-  const handleAttachFile = useCallback(async (file: File) => {
-    if (!onAttachFile || !editor) return;
+  const handleAttachFile = useCallback(
+    async (file: File) => {
+      if (!onAttachFile || !editor) return;
 
-    const uploadId = crypto.randomUUID();
+      const uploadId = crypto.randomUUID();
 
-    // Insert placeholder atom node — no src, Yjs-serializable
-    editor.chain().focus().insertContent({
-      type: "imageUpload",
-      attrs: { id: uploadId, fileName: file.name },
-    }).run();
+      // Insert placeholder atom node — no src, Yjs-serializable
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "imageUpload",
+          attrs: { id: uploadId, fileName: file.name },
+        })
+        .run();
 
-    let result: { url?: string; id?: string; masterPath?: string | null; downloadUrl?: string; isAnimated?: boolean } | null | undefined;
-    try {
-      result = await onAttachFile(file);
-    } catch {
-      result = null;
-    }
+      let result:
+        | {
+            url?: string;
+            id?: string;
+            masterPath?: string | null;
+            downloadUrl?: string;
+            isAnimated?: boolean;
+          }
+        | null
+        | undefined;
+      try {
+        result = await onAttachFile(file, contentKey);
+      } catch {
+        result = null;
+      }
 
-    if (editor.isDestroyed) return;
-    const found = findUploadNode(editor, uploadId);
-    if (!found) return; // user deleted the placeholder while upload was in flight
+      if (editor.isDestroyed) return;
+      const found = findUploadNode(editor, uploadId);
+      if (!found) return; // user deleted the placeholder while upload was in flight
 
-    const { state } = editor.view;
-    if (!result?.url) {
-      editor.view.dispatch(state.tr.delete(found.pos, found.pos + found.nodeSize));
-      toast.error("Couldn't upload that image. Check your connection and try again.");
-      return;
-    }
+      const { state } = editor.view;
+      if (!result?.url) {
+        editor.view.dispatch(
+          state.tr.delete(found.pos, found.pos + found.nodeSize),
+        );
+        toast.error(
+          "Couldn't upload that image. Check your connection and try again.",
+        );
+        return;
+      }
 
-    const imageNode = editor.schema.nodes.image!.create({
-      src: result.url,
-      alt: file.name,
-      ...(result.id ? { attachmentId: result.id } : {}),
-      ...(result.masterPath ? { masterPath: result.masterPath } : {}),
-      ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
-      ...(result.isAnimated ? { isAnimated: true } : {}),
-    });
-    const insertTr = state.tr.replaceWith(found.pos, found.pos + found.nodeSize, imageNode);
-    // Move cursor just past the image so the node deselects — the ring won't linger
-    // after a drag/paste drop and the user can keep typing immediately.
-    try {
-      const $after = insertTr.doc.resolve(found.pos + imageNode.nodeSize);
-      insertTr.setSelection(TextSelection.near($after));
-    } catch {
-      // no text position nearby — leave default selection
-    }
-    editor.view.dispatch(insertTr);
-  }, [onAttachFile, editor]);
+      const imageNode = editor.schema.nodes.image!.create({
+        src: result.url,
+        alt: file.name,
+        ...(result.id ? { attachmentId: result.id } : {}),
+        ...(result.masterPath ? { masterPath: result.masterPath } : {}),
+        ...(result.downloadUrl ? { downloadUrl: result.downloadUrl } : {}),
+        ...(result.isAnimated ? { isAnimated: true } : {}),
+      });
+      const insertTr = state.tr.replaceWith(
+        found.pos,
+        found.pos + found.nodeSize,
+        imageNode,
+      );
+      // Move cursor just past the image so the node deselects — the ring won't linger
+      // after a drag/paste drop and the user can keep typing immediately.
+      try {
+        const $after = insertTr.doc.resolve(found.pos + imageNode.nodeSize);
+        insertTr.setSelection(TextSelection.near($after));
+      } catch {
+        // no text position nearby — leave default selection
+      }
+      editor.view.dispatch(insertTr);
+    },
+    [onAttachFile, editor],
+  );
 
   // Keep a stable ref so FileHandler (which is configured in the [] useMemo) can
   // always call the latest handleAttachFile without capturing a stale closure.
   const handleAttachFileRef = useRef(handleAttachFile);
-  useEffect(() => { handleAttachFileRef.current = handleAttachFile; }, [handleAttachFile]);
+  useEffect(() => {
+    handleAttachFileRef.current = handleAttachFile;
+  }, [handleAttachFile]);
 
   // Find/replace keyboard shortcut — only intercept when editor has focus
   useEffect(() => {
@@ -419,7 +664,10 @@ export function GrapheEditor({
 
         // The lowest pixel the user can actually see (above toolbar + keyboard + buffer)
         const visibleBottom =
-          window.innerHeight - (keyboardHeightRef.current || 0) - TOOLBAR_HEIGHT - 16;
+          window.innerHeight -
+          (keyboardHeightRef.current || 0) -
+          TOOLBAR_HEIGHT -
+          16;
 
         if (coords.bottom > visibleBottom) {
           // Walk up the DOM from the ProseMirror root to find the scroll container
@@ -427,7 +675,10 @@ export function GrapheEditor({
           while (el && el !== document.body) {
             const style = window.getComputedStyle(el);
             if (style.overflowY === "auto" || style.overflowY === "scroll") {
-              el.scrollBy({ top: coords.bottom - visibleBottom, behavior: "instant" });
+              el.scrollBy({
+                top: coords.bottom - visibleBottom,
+                behavior: "instant",
+              });
               break;
             }
             el = el.parentElement;
@@ -511,7 +762,11 @@ export function GrapheEditor({
         />
       )}
 
-      <AiStatusIndicator aiLoading={aiLoading} aiError={aiError} onCancel={cancelAI} />
+      <AiStatusIndicator
+        aiLoading={aiLoading}
+        aiError={aiError}
+        onCancel={cancelAI}
+      />
 
       {/* Content area — injected by shell (scrollable region with title, tags, EditorContent) */}
       {renderContent(editor)}
@@ -527,20 +782,22 @@ export function GrapheEditor({
           toolbarBottom accounts for vv.offsetTop: when Chrome pans the visual viewport
           downward to keep the cursor in view after the keyboard opens, we subtract that
           offset so the toolbar tracks the visual viewport bottom (= keyboard top). */}
-      {bp === "mobile" && typeof document !== "undefined" && createPortal(
-        <EditorToolbar
-          editor={editor}
-          showUndoRedo
-          // M1: pad above the home indicator only when docked at the bottom
-          // (keyboard closed). When the keyboard is open the toolbar sits above
-          // it, so no safe-area inset is needed.
-          className={`fixed left-0 right-0 z-40 border-t border-panel-border bg-editor/95 backdrop-blur-md${keyboardHeight > 0 ? "" : " pb-safe"}`}
-          style={{ bottom: toolbarBottom }}
-          onAttachFile={attachFileHandler}
-          onFindReplace={() => setShowFindReplace(true)}
-        />,
-        document.body
-      )}
+      {bp === "mobile" &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <EditorToolbar
+            editor={editor}
+            showUndoRedo
+            // M1: pad above the home indicator only when docked at the bottom
+            // (keyboard closed). When the keyboard is open the toolbar sits above
+            // it, so no safe-area inset is needed.
+            className={`fixed left-0 right-0 z-40 border-t border-panel-border bg-editor/95 backdrop-blur-md${keyboardHeight > 0 ? "" : " pb-safe"}`}
+            style={{ bottom: toolbarBottom }}
+            onAttachFile={attachFileHandler}
+            onFindReplace={() => setShowFindReplace(true)}
+          />,
+          document.body,
+        )}
 
       {/* Find/replace panel */}
       {showFindReplace && (

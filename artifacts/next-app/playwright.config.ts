@@ -1,6 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const authFile = "playwright/.auth/user.json";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+const usesExternalServer = process.env.PLAYWRIGHT_BASE_URL !== undefined;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -10,7 +12,7 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL,
     actionTimeout: 15_000,
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -34,6 +36,14 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
 
+    // IndexedDB and editor-lifecycle coverage on WebKit stays narrowly scoped
+    // so the default Chromium demo suite remains the primary broad gate.
+    {
+      name: "webkit-lifecycle",
+      testMatch: /14-collaboration-lifecycle\.spec\.ts/,
+      use: { ...devices["Desktop Safari"] },
+    },
+
     // ── Authenticated suite ───────────────────────────────────────────────────
     // Uses the real session saved by pnpm test:e2e:login.
     // Run with: pnpm test:e2e:authenticated
@@ -53,8 +63,8 @@ export default defineConfig({
     command: process.env.CI
       ? "pnpm --filter @workspace/next-app run start"
       : "pnpm --filter @workspace/next-app run dev",
-    url: "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
+    url: baseURL,
+    reuseExistingServer: usesExternalServer || !process.env.CI,
     timeout: 120_000,
   },
   reporter: [["list"], ["html", { open: "never" }]],

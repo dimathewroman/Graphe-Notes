@@ -1,11 +1,12 @@
 import { fetchUpdates, type IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
-import type { CollaborationPersistenceAdapter } from "./collaboration-document";
+import type { RevisionedCollaborationPersistenceAdapter } from "./collaboration-document";
 
 const DATABASE_PREFIX = "graphe-collaboration:";
 const AVAILABILITY_DATABASE = "graphe-collaboration-availability";
 const UPDATES_STORE = "updates";
 const CUSTOM_STORE = "custom";
+const BASE_REVISION_KEY = "base-server-revision";
 
 interface IndexeddbSession {
   document: Y.Doc;
@@ -27,11 +28,14 @@ function verifyIndexeddbAvailability(): Promise<void> {
       return;
     }
 
-    request.onerror = () => reject(request.error ?? new Error("IndexedDB is unavailable."));
+    request.onerror = () =>
+      reject(request.error ?? new Error("IndexedDB is unavailable."));
     request.onsuccess = () => {
       request.result.close();
       try {
-        const deletion = globalThis.indexedDB.deleteDatabase(AVAILABILITY_DATABASE);
+        const deletion = globalThis.indexedDB.deleteDatabase(
+          AVAILABILITY_DATABASE,
+        );
         deletion.onsuccess = () => resolve();
         deletion.onerror = () => resolve();
         deletion.onblocked = () => resolve();
@@ -60,13 +64,18 @@ function openDocumentDatabase(name: string): Promise<IDBDatabase> {
         database.createObjectStore(CUSTOM_STORE);
       }
     };
-    request.onerror = () => reject(request.error ?? new Error("IndexedDB is unavailable."));
+    request.onerror = () =>
+      reject(request.error ?? new Error("IndexedDB is unavailable."));
     request.onsuccess = () => {
       const database = request.result;
       let initialized = false;
       try {
-        const updates = database.transaction(UPDATES_STORE, "readonly").objectStore(UPDATES_STORE);
-        const custom = database.transaction(CUSTOM_STORE, "readonly").objectStore(CUSTOM_STORE);
+        const updates = database
+          .transaction(UPDATES_STORE, "readonly")
+          .objectStore(UPDATES_STORE);
+        const custom = database
+          .transaction(CUSTOM_STORE, "readonly")
+          .objectStore(CUSTOM_STORE);
         initialized =
           updates.autoIncrement &&
           updates.keyPath === null &&
@@ -78,7 +87,11 @@ function openDocumentDatabase(name: string): Promise<IDBDatabase> {
 
       if (!initialized) {
         database.close();
-        reject(new Error("IndexedDB collaboration database is missing required object stores."));
+        reject(
+          new Error(
+            "IndexedDB collaboration database is missing required object stores.",
+          ),
+        );
         return;
       }
       database.onversionchange = () => database.close();
@@ -91,7 +104,10 @@ function initializeDocumentDatabase(name: string): Promise<void> {
   return openDocumentDatabase(name).then((database) => database.close());
 }
 
-function appendPersistedState(database: IDBDatabase, state: Uint8Array): Promise<void> {
+function appendPersistedState(
+  database: IDBDatabase,
+  state: Uint8Array,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     let transaction: IDBTransaction;
     try {
@@ -103,8 +119,48 @@ function appendPersistedState(database: IDBDatabase, state: Uint8Array): Promise
       return;
     }
 
-    transaction.onerror = () => reject(transaction.error ?? new Error("IndexedDB write failed."));
-    transaction.onabort = () => reject(transaction.error ?? new Error("IndexedDB write failed."));
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error("IndexedDB write failed."));
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error("IndexedDB write failed."));
+    transaction.oncomplete = () => resolve();
+  });
+}
+
+function readCustomValue(database: IDBDatabase, key: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let transaction: IDBTransaction;
+    try {
+      transaction = database.transaction(CUSTOM_STORE, "readonly");
+      const request = transaction.objectStore(CUSTOM_STORE).get(key);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () =>
+        reject(request.error ?? new Error("IndexedDB read failed."));
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+function writeCustomValue(
+  database: IDBDatabase,
+  key: string,
+  value: unknown,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let transaction: IDBTransaction;
+    try {
+      transaction = database.transaction(CUSTOM_STORE, "readwrite");
+      transaction.objectStore(CUSTOM_STORE).put(value, key);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error("IndexedDB write failed."));
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error("IndexedDB write failed."));
     transaction.oncomplete = () => resolve();
   });
 }
@@ -146,11 +202,11 @@ class LocalIndexeddbProvider {
   }
 }
 
-export function createIndexeddbCollaborationPersistence(): CollaborationPersistenceAdapter {
+export function createIndexeddbCollaborationPersistence(): RevisionedCollaborationPersistenceAdapter {
   return new IndexeddbCollaborationPersistence();
 }
 
-class IndexeddbCollaborationPersistence implements CollaborationPersistenceAdapter {
+class IndexeddbCollaborationPersistence implements RevisionedCollaborationPersistenceAdapter {
   private documentId: string | undefined;
   private session: IndexeddbSession | undefined;
   private sessionReady: Promise<IndexeddbSession> | undefined;
@@ -169,20 +225,51 @@ class IndexeddbCollaborationPersistence implements CollaborationPersistenceAdapt
     if (!this.destroyed) await session.persistence.persist(state);
   }
 
+  async restoreBaseRevision(documentId: string): Promise<string | null> {
+    const session = await this.getSession(documentId);
+    if (this.destroyed) return null;
+    const value = await readCustomValue(
+      session.persistence.db!,
+      BASE_REVISION_KEY,
+    );
+    return typeof value === "string" ? value : null;
+  }
+
+  async persistBaseRevision(
+    documentId: string,
+    revision: string,
+  ): Promise<void> {
+    if (this.destroyed) return;
+    const session = await this.getSession(documentId);
+    if (!this.destroyed)
+      await writeCustomValue(
+        session.persistence.db!,
+        BASE_REVISION_KEY,
+        revision,
+      );
+  }
+
   destroy(): Promise<void> {
     if (this.destroyPromise) return this.destroyPromise;
 
     this.destroyed = true;
     this.destroyPromise = this.session
-      ? Promise.resolve(this.session.persistence.destroy()).then(() => undefined)
+      ? Promise.resolve(this.session.persistence.destroy()).then(
+          () => undefined,
+        )
       : Promise.resolve();
     return this.destroyPromise;
   }
 
   private getSession(documentId: string): Promise<IndexeddbSession> {
-    if (this.destroyed) return Promise.reject(new Error("IndexedDB persistence has been destroyed."));
+    if (this.destroyed)
+      return Promise.reject(
+        new Error("IndexedDB persistence has been destroyed."),
+      );
     if (this.documentId && this.documentId !== documentId) {
-      return Promise.reject(new Error("IndexedDB persistence supports one collaboration document."));
+      return Promise.reject(
+        new Error("IndexedDB persistence supports one collaboration document."),
+      );
     }
     if (this.sessionReady) return this.sessionReady;
 

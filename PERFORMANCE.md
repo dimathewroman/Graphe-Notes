@@ -8,16 +8,16 @@ Reference for the performance testing system in Graphe Notes. Read this before s
 
 Eight interaction timings are measured by the Playwright performance suite (`artifacts/next-app/e2e/08-performance.spec.ts`). All run in demo mode at 1280×800 using wall-clock time (`Date.now()`).
 
-| Key | What it measures |
-|---|---|
-| `app_initial_load` | `page.goto("/")` → login screen (demo) or app shell (auth) visible |
-| `mode_entry` | "Enter demo mode" click → demo banner visible |
-| `note_creation` | New-note button click → note item appears in list |
-| `note_switch` | Click second note → title input + ProseMirror visible |
-| `bold_toggle` | Bold button click → `data-state="on"` confirmed |
-| `sidebar_nav_switch` | Nav click → first Quick Bit item visible |
-| `settings_open` | Settings button click → settings modal visible |
-| `version_history_open` | Version history button click → panel visible |
+| Key                    | What it measures                                                   |
+| ---------------------- | ------------------------------------------------------------------ |
+| `app_initial_load`     | `page.goto("/")` → login screen (demo) or app shell (auth) visible |
+| `mode_entry`           | "Enter demo mode" click → demo banner visible                      |
+| `note_creation`        | New-note button click → note item appears in list                  |
+| `note_switch`          | Click second note → title input + ProseMirror visible              |
+| `bold_toggle`          | Bold button click → `data-state="on"` confirmed                    |
+| `sidebar_nav_switch`   | Nav click → first Quick Bit item visible                           |
+| `settings_open`        | Settings button click → settings modal visible                     |
+| `version_history_open` | Version history button click → panel visible                       |
 
 ---
 
@@ -29,31 +29,31 @@ Two baseline files are committed to the repo. CI enforces against `perf-baseline
 
 Dev server (`next dev`), macOS. Recorded 2026-04-26.
 
-| Metric | Baseline |
-|---|---|
-| App initial load | 266ms |
-| Demo mode entry | 182ms |
-| Note creation | 191ms |
-| Note switch | 72ms |
-| Bold toggle | 85ms |
-| Sidebar nav switch | 41ms |
-| Settings open | 49ms |
-| Version history open | 86ms |
+| Metric               | Baseline |
+| -------------------- | -------- |
+| App initial load     | 266ms    |
+| Demo mode entry      | 182ms    |
+| Note creation        | 191ms    |
+| Note switch          | 72ms     |
+| Bold toggle          | 85ms     |
+| Sidebar nav switch   | 41ms     |
+| Settings open        | 49ms     |
+| Version history open | 86ms     |
 
 ### CI baseline — `artifacts/next-app/e2e/perf-baseline-ci.json`
 
 Production build (`next build` + `next start`), Ubuntu, GitHub-hosted runner. Recorded 2026-04-26.
 
-| Metric | Baseline |
-|---|---|
-| App initial load | 382ms |
-| Demo mode entry | 237ms |
-| Note creation | 193ms |
-| Note switch | 133ms |
-| Bold toggle | 59ms |
-| Sidebar nav switch | 55ms |
-| Settings open | 104ms |
-| Version history open | 81ms |
+| Metric               | Baseline |
+| -------------------- | -------- |
+| App initial load     | 382ms    |
+| Demo mode entry      | 237ms    |
+| Note creation        | 193ms    |
+| Note switch          | 133ms    |
+| Bold toggle          | 59ms     |
+| Sidebar nav switch   | 55ms     |
+| Settings open        | 104ms    |
+| Version history open | 81ms     |
 
 CI baselines are higher than local for most metrics because GitHub-hosted runners are slower than a developer laptop. Bold toggle is the exception — the production build executes faster than the dev server for synchronous DOM operations.
 
@@ -61,10 +61,10 @@ CI baselines are higher than local for most metrics because GitHub-hosted runner
 
 ## Thresholds
 
-| Severity | Multiplier | Effect |
-|---|---|---|
-| Warn | ≥ 1.5× baseline | Logged to console + attached as a Playwright test annotation; does **not** fail the test |
-| Fail | ≥ 2.5× baseline | `expect()` assertion failure — the CI job fails |
+| Severity | Multiplier      | Effect                                                                                   |
+| -------- | --------------- | ---------------------------------------------------------------------------------------- |
+| Warn     | ≥ 1.5× baseline | Logged to console + attached as a Playwright test annotation; does **not** fail the test |
+| Fail     | ≥ 2.5× baseline | `expect()` assertion failure — the CI job fails                                          |
 
 These constants live in `08-performance.spec.ts` as `WARN_MULT` and `FAIL_MULT`.
 
@@ -98,6 +98,7 @@ PERF_BASELINE_FILE=$(pwd)/artifacts/next-app/e2e/perf-baseline-ci.json \
 Measures response times for key API endpoints against the local dev server. Requires real credentials (not demo mode).
 
 Prerequisites:
+
 - Dev server running on port 3000
 - `.env` at repo root with `TEST_EMAIL`, `TEST_PASSWORD`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
 
@@ -133,6 +134,7 @@ The comment is identified by the HTML marker `<!-- graphe-perf-report -->` and u
 ### Artifacts
 
 Two artifacts are uploaded per run:
+
 - **`perf-report`** — `perf-results/perf-report.json` — machine-readable, retained 30 days
 - **`perf-baseline-ci`** — `e2e/perf-baseline-ci.json` — the baseline used for comparison, retained 30 days
 
@@ -166,7 +168,7 @@ git push  # CI will record a new baseline on its next run
 # Move it to artifacts/next-app/e2e/perf-baseline-ci.json and commit it
 ```
 
-Always describe *why* the baseline changed in the PR description — a regression and an intentional slowdown look identical in the diff.
+Always describe _why_ the baseline changed in the PR description — a regression and an intentional slowdown look identical in the diff.
 
 ---
 
@@ -181,7 +183,10 @@ Always describe *why* the baseline changed in the PR description — a regressio
 queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
 
 // Good — patch only the changed record in place
-queryClient.setQueryData(getGetNoteQueryKey(id), (old) => ({ ...old, pinned: true }));
+queryClient.setQueryData(getGetNoteQueryKey(id), (old) => ({
+  ...old,
+  pinned: true,
+}));
 ```
 
 **CSS-first motion.** Use CSS transitions for simple enter/exit and hover states. Reserve Framer Motion for springs, gesture-driven animations, and `layout` animations where CSS cannot express the behavior.
@@ -198,7 +203,7 @@ queryClient.setQueryData(getGetNoteQueryKey(id), (old) => ({ ...old, pinned: tru
 
 **Broad query invalidation on simple mutations.** Invalidating the notes list after a pin, favorite, or tag update causes a full network round-trip and a list re-render. Use `setQueryData` to update the specific record.
 
-**Re-initializing the Tiptap editor on content switch.** The editor instance is expensive to create. Switching notes must update `editor.commands.setContent()` — never unmount and remount `<GrapheEditor />` on note change.
+**Re-initializing the Tiptap editor on content switch.** The editor instance is expensive to create. Switching notes must update `editor.commands.setContent()` — never unmount and remount `<GrapheEditor />` on note change. The browser-only note collaboration lifecycle is the narrow exception: it replaces only the per-note Yjs-backed editor document after the previous session is fenced and destroyed; Quick Bits and ordinary server-content loading retain the shared editor path.
 
 **Fetching full note content when only metadata is needed.** The notes list endpoint (`GET /api/notes`) returns `id`, `title`, `contentText` (plain text preview), and metadata — not the full HTML content. Do not call `GET /api/notes/:id` in the list to get metadata that the list endpoint already provides.
 

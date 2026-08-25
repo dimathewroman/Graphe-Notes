@@ -136,6 +136,22 @@ describe("collaboration document", () => {
     await Promise.all([reopenedFirst.destroy(), reopenedSecond.destroy()]);
   });
 
+  it("persists the exact server base revision separately from Yjs document updates", async () => {
+    const documentId = "revision-note";
+    const revision = "2026-08-25T12:34:56.789Z";
+    const first = createIndexeddbCollaborationPersistence();
+
+    await expect(first.restoreBaseRevision(documentId)).resolves.toBeNull();
+    await first.persistBaseRevision(documentId, revision);
+    await first.destroy();
+
+    const reopened = createIndexeddbCollaborationPersistence();
+    await expect(reopened.restoreBaseRevision(documentId)).resolves.toBe(
+      revision,
+    );
+    await reopened.destroy();
+  });
+
   it("merges ordered writes from separate adapters for the same document", async () => {
     const updates = seededUpdates();
     const first = createCollaborationDocument({
@@ -169,9 +185,11 @@ describe("collaboration document", () => {
   });
 
   it("fails closed and releases the document when IndexedDB cannot open", async () => {
-    const open = vi.spyOn(globalThis.indexedDB, "open").mockImplementation(() => {
-      throw new Error("IndexedDB is unavailable");
-    });
+    const open = vi
+      .spyOn(globalThis.indexedDB, "open")
+      .mockImplementation(() => {
+        throw new Error("IndexedDB is unavailable");
+      });
     let providerConnections = 0;
     const document = createCollaborationDocument({
       documentId: "note-1",
@@ -185,7 +203,9 @@ describe("collaboration document", () => {
     });
 
     await expect(document.ready).rejects.toThrow("IndexedDB is unavailable");
-    await expect(document.destroy()).rejects.toThrow("IndexedDB is unavailable");
+    await expect(document.destroy()).rejects.toThrow(
+      "IndexedDB is unavailable",
+    );
 
     document.applyLocalUpdate(seededUpdates().seed);
     expect(providerConnections).toBe(0);
@@ -224,11 +244,15 @@ describe("collaboration document", () => {
   it("fails closed when the third target IndexedDB open fails", async () => {
     const nativeOpen = globalThis.indexedDB.open.bind(globalThis.indexedDB);
     let opens = 0;
-    const open = vi.spyOn(globalThis.indexedDB, "open").mockImplementation((name, version) => {
-      opens += 1;
-      if (opens === 3) throw new Error("Provider database is unavailable");
-      return version === undefined ? nativeOpen(name) : nativeOpen(name, version);
-    });
+    const open = vi
+      .spyOn(globalThis.indexedDB, "open")
+      .mockImplementation((name, version) => {
+        opens += 1;
+        if (opens === 3) throw new Error("Provider database is unavailable");
+        return version === undefined
+          ? nativeOpen(name)
+          : nativeOpen(name, version);
+      });
     let providerConnections = 0;
     const document = createCollaborationDocument({
       documentId: "provider-open-failure",
@@ -242,12 +266,16 @@ describe("collaboration document", () => {
     });
 
     try {
-      await expect(document.ready).rejects.toThrow("Provider database is unavailable");
+      await expect(document.ready).rejects.toThrow(
+        "Provider database is unavailable",
+      );
 
       const firstDestroy = document.destroy();
       const repeatedDestroy = document.destroy();
       expect(repeatedDestroy).toBe(firstDestroy);
-      await expect(firstDestroy).rejects.toThrow("Provider database is unavailable");
+      await expect(firstDestroy).rejects.toThrow(
+        "Provider database is unavailable",
+      );
 
       document.applyLocalUpdate(seededUpdates().seed);
       document.applyRemoteUpdate(seededUpdates().seed);
@@ -413,7 +441,9 @@ describe("collaboration document", () => {
     const sentUpdates: Uint8Array[] = [];
     let connectionDestroyCalls = 0;
     let deliverRemoteUpdate: ((update: Uint8Array) => void) | undefined;
-    let setConnectionState: ((state: "disconnected" | "connecting" | "connected") => void) | undefined;
+    let setConnectionState:
+      | ((state: "disconnected" | "connecting" | "connected") => void)
+      | undefined;
     const document = createCollaborationDocument({
       documentId: "note-1",
       provider: {

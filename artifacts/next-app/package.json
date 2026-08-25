@@ -25,6 +25,7 @@
     "@supabase/supabase-js": "^2.99.1",
     "@tanstack/react-query": "catalog:",
     "@tiptap/extension-code-block-lowlight": "^3.22.2",
+    "@tiptap/extension-collaboration": "3.20.1",
     "@tiptap/extension-color": "^3.20.1",
     "@tiptap/extension-details": "^3.22.2",
     "@tiptap/extension-emoji": "^3.22.2",
@@ -53,6 +54,7 @@
     "@tiptap/react": "^3.20.1",
     "@tiptap/starter-kit": "^3.20.1",
     "@tiptap/suggestion": "^3.22.2",
+    "@tiptap/y-tiptap": "3.0.2",
     "@workspace/api-client-react": "workspace:*",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
@@ -86,6 +88,7 @@
     "turndown-plugin-gfm": "^1.0.2",
     "vaul": "^1.1.2",
     "y-indexeddb": "9.0.12",
+    "y-protocols": "1.0.6",
     "yjs": "13.6.32",
     "zod": "catalog:",
     "zustand": "^5.0.11"

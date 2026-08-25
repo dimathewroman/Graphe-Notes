@@ -10,20 +10,37 @@ import type { Editor } from "@tiptap/react";
 
 import { useAppStore } from "@/store";
 import {
-  useGetNote, useUpdateNote, useSoftDeleteNote, useToggleNotePin, useToggleNoteFavorite,
-  useToggleNoteVault, useGetVaultStatus, useSetupVault, useUnlockVault,
-  getGetNotesQueryKey, getGetNoteQueryKey, getGetTagsQueryKey
+  useGetNote,
+  useUpdateNote,
+  useSoftDeleteNote,
+  useToggleNotePin,
+  useToggleNoteFavorite,
+  useToggleNoteVault,
+  useGetVaultStatus,
+  useSetupVault,
+  useUnlockVault,
+  getGetNotesQueryKey,
+  getGetNoteQueryKey,
+  getGetTagsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { authenticatedFetch, setVaultProof } from "@workspace/api-client-react/custom-fetch";
+import {
+  authenticatedFetch,
+  setVaultProof,
+} from "@workspace/api-client-react/custom-fetch";
 import { VersionHistoryPanel } from "./VersionHistoryPanel";
 import { VersionPreviewArea } from "./VersionPreviewArea";
 import { VaultModal } from "./VaultModal";
 import { useBreakpoint, useKeyboardHeight } from "@/hooks/use-mobile";
-import { useCreateNoteVersion, type NoteVersionFull } from "@/hooks/use-note-versions";
+import {
+  useCreateNoteVersion,
+  type NoteVersionFull,
+} from "@/hooks/use-note-versions";
 import { useDemoMode } from "@/lib/demo-context";
+import { useAuth } from "@/hooks/use-auth";
 import { exportAsPdf, exportAsMarkdown } from "@/hooks/use-note-export";
 import { useUploadAttachment } from "@/hooks/use-attachments";
+import { isCurrentNoteLifecycleSource } from "@/lib/collaboration/note-collaboration-lifecycle";
 import { cn } from "@/lib/utils";
 import { TableOfContents } from "./editor/TableOfContents";
 import { NoteHeader } from "./editor/NoteHeader";
@@ -38,23 +55,28 @@ import posthog from "posthog-js";
 // the current debounce batch has been pending this long, the next change forces
 // an immediate save instead of resetting the 800ms trailing timer.
 const MAX_SAVE_WAIT_MS = 5000;
+// Demo notes are immutable seeded server content. Their displayed updatedAt is
+// generated for relative-time UI, so it is not an authoritative cache token.
+// This fixed revision must change if the demo seed contract changes.
+const DEMO_COLLABORATION_BASE_REVISION = "2000-01-01T00:00:00.000Z";
 
 export function NoteShell() {
-  const selectedNoteId = useAppStore(s => s.selectedNoteId);
-  const setActiveEditor = useAppStore(s => s.setActiveEditor); // G6: publish editor for AIPanel
-  const selectNote = useAppStore(s => s.selectNote);
-  const isSidebarOpen = useAppStore(s => s.isSidebarOpen);
-  const toggleSidebar = useAppStore(s => s.toggleSidebar);
-  const isNoteListOpen = useAppStore(s => s.isNoteListOpen);
-  const toggleNoteList = useAppStore(s => s.toggleNoteList);
-  const setMobileView = useAppStore(s => s.setMobileView);
-  const setSidebarOpen = useAppStore(s => s.setSidebarOpen);
-  const setNoteListOpen = useAppStore(s => s.setNoteListOpen);
-  const openSaveAsTemplate = useAppStore(s => s.openSaveAsTemplate);
+  const selectedNoteId = useAppStore((s) => s.selectedNoteId);
+  const setActiveEditor = useAppStore((s) => s.setActiveEditor); // G6: publish editor for AIPanel
+  const selectNote = useAppStore((s) => s.selectNote);
+  const isSidebarOpen = useAppStore((s) => s.isSidebarOpen);
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const isNoteListOpen = useAppStore((s) => s.isNoteListOpen);
+  const toggleNoteList = useAppStore((s) => s.toggleNoteList);
+  const setMobileView = useAppStore((s) => s.setMobileView);
+  const setSidebarOpen = useAppStore((s) => s.setSidebarOpen);
+  const setNoteListOpen = useAppStore((s) => s.setNoteListOpen);
+  const openSaveAsTemplate = useAppStore((s) => s.openSaveAsTemplate);
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const queryClient = useQueryClient();
   const isDemo = useDemoMode();
+  const { user } = useAuth();
   const isDemoRef = useRef(isDemo);
   isDemoRef.current = isDemo;
 
@@ -75,18 +97,24 @@ export function NoteShell() {
   const setupVaultMut = useSetupVault();
   const unlockVaultMut = useUnlockVault();
   const { data: vaultStatus } = useGetVaultStatus();
-  const isVaultUnlocked = useAppStore(s => s.isVaultUnlocked);
-  const setVaultUnlocked = useAppStore(s => s.setVaultUnlocked);
+  const isVaultUnlocked = useAppStore((s) => s.isVaultUnlocked);
+  const setVaultUnlocked = useAppStore((s) => s.setVaultUnlocked);
   const [showVaultSetupModal, setShowVaultSetupModal] = useState(false);
   const [showVaultUnlockModal, setShowVaultUnlockModal] = useState(false);
   const [vaultUnlockError, setVaultUnlockError] = useState("");
   const [demoVaultConfigured, setDemoVaultConfigured] = useState(false);
 
   const [title, setTitle] = useState("");
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
+  const [authoritativeServerRevision, setAuthoritativeServerRevision] =
+    useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">(
+    "saved",
+  );
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showToc, setShowToc] = useState(false);
-  const [previewVersion, setPreviewVersion] = useState<NoteVersionFull | null>(null);
+  const [previewVersion, setPreviewVersion] = useState<NoteVersionFull | null>(
+    null,
+  );
   // Snapshot the sidebar/note-list visibility right before we collapse them
   // for the version history panel, so we can restore the user's previous
   // layout when the panel closes. Null means "no snapshot held".
@@ -153,7 +181,7 @@ export function NoteShell() {
     } catch (err) {
       Sentry.captureException(err);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNoteId]);
 
   // ── PostHog-wrapped panel toggle callbacks ──────────────────────────────────
@@ -165,7 +193,9 @@ export function NoteShell() {
         action: isSidebarOpen ? "close" : "open",
         timestamp: new Date().toISOString(),
       });
-    } catch { /* PostHog may not be initialized */ }
+    } catch {
+      /* PostHog may not be initialized */
+    }
   }, [toggleSidebar, isSidebarOpen]);
 
   const handleToggleNoteList = useCallback(() => {
@@ -176,18 +206,25 @@ export function NoteShell() {
         action: isNoteListOpen ? "close" : "open",
         timestamp: new Date().toISOString(),
       });
-    } catch { /* PostHog may not be initialized */ }
+    } catch {
+      /* PostHog may not be initialized */
+    }
   }, [toggleNoteList, isNoteListOpen]);
 
   // Refs holding the live editor state — used by performSave so we always
   // snapshot what's currently in the editor, not a stale closure value.
-  const liveStateRef = useRef<{ title: string; content: string; contentText: string }>(
-    { title: "", content: "", contentText: "" },
-  );
+  const liveStateRef = useRef<{
+    title: string;
+    content: string;
+    contentText: string;
+  }>({ title: "", content: "", contentText: "" });
   // Pending save buffer + timer. The debounced save merges multiple change
   // events into a single payload and fires after 800ms. flushSave() uses these
   // to commit immediately on Cmd+S or note close.
-  const pendingSaveRef = useRef<{ id: number; data: Record<string, unknown> } | null>(null);
+  const pendingSaveRef = useRef<{
+    id: number;
+    data: Record<string, unknown>;
+  } | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // V2: timestamp of the first un-flushed change in the current debounce batch.
   // Continuous typing resets the 800ms timer forever, so we force a save once a
@@ -195,6 +232,8 @@ export function NoteShell() {
   const pendingSinceRef = useRef<number | null>(null);
   // Track the previous selected note id so we can flush on navigation.
   const prevSelectedNoteId = useRef<number | null>(null);
+  const selectedNoteIdRef = useRef(selectedNoteId);
+  selectedNoteIdRef.current = selectedNoteId;
   // Stable handle for flushSave so it can be called from effects that fire
   // before flushSave is declared in render order.
   const flushSaveRef = useRef<
@@ -202,9 +241,15 @@ export function NoteShell() {
   >(async () => false);
 
   // PERF: temporary benchmark timestamps
-  const editorInitStart = useRef<number>(typeof performance !== "undefined" ? performance.now() : 0);
+  const editorInitStart = useRef<number>(
+    typeof performance !== "undefined" ? performance.now() : 0,
+  );
   const didLogEditorInit = useRef(false);
-  const perfSwitch = useRef({ queryStartTime: 0, queryEndTime: 0, setContentTime: 0 });
+  const perfSwitch = useRef({
+    queryStartTime: 0,
+    queryEndTime: 0,
+    setContentTime: 0,
+  });
   const prevIsLoading = useRef(false);
 
   // PERF: track isLoading transitions to measure query duration
@@ -228,7 +273,10 @@ export function NoteShell() {
         console.log(`[perf] editor-init: ${elapsed.toFixed(1)}ms`);
       }
       if (process.env.NODE_ENV !== "development") {
-        posthog.capture("perf_editor_init", { duration_ms: Math.round(elapsed), timestamp: new Date().toISOString() });
+        posthog.capture("perf_editor_init", {
+          duration_ms: Math.round(elapsed),
+          timestamp: new Date().toISOString(),
+        });
       }
       posthog.capture("editor_opened", { timestamp: new Date().toISOString() });
     }
@@ -246,6 +294,7 @@ export function NoteShell() {
 
     if (note) {
       setTitle(note.title);
+      setAuthoritativeServerRevision(note.updatedAt ?? null);
       // Seed the live state so the next save reflects the freshly-loaded note.
       liveStateRef.current = {
         title: note.title,
@@ -257,26 +306,62 @@ export function NoteShell() {
       perfSwitch.current.setContentTime = performance.now();
       requestAnimationFrame(() => {
         try {
-          const measure = performance.measure("note-switch", "note-switch-start");
+          const measure = performance.measure(
+            "note-switch",
+            "note-switch-start",
+          );
           const total = measure.duration;
           const p = perfSwitch.current;
-          const clickEntries = performance.getEntriesByName("note-switch-start");
-          const clickTime = clickEntries.length > 0 ? clickEntries[clickEntries.length - 1].startTime : 0;
-          const clickToQueryStart = clickTime > 0 && p.queryStartTime > 0 ? p.queryStartTime - clickTime : null;
-          const queryDuration = p.queryStartTime > 0 && p.queryEndTime > 0 ? p.queryEndTime - p.queryStartTime : null;
-          const queryToSetContent = p.queryEndTime > 0 && p.setContentTime > 0 ? p.setContentTime - p.queryEndTime : null;
-          const setContentToRendered = p.setContentTime > 0 ? performance.now() - p.setContentTime : null;
+          const clickEntries =
+            performance.getEntriesByName("note-switch-start");
+          const clickTime =
+            clickEntries.length > 0
+              ? clickEntries[clickEntries.length - 1].startTime
+              : 0;
+          const clickToQueryStart =
+            clickTime > 0 && p.queryStartTime > 0
+              ? p.queryStartTime - clickTime
+              : null;
+          const queryDuration =
+            p.queryStartTime > 0 && p.queryEndTime > 0
+              ? p.queryEndTime - p.queryStartTime
+              : null;
+          const queryToSetContent =
+            p.queryEndTime > 0 && p.setContentTime > 0
+              ? p.setContentTime - p.queryEndTime
+              : null;
+          const setContentToRendered =
+            p.setContentTime > 0 ? performance.now() - p.setContentTime : null;
           // E12: dev-only console noise. Prod forwards the metric to PostHog instead.
           if (process.env.NODE_ENV === "development") {
-            console.log(`[perf] note-switch (note ${note.id}): ${total.toFixed(1)}ms total`, {
-              clickToQueryStart: clickToQueryStart !== null ? `${clickToQueryStart.toFixed(1)}ms` : "(cache hit — no fetch)",
-              queryDuration: queryDuration !== null ? `${queryDuration.toFixed(1)}ms` : "(cache hit — no fetch)",
-              queryToSetContent: queryToSetContent !== null ? `${queryToSetContent.toFixed(1)}ms` : "n/a",
-              setContentToRendered: setContentToRendered !== null ? `${setContentToRendered.toFixed(1)}ms` : "n/a",
-            });
+            console.log(
+              `[perf] note-switch (note ${note.id}): ${total.toFixed(1)}ms total`,
+              {
+                clickToQueryStart:
+                  clickToQueryStart !== null
+                    ? `${clickToQueryStart.toFixed(1)}ms`
+                    : "(cache hit — no fetch)",
+                queryDuration:
+                  queryDuration !== null
+                    ? `${queryDuration.toFixed(1)}ms`
+                    : "(cache hit — no fetch)",
+                queryToSetContent:
+                  queryToSetContent !== null
+                    ? `${queryToSetContent.toFixed(1)}ms`
+                    : "n/a",
+                setContentToRendered:
+                  setContentToRendered !== null
+                    ? `${setContentToRendered.toFixed(1)}ms`
+                    : "n/a",
+              },
+            );
           }
           if (process.env.NODE_ENV !== "development") {
-            posthog.capture("perf_note_switch", { duration_ms: Math.round(total), note_id: note.id, timestamp: new Date().toISOString() });
+            posthog.capture("perf_note_switch", {
+              duration_ms: Math.round(total),
+              note_id: note.id,
+              timestamp: new Date().toISOString(),
+            });
           }
         } catch {
           // mark may not exist if note was loaded without a click (e.g. initial load)
@@ -284,6 +369,7 @@ export function NoteShell() {
       });
     } else {
       setTitle("");
+      setAuthoritativeServerRevision(null);
     }
     setShowVersionHistory(false);
   }, [note?.id, selectedNoteId, editor]);
@@ -338,7 +424,9 @@ export function NoteShell() {
       try {
         if (isDemoRef.current) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const existing = queryClient.getQueryData(getGetNoteQueryKey(id)) as any;
+          const existing = queryClient.getQueryData(
+            getGetNoteQueryKey(id),
+          ) as any;
           if (existing) {
             queryClient.setQueryData(getGetNoteQueryKey(id), {
               ...existing,
@@ -348,7 +436,16 @@ export function NoteShell() {
           }
         } else {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await updateNoteMut.mutateAsync({ id, data: data as any });
+          const savedNote = await updateNoteMut.mutateAsync({
+            id,
+            data: data as any,
+          });
+          if (
+            selectedNoteIdRef.current === id &&
+            typeof savedNote?.updatedAt === "string"
+          ) {
+            setAuthoritativeServerRevision(savedNote.updatedAt);
+          }
           // E2: patch the cached list in place instead of refetching. A debounced
           // autosave is a hot path — invalidateQueries here fired a GET /api/notes
           // on every save. Merge the saved fields (title/contentText/etc.) + a fresh
@@ -357,9 +454,15 @@ export function NoteShell() {
           {
             const now = new Date().toISOString();
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            queryClient.setQueriesData({ queryKey: getGetNotesQueryKey() }, (old: any) =>
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              Array.isArray(old) ? old.map((n: any) => n.id === id ? { ...n, ...data, updatedAt: now } : n) : old
+            queryClient.setQueriesData(
+              { queryKey: getGetNotesQueryKey() },
+              (old: any) =>
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                Array.isArray(old)
+                  ? old.map((n: any) =>
+                      n.id === id ? { ...n, ...data, updatedAt: now } : n,
+                    )
+                  : old,
             );
           }
         }
@@ -432,11 +535,7 @@ export function NoteShell() {
   // true if a save was actually flushed.
   const flushSave = useCallback(
     async (
-      source:
-        | "manual_save"
-        | "auto_close"
-        | "restore"
-        | "pre_ai_rewrite",
+      source: "manual_save" | "auto_close" | "restore" | "pre_ai_rewrite",
     ): Promise<boolean> => {
       if (saveTimerRef.current) {
         clearTimeout(saveTimerRef.current);
@@ -476,7 +575,9 @@ export function NoteShell() {
     pendingSinceRef.current = null;
     if (isDemoRef.current) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const existing = queryClient.getQueryData(getGetNoteQueryKey(pending.id)) as any;
+      const existing = queryClient.getQueryData(
+        getGetNoteQueryKey(pending.id),
+      ) as any;
       if (existing) {
         queryClient.setQueryData(getGetNoteQueryKey(pending.id), {
           ...existing,
@@ -548,35 +649,54 @@ export function NoteShell() {
     return () => document.removeEventListener("keydown", onKey);
   }, [selectedNoteId, captureSnapshot]);
 
-  const handleTitleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const newTitle = e.target.value;
-    setTitle(newTitle);
-    liveStateRef.current = { ...liveStateRef.current, title: newTitle };
-    if (selectedNoteId) debouncedSave(selectedNoteId, { title: newTitle });
-  }, [selectedNoteId, debouncedSave]);
+  const handleTitleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newTitle = e.target.value;
+      setTitle(newTitle);
+      liveStateRef.current = { ...liveStateRef.current, title: newTitle };
+      if (selectedNoteId) debouncedSave(selectedNoteId, { title: newTitle });
+    },
+    [selectedNoteId, debouncedSave],
+  );
 
-  const handleContentChange = useCallback((html: string, text: string) => {
-    liveStateRef.current = { ...liveStateRef.current, content: html, contentText: text };
-    if (selectedNoteId) debouncedSave(selectedNoteId, { content: html, contentText: text });
-  }, [selectedNoteId, debouncedSave]);
+  const handleContentChange = useCallback(
+    (html: string, text: string, sourceContentKey?: string | number) => {
+      if (!isCurrentNoteLifecycleSource(sourceContentKey, selectedNoteId))
+        return;
+      liveStateRef.current = {
+        ...liveStateRef.current,
+        content: html,
+        contentText: text,
+      };
+      if (selectedNoteId)
+        debouncedSave(selectedNoteId, { content: html, contentText: text });
+    },
+    [selectedNoteId, debouncedSave],
+  );
 
   // Remove the editor image node whose src contains the given storage path.
-  const handleDeleteImage = useCallback((storagePath: string) => {
-    if (!editor) return;
-    const { state, view } = editor;
-    const positions: Array<{ from: number; to: number }> = [];
-    state.doc.descendants((node, pos) => {
-      if (node.type.name === "image" && (node.attrs.src as string)?.includes(storagePath)) {
-        positions.push({ from: pos, to: pos + node.nodeSize });
+  const handleDeleteImage = useCallback(
+    (storagePath: string) => {
+      if (!editor) return;
+      const { state, view } = editor;
+      const positions: Array<{ from: number; to: number }> = [];
+      state.doc.descendants((node, pos) => {
+        if (
+          node.type.name === "image" &&
+          (node.attrs.src as string)?.includes(storagePath)
+        ) {
+          positions.push({ from: pos, to: pos + node.nodeSize });
+        }
+      });
+      if (!positions.length) return;
+      let tr = state.tr;
+      for (let i = positions.length - 1; i >= 0; i--) {
+        tr = tr.delete(positions[i].from, positions[i].to);
       }
-    });
-    if (!positions.length) return;
-    let tr = state.tr;
-    for (let i = positions.length - 1; i >= 0; i--) {
-      tr = tr.delete(positions[i].from, positions[i].to);
-    }
-    view.dispatch(tr);
-  }, [editor]);
+      view.dispatch(tr);
+    },
+    [editor],
+  );
 
   // Restore is non-destructive: snapshot the current draft as "Before restore"
   // first, then replace the editor content with the version. The user can
@@ -603,7 +723,9 @@ export function NoteShell() {
         try {
           if (isDemoRef.current) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
+            const existing = queryClient.getQueryData(
+              getGetNoteQueryKey(selectedNoteId),
+            ) as any;
             if (existing) {
               queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
                 ...existing,
@@ -613,7 +735,10 @@ export function NoteShell() {
             }
           } else {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await updateNoteMut.mutateAsync({ id: selectedNoteId, data: pending.data as any });
+            await updateNoteMut.mutateAsync({
+              id: selectedNoteId,
+              data: pending.data as any,
+            });
           }
         } catch (err) {
           Sentry.captureException(err);
@@ -653,19 +778,33 @@ export function NoteShell() {
       setPreviewVersion(null);
       posthog.capture("version_history_restored", { note_id: selectedNoteId });
     },
-    [editor, selectedNoteId, createVersion, performSave, updateNoteMut, queryClient],
+    [
+      editor,
+      selectedNoteId,
+      createVersion,
+      performSave,
+      updateNoteMut,
+      queryClient,
+    ],
   );
 
   // Take a snapshot before any AI rewrite so the user can always undo it.
-  const handleBeforeAiRewrite = useCallback(async () => {
-    await captureSnapshot("pre_ai_rewrite");
-  }, [captureSnapshot]);
+  const handleBeforeAiRewrite = useCallback(
+    async (sourceContentKey?: string | number) => {
+      if (!isCurrentNoteLifecycleSource(sourceContentKey, selectedNoteId))
+        return;
+      await captureSnapshot("pre_ai_rewrite");
+    },
+    [captureSnapshot, selectedNoteId],
+  );
 
   const handleDelete = async () => {
     if (!selectedNoteId) return;
     if (isDemo) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
+      const existing = queryClient.getQueryData(
+        getGetNoteQueryKey(selectedNoteId),
+      ) as any;
       if (existing) {
         const now = new Date().toISOString();
         const autoDeleteAt = new Date(Date.now() + 30 * 86400000).toISOString();
@@ -677,67 +816,92 @@ export function NoteShell() {
           deletedReason: "deleted",
         });
       }
-      posthog.capture("note_deleted", { note_id: selectedNoteId, timestamp: new Date().toISOString() });
+      posthog.capture("note_deleted", {
+        note_id: selectedNoteId,
+        timestamp: new Date().toISOString(),
+      });
       selectNote(null);
       if (bp !== "desktop") setMobileView("list");
       return;
     }
     await softDeleteMut.mutateAsync({ id: selectedNoteId });
-    posthog.capture("note_deleted", { note_id: selectedNoteId, timestamp: new Date().toISOString() });
+    posthog.capture("note_deleted", {
+      note_id: selectedNoteId,
+      timestamp: new Date().toISOString(),
+    });
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
     selectNote(null);
     if (bp !== "desktop") setMobileView("list");
   };
 
   // Optimistic update for pin/fav
-  const handleAction = useCallback((action: "pin" | "fav") => {
-    if (!selectedNoteId || !note) return;
-    if (isDemo) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
-      if (existing) {
-        queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
-          ...existing,
-          ...(action === "pin" ? { pinned: !existing.pinned } : { favorite: !existing.favorite }),
-        });
+  const handleAction = useCallback(
+    (action: "pin" | "fav") => {
+      if (!selectedNoteId || !note) return;
+      if (isDemo) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const existing = queryClient.getQueryData(
+          getGetNoteQueryKey(selectedNoteId),
+        ) as any;
+        if (existing) {
+          queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
+            ...existing,
+            ...(action === "pin"
+              ? { pinned: !existing.pinned }
+              : { favorite: !existing.favorite }),
+          });
+        }
+        return;
       }
-      return;
-    }
-    const id = selectedNoteId;
-    const field = action === "pin" ? "pinned" : "favorite";
-    const newVal = action === "pin" ? !note.pinned : !note.favorite;
-    if (action === "pin") posthog.capture("note_pinned", { note_id: id, pinned: newVal });
-    if (action === "fav") posthog.capture("note_favorited", { note_id: id, favorited: newVal });
-    const mutOpts = {
-      onMutate: async () => {
-        await queryClient.cancelQueries({ queryKey: getGetNoteQueryKey(id) });
-        const prev = queryClient.getQueryData(getGetNoteQueryKey(id));
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        queryClient.setQueryData(getGetNoteQueryKey(id), (old: any) => old ? { ...old, [field]: newVal } : old);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        queryClient.setQueriesData({ queryKey: getGetNotesQueryKey() }, (old: any) =>
+      const id = selectedNoteId;
+      const field = action === "pin" ? "pinned" : "favorite";
+      const newVal = action === "pin" ? !note.pinned : !note.favorite;
+      if (action === "pin")
+        posthog.capture("note_pinned", { note_id: id, pinned: newVal });
+      if (action === "fav")
+        posthog.capture("note_favorited", { note_id: id, favorited: newVal });
+      const mutOpts = {
+        onMutate: async () => {
+          await queryClient.cancelQueries({ queryKey: getGetNoteQueryKey(id) });
+          const prev = queryClient.getQueryData(getGetNoteQueryKey(id));
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          Array.isArray(old) ? old.map((n: any) => n.id === id ? { ...n, [field]: newVal } : n) : old
-        );
-        return { prev };
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      onError: (_e: unknown, _v: unknown, ctx: any) => {
-        queryClient.setQueryData(getGetNoteQueryKey(id), ctx?.prev);
-      },
-      onSettled: () => {
-        queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(id) });
-        queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
-      },
-    };
-    if (action === "pin") pinMut.mutate({ id }, mutOpts);
-    if (action === "fav") favMut.mutate({ id }, mutOpts);
-  }, [selectedNoteId, note, isDemo, queryClient, pinMut, favMut]);
+          queryClient.setQueryData(getGetNoteQueryKey(id), (old: any) =>
+            old ? { ...old, [field]: newVal } : old,
+          );
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          queryClient.setQueriesData(
+            { queryKey: getGetNotesQueryKey() },
+            (old: any) =>
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              Array.isArray(old)
+                ? old.map((n: any) =>
+                    n.id === id ? { ...n, [field]: newVal } : n,
+                  )
+                : old,
+          );
+          return { prev };
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onError: (_e: unknown, _v: unknown, ctx: any) => {
+          queryClient.setQueryData(getGetNoteQueryKey(id), ctx?.prev);
+        },
+        onSettled: () => {
+          queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(id) });
+          queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+        },
+      };
+      if (action === "pin") pinMut.mutate({ id }, mutOpts);
+      if (action === "fav") favMut.mutate({ id }, mutOpts);
+    },
+    [selectedNoteId, note, isDemo, queryClient, pinMut, favMut],
+  );
 
   const handleToggleVault = async () => {
     if (!selectedNoteId || !note) return;
     if (!note.vaulted) {
-      const pinConfigured = isDemo ? demoVaultConfigured : vaultStatus?.isConfigured;
+      const pinConfigured = isDemo
+        ? demoVaultConfigured
+        : vaultStatus?.isConfigured;
       if (!pinConfigured) {
         setShowVaultSetupModal(true);
         return;
@@ -750,8 +914,14 @@ export function NoteShell() {
     }
     if (isDemo) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
-      if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, vaulted: !note.vaulted });
+      const existing = queryClient.getQueryData(
+        getGetNoteQueryKey(selectedNoteId),
+      ) as any;
+      if (existing)
+        queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
+          ...existing,
+          vaulted: !note.vaulted,
+        });
       return;
     }
     const id = selectedNoteId;
@@ -762,7 +932,9 @@ export function NoteShell() {
         await queryClient.cancelQueries({ queryKey: getGetNoteQueryKey(id) });
         const prev = queryClient.getQueryData(getGetNoteQueryKey(id));
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        queryClient.setQueryData(getGetNoteQueryKey(id), (old: any) => old ? { ...old, vaulted: newVaulted } : old);
+        queryClient.setQueryData(getGetNoteQueryKey(id), (old: any) =>
+          old ? { ...old, vaulted: newVaulted } : old,
+        );
         return { prev };
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -788,7 +960,10 @@ export function NoteShell() {
   }, [title, editor, note?.content]);
 
   const handleSaveAsTemplate = useCallback(() => {
-    posthog.capture("save_as_template_opened", { note_id: selectedNoteId, timestamp: new Date().toISOString() });
+    posthog.capture("save_as_template_opened", {
+      note_id: selectedNoteId,
+      timestamp: new Date().toISOString(),
+    });
     openSaveAsTemplate();
   }, [selectedNoteId, openSaveAsTemplate]);
 
@@ -800,14 +975,25 @@ export function NoteShell() {
       sessionStorage.setItem("demo_vault_hash", pin);
       queryClient.setQueryData(["/api/vault/status"], { isConfigured: true });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const existing = queryClient.getQueryData(getGetNoteQueryKey(selectedNoteId)) as any;
-      if (existing) queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...existing, vaulted: true });
+      const existing = queryClient.getQueryData(
+        getGetNoteQueryKey(selectedNoteId),
+      ) as any;
+      if (existing)
+        queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
+          ...existing,
+          vaulted: true,
+        });
       return;
     }
     try {
       await setupVaultMut.mutateAsync({ data: { pin } });
-      await vaultMut.mutateAsync({ id: selectedNoteId, data: { vaulted: true } });
-      queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
+      await vaultMut.mutateAsync({
+        id: selectedNoteId,
+        data: { vaulted: true },
+      });
+      queryClient.invalidateQueries({
+        queryKey: getGetNoteQueryKey(selectedNoteId),
+      });
       queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
     } catch {
       // Setup failed — nothing to roll back; the user can try again from the
@@ -820,11 +1006,19 @@ export function NoteShell() {
     if (isDemo) {
       const stored = sessionStorage.getItem("demo_vault_hash");
       if (!stored || stored === pin) {
-        posthog.capture("vault_unlock_attempted", { success: true, source: "note", timestamp: new Date().toISOString() });
+        posthog.capture("vault_unlock_attempted", {
+          success: true,
+          source: "note",
+          timestamp: new Date().toISOString(),
+        });
         setShowVaultUnlockModal(false);
         setVaultUnlocked(true);
       } else {
-        posthog.capture("vault_unlock_attempted", { success: false, source: "note", timestamp: new Date().toISOString() });
+        posthog.capture("vault_unlock_attempted", {
+          success: false,
+          source: "note",
+          timestamp: new Date().toISOString(),
+        });
         setVaultUnlockError("Wrong PIN.");
       }
       return;
@@ -834,45 +1028,77 @@ export function NoteShell() {
       // Store the unlock proof so subsequent requests can fetch vaulted content
       // (§S / X-S2), then refetch the notes that were returned blanked.
       setVaultProof((res as { proof?: string })?.proof ?? null);
-      posthog.capture("vault_unlock_attempted", { success: true, source: "note", timestamp: new Date().toISOString() });
+      posthog.capture("vault_unlock_attempted", {
+        success: true,
+        source: "note",
+        timestamp: new Date().toISOString(),
+      });
       setShowVaultUnlockModal(false);
       setVaultUnlocked(true);
       queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
       if (selectedNoteId) {
-        queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
+        queryClient.invalidateQueries({
+          queryKey: getGetNoteQueryKey(selectedNoteId),
+        });
       }
     } catch {
-      posthog.capture("vault_unlock_attempted", { success: false, source: "note", timestamp: new Date().toISOString() });
+      posthog.capture("vault_unlock_attempted", {
+        success: false,
+        source: "note",
+        timestamp: new Date().toISOString(),
+      });
       // Keep the modal open so the user can try again.
       setVaultUnlockError("Wrong PIN.");
     }
   };
 
-  const addTag = useCallback(async (tag: string) => {
-    if (!selectedNoteId || !note) return;
-    const newTags = [...(note.tags ?? []), tag];
-    if (isDemo) {
-      queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...note, tags: newTags });
-      return;
-    }
-    await updateNoteMut.mutateAsync({ id: selectedNoteId, data: { tags: newTags } });
-    queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
-    queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetTagsQueryKey() });
-  }, [selectedNoteId, note, isDemo, queryClient, updateNoteMut]);
+  const addTag = useCallback(
+    async (tag: string) => {
+      if (!selectedNoteId || !note) return;
+      const newTags = [...(note.tags ?? []), tag];
+      if (isDemo) {
+        queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
+          ...note,
+          tags: newTags,
+        });
+        return;
+      }
+      await updateNoteMut.mutateAsync({
+        id: selectedNoteId,
+        data: { tags: newTags },
+      });
+      queryClient.invalidateQueries({
+        queryKey: getGetNoteQueryKey(selectedNoteId),
+      });
+      queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetTagsQueryKey() });
+    },
+    [selectedNoteId, note, isDemo, queryClient, updateNoteMut],
+  );
 
-  const removeTag = useCallback(async (tag: string) => {
-    if (!selectedNoteId || !note) return;
-    const newTags = (note.tags ?? []).filter(t => t !== tag);
-    if (isDemo) {
-      queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), { ...note, tags: newTags });
-      return;
-    }
-    await updateNoteMut.mutateAsync({ id: selectedNoteId, data: { tags: newTags } });
-    queryClient.invalidateQueries({ queryKey: getGetNoteQueryKey(selectedNoteId) });
-    queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetTagsQueryKey() });
-  }, [selectedNoteId, note, isDemo, queryClient, updateNoteMut]);
+  const removeTag = useCallback(
+    async (tag: string) => {
+      if (!selectedNoteId || !note) return;
+      const newTags = (note.tags ?? []).filter((t) => t !== tag);
+      if (isDemo) {
+        queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
+          ...note,
+          tags: newTags,
+        });
+        return;
+      }
+      await updateNoteMut.mutateAsync({
+        id: selectedNoteId,
+        data: { tags: newTags },
+      });
+      queryClient.invalidateQueries({
+        queryKey: getGetNoteQueryKey(selectedNoteId),
+      });
+      queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetTagsQueryKey() });
+    },
+    [selectedNoteId, note, isDemo, queryClient, updateNoteMut],
+  );
 
   const handleBack = useCallback(() => {
     setMobileView("list");
@@ -884,19 +1110,37 @@ export function NoteShell() {
 
   // Attach file: upload via shell, return result for GrapheEditor to insert image.
   // uploadAttachment returns AttachmentRecord | null; normalise to match the prop signature.
-  const handleAttachFile = useCallback(async (file: File): Promise<{ url?: string; id?: string; masterPath?: string | null; fileType?: string; downloadUrl?: string; isAnimated?: boolean } | undefined> => {
-    const result = await uploadAttachment(file);
-    if (!result) return undefined;
-    return {
-      url: result.url ?? undefined,
-      id: result.id,
-      masterPath: result.masterPath,
-      fileType: result.fileType,
-      // masterUrl is the original file blob URL (demo HEIC) or undefined for real uploads
-      downloadUrl: result.masterUrl ?? undefined,
-      isAnimated: result.isAnimated ?? undefined,
-    };
-  }, [uploadAttachment]);
+  const handleAttachFile = useCallback(
+    async (
+      file: File,
+      sourceContentKey?: string | number,
+    ): Promise<
+      | {
+          url?: string;
+          id?: string;
+          masterPath?: string | null;
+          fileType?: string;
+          downloadUrl?: string;
+          isAnimated?: boolean;
+        }
+      | undefined
+    > => {
+      if (!isCurrentNoteLifecycleSource(sourceContentKey, selectedNoteId))
+        return undefined;
+      const result = await uploadAttachment(file);
+      if (!result) return undefined;
+      return {
+        url: result.url ?? undefined,
+        id: result.id,
+        masterPath: result.masterPath,
+        fileType: result.fileType,
+        // masterUrl is the original file blob URL (demo HEIC) or undefined for real uploads
+        downloadUrl: result.masterUrl ?? undefined,
+        isAnimated: result.isAnimated ?? undefined,
+      };
+    },
+    [selectedNoteId, uploadAttachment],
+  );
 
   // ── Empty state ──────────────────────────────────────────────────────────────
 
@@ -925,7 +1169,10 @@ export function NoteShell() {
         showVaultUnlockModal={showVaultUnlockModal}
         onRequestUnlock={() => setShowVaultUnlockModal(true)}
         onUnlockConfirm={handleUnlockConfirm}
-        onUnlockCancel={() => { setShowVaultUnlockModal(false); setVaultUnlockError(""); }}
+        onUnlockCancel={() => {
+          setShowVaultUnlockModal(false);
+          setVaultUnlockError("");
+        }}
         vaultUnlockError={vaultUnlockError}
       />
     );
@@ -934,8 +1181,7 @@ export function NoteShell() {
   // When version history is open on tablet/desktop the panel sits as a fixed
   // 360px column on the right. Reserve that space on the editor wrapper so the
   // note + preview overlay sit beside the panel instead of underneath it.
-  const reservePanelSpace =
-    showVersionHistory && bp !== "mobile";
+  const reservePanelSpace = showVersionHistory && bp !== "mobile";
 
   return (
     <div
@@ -959,7 +1205,7 @@ export function NoteShell() {
         onPin={handlePin}
         onFav={handleFav}
         onVaultToggle={handleToggleVault}
-        onVersionHistory={() => setShowVersionHistory(v => !v)}
+        onVersionHistory={() => setShowVersionHistory((v) => !v)}
         onSetShowToc={setShowToc}
         onExportPdf={handleExportPdf}
         onExportMarkdown={handleExportMarkdown}
@@ -978,8 +1224,31 @@ export function NoteShell() {
           mode="note"
           isDemo={isDemo}
           onAttachFile={handleAttachFile}
-          onEditorReady={(e) => { setEditor(e); setActiveEditor(e); }}
+          onEditorReady={(e) => {
+            setEditor(e);
+            setActiveEditor(e);
+          }}
           onBeforeAiRewrite={handleBeforeAiRewrite}
+          collaboration={{
+            identity:
+              note?.id === selectedNoteId
+                ? isDemo
+                  ? { mode: "demo", noteId: selectedNoteId }
+                  : user?.id
+                    ? {
+                        mode: "authenticated",
+                        userId: user.id,
+                        noteId: selectedNoteId,
+                      }
+                    : null
+                : null,
+            serverRevision:
+              note?.id === selectedNoteId
+                ? isDemo
+                  ? DEMO_COLLABORATION_BASE_REVISION
+                  : (authoritativeServerRevision ?? note.updatedAt ?? null)
+                : null,
+          }}
           renderContent={(ed) => (
             <motion.div
               animate={contentControls}
@@ -1059,7 +1328,10 @@ export function NoteShell() {
           mode="unlock"
           error={vaultUnlockError}
           onConfirm={handleUnlockConfirm}
-          onCancel={() => { setShowVaultUnlockModal(false); setVaultUnlockError(""); }}
+          onCancel={() => {
+            setShowVaultUnlockModal(false);
+            setVaultUnlockError("");
+          }}
         />
       )}
 
