@@ -543,6 +543,18 @@ export function GrapheEditor({
     async (file: File) => {
       if (!onAttachFile || !editor) return;
 
+      // Attachment nodes include URLs, names, and storage metadata required by
+      // the existing editor. The pilot deliberately has no stable-reference
+      // rehydration API yet, so erase and disable this note's local replica
+      // before any such node can enter Yjs.
+      if (collaborationRequested) {
+        const disabled = await noteCollaboration.disableLocalPersistence();
+        if (!disabled) {
+          toast.error("Local draft cache could not be cleared. Try again.");
+          return;
+        }
+      }
+
       const uploadId = crypto.randomUUID();
 
       // Insert placeholder atom node — no src, Yjs-serializable
@@ -609,7 +621,12 @@ export function GrapheEditor({
       }
       editor.view.dispatch(insertTr);
     },
-    [onAttachFile, editor],
+    [
+      collaborationRequested,
+      editor,
+      noteCollaboration.disableLocalPersistence,
+      onAttachFile,
+    ],
   );
 
   // Keep a stable ref so FileHandler (which is configured in the [] useMemo) can

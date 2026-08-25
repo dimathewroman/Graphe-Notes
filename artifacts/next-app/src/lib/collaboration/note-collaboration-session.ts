@@ -15,6 +15,17 @@ export { createNoteCollaborationIdentity } from "./note-collaboration-lifecycle"
 export type RevisionedCollaborationPersistence =
   RevisionedCollaborationPersistenceAdapter;
 
+type ErasableRevisionedCollaborationPersistence =
+  RevisionedCollaborationPersistence & {
+    disableAndErase(): Promise<void>;
+  };
+
+function isErasablePersistence(
+  persistence: RevisionedCollaborationPersistence,
+): persistence is ErasableRevisionedCollaborationPersistence {
+  return typeof (persistence as { disableAndErase?: unknown }).disableAndErase === "function";
+}
+
 export type CollaborationBootstrapSource = "local" | "server";
 
 export interface NoteCollaborationSession {
@@ -22,6 +33,7 @@ export interface NoteCollaborationSession {
   readonly yDocument: Y.Doc;
   readonly ready: Promise<CollaborationBootstrapSource>;
   recordAuthoritativeServerRevision(revision: string): Promise<void>;
+  disableLocalPersistence(): Promise<void>;
   destroy(): Promise<void>;
 }
 
@@ -41,6 +53,11 @@ function clearTiptapContent(document: Y.Doc): void {
   document.transact(() => fragment.delete(0, fragment.length));
 }
 
+function containsUnsafeAttachmentContent(document: Y.Doc): boolean {
+  const serialized = document.getXmlFragment("default").toString();
+  return /<(?:image|imageUpload)\b/i.test(serialized);
+}
+
 export function createNoteCollaborationSession({
   identity,
   serverRevision,
@@ -52,6 +69,14 @@ export function createNoteCollaborationSession({
   });
   const yDocument = collaboration.getYDocument();
   const ready = collaboration.ready.then(async () => {
+    if (containsUnsafeAttachmentContent(yDocument)) {
+      if (!isErasablePersistence(persistence)) {
+        throw new Error("Attachment-bearing collaboration state cannot be erased.");
+      }
+      await persistence.disableAndErase();
+      clearTiptapContent(yDocument);
+      return "server" as const;
+    }
     const persistedBaseRevision = await persistence.restoreBaseRevision(
       identity.documentId,
     );
@@ -85,6 +110,12 @@ export function createNoteCollaborationSession({
       }
       await collaboration.flush();
       await persistence.persistBaseRevision(identity.documentId, revision);
+    },
+    async disableLocalPersistence() {
+      if (!isErasablePersistence(persistence)) {
+        throw new Error("Local collaboration persistence cannot be erased.");
+      }
+      await persistence.disableAndErase();
     },
     destroy() {
       return collaboration.destroy();

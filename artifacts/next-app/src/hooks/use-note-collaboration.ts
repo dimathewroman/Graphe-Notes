@@ -14,6 +14,7 @@ import {
   type NoteCollaborationSession,
   type RevisionedCollaborationPersistence,
 } from "@/lib/collaboration/note-collaboration-session";
+import { registerActiveCollaborationReplica } from "@/lib/collaboration/note-collaboration-replica";
 
 type PersistenceFactory = () => RevisionedCollaborationPersistence;
 
@@ -28,6 +29,7 @@ export interface UseNoteCollaborationResult {
   bootstrapSource: "local" | "server" | null;
   yDocument: Y.Doc | null;
   recordAuthoritativeServerRevision(revision: string): Promise<boolean>;
+  disableLocalPersistence(): Promise<boolean>;
 }
 
 function identityKey(
@@ -40,7 +42,7 @@ function identityKey(
 }
 
 function safeCapturePersistenceFailure(
-  stage: "initialize" | "write" | "destroy",
+  stage: "initialize" | "write" | "destroy" | "erase",
 ) {
   Sentry.captureException(
     new Error(`Collaboration persistence ${stage} failed.`),
@@ -63,6 +65,7 @@ export function useNoteCollaboration({
   const sessionsRef = useRef(new Map<string, NoteCollaborationSession>());
   const failureRef = useRef(onPersistenceFailure);
   const activeSessionRef = useRef<NoteCollaborationSession | null>(null);
+  const unregisterActiveReplicaRef = useRef<(() => void) | null>(null);
   const coordinatorRef = useRef<ReturnType<
     typeof createNoteCollaborationLifecycleCoordinator
   > | null>(null);
@@ -84,6 +87,8 @@ export function useNoteCollaboration({
         const coordinated: CoordinatedSession = {
           identity: sessionIdentity,
           destroy: async () => {
+            unregisterActiveReplicaRef.current?.();
+            unregisterActiveReplicaRef.current = null;
             sessionsRef.current.delete(sessionIdentity.documentId);
             if (activeSessionRef.current === session)
               activeSessionRef.current = null;
@@ -125,6 +130,15 @@ export function useNoteCollaboration({
         if (cancelled || !coordinator.isCurrent(coordinated)) return;
 
         activeSessionRef.current = session;
+        unregisterActiveReplicaRef.current?.();
+        unregisterActiveReplicaRef.current = registerActiveCollaborationReplica(
+          coordinated.identity,
+          async () => {
+            unregisterActiveReplicaRef.current?.();
+            unregisterActiveReplicaRef.current = null;
+            await coordinator.destroy();
+          },
+        );
         setBootstrapSource(source);
         setYDocument(session.yDocument);
         setStatus("ready");
@@ -139,6 +153,8 @@ export function useNoteCollaboration({
 
     return () => {
       cancelled = true;
+      unregisterActiveReplicaRef.current?.();
+      unregisterActiveReplicaRef.current = null;
       void coordinator.destroy().catch(() => {
         safeCapturePersistenceFailure("destroy");
         failureRef.current?.();
@@ -166,10 +182,24 @@ export function useNoteCollaboration({
     [],
   );
 
+  const disableLocalPersistence = useCallback(async () => {
+    const session = activeSessionRef.current;
+    if (!session) return true;
+    try {
+      await session.disableLocalPersistence();
+      return true;
+    } catch {
+      safeCapturePersistenceFailure("erase");
+      failureRef.current?.();
+      return false;
+    }
+  }, []);
+
   return {
     status,
     bootstrapSource,
     yDocument,
     recordAuthoritativeServerRevision,
+    disableLocalPersistence,
   };
 }

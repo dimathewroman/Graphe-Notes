@@ -1,16 +1,157 @@
 import { fetchUpdates, type IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
-import type { RevisionedCollaborationPersistenceAdapter } from "./collaboration-document";
+import type { ErasableRevisionedCollaborationPersistenceAdapter } from "./collaboration-document";
 
 const DATABASE_PREFIX = "graphe-collaboration:";
 const AVAILABILITY_DATABASE = "graphe-collaboration-availability";
 const UPDATES_STORE = "updates";
 const CUSTOM_STORE = "custom";
 const BASE_REVISION_KEY = "base-server-revision";
+const REGISTRY_DATABASE = "graphe-collaboration-registry";
+const REGISTRY_STORE = "replicas";
 
 interface IndexeddbSession {
   document: Y.Doc;
   persistence: LocalIndexeddbProvider;
+}
+
+interface ReplicaRegistryRecord {
+  documentId: string;
+  scope: string;
+}
+
+function collaborationScope(documentId: string): string {
+  if (documentId.startsWith("graphe-yjs:v1:demo:note:")) return "demo";
+  const match = /^graphe-yjs:v1:user:(.+):note:[^:]+$/.exec(documentId);
+  return match ? `authenticated:${match[1]}` : "unknown";
+}
+
+function openRegistryDatabase(): Promise<IDBDatabase> {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    let request: IDBOpenDBRequest;
+    try {
+      request = globalThis.indexedDB.open(REGISTRY_DATABASE, 1);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(REGISTRY_STORE)) {
+        request.result.createObjectStore(REGISTRY_STORE, { keyPath: "documentId" });
+      }
+    };
+    request.onerror = () =>
+      reject(request.error ?? new Error("IndexedDB registry is unavailable."));
+    request.onsuccess = () => resolve(request.result);
+  });
+}
+
+function completeRegistryTransaction(
+  database: IDBDatabase,
+  mode: IDBTransactionMode,
+  apply: (store: IDBObjectStore) => void,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let transaction: IDBTransaction | undefined;
+    try {
+      transaction = database.transaction(REGISTRY_STORE, mode);
+      apply(transaction.objectStore(REGISTRY_STORE));
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error("IndexedDB registry write failed."));
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error("IndexedDB registry write failed."));
+    transaction.oncomplete = () => resolve();
+  }).finally(() => database.close());
+}
+
+async function registerDocument(documentId: string): Promise<void> {
+  const database = await openRegistryDatabase();
+  await completeRegistryTransaction(database, "readwrite", (store) => {
+    store.put({ documentId, scope: collaborationScope(documentId) });
+  });
+}
+
+async function registeredDocuments(
+  scope: string | null,
+): Promise<ReplicaRegistryRecord[]> {
+  const database = await openRegistryDatabase();
+  return new Promise<ReplicaRegistryRecord[]>((resolve, reject) => {
+    let transaction: IDBTransaction | undefined;
+    try {
+      transaction = database.transaction(REGISTRY_STORE, "readonly");
+      const request = transaction.objectStore(REGISTRY_STORE).getAll();
+      request.onsuccess = () => {
+        const records = (request.result as ReplicaRegistryRecord[]).filter(
+          (record) => scope === null || record.scope === scope,
+        );
+        resolve(records);
+      };
+      request.onerror = () =>
+        reject(request.error ?? new Error("IndexedDB registry read failed."));
+    } catch (error) {
+      reject(error);
+    }
+    if (transaction) {
+      transaction.addEventListener("complete", () => database.close());
+      transaction.addEventListener("abort", () => database.close());
+    }
+  });
+}
+
+async function removeRegisteredDocuments(documentIds: string[]): Promise<void> {
+  if (documentIds.length === 0) return;
+  const database = await openRegistryDatabase();
+  await completeRegistryTransaction(database, "readwrite", (store) => {
+    documentIds.forEach((documentId) => store.delete(documentId));
+  });
+}
+
+function deleteDocumentDatabase(documentId: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let request: IDBOpenDBRequest;
+    try {
+      request = globalThis.indexedDB.deleteDatabase(
+        `${DATABASE_PREFIX}${documentId}`,
+      );
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    request.onsuccess = () => resolve();
+    request.onerror = () =>
+      reject(request.error ?? new Error("IndexedDB deletion failed."));
+    request.onblocked = () => reject(new Error("IndexedDB deletion is blocked."));
+  });
+}
+
+/** These only address records registered by this adapter; unrelated IndexedDB databases are never enumerated or deleted. */
+export async function eraseDocument(documentId: string): Promise<void> {
+  await deleteDocumentDatabase(documentId);
+  await removeRegisteredDocuments([documentId]);
+}
+
+async function eraseScope(scope: string): Promise<void> {
+  const records = await registeredDocuments(scope);
+  await Promise.all(records.map((record) => deleteDocumentDatabase(record.documentId)));
+  await removeRegisteredDocuments(records.map((record) => record.documentId));
+}
+
+export async function eraseAuthenticatedOwner(userId: string): Promise<void> {
+  await eraseScope(`authenticated:${userId}`);
+}
+
+export async function eraseDemo(): Promise<void> {
+  await eraseScope("demo");
+}
+
+export async function eraseAll(): Promise<void> {
+  const records = await registeredDocuments(null);
+  await Promise.all(records.map((record) => deleteDocumentDatabase(record.documentId)));
+  await removeRegisteredDocuments(records.map((record) => record.documentId));
 }
 
 function verifyIndexeddbAvailability(): Promise<void> {
@@ -202,15 +343,16 @@ class LocalIndexeddbProvider {
   }
 }
 
-export function createIndexeddbCollaborationPersistence(): RevisionedCollaborationPersistenceAdapter {
+export function createIndexeddbCollaborationPersistence(): ErasableRevisionedCollaborationPersistenceAdapter {
   return new IndexeddbCollaborationPersistence();
 }
 
-class IndexeddbCollaborationPersistence implements RevisionedCollaborationPersistenceAdapter {
+class IndexeddbCollaborationPersistence implements ErasableRevisionedCollaborationPersistenceAdapter {
   private documentId: string | undefined;
   private session: IndexeddbSession | undefined;
   private sessionReady: Promise<IndexeddbSession> | undefined;
   private destroyed = false;
+  private disabled = false;
   private destroyPromise: Promise<void> | undefined;
 
   async restore(documentId: string): Promise<Uint8Array | null> {
@@ -219,7 +361,7 @@ class IndexeddbCollaborationPersistence implements RevisionedCollaborationPersis
   }
 
   async persist(documentId: string, state: Uint8Array): Promise<void> {
-    if (this.destroyed) return;
+    if (this.destroyed || this.disabled) return;
 
     const session = await this.getSession(documentId);
     if (!this.destroyed) await session.persistence.persist(state);
@@ -239,7 +381,7 @@ class IndexeddbCollaborationPersistence implements RevisionedCollaborationPersis
     documentId: string,
     revision: string,
   ): Promise<void> {
-    if (this.destroyed) return;
+    if (this.destroyed || this.disabled) return;
     const session = await this.getSession(documentId);
     if (!this.destroyed)
       await writeCustomValue(
@@ -261,8 +403,16 @@ class IndexeddbCollaborationPersistence implements RevisionedCollaborationPersis
     return this.destroyPromise;
   }
 
+  async disableAndErase(): Promise<void> {
+    if (this.disabled) return;
+    this.disabled = true;
+    const documentId = this.documentId;
+    await this.destroy();
+    if (documentId) await eraseDocument(documentId);
+  }
+
   private getSession(documentId: string): Promise<IndexeddbSession> {
-    if (this.destroyed)
+    if (this.destroyed || this.disabled)
       return Promise.reject(
         new Error("IndexedDB persistence has been destroyed."),
       );
@@ -277,6 +427,7 @@ class IndexeddbCollaborationPersistence implements RevisionedCollaborationPersis
     const databaseName = `${DATABASE_PREFIX}${documentId}`;
     this.sessionReady = verifyIndexeddbAvailability()
       .then(() => initializeDocumentDatabase(databaseName))
+      .then(() => registerDocument(documentId))
       .then(() => {
         const document = new Y.Doc({ guid: documentId });
         const persistence = new LocalIndexeddbProvider(databaseName, document);

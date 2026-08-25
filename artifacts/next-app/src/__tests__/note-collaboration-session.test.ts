@@ -37,6 +37,14 @@ class MemoryPersistence implements RevisionedCollaborationPersistence {
   async destroy(): Promise<void> {}
 }
 
+class ErasableMemoryPersistence extends MemoryPersistence {
+  erased = 0;
+
+  async disableAndErase(): Promise<void> {
+    this.erased += 1;
+  }
+}
+
 function insertDraft(document: Y.Doc, value: string) {
   const fragment = document.getXmlFragment("default");
   const paragraph = new Y.XmlElement("paragraph");
@@ -44,6 +52,13 @@ function insertDraft(document: Y.Doc, value: string) {
   text.insert(0, value);
   paragraph.insert(0, [text]);
   fragment.insert(0, [paragraph]);
+}
+
+function insertAttachmentPlaceholder(document: Y.Doc) {
+  const fragment = document.getXmlFragment("default");
+  const placeholder = new Y.XmlElement("imageUpload");
+  placeholder.setAttribute("fileName", "private-name.png");
+  fragment.insert(0, [placeholder]);
 }
 
 describe("note collaboration session", () => {
@@ -149,6 +164,34 @@ describe("note collaboration session", () => {
 
     await expect(reopened.ready).resolves.toBe("server");
     expect(reopened.yDocument.getXmlFragment("default").length).toBe(0);
+    await reopened.destroy();
+  });
+
+  it("purges a legacy attachment-bearing replica instead of recovering attachment metadata", async () => {
+    const persistence = new ErasableMemoryPersistence();
+    const identity = createNoteCollaborationIdentity({
+      mode: "demo",
+      noteId: "attachment-note",
+    });
+    const first = createNoteCollaborationSession({
+      identity,
+      serverRevision: SERVER_REVISION,
+      persistence,
+    });
+    await first.ready;
+    insertAttachmentPlaceholder(first.yDocument);
+    await first.recordAuthoritativeServerRevision(SERVER_REVISION);
+    await first.destroy();
+
+    const reopened = createNoteCollaborationSession({
+      identity,
+      serverRevision: SERVER_REVISION,
+      persistence,
+    });
+
+    await expect(reopened.ready).resolves.toBe("server");
+    expect(reopened.yDocument.getXmlFragment("default").length).toBe(0);
+    expect(persistence.erased).toBe(1);
     await reopened.destroy();
   });
 

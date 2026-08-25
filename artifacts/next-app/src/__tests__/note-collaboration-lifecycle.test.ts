@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createNoteCollaborationIdentity,
   createNoteCollaborationLifecycleCoordinator,
+  getNoteCollaborationPersistencePolicy,
   isCurrentNoteLifecycleSource,
   shouldRestoreLocalDraft,
   type NoteCollaborationSession,
@@ -94,6 +95,46 @@ describe("server-first local draft recovery", () => {
         serverRevision,
       }),
     ).toBe(false);
+  });
+});
+
+describe("local collaboration pilot eligibility", () => {
+  it("never initializes or recovers a vaulted note, whether it is locked or unlocked", () => {
+    expect(
+      getNoteCollaborationPersistencePolicy({
+        vaulted: true,
+        content: "",
+      }),
+    ).toEqual({ enabled: false, eraseExistingReplica: true });
+    expect(
+      getNoteCollaborationPersistencePolicy({
+        vaulted: true,
+        content: "<p>decrypted editor content</p>",
+      }),
+    ).toEqual({ enabled: false, eraseExistingReplica: true });
+  });
+
+  it("fails closed for attachment-bearing content instead of persisting attachment metadata", () => {
+    expect(
+      getNoteCollaborationPersistencePolicy({
+        vaulted: false,
+        content:
+          '<p>text</p><img src="https://signed.example/file" alt="private-name.png" data-master-path="private/path" />',
+      }),
+    ).toEqual({ enabled: false, eraseExistingReplica: true });
+    expect(
+      getNoteCollaborationPersistencePolicy({
+        vaulted: false,
+        content:
+          '<p>text</p><div data-type="imageUpload" data-file-name="private-name.png" />',
+      }),
+    ).toEqual({ enabled: false, eraseExistingReplica: true });
+    expect(
+      getNoteCollaborationPersistencePolicy({
+        vaulted: false,
+        content: "<p>plain note</p>",
+      }),
+    ).toEqual({ enabled: true, eraseExistingReplica: false });
   });
 });
 

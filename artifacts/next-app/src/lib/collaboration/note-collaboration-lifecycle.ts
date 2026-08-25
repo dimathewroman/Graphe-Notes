@@ -14,6 +14,16 @@ export interface LocalDraftRecoveryInput {
   serverRevision: string | null;
 }
 
+export interface NoteCollaborationPersistencePolicyInput {
+  vaulted: boolean;
+  content: string | null | undefined;
+}
+
+export interface NoteCollaborationPersistencePolicy {
+  enabled: boolean;
+  eraseExistingReplica: boolean;
+}
+
 export interface NoteCollaborationSession {
   readonly identity: NoteCollaborationIdentity;
   destroy(): void | Promise<void>;
@@ -76,6 +86,24 @@ export function shouldRestoreLocalDraft({
     isAuthoritativeServerRevision(serverRevision) &&
     persistedBaseRevision === serverRevision
   );
+}
+
+/**
+ * The local Yjs pilot is intentionally limited to non-vaulted, attachment-free
+ * notes. Vault plaintext and attachment metadata have different durability
+ * contracts, so their browser editor stays on the existing server path.
+ */
+export function getNoteCollaborationPersistencePolicy({
+  vaulted,
+  content,
+}: NoteCollaborationPersistencePolicyInput): NoteCollaborationPersistencePolicy {
+  const hasAttachment =
+    /<(?:img|video|audio)\b/i.test(content ?? "") ||
+    /data-type=["']imageUpload["']/i.test(content ?? "");
+  if (vaulted || hasAttachment) {
+    return { enabled: false, eraseExistingReplica: true };
+  }
+  return { enabled: true, eraseExistingReplica: false };
 }
 
 export interface NoteCollaborationLifecycleCoordinator {

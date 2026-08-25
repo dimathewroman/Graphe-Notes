@@ -262,6 +262,7 @@ Demo mode (`DemoContext`) runs inside the authenticated app shell but makes no c
 - Demo mutations patch the React Query cache directly — they never reach the API
 - Demo vault PIN is in `sessionStorage` only — it is not in the database
 - Demo data is static in `src/lib/demo-data.ts` — no user data is ever involved
+- Eligible demo-note replicas use their own deterministic browser namespace. They may recover within demo after reload, but the existing demo-cache clear boundary removes them before authenticated data is loaded.
 
 Demo mode is safe to run without any backend credentials. CI uses demo mode exclusively.
 

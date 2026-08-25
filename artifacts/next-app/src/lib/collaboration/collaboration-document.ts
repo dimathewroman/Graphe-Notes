@@ -12,10 +12,19 @@ export interface CollaborationPersistenceAdapter {
   destroy(): void | Promise<void>;
 }
 
+export interface ErasableCollaborationPersistenceAdapter
+  extends CollaborationPersistenceAdapter {
+  disableAndErase(): Promise<void>;
+}
+
 export interface RevisionedCollaborationPersistenceAdapter extends CollaborationPersistenceAdapter {
   restoreBaseRevision(documentId: string): Promise<string | null>;
   persistBaseRevision(documentId: string, revision: string): Promise<void>;
 }
+
+export interface ErasableRevisionedCollaborationPersistenceAdapter
+  extends RevisionedCollaborationPersistenceAdapter,
+    ErasableCollaborationPersistenceAdapter {}
 
 export type CollaborationConnectionState =
   | "disconnected"

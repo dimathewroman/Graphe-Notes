@@ -9,6 +9,8 @@ import NextImage from "next/image";
 import { DEMO_NOTES, DEMO_FOLDERS, DEMO_TAGS, DEMO_QUICK_BITS, DEMO_NOTE_VERSIONS } from "@/lib/demo-data";
 import { DemoContext } from "@/lib/demo-context";
 import { seedDemoVersionIdCounter } from "@/hooks/use-note-versions";
+import { eraseDemoCollaborationReplicas } from "@/lib/collaboration/note-collaboration-replica";
+import * as Sentry from "@sentry/nextjs";
 
 const grapheLogo = "/graphe_minimalist_1773640203523.png";
 
@@ -219,6 +221,14 @@ export default function AppPage() {
   // reset the demo flag so real notes are fetched fresh from the API.
   useEffect(() => {
     if (isAuthenticated && isDemo) {
+      // Eligible demo replicas may survive a demo reload in their isolated
+      // namespace, but this existing demo-cache clear boundary deletes them
+      // before authenticated data is allowed to populate the query cache.
+      void eraseDemoCollaborationReplicas().catch(() => {
+        Sentry.captureException(
+          new Error("Collaboration replica disposal failed."),
+        );
+      });
       queryClient.clear();
       setIsDemo(false);
     }

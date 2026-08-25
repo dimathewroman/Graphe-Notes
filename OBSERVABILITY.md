@@ -40,7 +40,7 @@ Source maps are uploaded to Sentry on every Vercel build via the Sentry webpack 
 | --------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `app/global-error.tsx`            | Error boundary       | All uncaught client-side React errors                                                                              |
 | `components/NoteShell.tsx`        | try/catch            | Note save failures                                                                                                 |
-| `hooks/use-note-collaboration.ts` | generic client error | Browser persistence initialize, write, and teardown failures; no note, owner, document, path, or raw-error payload |
+| `hooks/use-note-collaboration.ts` | generic client error | Browser persistence initialize, write, teardown, and erase failures; no note, owner, document, path, or raw-error payload |
 | `components/QuickBitShell.tsx`    | try/catch            | Animation errors, file read errors                                                                                 |
 | `app/api/ai/generate/route.ts`    | try/catch            | AI generation failures                                                                                             |
 

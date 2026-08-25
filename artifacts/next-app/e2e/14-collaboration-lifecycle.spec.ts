@@ -127,4 +127,63 @@ test.describe("Yjs note lifecycle", () => {
     await page.getByTestId("note-item").nth(0).click();
     await expect(editor).not.toContainText(localDraftMarker);
   });
+
+  test("purges the local replica before attachment metadata can be durable", async ({
+    page,
+  }) => {
+    await enterDemoMode(page);
+    await page.getByTestId("note-item").first().click();
+    await expect(page.locator(".ProseMirror:visible")).toBeVisible();
+    const databaseName = await demoDocumentDatabase(page);
+
+    const [fileChooser] = await Promise.all([
+      page.waitForEvent("filechooser"),
+      page.getByTestId("toolbar-attach-file").click(),
+    ]);
+    await fileChooser.setFiles({
+      name: "private-name.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI6QAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    });
+    await expect(page.locator(".ProseMirror img")).toBeVisible();
+    await expect
+      .poll(async () => {
+        return page.evaluate(async (name) =>
+          (await indexedDB.databases()).some(
+            (database) => database.name === name,
+          ),
+        databaseName);
+      })
+      .toBe(false);
+  });
+
+  test("purges a vault replica without initializing a replacement", async ({
+    page,
+  }) => {
+    await enterDemoMode(page);
+    await page.getByTestId("note-item").first().click();
+    await expect(page.locator(".ProseMirror:visible")).toBeVisible();
+    const databaseName = await demoDocumentDatabase(page);
+
+    await page.getByTitle("Move to vault").click();
+    const pressDigit = async (digit: string) =>
+      page.getByRole("button", { name: digit, exact: true }).click();
+    for (const digit of ["1", "2", "3", "4"]) await pressDigit(digit);
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    for (const digit of ["1", "2", "3", "4"]) await pressDigit(digit);
+    await page.getByRole("button", { name: "Confirm", exact: true }).click();
+    await expect(page.getByTestId("vault-modal")).not.toBeVisible();
+    await expect
+      .poll(async () => {
+        return page.evaluate(async (name) =>
+          (await indexedDB.databases()).some(
+            (database) => database.name === name,
+          ),
+        databaseName);
+      })
+      .toBe(false);
+  });
 });

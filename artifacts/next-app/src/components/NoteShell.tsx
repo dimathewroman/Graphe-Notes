@@ -40,7 +40,13 @@ import { useDemoMode } from "@/lib/demo-context";
 import { useAuth } from "@/hooks/use-auth";
 import { exportAsPdf, exportAsMarkdown } from "@/hooks/use-note-export";
 import { useUploadAttachment } from "@/hooks/use-attachments";
-import { isCurrentNoteLifecycleSource } from "@/lib/collaboration/note-collaboration-lifecycle";
+import {
+  createNoteCollaborationIdentity,
+  getNoteCollaborationPersistencePolicy,
+  isCurrentNoteLifecycleSource,
+} from "@/lib/collaboration/note-collaboration-lifecycle";
+import { eraseNoteCollaborationReplica } from "@/lib/collaboration/note-collaboration-replica";
+import { PerNoteSaveBuffer } from "@/lib/note-save-buffer";
 import { cn } from "@/lib/utils";
 import { TableOfContents } from "./editor/TableOfContents";
 import { NoteHeader } from "./editor/NoteHeader";
@@ -59,6 +65,10 @@ const MAX_SAVE_WAIT_MS = 5000;
 // generated for relative-time UI, so it is not an authoritative cache token.
 // This fixed revision must change if the demo seed contract changes.
 const DEMO_COLLABORATION_BASE_REVISION = "2000-01-01T00:00:00.000Z";
+
+function captureSafeNoteFailure(stage: string): void {
+  Sentry.captureException(new Error(`Note ${stage} failed.`));
+}
 
 export function NoteShell() {
   const selectedNoteId = useAppStore((s) => s.selectedNoteId);
@@ -178,8 +188,8 @@ export function NoteShell() {
 
     try {
       runAnim();
-    } catch (err) {
-      Sentry.captureException(err);
+    } catch {
+      captureSafeNoteFailure("transition");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNoteId]);
@@ -218,18 +228,22 @@ export function NoteShell() {
     content: string;
     contentText: string;
   }>({ title: "", content: "", contentText: "" });
+  const liveStateByNoteRef = useRef(
+    new Map<
+      number,
+      { title: string; content: string; contentText: string }
+    >(),
+  );
   // Pending save buffer + timer. The debounced save merges multiple change
   // events into a single payload and fires after 800ms. flushSave() uses these
   // to commit immediately on Cmd+S or note close.
-  const pendingSaveRef = useRef<{
-    id: number;
-    data: Record<string, unknown>;
-  } | null>(null);
+  const pendingSaveRef = useRef(new PerNoteSaveBuffer());
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduledSaveNoteIdRef = useRef<number | null>(null);
   // V2: timestamp of the first un-flushed change in the current debounce batch.
   // Continuous typing resets the 800ms timer forever, so we force a save once a
   // batch has been pending past MAX_SAVE_WAIT_MS.
-  const pendingSinceRef = useRef<number | null>(null);
+  const pendingSinceRef = useRef(new Map<number, number>());
   // Track the previous selected note id so we can flush on navigation.
   const prevSelectedNoteId = useRef<number | null>(null);
   const selectedNoteIdRef = useRef(selectedNoteId);
@@ -237,7 +251,10 @@ export function NoteShell() {
   // Stable handle for flushSave so it can be called from effects that fire
   // before flushSave is declared in render order.
   const flushSaveRef = useRef<
-    (source: "manual_save" | "auto_close" | "restore") => Promise<boolean>
+    (
+      source: "manual_save" | "auto_close" | "restore",
+      noteId?: number | null,
+    ) => Promise<boolean>
   >(async () => false);
 
   // PERF: temporary benchmark timestamps
@@ -286,9 +303,9 @@ export function NoteShell() {
     if (
       prevSelectedNoteId.current != null &&
       prevSelectedNoteId.current !== selectedNoteId &&
-      pendingSaveRef.current
+      pendingSaveRef.current.has(prevSelectedNoteId.current)
     ) {
-      void flushSaveRef.current("auto_close");
+      void flushSaveRef.current("auto_close", prevSelectedNoteId.current);
     }
     prevSelectedNoteId.current = selectedNoteId;
 
@@ -301,6 +318,7 @@ export function NoteShell() {
         content: note.content ?? "",
         contentText: note.contentText ?? "",
       };
+      liveStateByNoteRef.current.set(note.id, liveStateRef.current);
       setPreviewVersion(null);
       // PERF: log note-switch breakdown
       perfSwitch.current.setContentTime = performance.now();
@@ -420,7 +438,12 @@ export function NoteShell() {
         | "restore"
         | "pre_ai_rewrite",
     ) => {
-      const live = liveStateRef.current;
+      const live = liveStateByNoteRef.current.get(id) ?? {
+        title: typeof data.title === "string" ? data.title : "",
+        content: typeof data.content === "string" ? data.content : "",
+        contentText:
+          typeof data.contentText === "string" ? data.contentText : "",
+      };
       try {
         if (isDemoRef.current) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -466,18 +489,14 @@ export function NoteShell() {
             );
           }
         }
-        setSaveStatus("saved");
-      } catch (err) {
+        if (selectedNoteIdRef.current === id) setSaveStatus("saved");
+      } catch {
         // V4: surface the failure instead of dropping the payload. Show an error
-        // status and retain the failed payload (merged UNDER any newer pending
-        // edits so we don't clobber them) so the next debounced save or Cmd+S
-        // retries it.
-        Sentry.captureException(err);
-        setSaveStatus("error");
-        pendingSaveRef.current = {
-          id,
-          data: { ...data, ...(pendingSaveRef.current?.data ?? {}) },
-        };
+        // status and retain the failed payload with only newer edits from that
+        // same note, so the next debounced save or Cmd+S retries it.
+        captureSafeNoteFailure("save");
+        if (selectedNoteIdRef.current === id) setSaveStatus("error");
+        pendingSaveRef.current.retry(id, data);
         return;
       }
 
@@ -493,8 +512,8 @@ export function NoteShell() {
           content: live.content,
           contentText: live.contentText,
         });
-      } catch (err) {
-        Sentry.captureException(err);
+      } catch {
+        captureSafeNoteFailure("version snapshot");
       }
     },
     [queryClient, updateNoteMut, createVersion],
@@ -503,27 +522,25 @@ export function NoteShell() {
   const debouncedSave = useCallback(
     (id: number, data: Record<string, unknown>) => {
       setSaveStatus("saving");
-      pendingSaveRef.current = {
-        id,
-        data: { ...(pendingSaveRef.current?.data ?? {}), ...data },
-      };
+      pendingSaveRef.current.queue(id, data);
       const now = Date.now();
-      if (pendingSinceRef.current === null) pendingSinceRef.current = now;
+      if (!pendingSinceRef.current.has(id)) pendingSinceRef.current.set(id, now);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       const commit = () => {
-        const pending = pendingSaveRef.current;
-        pendingSaveRef.current = null;
-        pendingSinceRef.current = null;
+        const pending = pendingSaveRef.current.take(id);
+        pendingSinceRef.current.delete(id);
         saveTimerRef.current = null;
-        if (pending) void performSave(pending.id, pending.data, "auto_save");
+        scheduledSaveNoteIdRef.current = null;
+        if (pending) void performSave(id, pending, "auto_save");
       };
       // V2 max-wait: if edits have been streaming continuously past
       // MAX_SAVE_WAIT_MS, force a save now instead of resetting the 800ms timer,
       // so a long uninterrupted typing run can't sit unsaved indefinitely.
-      if (now - pendingSinceRef.current >= MAX_SAVE_WAIT_MS) {
+      if (now - (pendingSinceRef.current.get(id) ?? now) >= MAX_SAVE_WAIT_MS) {
         commit();
         return;
       }
+      scheduledSaveNoteIdRef.current = id;
       saveTimerRef.current = setTimeout(commit, 800);
     },
     [performSave],
@@ -536,16 +553,18 @@ export function NoteShell() {
   const flushSave = useCallback(
     async (
       source: "manual_save" | "auto_close" | "restore" | "pre_ai_rewrite",
+      noteId = selectedNoteIdRef.current,
     ): Promise<boolean> => {
-      if (saveTimerRef.current) {
+      if (!noteId) return false;
+      if (saveTimerRef.current && scheduledSaveNoteIdRef.current === noteId) {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
+        scheduledSaveNoteIdRef.current = null;
       }
-      const pending = pendingSaveRef.current;
-      pendingSaveRef.current = null;
-      pendingSinceRef.current = null;
+      const pending = pendingSaveRef.current.take(noteId);
+      pendingSinceRef.current.delete(noteId);
       if (!pending) return false;
-      await performSave(pending.id, pending.data, source);
+      await performSave(noteId, pending, source);
       return true;
     },
     [performSave],
@@ -554,6 +573,7 @@ export function NoteShell() {
   useEffect(() => {
     flushSaveRef.current = flushSave as (
       source: "manual_save" | "auto_close" | "restore",
+      noteId?: number | null,
     ) => Promise<boolean>;
   }, [flushSave]);
 
@@ -569,36 +589,40 @@ export function NoteShell() {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
-    const pending = pendingSaveRef.current;
-    if (!pending) return;
-    pendingSaveRef.current = null;
-    pendingSinceRef.current = null;
+    const pending = pendingSaveRef.current.drain();
+    pendingSinceRef.current.clear();
+    scheduledSaveNoteIdRef.current = null;
+    if (pending.length === 0) return;
     if (isDemoRef.current) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const existing = queryClient.getQueryData(
-        getGetNoteQueryKey(pending.id),
-      ) as any;
-      if (existing) {
-        queryClient.setQueryData(getGetNoteQueryKey(pending.id), {
-          ...existing,
-          ...pending.data,
-          updatedAt: new Date().toISOString(),
-        });
-      }
+      pending.forEach((entry) => {
+        const existing = queryClient.getQueryData(
+          getGetNoteQueryKey(entry.id),
+        ) as any;
+        if (existing) {
+          queryClient.setQueryData(getGetNoteQueryKey(entry.id), {
+            ...existing,
+            ...entry.data,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      });
       setSaveStatus("saved");
       return;
     }
-    try {
-      void authenticatedFetch(`/api/notes/${pending.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(pending.data),
-        keepalive: true,
-      });
-      setSaveStatus("saved");
-    } catch (err) {
-      Sentry.captureException(err);
-    }
+    pending.forEach((entry) => {
+      try {
+        void authenticatedFetch(`/api/notes/${entry.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(entry.data),
+          keepalive: true,
+        });
+      } catch {
+        captureSafeNoteFailure("page-hide save");
+      }
+    });
+    setSaveStatus("saved");
   };
 
   useEffect(() => {
@@ -654,6 +678,8 @@ export function NoteShell() {
       const newTitle = e.target.value;
       setTitle(newTitle);
       liveStateRef.current = { ...liveStateRef.current, title: newTitle };
+      if (selectedNoteId)
+        liveStateByNoteRef.current.set(selectedNoteId, liveStateRef.current);
       if (selectedNoteId) debouncedSave(selectedNoteId, { title: newTitle });
     },
     [selectedNoteId, debouncedSave],
@@ -668,6 +694,8 @@ export function NoteShell() {
         content: html,
         contentText: text,
       };
+      if (selectedNoteId)
+        liveStateByNoteRef.current.set(selectedNoteId, liveStateRef.current);
       if (selectedNoteId)
         debouncedSave(selectedNoteId, { content: html, contentText: text });
     },
@@ -715,10 +743,11 @@ export function NoteShell() {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
-      const pending = pendingSaveRef.current;
-      pendingSaveRef.current = null;
-      pendingSinceRef.current = null;
-      const live = liveStateRef.current;
+      scheduledSaveNoteIdRef.current = null;
+      const pending = pendingSaveRef.current.take(selectedNoteId);
+      pendingSinceRef.current.delete(selectedNoteId);
+      const live = liveStateByNoteRef.current.get(selectedNoteId) ??
+        liveStateRef.current;
       if (pending) {
         try {
           if (isDemoRef.current) {
@@ -729,7 +758,7 @@ export function NoteShell() {
             if (existing) {
               queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
                 ...existing,
-                ...pending.data,
+                ...pending,
                 updatedAt: new Date().toISOString(),
               });
             }
@@ -737,11 +766,11 @@ export function NoteShell() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await updateNoteMut.mutateAsync({
               id: selectedNoteId,
-              data: pending.data as any,
+              data: pending as any,
             });
           }
-        } catch (err) {
-          Sentry.captureException(err);
+        } catch {
+          captureSafeNoteFailure("restore save");
         }
       }
       await createVersion({
@@ -762,6 +791,7 @@ export function NoteShell() {
         content: version.content,
         contentText: newText,
       };
+      liveStateByNoteRef.current.set(selectedNoteId, liveStateRef.current);
 
       // 3. Persist the restored content as the new note state. We use
       //    performSave directly so the post-restore snapshot is tagged
@@ -1142,6 +1172,52 @@ export function NoteShell() {
     [selectedNoteId, uploadAttachment],
   );
 
+  const collaborationPolicy = getNoteCollaborationPersistencePolicy({
+    vaulted: note?.vaulted === true,
+    content: note?.content,
+  });
+  const collaborationIdentity =
+    note?.id === selectedNoteId && collaborationPolicy.enabled
+      ? isDemo
+        ? { mode: "demo" as const, noteId: selectedNoteId }
+        : user?.id
+          ? {
+              mode: "authenticated" as const,
+              userId: user.id,
+              noteId: selectedNoteId,
+            }
+          : null
+      : null;
+
+  // Vaulted and attachment-bearing notes deliberately remain on the existing
+  // server editor path. Purge a prior pilot replica whenever either boundary is
+  // observed, including after an unlocked vault query returns plaintext.
+  useEffect(() => {
+    if (!collaborationPolicy.eraseExistingReplica || !selectedNoteId) return;
+    const identity = isDemo
+      ? createNoteCollaborationIdentity({ mode: "demo", noteId: selectedNoteId })
+      : user?.id
+        ? createNoteCollaborationIdentity({
+            mode: "authenticated",
+            userId: user.id,
+            noteId: selectedNoteId,
+          })
+        : null;
+    if (!identity) return;
+    void eraseNoteCollaborationReplica(identity).catch(() => {
+      Sentry.captureException(
+        new Error("Collaboration replica erasure failed."),
+      );
+      setSaveStatus("error");
+    });
+  }, [
+    collaborationPolicy.eraseExistingReplica,
+    isDemo,
+    note?.content,
+    selectedNoteId,
+    user?.id,
+  ]);
+
   // ── Empty state ──────────────────────────────────────────────────────────────
 
   if (!selectedNoteId) {
@@ -1230,18 +1306,7 @@ export function NoteShell() {
           }}
           onBeforeAiRewrite={handleBeforeAiRewrite}
           collaboration={{
-            identity:
-              note?.id === selectedNoteId
-                ? isDemo
-                  ? { mode: "demo", noteId: selectedNoteId }
-                  : user?.id
-                    ? {
-                        mode: "authenticated",
-                        userId: user.id,
-                        noteId: selectedNoteId,
-                      }
-                    : null
-                : null,
+            identity: collaborationIdentity,
             serverRevision:
               note?.id === selectedNoteId
                 ? isDemo

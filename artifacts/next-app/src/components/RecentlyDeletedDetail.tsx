@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ArrowLeft, RotateCcw, Trash2, MoreVertical, AlertCircle, Lock } from "lucide-react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -30,6 +30,11 @@ import { cn } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { useDemoMode } from "@/lib/demo-context";
+import { useAuth } from "@/hooks/use-auth";
+import { createNoteCollaborationIdentity } from "@/lib/collaboration/note-collaboration-lifecycle";
+import { eraseNoteCollaborationReplica } from "@/lib/collaboration/note-collaboration-replica";
+import * as Sentry from "@sentry/nextjs";
+import { toast } from "sonner";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
   AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
@@ -48,6 +53,7 @@ export function RecentlyDeletedDetail() {
   const toggleNoteList = useAppStore(s => s.toggleNoteList);
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
@@ -106,6 +112,30 @@ export function RecentlyDeletedDetail() {
   const restoreMut = useRestoreNote();
   const permanentDeleteMut = usePermanentDeleteNote();
 
+  const erasePermanentReplica = useCallback(
+    async (noteId: number) => {
+      const identity = isDemo
+        ? createNoteCollaborationIdentity({ mode: "demo", noteId })
+        : user?.id
+          ? createNoteCollaborationIdentity({
+              mode: "authenticated",
+              userId: user.id,
+              noteId,
+            })
+          : null;
+      if (!identity) return;
+      try {
+        await eraseNoteCollaborationReplica(identity);
+      } catch {
+        Sentry.captureException(
+          new Error("Collaboration replica disposal failed."),
+        );
+        toast.error("Local editor cache could not be cleared.");
+      }
+    },
+    [isDemo, user?.id],
+  );
+
   const handleRestore = async () => {
     if (!selectedNoteId || !note) return;
     if (isDemo) {
@@ -119,6 +149,7 @@ export function RecentlyDeletedDetail() {
           deletedReason: null,
         });
       }
+      await erasePermanentReplica(selectedNoteId);
       selectNote(null);
       if (note.vaulted) {
         // Silently returns to vault — no navigation needed
@@ -159,6 +190,7 @@ export function RecentlyDeletedDetail() {
     }
     try {
       await permanentDeleteMut.mutateAsync({ id: selectedNoteId, data: { confirm: true } });
+      await erasePermanentReplica(selectedNoteId);
       queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
     } catch {}
     selectNote(null);

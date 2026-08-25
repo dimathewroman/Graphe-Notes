@@ -6,7 +6,11 @@ import {
   type CollaborationProviderAdapter,
   type CollaborationPersistenceAdapter,
 } from "@/lib/collaboration/collaboration-document";
-import { createIndexeddbCollaborationPersistence } from "@/lib/collaboration/indexeddb-persistence";
+import {
+  createIndexeddbCollaborationPersistence,
+  eraseAuthenticatedOwner,
+  eraseDemo,
+} from "@/lib/collaboration/indexeddb-persistence";
 
 function readBody(update: Uint8Array): string {
   const document = new Y.Doc();
@@ -150,6 +154,61 @@ describe("collaboration document", () => {
       revision,
     );
     await reopened.destroy();
+  });
+
+  it("erases only the registered local replicas for a leaving owner or demo exit", async () => {
+    const updates = seededUpdates();
+    const ownerADocumentId = "graphe-yjs:v1:user:owner-a:note:77";
+    const ownerBDocumentId = "graphe-yjs:v1:user:owner-b:note:77";
+    const demoDocumentId = "graphe-yjs:v1:demo:note:77";
+    const documents = [ownerADocumentId, ownerBDocumentId, demoDocumentId].map(
+      (documentId) =>
+        createCollaborationDocument({
+          documentId,
+          persistence: createIndexeddbCollaborationPersistence(),
+        }),
+    );
+    await Promise.all(documents.map((document) => document.ready));
+    documents.forEach((document) => document.applyLocalUpdate(updates.seed));
+    await Promise.all(documents.map((document) => document.flush()));
+    await Promise.all(documents.map((document) => document.destroy()));
+
+    await eraseAuthenticatedOwner("owner-a");
+    const reopenedOwnerA = createCollaborationDocument({
+      documentId: ownerADocumentId,
+      persistence: createIndexeddbCollaborationPersistence(),
+    });
+    const reopenedOwnerB = createCollaborationDocument({
+      documentId: ownerBDocumentId,
+      persistence: createIndexeddbCollaborationPersistence(),
+    });
+    const reopenedDemo = createCollaborationDocument({
+      documentId: demoDocumentId,
+      persistence: createIndexeddbCollaborationPersistence(),
+    });
+    await Promise.all([
+      reopenedOwnerA.ready,
+      reopenedOwnerB.ready,
+      reopenedDemo.ready,
+    ]);
+    expect(readBody(reopenedOwnerA.exportState())).toBe("");
+    expect(readBody(reopenedOwnerB.exportState())).toBe("core");
+    expect(readBody(reopenedDemo.exportState())).toBe("core");
+    await Promise.all([
+      reopenedOwnerA.destroy(),
+      reopenedOwnerB.destroy(),
+      reopenedDemo.destroy(),
+    ]);
+
+    await eraseDemo();
+    const reopenedAfterDemoExit = createCollaborationDocument({
+      documentId: demoDocumentId,
+      persistence: createIndexeddbCollaborationPersistence(),
+    });
+    await reopenedAfterDemoExit.ready;
+    expect(readBody(reopenedAfterDemoExit.exportState())).toBe("");
+    await reopenedAfterDemoExit.destroy();
+    await eraseAuthenticatedOwner("owner-b");
   });
 
   it("merges ordered writes from separate adapters for the same document", async () => {

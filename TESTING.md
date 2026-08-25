@@ -131,7 +131,7 @@ Requires `TEST_EMAIL` and `TEST_PASSWORD` in `.env` (see `.env.example`). The te
 | `10-ordered-list-nesting.spec.ts`       | Ordered-list indent/outdent numbering                                                                                              |
 | `11-editor-enhancements.spec.ts`        | Editor toolbar/enhancement behaviors                                                                                               |
 | `12-data-integrity-regressions.spec.ts` | Cross-note undo, save-flush, orphan-on-delete regressions                                                                          |
-| `14-collaboration-lifecycle.spec.ts`    | Real IndexedDB note isolation, A→B→A fencing, reload recovery, stale-base rejection, and keyboard undo/redo in Chromium and WebKit |
+| `14-collaboration-lifecycle.spec.ts`    | Real IndexedDB note isolation, A→B→A fencing, reload recovery, stale-base rejection, attachment/vault fail-closed behavior, and keyboard undo/redo in Chromium and WebKit |
 
 All tests use `data-testid` attributes for selectors — never CSS classes or element structure.
 

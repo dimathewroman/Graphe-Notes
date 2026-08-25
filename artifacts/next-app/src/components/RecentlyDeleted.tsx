@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Trash2, MoreVertical, Menu, PanelLeft, Lock, ShieldCheck, ZapOff, Zap } from "lucide-react";
 import {
   AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
@@ -19,6 +19,11 @@ import { cn } from "@/lib/utils";
 import { IconButton } from "./ui/IconButton";
 import { useBreakpoint } from "@/hooks/use-mobile";
 import { useDemoMode } from "@/lib/demo-context";
+import { useAuth } from "@/hooks/use-auth";
+import { createNoteCollaborationIdentity } from "@/lib/collaboration/note-collaboration-lifecycle";
+import { eraseNoteCollaborationReplica } from "@/lib/collaboration/note-collaboration-replica";
+import * as Sentry from "@sentry/nextjs";
+import { toast } from "sonner";
 import { DEMO_NOTES } from "@/lib/demo-data";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "./ui/empty";
 import { ScrollArea } from "./ui/scroll-area";
@@ -41,6 +46,7 @@ export function RecentlyDeleted() {
   const demoExtraIds = useAppStore(s => s.demoExtraIds);
   const bp = useBreakpoint();
   const isDemo = useDemoMode();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const [showOverflow, setShowOverflow] = useState(false);
@@ -118,6 +124,30 @@ export function RecentlyDeleted() {
 
   const permanentDeleteMut = usePermanentDeleteNote();
 
+  const erasePermanentReplica = useCallback(
+    async (noteId: number) => {
+      const identity = isDemo
+        ? createNoteCollaborationIdentity({ mode: "demo", noteId })
+        : user?.id
+          ? createNoteCollaborationIdentity({
+              mode: "authenticated",
+              userId: user.id,
+              noteId,
+            })
+          : null;
+      if (!identity) return;
+      try {
+        await eraseNoteCollaborationReplica(identity);
+      } catch {
+        Sentry.captureException(
+          new Error("Collaboration replica disposal failed."),
+        );
+        toast.error("Local editor cache could not be cleared.");
+      }
+    },
+    [isDemo, user?.id],
+  );
+
   const handleEmptyConfirm = async () => {
     setShowConfirmEmpty(false);
     if (isDemo) {
@@ -130,6 +160,7 @@ export function RecentlyDeleted() {
             _demoPermanentlyDeleted: true,
           });
         }
+        await erasePermanentReplica(note.id);
       }
       if (selectedNoteId && notes.some((n) => n.id === selectedNoteId)) {
         selectNote(null);
@@ -139,6 +170,7 @@ export function RecentlyDeleted() {
     for (const note of notes) {
       try {
         await permanentDeleteMut.mutateAsync({ id: note.id, data: { confirm: true } });
+        await erasePermanentReplica(note.id);
       } catch {}
     }
     queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
