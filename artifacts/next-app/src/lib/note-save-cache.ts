@@ -16,6 +16,34 @@ type NoteSaveQueryClient = {
   ) => void;
 };
 
+export interface IssuedNoteSaveOrdering {
+  saveSessionId: string;
+  saveSequence: number;
+}
+
+/**
+ * Rejects a late successful response before it can replace newer server state
+ * in the client. A mounted note shell owns one browser save session, so a
+ * different session is unexpected and deliberately cannot supersede it.
+ */
+export class NoteSaveResponseFence {
+  private readonly latestApplied = new Map<number, IssuedNoteSaveOrdering>();
+
+  accepts(noteId: number, incoming: IssuedNoteSaveOrdering): boolean {
+    const previous = this.latestApplied.get(noteId);
+    if (
+      previous &&
+      (previous.saveSessionId !== incoming.saveSessionId ||
+        previous.saveSequence >= incoming.saveSequence)
+    ) {
+      return false;
+    }
+
+    this.latestApplied.set(noteId, incoming);
+    return true;
+  }
+}
+
 /** Keeps the editor and every note-list cache on the exact server response. */
 export function applyAuthoritativeNoteSaveToCache<TSavedNote extends SavedNote>(
   queryClient: NoteSaveQueryClient,

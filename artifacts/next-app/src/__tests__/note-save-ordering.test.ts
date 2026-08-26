@@ -12,6 +12,14 @@ const revision = "2026-08-26T01:02:03.456Z";
 const sessionA = "11111111-1111-4111-8111-111111111111";
 const sessionB = "22222222-2222-4222-8222-222222222222";
 
+function createTableBody(sql: string, table: string): string {
+  const match = sql.match(
+    new RegExp(`CREATE TABLE "${table}" \\(([^]*?)\\n\\);`),
+  );
+  if (!match) throw new Error(`Missing ${table} in fresh schema`);
+  return match[1];
+}
+
 function save(
   saveSessionId: string,
   saveSequence: number,
@@ -97,5 +105,36 @@ describe("durable note save ordering", () => {
     expect(migration).toMatch(/ADD COLUMN save_sequence bigint/);
     expect(migration).not.toMatch(/\b(UPDATE|DELETE|DROP)\b/i);
     expect(migration).not.toMatch(/NOT NULL|DEFAULT/i);
+  });
+
+  it("keeps save ordering columns on fresh notes only, matching migration and Drizzle", () => {
+    const freshSchema = readFileSync(
+      resolve(
+        process.cwd(),
+        "../../lib/db/drizzle/fresh/0000_current_schema.sql",
+      ),
+      "utf8",
+    );
+    const incrementalMigration = readFileSync(
+      resolve(
+        process.cwd(),
+        "../../lib/db/drizzle/0008_note_save_ordering.sql",
+      ),
+      "utf8",
+    );
+    const drizzleModel = readFileSync(
+      resolve(process.cwd(), "../../lib/db/src/schema/notes.ts"),
+      "utf8",
+    );
+    const folders = createTableBody(freshSchema, "folders");
+    const notes = createTableBody(freshSchema, "notes");
+
+    for (const column of ["save_session_id", "save_sequence"]) {
+      expect(folders).not.toContain(`"${column}"`);
+      expect(notes).toContain(`"${column}"`);
+      expect(incrementalMigration).toMatch(new RegExp(`ADD COLUMN ${column}`));
+    }
+    expect(drizzleModel).toContain('saveSessionId: uuid("save_session_id")');
+    expect(drizzleModel).toContain('saveSequence: bigint("save_sequence"');
   });
 });

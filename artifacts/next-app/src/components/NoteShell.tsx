@@ -52,7 +52,10 @@ import {
   createBrowserSaveSessionId,
   type NoteSaveOrdering,
 } from "@/lib/note-save-ordering";
-import { applyAuthoritativeNoteSaveToCache } from "@/lib/note-save-cache";
+import {
+  applyAuthoritativeNoteSaveToCache,
+  NoteSaveResponseFence,
+} from "@/lib/note-save-cache";
 import { cn } from "@/lib/utils";
 import { TableOfContents } from "./editor/TableOfContents";
 import { NoteHeader } from "./editor/NoteHeader";
@@ -101,6 +104,7 @@ export function NoteShell() {
   }
   const nextSaveSequenceRef = useRef(0);
   const serverRevisionByNoteRef = useRef(new Map<number, string>());
+  const saveResponseFenceRef = useRef(new NoteSaveResponseFence());
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: note, isLoading } = useGetNote(selectedNoteId || 0, {
@@ -494,15 +498,17 @@ export function NoteShell() {
             id,
             data: { ...data, ...ordering } as any,
           });
-          applyAuthoritativeNoteSaveToCache(queryClient, savedNote);
-          if (
-            selectedNoteIdRef.current === id &&
-            typeof savedNote?.updatedAt === "string"
-          ) {
-            setAuthoritativeServerRevision(savedNote.updatedAt);
-          }
-          if (typeof savedNote?.updatedAt === "string") {
-            serverRevisionByNoteRef.current.set(id, savedNote.updatedAt);
+          if (saveResponseFenceRef.current.accepts(id, ordering)) {
+            applyAuthoritativeNoteSaveToCache(queryClient, savedNote);
+            if (
+              selectedNoteIdRef.current === id &&
+              typeof savedNote?.updatedAt === "string"
+            ) {
+              setAuthoritativeServerRevision(savedNote.updatedAt);
+            }
+            if (typeof savedNote?.updatedAt === "string") {
+              serverRevisionByNoteRef.current.set(id, savedNote.updatedAt);
+            }
           }
         }
         const acknowledged =
@@ -805,20 +811,22 @@ export function NoteShell() {
             }
           } else {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const ordering = nextSaveOrdering(selectedNoteId);
             const savedNote = await updateNoteMut.mutateAsync({
               id: selectedNoteId,
-              data: {
-                ...pending.data,
-                ...nextSaveOrdering(selectedNoteId),
-              } as any,
+              data: { ...pending.data, ...ordering } as any,
             });
-            applyAuthoritativeNoteSaveToCache(queryClient, savedNote);
-            if (typeof savedNote.updatedAt === "string") {
-              serverRevisionByNoteRef.current.set(
-                selectedNoteId,
-                savedNote.updatedAt,
-              );
-              setAuthoritativeServerRevision(savedNote.updatedAt);
+            if (
+              saveResponseFenceRef.current.accepts(selectedNoteId, ordering)
+            ) {
+              applyAuthoritativeNoteSaveToCache(queryClient, savedNote);
+              if (typeof savedNote.updatedAt === "string") {
+                serverRevisionByNoteRef.current.set(
+                  selectedNoteId,
+                  savedNote.updatedAt,
+                );
+                setAuthoritativeServerRevision(savedNote.updatedAt);
+              }
             }
           }
           pendingSaveRef.current.acknowledge(
