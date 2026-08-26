@@ -1,5 +1,6 @@
 packages:
   - artifacts/next-app
+  - artifacts/static-client
   - lib/*
   - lib/integrations/*
   - scripts

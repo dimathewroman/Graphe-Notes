@@ -14,8 +14,8 @@ configured HTTPS origins, explicit development/test loopback allowance, invalid
 configuration, encoded path/query preservation, and rejection before bearer or
 vault-proof headers can reach an arbitrary absolute URL.
 
-The static-client target has an executable source-graph guard and exported
-output check. It proves the static entrypoints exclude hosted API handlers,
+The static-client workspace package has an executable source-graph guard and
+exported output check. It proves the static entrypoints exclude hosted API handlers,
 middleware, service-role/database owners, and server instrumentation, then
 requires both the root page and auth callback in the emitted `webDir`:
 

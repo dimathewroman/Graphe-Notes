@@ -238,7 +238,7 @@ importers:
         version: 12.35.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       geist:
         specifier: ^1.7.0
-        version: 1.7.0(next@16.2.12(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))
+        version: 1.7.0(next@16.2.12(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))
       heic-convert:
         specifier: ^2.1.0
         version: 2.1.0
@@ -381,6 +381,34 @@ importers:
       vitest:
         specifier: ^3.2.6
         version: 3.2.6(@types/node@25.3.5)(jiti@2.6.1)(jsdom@25.0.1)(lightningcss@1.32.0)(msw@2.13.6(@types/node@25.3.5)(typescript@5.9.3))(tsx@4.21.0)(yaml@2.8.3)
+
+  artifacts/static-client:
+    dependencies:
+      geist:
+        specifier: ^1.7.0
+        version: 1.7.0(next@16.2.12(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))
+      next:
+        specifier: ^16.2.12
+        version: 16.2.12(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      react:
+        specifier: 'catalog:'
+        version: 19.1.0
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.1.0(react@19.1.0)
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.3.5
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: 'catalog:'
+        version: 19.2.3(@types/react@19.2.14)
+      typescript:
+        specifier: ~5.9.2
+        version: 5.9.3
 
   lib/api-client-react:
     dependencies:
@@ -10095,7 +10123,7 @@ snapshots:
 
   fuzzysort@3.1.0: {}
 
-  geist@1.7.0(next@16.2.12(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)):
+  geist@1.7.0(next@16.2.12(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)):
     dependencies:
       next: 16.2.12(@babel/core@7.29.0)(@opentelemetry/api@1.9.1)(@playwright/test@1.59.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
 
