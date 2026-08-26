@@ -14,9 +14,10 @@
 ### Fixed
 
 - Restored the packaged Graphe login design by giving the static-client export
-  its own Tailwind PostCSS configuration and a shared local Graphe logo asset.
-  Its output guard now rejects raw Tailwind directives, missing required
-  utilities, and a missing logo before Capacitor sync.
+  its own Tailwind PostCSS configuration and copying the canonical local Graphe
+  logo into each static output. Its output guard now rejects raw Tailwind
+  directives, missing required utilities, and a noncanonical or missing logo
+  before Capacitor sync.
 
 - Hardened the Capacitor foundation verifier to read the canonical JSON config
   without evaluating TypeScript, reject mutation-spoofed/insecure settings, and

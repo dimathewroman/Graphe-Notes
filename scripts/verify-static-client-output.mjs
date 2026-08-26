@@ -1,14 +1,17 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const logoName = "graphe_minimalist_1773640203523.png";
 const requiredFiles = [
   "index.html",
   "auth/callback.html",
-  "graphe_minimalist_1773640203523.png",
+  logoName,
 ];
 const requiredUtilities = ["min-h-screen", "flex"];
 const rawTailwindDirectives = ["@apply", '@import "tailwindcss"', "@tailwind"];
+const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 function filesUnder(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -17,12 +20,36 @@ function filesUnder(directory) {
   });
 }
 
+function sha256(contents) {
+  return createHash("sha256").update(contents).digest("hex");
+}
+
+function isPng(contents) {
+  return contents.subarray(0, pngSignature.length).equals(pngSignature);
+}
+
 export function verifyStaticClientOutput(repositoryRoot = resolve(import.meta.dirname, "..")) {
   const outputRoot = resolve(repositoryRoot, "artifacts/static-client/out");
   for (const file of requiredFiles) {
     if (!existsSync(resolve(outputRoot, file))) {
       throw new Error(`Static-client output check failed: missing ${file}.`);
     }
+  }
+
+  const canonicalLogo = resolve(repositoryRoot, "artifacts/next-app/public", logoName);
+  if (!existsSync(canonicalLogo)) {
+    throw new Error(`Static-client output check failed: missing canonical ${logoName}.`);
+  }
+  const canonicalLogoContents = readFileSync(canonicalLogo);
+  const exportedLogoContents = readFileSync(resolve(outputRoot, logoName));
+  if (!isPng(canonicalLogoContents)) {
+    throw new Error(`Static-client output check failed: canonical ${logoName} is not a PNG.`);
+  }
+  if (!isPng(exportedLogoContents)) {
+    throw new Error(`Static-client output check failed: exported ${logoName} is not a PNG.`);
+  }
+  if (sha256(exportedLogoContents) !== sha256(canonicalLogoContents)) {
+    throw new Error(`Static-client output check failed: exported ${logoName} does not match the canonical asset.`);
   }
 
   const outputFiles = filesUnder(outputRoot);

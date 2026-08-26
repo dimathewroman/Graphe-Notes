@@ -17,8 +17,8 @@ vault-proof headers can reach an arbitrary absolute URL.
 The static-client workspace package has executable source-graph and exported-output
 guards. They prove the static entrypoints exclude hosted API handlers, middleware,
 service-role/database owners, and server instrumentation; the export contains its
-root page, auth callback, Graphe logo, and compiled Tailwind utilities without raw
-Tailwind directives:
+root page, auth callback, canonical Graphe PNG logo, and compiled Tailwind
+utilities without raw Tailwind directives:
 
 ```bash
 pnpm run check:static-client-boundary

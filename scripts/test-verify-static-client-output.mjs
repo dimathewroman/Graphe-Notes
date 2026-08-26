@@ -1,7 +1,10 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { verifyStaticClientOutput } from "./verify-static-client-output.mjs";
+
+const repositoryRoot = resolve(import.meta.dirname, "..");
+const logoName = "graphe_minimalist_1773640203523.png";
 
 function fixture() {
   const root = mkdtempSync(resolve(tmpdir(), "graphe-static-client-output-"));
@@ -10,7 +13,10 @@ function fixture() {
   mkdirSync(resolve(output, "_next/static/css"), { recursive: true });
   writeFileSync(resolve(output, "index.html"), "<main>Graphe</main>");
   writeFileSync(resolve(output, "auth/callback.html"), "<main>Callback</main>");
-  writeFileSync(resolve(output, "graphe_minimalist_1773640203523.png"), "logo");
+  const canonicalLogo = resolve(repositoryRoot, "artifacts/next-app/public", logoName);
+  mkdirSync(resolve(root, "artifacts/next-app/public"), { recursive: true });
+  copyFileSync(canonicalLogo, resolve(root, "artifacts/next-app/public", logoName));
+  copyFileSync(canonicalLogo, resolve(output, logoName));
   writeFileSync(
     resolve(output, "_next/static/css/app.css"),
     ".min-h-screen{min-height:100vh}.flex{display:flex}",
@@ -52,9 +58,14 @@ rejects(
   "Static-client output check failed: CSS is missing compiled .flex.",
 );
 rejects(
-  "missing Graphe logo",
-  (root) => rmSync(resolve(root, "artifacts/static-client/out/graphe_minimalist_1773640203523.png")),
-  "Static-client output check failed: missing graphe_minimalist_1773640203523.png.",
+  "materialized Graphe logo symlink",
+  (root) => writeFileSync(resolve(root, "artifacts/static-client/out", logoName), "../../next-app/public/graphe_minimalist_1773640203523.png"),
+  "Static-client output check failed: exported graphe_minimalist_1773640203523.png is not a PNG.",
+);
+rejects(
+  "noncanonical Graphe PNG",
+  (root) => writeFileSync(resolve(root, "artifacts/static-client/out", logoName), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  "Static-client output check failed: exported graphe_minimalist_1773640203523.png does not match the canonical asset.",
 );
 
 console.log("Static-client output mutation-negative tests passed.");
