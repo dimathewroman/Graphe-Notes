@@ -28,13 +28,16 @@ function mutate(root, relativePath, transform) {
   writeFileSync(path, transform(readFileSync(path, "utf8")));
 }
 
-function rejects(name, change) {
+function rejects(name, change, expectedMessage) {
   const root = fixture();
   try {
     change(root);
     try {
       verifyCapacitorFoundation(root);
-    } catch {
+    } catch (error) {
+      if (expectedMessage && error.message !== expectedMessage) {
+        throw new Error(`Verifier rejected ${name} with unexpected diagnostic: ${error.message}`);
+      }
       console.log(`✓ rejects ${name}`);
       return;
     }
@@ -62,6 +65,8 @@ rejects("data-extraction exclusions under the wrong parent", (root) => mutate(ro
     <device-transfer>
     </device-transfer>`)));
 rejects("permissive data-extraction include", (root) => mutate(root, "android/app/src/main/res/xml/data_extraction_rules.xml", (source) => source.replace('        <exclude domain="root" path="." />', '        <exclude domain="root" path="." />\n        <include domain="database" path="." />')));
+rejects("illegal double-hyphen XML comment", (root) => mutate(root, "android/app/src/main/res/xml/data_extraction_rules.xml", (source) => source.replace("<data-extraction-rules>", "<data-extraction-rules>\n    <!-- invalid -- double-hyphen -->")), "Capacitor foundation check failed: Android data-extraction XML is not well-formed");
+rejects("invalid XML declaration", (root) => mutate(root, "android/app/src/main/res/xml/data_extraction_rules.xml", (source) => source.replace('<?xml version="1.0" encoding="utf-8"?>', "<?xml nonsense?>")), "Capacitor foundation check failed: Android data-extraction XML is not well-formed");
 rejects("comment-spoofed Android debug helper", (root) => writeFileSync(resolve(root, "scripts/build-android-debug.sh"), `#!/bin/sh
 # cd "$(dirname "$0")/../android"
 # exec ./gradlew :app:assembleDebug :app:testDebugUnitTest

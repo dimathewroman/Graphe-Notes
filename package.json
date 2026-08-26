@@ -46,6 +46,7 @@
     "@capacitor/ios": "8.5.0",
     "concurrently": "catalog:",
     "prettier": "^3.8.1",
+    "saxes": "6.0.0",
     "typescript": "~5.9.2"
   },
   "dependencies": {

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { SaxesParser } from "saxes";
 
 const expectedConfig = {
   appId: "com.leridian.graphe",
@@ -46,60 +47,39 @@ function attributes(fragment) {
   return values;
 }
 
-function parseXmlAttributes(source) {
-  const values = new Map();
-  const attribute = /([A-Za-z_][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/uy;
-  let index = 0;
-
-  while (index < source.length) {
-    while (/\s/u.test(source[index] ?? "")) index += 1;
-    if (index === source.length) break;
-    attribute.lastIndex = index;
-    const match = attribute.exec(source);
-    if (!match) fail("Android data-extraction XML has an invalid attribute");
-    if (values.has(match[1])) fail("Android data-extraction XML duplicates an attribute");
-    values.set(match[1], match[2] ?? match[3]);
-    index = attribute.lastIndex;
-  }
-
-  return values;
-}
-
 function parseXmlDocument(source) {
-  const active = stripComments(source).replace(/^\s*<\?xml\s+[^?]*\?>/u, "");
-  const tag = /<[^>]*>/gu;
   const roots = [];
   const stack = [];
-  let cursor = 0;
+  const parser = new SaxesParser();
 
-  for (const match of active.matchAll(tag)) {
-    if (!/^\s*$/u.test(active.slice(cursor, match.index))) fail("Android data-extraction XML contains text content");
-    cursor = (match.index ?? 0) + match[0].length;
-    const token = match[0];
-    const closing = token.match(/^<\/([A-Za-z_][\w:.-]*)\s*>$/u);
-
-    if (closing) {
-      const element = stack.pop();
-      if (!element || element.name !== closing[1]) fail("Android data-extraction XML has mismatched elements");
-      continue;
-    }
-
-    const opening = token.match(/^<([A-Za-z_][\w:.-]*)([\s\S]*?)(\/?)>$/u);
-    if (!opening) fail("Android data-extraction XML has an invalid element");
+  parser.on("opentag", (tag) => {
     const element = {
-      name: opening[1],
-      attributes: parseXmlAttributes(opening[2]),
+      name: tag.name,
+      attributes: new Map(Object.entries(tag.attributes)),
       children: [],
     };
 
     if (stack.length === 0) roots.push(element);
     else stack.at(-1).children.push(element);
-    if (opening[3] !== "/") stack.push(element);
+    stack.push(element);
+  });
+  parser.on("closetag", () => {
+    stack.pop();
+  });
+  parser.on("text", (text) => {
+    if (!/^\s*$/u.test(text)) fail("Android data-extraction XML contains text content");
+  });
+  parser.on("cdata", () => {
+    fail("Android data-extraction XML contains text content");
+  });
+
+  try {
+    parser.write(source).close();
+  } catch {
+    fail("Android data-extraction XML is not well-formed");
   }
 
-  if (!/^\s*$/u.test(active.slice(cursor)) || stack.length !== 0 || roots.length !== 1) {
-    fail("Android data-extraction XML must contain one balanced root element");
-  }
+  if (roots.length !== 1) fail("Android data-extraction XML must contain one root element");
 
   return roots[0];
 }
