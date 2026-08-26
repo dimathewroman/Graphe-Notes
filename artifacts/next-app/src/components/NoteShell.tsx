@@ -439,6 +439,7 @@ export function NoteShell() {
         | "auto_close"
         | "restore"
         | "pre_ai_rewrite",
+      pendingVersion?: number,
     ) => {
       const live = liveStateByNoteRef.current.get(id) ?? {
         title: typeof data.title === "string" ? data.title : "",
@@ -491,14 +492,29 @@ export function NoteShell() {
             );
           }
         }
-        if (selectedNoteIdRef.current === id) setSaveStatus("saved");
+        const acknowledged =
+          pendingVersion === undefined ||
+          pendingSaveRef.current.acknowledge(id, pendingVersion);
+        const pendingRemains = pendingSaveRef.current.has(id);
+        if (!pendingRemains) pendingSinceRef.current.delete(id);
+        if (selectedNoteIdRef.current === id) {
+          setSaveStatus(acknowledged || !pendingRemains ? "saved" : "saving");
+        }
       } catch {
         // V4: surface the failure instead of dropping the payload. Show an error
         // status and retain the failed payload with only newer edits from that
         // same note, so the next debounced save or Cmd+S retries it.
+        if (
+          pendingVersion !== undefined &&
+          !pendingSaveRef.current.has(id)
+        ) {
+          return;
+        }
         captureSafeNoteFailure("save");
         if (selectedNoteIdRef.current === id) setSaveStatus("error");
-        pendingSaveRef.current.retry(id, data);
+        if (pendingVersion === undefined) {
+          pendingSaveRef.current.retry(id, data);
+        }
         return;
       }
 
@@ -529,11 +545,12 @@ export function NoteShell() {
       if (!pendingSinceRef.current.has(id)) pendingSinceRef.current.set(id, now);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       const commit = () => {
-        const pending = pendingSaveRef.current.take(id);
-        pendingSinceRef.current.delete(id);
+        const pending = pendingSaveRef.current.snapshotFor(id);
         saveTimerRef.current = null;
         scheduledSaveNoteIdRef.current = null;
-        if (pending) void performSave(id, pending, "auto_save");
+        if (pending) {
+          void performSave(id, pending.data, "auto_save", pending.version);
+        }
       };
       // V2 max-wait: if edits have been streaming continuously past
       // MAX_SAVE_WAIT_MS, force a save now instead of resetting the 800ms timer,
@@ -563,10 +580,9 @@ export function NoteShell() {
         saveTimerRef.current = null;
         scheduledSaveNoteIdRef.current = null;
       }
-      const pending = pendingSaveRef.current.take(noteId);
-      pendingSinceRef.current.delete(noteId);
+      const pending = pendingSaveRef.current.snapshotFor(noteId);
       if (!pending) return false;
-      await performSave(noteId, pending, source);
+      await performSave(noteId, pending.data, source, pending.version);
       return true;
     },
     [performSave],
@@ -756,8 +772,7 @@ export function NoteShell() {
         saveTimerRef.current = null;
       }
       scheduledSaveNoteIdRef.current = null;
-      const pending = pendingSaveRef.current.take(selectedNoteId);
-      pendingSinceRef.current.delete(selectedNoteId);
+      const pending = pendingSaveRef.current.snapshotFor(selectedNoteId);
       const live = liveStateByNoteRef.current.get(selectedNoteId) ??
         liveStateRef.current;
       if (pending) {
@@ -770,7 +785,7 @@ export function NoteShell() {
             if (existing) {
               queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
                 ...existing,
-                ...pending,
+                ...pending.data,
                 updatedAt: new Date().toISOString(),
               });
             }
@@ -778,11 +793,20 @@ export function NoteShell() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await updateNoteMut.mutateAsync({
               id: selectedNoteId,
-              data: pending as any,
+              data: pending.data as any,
             });
+          }
+          pendingSaveRef.current.acknowledge(
+            pending.id,
+            pending.version,
+          );
+          if (!pendingSaveRef.current.has(selectedNoteId)) {
+            pendingSinceRef.current.delete(selectedNoteId);
           }
         } catch {
           captureSafeNoteFailure("restore save");
+          setSaveStatus("error");
+          return;
         }
       }
       await createVersion({

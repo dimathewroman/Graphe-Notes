@@ -506,6 +506,37 @@ describe("collaboration document", () => {
     expect(sentUpdates).toHaveLength(sentUpdatesBeforeDestroy);
   });
 
+  it("retries only the adapter teardown that failed", async () => {
+    const persistence = new MemoryPersistence();
+    let providerDestroyCalls = 0;
+    const document = createCollaborationDocument({
+      documentId: "retry-destroy",
+      persistence,
+      provider: {
+        connect() {
+          return {
+            send() {},
+            async destroy() {
+              providerDestroyCalls += 1;
+              if (providerDestroyCalls === 1) {
+                throw new Error("provider teardown failed");
+              }
+            },
+          };
+        },
+      },
+    });
+    await document.ready;
+
+    await expect(document.destroy()).rejects.toThrow(
+      "provider teardown failed",
+    );
+    await expect(document.destroy()).resolves.toBeUndefined();
+
+    expect(providerDestroyCalls).toBe(2);
+    expect(persistence.destroyCalls).toBe(1);
+  });
+
   it("waits for pending persistence restore before releasing the adapter", async () => {
     const persistence = new PendingRestorePersistence();
     let providerConnections = 0;

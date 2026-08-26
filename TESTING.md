@@ -137,7 +137,7 @@ All tests use `data-testid` attributes for selectors — never CSS classes or el
 
 The collaboration lifecycle spec uses demo data only. It exercises local browser storage and offline/recovery behavior without authentication state or live credentials.
 
-Focused collaboration units cover same-note retry ordering, acknowledgement-based page-hide saves, strict legacy-replica discovery, stale-owner cleanup, and cleanup-before-boundary sequencing. They use synthetic IndexedDB databases and never read live browser data.
+Focused collaboration units cover same-note retry ordering, acknowledgement-based normal/page-hide saves, strict legacy-replica discovery, stale-owner cleanup, retryable provider teardown, cleanup-before-boundary sequencing, and partial empty-trash recovery. They use synthetic IndexedDB databases and never read live browser data.
 
 ### Touch-editor regression boundary
 

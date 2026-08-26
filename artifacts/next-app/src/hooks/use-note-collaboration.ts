@@ -87,12 +87,12 @@ export function useNoteCollaboration({
         const coordinated: CoordinatedSession = {
           identity: sessionIdentity,
           destroy: async () => {
+            await session.destroy();
             unregisterActiveReplicaRef.current?.();
             unregisterActiveReplicaRef.current = null;
             sessionsRef.current.delete(sessionIdentity.documentId);
             if (activeSessionRef.current === session)
               activeSessionRef.current = null;
-            await session.destroy();
           },
         };
         return coordinated;
@@ -134,8 +134,6 @@ export function useNoteCollaboration({
         unregisterActiveReplicaRef.current = registerActiveCollaborationReplica(
           coordinated.identity,
           async () => {
-            unregisterActiveReplicaRef.current?.();
-            unregisterActiveReplicaRef.current = null;
             await coordinator.destroy();
           },
         );
@@ -153,8 +151,6 @@ export function useNoteCollaboration({
 
     return () => {
       cancelled = true;
-      unregisterActiveReplicaRef.current?.();
-      unregisterActiveReplicaRef.current = null;
       void coordinator.destroy().catch(() => {
         safeCapturePersistenceFailure("destroy");
         failureRef.current?.();

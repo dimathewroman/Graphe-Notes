@@ -213,13 +213,15 @@ describe("note collaboration lifecycle coordinator", () => {
 
   it("fails closed when teardown fails instead of activating the next note", async () => {
     const created: string[] = [];
+    let destroyAttempts = 0;
     const coordinator = createNoteCollaborationLifecycleCoordinator(
       (identity) => {
         created.push(String(identity.noteId));
         return {
           identity,
           destroy: async () => {
-            if (identity.noteId === "A")
+            destroyAttempts += 1;
+            if (identity.noteId === "A" && destroyAttempts === 1)
               throw new Error("persistence teardown failed");
           },
         };
@@ -231,6 +233,10 @@ describe("note collaboration lifecycle coordinator", () => {
       coordinator.activate({ mode: "demo", noteId: "B" }),
     ).rejects.toThrow("teardown failed");
     expect(created).toEqual(["A"]);
+    expect(coordinator.current()).toBeNull();
+
+    await expect(coordinator.destroy()).resolves.toBeUndefined();
+    expect(destroyAttempts).toBe(2);
     expect(coordinator.current()).toBeNull();
   });
 

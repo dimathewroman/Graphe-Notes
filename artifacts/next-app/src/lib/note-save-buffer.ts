@@ -14,10 +14,13 @@ export interface PendingNoteSaveSnapshot extends PendingNoteSave {
  */
 export class PerNoteSaveBuffer {
   private readonly pending = new Map<number, Record<string, unknown>>();
-  private readonly versions = new Map<number, number>();
+  private readonly pendingVersions = new Map<number, number>();
+  private readonly versionCounters = new Map<number, number>();
 
   private advanceVersion(id: number): void {
-    this.versions.set(id, (this.versions.get(id) ?? 0) + 1);
+    const version = (this.versionCounters.get(id) ?? 0) + 1;
+    this.versionCounters.set(id, version);
+    this.pendingVersions.set(id, version);
   }
 
   queue(id: number, data: Record<string, unknown>): Record<string, unknown> {
@@ -38,29 +41,34 @@ export class PerNoteSaveBuffer {
     const data = this.pending.get(id);
     if (!data) return null;
     this.pending.delete(id);
-    this.versions.delete(id);
+    this.pendingVersions.delete(id);
     return data;
   }
 
+  snapshotFor(id: number): PendingNoteSaveSnapshot | null {
+    const data = this.pending.get(id);
+    const version = this.pendingVersions.get(id);
+    return data && version !== undefined ? { id, data, version } : null;
+  }
+
   snapshot(): PendingNoteSaveSnapshot[] {
-    return [...this.pending].map(([id, data]) => ({
-      id,
-      data,
-      version: this.versions.get(id) ?? 0,
-    }));
+    return [...this.pending].flatMap(([id, data]) => {
+      const version = this.pendingVersions.get(id);
+      return version === undefined ? [] : [{ id, data, version }];
+    });
   }
 
   acknowledge(id: number, version: number): boolean {
-    if (this.versions.get(id) !== version) return false;
+    if (this.pendingVersions.get(id) !== version) return false;
     this.pending.delete(id);
-    this.versions.delete(id);
+    this.pendingVersions.delete(id);
     return true;
   }
 
   drain(): PendingNoteSave[] {
     const entries = [...this.pending].map(([id, data]) => ({ id, data }));
     this.pending.clear();
-    this.versions.clear();
+    this.pendingVersions.clear();
     return entries;
   }
 

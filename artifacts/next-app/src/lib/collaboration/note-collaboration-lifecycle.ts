@@ -119,16 +119,20 @@ export function createNoteCollaborationLifecycleCoordinator(
   createSession: NoteCollaborationSessionFactory,
 ): NoteCollaborationLifecycleCoordinator {
   let active: NoteCollaborationSession | null = null;
+  let pendingRelease: NoteCollaborationSession | null = null;
   let teardown: Promise<void> | null = null;
   let generation = 0;
 
   const releaseActive = (): Promise<void> => {
     if (teardown) return teardown;
 
-    const previous = active;
+    const previous = active ?? pendingRelease;
     active = null;
+    pendingRelease = previous;
     teardown = previous
-      ? Promise.resolve(previous.destroy()).then(() => undefined)
+      ? Promise.resolve(previous.destroy()).then(() => {
+          if (pendingRelease === previous) pendingRelease = null;
+        })
       : Promise.resolve();
     teardown = teardown.finally(() => {
       teardown = null;

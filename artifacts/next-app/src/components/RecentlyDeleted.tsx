@@ -25,6 +25,7 @@ import { eraseNoteCollaborationReplica, runReplicaProtectedBoundary } from "@/li
 import * as Sentry from "@sentry/nextjs";
 import { toast } from "sonner";
 import { DEMO_NOTES } from "@/lib/demo-data";
+import { deleteRecentlyDeletedBatch } from "@/lib/recently-deleted-batch";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "./ui/empty";
 import { ScrollArea } from "./ui/scroll-area";
 
@@ -144,31 +145,47 @@ export function RecentlyDeleted() {
   const handleEmptyConfirm = async () => {
     setShowConfirmEmpty(false);
     try {
-      for (const note of notes) {
-        await runReplicaProtectedBoundary(
-          () => erasePermanentReplica(note.id),
-          async () => {
-            if (isDemo) {
-              const existing = queryClient.getQueryData<any>(getGetNoteQueryKey(note.id));
-              if (existing) {
-                queryClient.setQueryData(getGetNoteQueryKey(note.id), {
-                  ...existing,
-                  _demoDeleted: false,
-                  _demoPermanentlyDeleted: true,
-                });
+      await deleteRecentlyDeletedBatch(
+        notes.map((note) => note.id),
+        async (noteId) => {
+          await runReplicaProtectedBoundary(
+            () => erasePermanentReplica(noteId),
+            async () => {
+              if (isDemo) {
+                const existing = queryClient.getQueryData<any>(getGetNoteQueryKey(noteId));
+                if (existing) {
+                  queryClient.setQueryData(getGetNoteQueryKey(noteId), {
+                    ...existing,
+                    _demoDeleted: false,
+                    _demoPermanentlyDeleted: true,
+                  });
+                }
+                return;
               }
-              return;
-            }
-            await permanentDeleteMut.mutateAsync({ id: note.id, data: { confirm: true } });
-          },
-        );
-      }
+              await permanentDeleteMut.mutateAsync({ id: noteId, data: { confirm: true } });
+            },
+          );
+        },
+        async (noteId) => {
+          if (!isDemo) {
+            queryClient.setQueriesData(
+              { queryKey: getGetNotesQueryKey() },
+              (old: unknown) =>
+                Array.isArray(old)
+                  ? old.filter(
+                      (entry: { id?: unknown }) => entry.id !== noteId,
+                    )
+                  : old,
+            );
+            await queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+          }
+        },
+      );
     } catch {
       Sentry.captureException(new Error("Permanent note deletion failed."));
       toast.error("Deletion could not be completed. No further notes were deleted.");
       return;
     }
-    if (!isDemo) queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
     if (selectedNoteId && notes.some((n) => n.id === selectedNoteId)) {
       selectNote(null);
     }

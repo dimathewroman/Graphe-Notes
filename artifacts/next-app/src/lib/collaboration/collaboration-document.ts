@@ -75,6 +75,8 @@ export function createCollaborationDocument({
   let destroyed = false;
   let destroyPromise: Promise<void> | undefined;
   let finalState: Uint8Array | undefined;
+  let providerReleased = false;
+  let persistenceReleased = false;
 
   const applyRemoteUpdate = (update: Uint8Array) => {
     if (destroyed) return;
@@ -138,21 +140,45 @@ export function createCollaborationDocument({
     destroy() {
       if (destroyPromise) return destroyPromise;
 
-      destroyed = true;
-      connectionState = "disconnected";
-      finalState = Y.encodeStateAsUpdate(document);
-      document.off("update", onUpdate);
-      document.destroy();
+      if (!destroyed) {
+        destroyed = true;
+        connectionState = "disconnected";
+        finalState = Y.encodeStateAsUpdate(document);
+        document.off("update", onUpdate);
+        document.destroy();
+      }
 
       const providerConnection = connection;
-      destroyPromise = Promise.all([
-        providerConnection
-          ? Promise.resolve().then(() => providerConnection.destroy())
+      const releases = [
+        providerConnection && !providerReleased
+          ? Promise.resolve()
+              .then(() => providerConnection.destroy())
+              .then(() => {
+                providerReleased = true;
+              })
           : undefined,
-        persistence
-          ? waitForPersistence().finally(() => persistence.destroy())
+        persistence && !persistenceReleased
+          ? (async () => {
+              let persistenceFailure: unknown;
+              try {
+                await waitForPersistence();
+              } catch (error) {
+                persistenceFailure = error;
+              }
+              await persistence.destroy();
+              persistenceReleased = true;
+              if (persistenceFailure) throw persistenceFailure;
+            })()
           : undefined,
-      ]).then(() => undefined);
+      ].filter((release): release is Promise<void> => release !== undefined);
+      destroyPromise = Promise.allSettled(releases).then((results) => {
+        const rejected = results.find((result) => result.status === "rejected");
+        if (rejected?.status === "rejected") throw rejected.reason;
+      });
+      const currentDestroy = destroyPromise;
+      void currentDestroy.catch(() => {
+        if (destroyPromise === currentDestroy) destroyPromise = undefined;
+      });
       return destroyPromise;
     },
   };

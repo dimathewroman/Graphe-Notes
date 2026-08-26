@@ -7,7 +7,10 @@ import {
   runReplicaProtectedBoundary,
   type CollaborationReplicaPersistence,
 } from "@/lib/collaboration/note-collaboration-replica";
-import { createNoteCollaborationIdentity } from "@/lib/collaboration/note-collaboration-lifecycle";
+import {
+  createNoteCollaborationIdentity,
+  createNoteCollaborationLifecycleCoordinator,
+} from "@/lib/collaboration/note-collaboration-lifecycle";
 
 function createPersistence(): CollaborationReplicaPersistence {
   return {
@@ -113,10 +116,21 @@ describe("collaboration replica disposition", () => {
       noteId: 987654,
     });
     let attempts = 0;
-    const unregister = registerActiveCollaborationReplica(identity, async () => {
-      attempts += 1;
-      if (attempts === 1) throw new Error("teardown failed");
-    });
+    let unregister: () => void = () => undefined;
+    const coordinator = createNoteCollaborationLifecycleCoordinator(
+      (sessionIdentity) => ({
+        identity: sessionIdentity,
+        async destroy() {
+          attempts += 1;
+          if (attempts === 1) throw new Error("teardown failed");
+          unregister();
+        },
+      }),
+    );
+    await coordinator.activate({ mode: "demo", noteId: identity.noteId });
+    unregister = registerActiveCollaborationReplica(identity, () =>
+      coordinator.destroy(),
+    );
 
     await expect(eraseNoteCollaborationReplica(identity)).rejects.toThrow(
       "teardown failed",

@@ -42,4 +42,21 @@ describe("page lifecycle note saving", () => {
     expect(result).toBe("saved");
     expect(buffer.snapshot()).toEqual([]);
   });
+
+  it("keeps an autosave snapshot visible to page-hide until either request acknowledges it", async () => {
+    const buffer = new PerNoteSaveBuffer();
+    buffer.queue(1, { content: "still-durable" });
+    const autosave = buffer.snapshotFor(1);
+    expect(autosave).not.toBeNull();
+
+    const sendKeepalive = vi.fn(async () => ({ ok: true }));
+    const pageHideResult = await flushPendingNoteSavesOnPageHide(
+      buffer,
+      sendKeepalive,
+    );
+
+    expect(sendKeepalive).toHaveBeenCalledWith(autosave);
+    expect(pageHideResult).toBe("saved");
+    expect(buffer.acknowledge(autosave!.id, autosave!.version)).toBe(false);
+  });
 });
