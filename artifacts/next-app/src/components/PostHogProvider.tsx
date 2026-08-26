@@ -45,14 +45,28 @@ function scrubExceptionBeforeSend(event: CaptureResult | null): CaptureResult | 
   };
 }
 
+function telemetryApiHost(): string | null {
+  // The hosted app owns its same-origin /ingest rewrite. A static asset bundle
+  // has no rewrite server, so it remains telemetry-silent until a separately
+  // configured direct ingest host is supplied at build time.
+  if (process.env.NEXT_PUBLIC_STATIC_CLIENT === "1") {
+    return process.env.NEXT_PUBLIC_POSTHOG_INGEST_HOST || null;
+  }
+
+  return "/ingest";
+}
+
 export function PHProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!process.env.NEXT_PUBLIC_POSTHOG_KEY) return;
     if (posthog.__loaded) return; // already initialized (e.g. HMR)
 
+    const apiHost = telemetryApiHost();
+    if (!apiHost) return;
+
     posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
-      api_host: "/ingest",
+      api_host: apiHost,
       ui_host: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.posthog.com",
       defaults: "2026-01-30",
       // Product analytics is deliberate: user-authored note and PIN DOM must

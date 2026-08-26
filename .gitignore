@@ -4,6 +4,8 @@
 dist
 tmp
 out-tsc
+artifacts/static-client/.next/
+artifacts/static-client/out/
 *.tsbuildinfo
 .expo
 .expo-shared

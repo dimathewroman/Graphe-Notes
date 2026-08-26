@@ -10,6 +10,8 @@
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "test": "pnpm -r --if-present run test",
     "check": "pnpm run typecheck && pnpm run test",
+    "check:static-client-boundary": "node scripts/verify-static-client-boundary.mjs",
+    "build:static-client": "pnpm run check:static-client-boundary && pnpm --filter @workspace/next-app exec next build --webpack ../static-client && node scripts/verify-static-client-output.mjs",
     "db:migrations:validate": "node scripts/validate-db-migrations.mjs",
     "db:hosted-preflight": "node scripts/preflight-hosted-db.mjs",
     "claude-proxy": "node scripts/claude-proxy.mjs"

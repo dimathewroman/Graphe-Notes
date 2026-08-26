@@ -14,6 +14,24 @@ configured HTTPS origins, explicit development/test loopback allowance, invalid
 configuration, encoded path/query preservation, and rejection before bearer or
 vault-proof headers can reach an arbitrary absolute URL.
 
+The static-client target has an executable source-graph guard and exported
+output check. It proves the static entrypoints exclude hosted API handlers,
+middleware, service-role/database owners, and server instrumentation, then
+requires both the root page and auth callback in the emitted `webDir`:
+
+```bash
+pnpm run check:static-client-boundary
+NEXT_PUBLIC_API_ORIGIN=https://api.example.com \
+NEXT_PUBLIC_SUPABASE_URL=https://project.supabase.co \
+NEXT_PUBLIC_SUPABASE_ANON_KEY=public-anon-key \
+pnpm run build:static-client
+```
+
+The example origin is configuration syntax only; use the real approved HTTPS
+API origin only when creating a deployable bundle. The static build intentionally
+uses unoptimized images and is telemetry-silent unless an explicit direct
+PostHog ingest host is configured.
+
 Test location: `artifacts/next-app/e2e/`
 
 Security regression tests live in

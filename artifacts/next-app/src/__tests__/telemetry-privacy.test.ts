@@ -33,6 +33,8 @@ afterEach(() => {
   vi.clearAllMocks();
   posthog.__loaded = false;
   delete process.env.NEXT_PUBLIC_POSTHOG_KEY;
+  delete process.env.NEXT_PUBLIC_STATIC_CLIENT;
+  delete process.env.NEXT_PUBLIC_POSTHOG_INGEST_HOST;
 });
 
 describe("PostHog identity privacy", () => {
@@ -79,6 +81,27 @@ describe("PostHog browser privacy defaults", () => {
       capture_pageleave: false,
       rageclick: false,
       capture_exceptions: true,
+    }));
+  });
+
+  it("keeps a static client telemetry-silent without a direct ingest host", () => {
+    process.env.NEXT_PUBLIC_POSTHOG_KEY = "test-key";
+    process.env.NEXT_PUBLIC_STATIC_CLIENT = "1";
+
+    render(createElement(PHProvider, { children: createElement("div", null, "Application") }));
+
+    expect(posthog.init).not.toHaveBeenCalled();
+  });
+
+  it("uses only an explicit direct ingest host for a static client", () => {
+    process.env.NEXT_PUBLIC_POSTHOG_KEY = "test-key";
+    process.env.NEXT_PUBLIC_STATIC_CLIENT = "1";
+    process.env.NEXT_PUBLIC_POSTHOG_INGEST_HOST = "https://telemetry.example.test";
+
+    render(createElement(PHProvider, { children: createElement("div", null, "Application") }));
+
+    expect(posthog.init).toHaveBeenCalledWith("test-key", expect.objectContaining({
+      api_host: "https://telemetry.example.test",
     }));
   });
 

@@ -39,6 +39,12 @@ describe("client API-origin resolver", () => {
     expect(resolveApiUrl("/api/attachments/sign?id=a%2Fb")).toBe(
       "https://api.example.test/api/attachments/sign?id=a%2Fb",
     );
+    expect(resolveApiUrl("/api/attachments/download?id=a%2Fb")).toBe(
+      "https://api.example.test/api/attachments/download?id=a%2Fb",
+    );
+    expect(resolveApiUrl("/api/attachments/download?path=notes%2Fa%2Fb.png")).toBe(
+      "https://api.example.test/api/attachments/download?path=notes%2Fa%2Fb.png",
+    );
   });
 
   it("allows an explicitly enabled loopback HTTP origin in test", () => {
@@ -185,10 +191,10 @@ describe("client API-origin resolver", () => {
     setAccessToken("access-token");
     setVaultProof("vault-proof");
 
-    await authenticatedFetch("/api/vault/status");
+    await authenticatedFetch("/api/attachments/sign?id=attachment-1");
 
     expect(fetchSpy).toHaveBeenCalledWith(
-      "https://api.example.test/api/vault/status",
+      "https://api.example.test/api/attachments/sign?id=attachment-1",
       expect.objectContaining({
         headers: expect.any(Headers),
       }),

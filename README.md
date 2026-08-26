@@ -61,6 +61,33 @@ All variables live in a single `.env` file at the repo root. The app ships with 
 | `SUPABASE_URL` | API routes | Supabase dashboard → Project Settings → API |
 | `SUPABASE_SERVICE_ROLE_KEY` | API routes (admin ops) | Supabase dashboard → Project Settings → API |
 | `SUPABASE_DB_URL` | Schema migrations | Supabase dashboard → Project Settings → Database → Connection string (Session mode) |
+| `NEXT_PUBLIC_API_ORIGIN` | Static client only | The separately deployed HTTPS Graphe API origin; required for `pnpm run build:static-client` |
+| `NEXT_PUBLIC_POSTHOG_INGEST_HOST` | Static client telemetry only | Optional direct HTTPS PostHog ingest endpoint; leave unset to disable static-bundle telemetry |
+
+## Static client build target
+
+`artifacts/next-app` remains the hosted web and `/api` owner. The separate
+static-client target is a Capacitor-compatible web directory only: it contains
+the browser UI and auth callback page, while all authenticated API requests use
+the existing public API-origin seam.
+
+With the hosted API origin supplied as a public build variable, run:
+
+```bash
+NEXT_PUBLIC_API_ORIGIN=https://api.example.com \
+NEXT_PUBLIC_SUPABASE_URL=https://project.supabase.co \
+NEXT_PUBLIC_SUPABASE_ANON_KEY=public-anon-key \
+pnpm run build:static-client
+```
+
+The command first proves the static import graph excludes hosted route handlers,
+middleware, database/service-role code, and server instrumentation. It then
+emits `artifacts/static-client/out/`, including `index.html` and
+`auth/callback.html`. Images are intentionally unoptimized; telemetry is off
+unless `NEXT_PUBLIC_POSTHOG_INGEST_HOST` is explicitly provided. Static Sentry
+reporting is also intentionally disabled until it has its own approved client
+transport. This command does not add Capacitor, CORS origins, native OAuth/deep-link configuration, or
+change hosted behavior.
 
 ## Database setup
 

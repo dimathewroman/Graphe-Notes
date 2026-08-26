@@ -64,6 +64,28 @@ or insecure origins fail closed. HTTP is restricted to an explicitly enabled
 loopback origin in development/test. Absolute request URLs are rejected before
 credentials are built or a network call starts.
 
+### Static-client boundary
+
+`artifacts/static-client` is a static asset target and cannot carry the hosted
+server trust boundary. Its build guard rejects imports of route handlers,
+middleware, server instrumentation, service-role/database code, and Node-only
+request helpers before export. The bundle requires a public
+`NEXT_PUBLIC_API_ORIGIN`; the existing client API validator still accepts only
+contained relative `/api` paths and validates that origin before bearer or vault
+proof headers are attached. Selecting CORS origins is intentionally out of
+scope, so this target is not evidence that a cross-origin native client can
+yet authenticate against the hosted API.
+
+The hosted app retains its `/ingest` rewrite. A static build does not fall back
+to that unavailable rewrite: browser PostHog is disabled unless an explicit
+public direct ingest host is supplied. This preserves the existing deliberate
+event and exception-scrubbing controls without introducing a proxy or endpoint
+decision into the static build.
+
+Static Sentry calls are likewise compiled to a local no-op rather than importing
+the hosted Sentry server/edge instrumentation. A static error-reporting transport
+requires its own privacy and endpoint decision.
+
 ### Durable editor ordering
 
 Content-bearing `PATCH /api/notes/:id` requests are authorized as the note owner

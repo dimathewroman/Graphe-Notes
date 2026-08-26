@@ -55,6 +55,9 @@ Graphe-Notes/
 │       ├── sentry.client.config.ts
 │       ├── sentry.server.config.ts
 │       └── sentry.edge.config.ts
+│   └── static-client/                Static-only App Router export target
+│       ├── app/                      Static `/` and `/auth/callback` entrypoints
+│       └── next.config.ts            `output: "export"`, unoptimized images
 ├── lib/
 │   ├── api-spec/                    OpenAPI spec (openapi.yaml) + Orval config
 │   ├── api-client-react/            Generated React Query hooks + custom fetch
@@ -91,6 +94,28 @@ Graphe-Notes/
 | `/auth/callback` | `app/auth/callback/page.tsx` | OAuth redirect handler; listens for `onAuthStateChange`, redirects to `/` |
 
 The app is a single-page application. All navigation (notes, folders, quick bits, settings) is state-driven inside `Home.tsx` — no additional Next.js page routes.
+
+### Static-client deployment boundary
+
+`artifacts/static-client` is a second, deliberately small build target for a
+future Capacitor `webDir`. It reuses browser-safe UI, editor, auth, and query
+owners from `artifacts/next-app/src`, but it has no API routes, middleware,
+server instrumentation, database client, service-role client, cron, response
+headers, or telemetry rewrite. `pnpm run build:static-client` emits its static
+assets to `artifacts/static-client/out/`; the executable boundary guard walks
+the entrypoint import graph before the build and rejects those hosted owners.
+
+The hosted `artifacts/next-app` deployment remains the only owner of `/api`,
+JWT middleware, server/edge instrumentation, CSP/security headers, PostHog
+rewrites, cron, database access, and service-role credentials. The shared
+`resolveApiUrl()` contract keeps hosted requests same-origin and permits a
+static bundle to target one configured public HTTPS API origin. Attachment
+signing and download links use that same contract. The static target uses
+unoptimized images and intentionally disables browser telemetry unless an
+explicit direct ingest host is supplied; its Sentry calls are a local no-op
+rather than server instrumentation, and its sanitizer uses the browser export
+rather than the Node/jsdom path. CORS, native origins, OAuth/deep links, and
+native authentication persistence are separate future decisions.
 
 ### API Endpoints
 

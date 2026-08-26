@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added `artifacts/static-client`, a reproducible `output: "export"` webDir
+  target for future Capacitor packaging. It reuses the browser-safe application
+  entrypoints while keeping hosted `/api`, middleware, server-only owners,
+  optimized images, security headers, and telemetry rewrites in
+  `artifacts/next-app`. `pnpm run build:static-client` validates the import
+  boundary and emits `index.html` plus `auth/callback.html`; static telemetry is
+  disabled until a direct ingest host is explicitly configured.
+
 All notable changes to Graphe Notes are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
