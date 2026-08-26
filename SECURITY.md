@@ -157,7 +157,10 @@ The browser-only note draft replica must never put note content, titles, owner
 identifiers, document identities, storage paths, filenames, or raw storage
 errors into analytics or error reports. Persistence failures use a generic
 Sentry error classification and a generic UI notice; server saving remains the
-canonical recovery path.
+canonical recovery path. Identity changes and permanent deletion fail closed
+when local cleanup cannot be proven. Cleanup may inspect same-origin IndexedDB
+database names only when needed to find a strictly valid pre-registry Graphe
+replica; it never opens or deletes unrelated databases.
 
 ### PIN hashing
 

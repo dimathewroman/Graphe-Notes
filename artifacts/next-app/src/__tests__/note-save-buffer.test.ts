@@ -28,6 +28,18 @@ describe("per-note save buffer", () => {
     expect(buffer.take(2)).toEqual({ content: "B-first" });
   });
 
+  it("keeps newer same-note fields when an older in-flight save fails", () => {
+    const buffer = new PerNoteSaveBuffer();
+
+    buffer.queue(1, { title: "A-old", content: "A-old" });
+    expect(buffer.take(1)).toEqual({ title: "A-old", content: "A-old" });
+
+    buffer.queue(1, { content: "A-new" });
+    buffer.retry(1, { title: "A-old", content: "A-old" });
+
+    expect(buffer.take(1)).toEqual({ title: "A-old", content: "A-new" });
+  });
+
   it("drains page-hide saves as isolated note payloads", () => {
     const buffer = new PerNoteSaveBuffer();
     buffer.queue(1, { title: "A", content: "A-content" });
@@ -38,5 +50,21 @@ describe("per-note save buffer", () => {
       { id: 2, data: { title: "B", content: "B-content" } },
     ]);
     expect(buffer.drain()).toEqual([]);
+  });
+
+  it("acknowledges only the exact pending version that was sent", () => {
+    const buffer = new PerNoteSaveBuffer();
+    buffer.queue(1, { content: "A-old" });
+
+    const [sent] = buffer.snapshot();
+    buffer.queue(1, { content: "A-new" });
+
+    expect(buffer.acknowledge(sent.id, sent.version)).toBe(false);
+    expect(buffer.take(1)).toEqual({ content: "A-new" });
+
+    buffer.queue(1, { content: "A-latest" });
+    const [latest] = buffer.snapshot();
+    expect(buffer.acknowledge(latest.id, latest.version)).toBe(true);
+    expect(buffer.has(1)).toBe(false);
   });
 });

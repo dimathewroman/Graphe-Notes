@@ -47,6 +47,7 @@ import {
 } from "@/lib/collaboration/note-collaboration-lifecycle";
 import { eraseNoteCollaborationReplica } from "@/lib/collaboration/note-collaboration-replica";
 import { PerNoteSaveBuffer } from "@/lib/note-save-buffer";
+import { flushPendingNoteSavesOnPageHide } from "@/lib/note-page-lifecycle-save";
 import { cn } from "@/lib/utils";
 import { TableOfContents } from "./editor/TableOfContents";
 import { NoteHeader } from "./editor/NoteHeader";
@@ -238,6 +239,7 @@ export function NoteShell() {
   // events into a single payload and fires after 800ms. flushSave() uses these
   // to commit immediately on Cmd+S or note close.
   const pendingSaveRef = useRef(new PerNoteSaveBuffer());
+  const pageHideFlushRef = useRef<Promise<void> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduledSaveNoteIdRef = useRef<number | null>(null);
   // V2: timestamp of the first un-flushed change in the current debounce batch.
@@ -585,44 +587,54 @@ export function NoteShell() {
   // escape hatch — the generated mutation hook can't set `keepalive`.
   const flushOnHideRef = useRef<() => void>(() => {});
   flushOnHideRef.current = () => {
+    if (pageHideFlushRef.current) return;
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
-    const pending = pendingSaveRef.current.drain();
-    pendingSinceRef.current.clear();
     scheduledSaveNoteIdRef.current = null;
-    if (pending.length === 0) return;
-    if (isDemoRef.current) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      pending.forEach((entry) => {
-        const existing = queryClient.getQueryData(
-          getGetNoteQueryKey(entry.id),
-        ) as any;
-        if (existing) {
-          queryClient.setQueryData(getGetNoteQueryKey(entry.id), {
-            ...existing,
-            ...entry.data,
-            updatedAt: new Date().toISOString(),
-          });
+    const pendingIds = pendingSaveRef.current.snapshot().map((entry) => entry.id);
+    if (pendingIds.length === 0) return;
+
+    setSaveStatus("saving");
+    pageHideFlushRef.current = flushPendingNoteSavesOnPageHide(
+      pendingSaveRef.current,
+      async (entry) => {
+        if (isDemoRef.current) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const existing = queryClient.getQueryData(getGetNoteQueryKey(entry.id)) as any;
+          if (existing) {
+            queryClient.setQueryData(getGetNoteQueryKey(entry.id), {
+              ...existing,
+              ...entry.data,
+              updatedAt: new Date().toISOString(),
+            });
+          }
+          return { ok: true };
         }
-      });
-      setSaveStatus("saved");
-      return;
-    }
-    pending.forEach((entry) => {
-      try {
-        void authenticatedFetch(`/api/notes/${entry.id}`, {
+        return authenticatedFetch(`/api/notes/${entry.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(entry.data),
           keepalive: true,
         });
-      } catch {
-        captureSafeNoteFailure("page-hide save");
-      }
-    });
-    setSaveStatus("saved");
+      },
+    )
+      .then((result) => {
+        pendingIds.forEach((id) => {
+          if (!pendingSaveRef.current.has(id)) pendingSinceRef.current.delete(id);
+        });
+        if (result === "saved") setSaveStatus("saved");
+        else if (result === "error") {
+          captureSafeNoteFailure("page-hide save");
+          setSaveStatus("error");
+        } else if (result === "pending") {
+          setSaveStatus("saving");
+        }
+      })
+      .finally(() => {
+        pageHideFlushRef.current = null;
+      });
   };
 
   useEffect(() => {

@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import type { User as SupabaseUser } from "@supabase/supabase-js";
+import type { Session as SupabaseSession, User as SupabaseUser } from "@supabase/supabase-js";
 import type { AuthUser } from "@workspace/api-zod";
 import * as Sentry from "@sentry/nextjs";
 import { supabase } from "@/lib/supabase";
-import { eraseAuthenticatedCollaborationReplicas } from "@/lib/collaboration/note-collaboration-replica";
+import { eraseAuthenticatedCollaborationReplicas, eraseStaleAuthenticatedCollaborationReplicas, runReplicaProtectedBoundary } from "@/lib/collaboration/note-collaboration-replica";
 import posthog from "posthog-js";
+import { toast } from "sonner";
 
 export type { AuthUser };
 
@@ -36,7 +37,7 @@ interface AuthState {
   loginWithOAuth: (provider: "google" | "apple") => void;
   loginWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
   signUpWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
-  logout: () => void;
+  logout: () => Promise<void>;
   login: (provider?: "google" | "apple") => void;
 }
 
@@ -55,12 +56,6 @@ function hasStoredSession(): boolean {
   }
 }
 
-function disposeAuthenticatedReplicas(userId: string): void {
-  void eraseAuthenticatedCollaborationReplicas(userId).catch(() => {
-    Sentry.captureException(new Error("Collaboration replica disposal failed."));
-  });
-}
-
 export function useAuth(): AuthState {
   const [user, setUser] = useState<AuthUserWithDisplay | null>(null);
   // Start as false so the login screen (including the demo button) is visible
@@ -70,6 +65,7 @@ export function useAuth(): AuthState {
   // and needs Supabase validation.
   const [isLoading, setIsLoading] = useState(false);
   const authenticatedOwnerRef = useRef<string | null>(null);
+  const sessionTransitionRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     // No stored token → nothing to validate; login screen already visible.
@@ -83,21 +79,46 @@ export function useAuth(): AuthState {
     setIsLoading(true);
     const safetyTimer = setTimeout(() => setIsLoading(false), 5000);
 
+    const applySession = (session: SupabaseSession | null): Promise<void> => {
+      const transition = sessionTransitionRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          const nextUser = session?.user ?? null;
+          const previousOwner = authenticatedOwnerRef.current;
+          const nextOwner = nextUser?.id ?? null;
+          try {
+            if (nextOwner) {
+              if (previousOwner && previousOwner !== nextOwner) {
+                await eraseAuthenticatedCollaborationReplicas(previousOwner);
+              }
+              await eraseStaleAuthenticatedCollaborationReplicas(nextOwner);
+            } else if (previousOwner) {
+              await eraseAuthenticatedCollaborationReplicas(previousOwner);
+            }
+          } catch {
+            Sentry.captureException(new Error("Collaboration replica disposal failed."));
+            if (!nextOwner) {
+              authenticatedOwnerRef.current = null;
+              setUser(null);
+            }
+            throw new Error("Collaboration replica transition failed.");
+          }
+
+          authenticatedOwnerRef.current = nextOwner;
+          if (session?.user) {
+            setUser(mapUser(session.user));
+            posthog.identify(session.user.id);
+          } else {
+            setUser(null);
+          }
+        });
+      sessionTransitionRef.current = transition;
+      return transition;
+    };
+
     supabase.auth
       .getSession()
-      .then(({ data: { session } }) => {
-        if (session?.user) {
-          const previousOwner = authenticatedOwnerRef.current;
-          authenticatedOwnerRef.current = session.user.id;
-          if (previousOwner && previousOwner !== session.user.id) {
-            disposeAuthenticatedReplicas(previousOwner);
-          }
-          setUser(mapUser(session.user));
-          posthog.identify(session.user.id);
-        } else {
-          setUser(null);
-        }
-      })
+      .then(({ data: { session } }) => applySession(session))
       .catch(() => {
         setUser(null);
       })
@@ -109,19 +130,9 @@ export function useAuth(): AuthState {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      const previousOwner = authenticatedOwnerRef.current;
-      const nextOwner = session?.user.id ?? null;
-      authenticatedOwnerRef.current = nextOwner;
-      if (previousOwner && previousOwner !== nextOwner) {
-        disposeAuthenticatedReplicas(previousOwner);
-      }
-      if (session?.user) {
-        setUser(mapUser(session.user));
-        posthog.identify(session.user.id);
-      } else {
-        setUser(null);
-      }
-      setIsLoading(false);
+      void applySession(session)
+        .catch(() => setUser(null))
+        .finally(() => setIsLoading(false));
     });
 
     return () => {
@@ -187,20 +198,22 @@ export function useAuth(): AuthState {
 
   const logout = useCallback(async () => {
     try {
+      if (user?.id) {
+        await runReplicaProtectedBoundary(
+          () => eraseAuthenticatedCollaborationReplicas(user.id),
+          async () => {
+            await supabase.auth.signOut();
+          },
+        );
+      } else {
+        await supabase.auth.signOut();
+      }
       posthog.capture("user_logged_out");
       posthog.reset();
-      if (user?.id) {
-        await eraseAuthenticatedCollaborationReplicas(user.id).catch(() => {
-          Sentry.captureException(
-            new Error("Collaboration replica disposal failed."),
-          );
-        });
-      }
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error("Sign-out failed:", err);
-    } finally {
       setUser(null);
+    } catch {
+      Sentry.captureException(new Error("Sign-out cleanup failed."));
+      toast.error("Local editor cache could not be cleared. Sign out was cancelled.");
     }
   }, [user?.id]);
 

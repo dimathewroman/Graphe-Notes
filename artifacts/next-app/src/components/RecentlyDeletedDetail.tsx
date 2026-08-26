@@ -32,7 +32,7 @@ import { useBreakpoint } from "@/hooks/use-mobile";
 import { useDemoMode } from "@/lib/demo-context";
 import { useAuth } from "@/hooks/use-auth";
 import { createNoteCollaborationIdentity } from "@/lib/collaboration/note-collaboration-lifecycle";
-import { eraseNoteCollaborationReplica } from "@/lib/collaboration/note-collaboration-replica";
+import { eraseNoteCollaborationReplica, runReplicaProtectedBoundary } from "@/lib/collaboration/note-collaboration-replica";
 import * as Sentry from "@sentry/nextjs";
 import { toast } from "sonner";
 import {
@@ -123,15 +123,8 @@ export function RecentlyDeletedDetail() {
               noteId,
             })
           : null;
-      if (!identity) return;
-      try {
-        await eraseNoteCollaborationReplica(identity);
-      } catch {
-        Sentry.captureException(
-          new Error("Collaboration replica disposal failed."),
-        );
-        toast.error("Local editor cache could not be cleared.");
-      }
+      if (!identity) throw new Error("Collaboration identity unavailable.");
+      await eraseNoteCollaborationReplica(identity);
     },
     [isDemo, user?.id],
   );
@@ -149,7 +142,6 @@ export function RecentlyDeletedDetail() {
           deletedReason: null,
         });
       }
-      await erasePermanentReplica(selectedNoteId);
       selectNote(null);
       if (note.vaulted) {
         // Silently returns to vault — no navigation needed
@@ -175,24 +167,30 @@ export function RecentlyDeletedDetail() {
   const handlePermanentDelete = async () => {
     if (!selectedNoteId) return;
     setShowConfirmDelete(false);
-    if (isDemo) {
-      const existing = queryClient.getQueryData<any>(getGetNoteQueryKey(selectedNoteId));
-      if (existing) {
-        queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
-          ...existing,
-          _demoDeleted: false,
-          _demoPermanentlyDeleted: true,
-        });
-      }
-      selectNote(null);
-      if (bp !== "desktop") setMobileView("list");
+    try {
+      await runReplicaProtectedBoundary(
+        () => erasePermanentReplica(selectedNoteId),
+        async () => {
+          if (isDemo) {
+            const existing = queryClient.getQueryData<any>(getGetNoteQueryKey(selectedNoteId));
+            if (existing) {
+              queryClient.setQueryData(getGetNoteQueryKey(selectedNoteId), {
+                ...existing,
+                _demoDeleted: false,
+                _demoPermanentlyDeleted: true,
+              });
+            }
+            return;
+          }
+          await permanentDeleteMut.mutateAsync({ id: selectedNoteId, data: { confirm: true } });
+        },
+      );
+      if (!isDemo) queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
+    } catch {
+      Sentry.captureException(new Error("Permanent note deletion failed."));
+      toast.error("Deletion could not be completed. The note is still in Recently Deleted.");
       return;
     }
-    try {
-      await permanentDeleteMut.mutateAsync({ id: selectedNoteId, data: { confirm: true } });
-      await erasePermanentReplica(selectedNoteId);
-      queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
-    } catch {}
     selectNote(null);
     if (bp !== "desktop") setMobileView("list");
   };

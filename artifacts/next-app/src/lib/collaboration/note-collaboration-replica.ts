@@ -3,6 +3,7 @@ import type { NoteCollaborationIdentity } from "./note-collaboration-lifecycle";
 export interface CollaborationReplicaPersistence {
   eraseDocument(documentId: string): Promise<void>;
   eraseAuthenticatedOwner(userId: string): Promise<void>;
+  eraseStaleAuthenticatedOwners(currentUserId: string): Promise<void>;
   eraseDemo(): Promise<void>;
   eraseAll(): Promise<void>;
 }
@@ -15,6 +16,7 @@ export interface CollaborationReplicaDispositionOptions {
 export interface CollaborationReplicaDisposition {
   eraseNote(identity: NoteCollaborationIdentity): Promise<void>;
   eraseAuthenticatedOwner(userId: string): Promise<void>;
+  eraseStaleAuthenticatedOwners(currentUserId: string): Promise<void>;
   eraseDemo(): Promise<void>;
   clearAll(): Promise<void>;
 }
@@ -37,6 +39,10 @@ export function createCollaborationReplicaDisposition({
       await disposeActive(`authenticated:${userId}`);
       await persistence.eraseAuthenticatedOwner(userId);
     },
+    async eraseStaleAuthenticatedOwners(currentUserId) {
+      await disposeActive(`authenticated-except:${currentUserId}`);
+      await persistence.eraseStaleAuthenticatedOwners(currentUserId);
+    },
     async eraseDemo() {
       await disposeActive("demo");
       await persistence.eraseDemo();
@@ -57,11 +63,24 @@ type ActiveReplica = {
 const activeReplicas = new Map<string, ActiveReplica>();
 
 function matchesScope(replica: ActiveReplica, scope: string): boolean {
+  if (scope.startsWith("authenticated-except:")) {
+    const currentScope = `authenticated:${scope.slice("authenticated-except:".length)}`;
+    return (
+      replica.scope.startsWith("authenticated:") &&
+      replica.scope !== currentScope
+    );
+  }
   return (
-    scope === "all" ||
-    replica.documentId === scope ||
-    replica.scope === scope
+    scope === "all" || replica.documentId === scope || replica.scope === scope
   );
+}
+
+export async function runReplicaProtectedBoundary(
+  cleanup: () => Promise<void>,
+  continueBoundary: () => Promise<void>,
+): Promise<void> {
+  await cleanup();
+  await continueBoundary();
 }
 
 async function disposeActiveReplicas(scope: string): Promise<void> {
@@ -70,8 +89,10 @@ async function disposeActiveReplicas(scope: string): Promise<void> {
   );
   await Promise.all(
     replicas.map(async (replica) => {
-      activeReplicas.delete(replica.documentId);
       await replica.dispose();
+      if (activeReplicas.get(replica.documentId) === replica) {
+        activeReplicas.delete(replica.documentId);
+      }
     }),
   );
 }
@@ -108,22 +129,53 @@ async function browserDisposition(): Promise<CollaborationReplicaDisposition> {
   });
 }
 
+const cleanupTasks = new Map<string, Promise<void>>();
+
+function shareCleanup(
+  key: string,
+  cleanup: () => Promise<void>,
+): Promise<void> {
+  const active = cleanupTasks.get(key);
+  if (active) return active;
+  const task = cleanup().finally(() => {
+    if (cleanupTasks.get(key) === task) cleanupTasks.delete(key);
+  });
+  cleanupTasks.set(key, task);
+  return task;
+}
+
 export async function eraseNoteCollaborationReplica(
   identity: NoteCollaborationIdentity,
 ): Promise<void> {
-  return (await browserDisposition()).eraseNote(identity);
+  return shareCleanup(`note:${identity.documentId}`, async () =>
+    (await browserDisposition()).eraseNote(identity),
+  );
 }
 
 export async function eraseAuthenticatedCollaborationReplicas(
   userId: string,
 ): Promise<void> {
-  return (await browserDisposition()).eraseAuthenticatedOwner(userId);
+  return shareCleanup(`owner:${userId}`, async () =>
+    (await browserDisposition()).eraseAuthenticatedOwner(userId),
+  );
+}
+
+export async function eraseStaleAuthenticatedCollaborationReplicas(
+  currentUserId: string,
+): Promise<void> {
+  return shareCleanup(`stale-owners:${currentUserId}`, async () =>
+    (await browserDisposition()).eraseStaleAuthenticatedOwners(currentUserId),
+  );
 }
 
 export async function eraseDemoCollaborationReplicas(): Promise<void> {
-  return (await browserDisposition()).eraseDemo();
+  return shareCleanup("demo", async () =>
+    (await browserDisposition()).eraseDemo(),
+  );
 }
 
 export async function clearAllCollaborationReplicas(): Promise<void> {
-  return (await browserDisposition()).clearAll();
+  return shareCleanup("all", async () =>
+    (await browserDisposition()).clearAll(),
+  );
 }

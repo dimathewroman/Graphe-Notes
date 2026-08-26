@@ -21,9 +21,27 @@ interface ReplicaRegistryRecord {
 }
 
 function collaborationScope(documentId: string): string {
-  if (documentId.startsWith("graphe-yjs:v1:demo:note:")) return "demo";
-  const match = /^graphe-yjs:v1:user:(.+):note:[^:]+$/.exec(documentId);
+  if (/^graphe-yjs:v1:demo:note:\d+$/.test(documentId)) return "demo";
+  const match = /^graphe-yjs:v1:user:([^:]+):note:\d+$/.exec(documentId);
   return match ? `authenticated:${match[1]}` : "unknown";
+}
+
+function replicaRecord(documentId: string): ReplicaRegistryRecord | null {
+  const scope = collaborationScope(documentId);
+  return scope === "unknown" ? null : { documentId, scope };
+}
+
+async function discoverStrictReplicaRecords(): Promise<
+  ReplicaRegistryRecord[]
+> {
+  if (typeof globalThis.indexedDB.databases !== "function") return [];
+  const databases = await globalThis.indexedDB.databases();
+  return databases.flatMap((database) => {
+    const name = database.name;
+    if (!name?.startsWith(DATABASE_PREFIX)) return [];
+    const record = replicaRecord(name.slice(DATABASE_PREFIX.length));
+    return record ? [record] : [];
+  });
 }
 
 function openRegistryDatabase(): Promise<IDBDatabase> {
@@ -37,7 +55,9 @@ function openRegistryDatabase(): Promise<IDBDatabase> {
     }
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(REGISTRY_STORE)) {
-        request.result.createObjectStore(REGISTRY_STORE, { keyPath: "documentId" });
+        request.result.createObjectStore(REGISTRY_STORE, {
+          keyPath: "documentId",
+        });
       }
     };
     request.onerror = () =>
@@ -61,9 +81,13 @@ function completeRegistryTransaction(
       return;
     }
     transaction.onerror = () =>
-      reject(transaction.error ?? new Error("IndexedDB registry write failed."));
+      reject(
+        transaction.error ?? new Error("IndexedDB registry write failed."),
+      );
     transaction.onabort = () =>
-      reject(transaction.error ?? new Error("IndexedDB registry write failed."));
+      reject(
+        transaction.error ?? new Error("IndexedDB registry write failed."),
+      );
     transaction.oncomplete = () => resolve();
   }).finally(() => database.close());
 }
@@ -86,7 +110,14 @@ async function registeredDocuments(
       const request = transaction.objectStore(REGISTRY_STORE).getAll();
       request.onsuccess = () => {
         const records = (request.result as ReplicaRegistryRecord[]).filter(
-          (record) => scope === null || record.scope === scope,
+          (record) => {
+            const expected = replicaRecord(record.documentId);
+            return (
+              expected !== null &&
+              expected.scope === record.scope &&
+              (scope === null || record.scope === scope)
+            );
+          },
         );
         resolve(records);
       };
@@ -124,24 +155,58 @@ function deleteDocumentDatabase(documentId: string): Promise<void> {
     request.onsuccess = () => resolve();
     request.onerror = () =>
       reject(request.error ?? new Error("IndexedDB deletion failed."));
-    request.onblocked = () => reject(new Error("IndexedDB deletion is blocked."));
+    request.onblocked = () =>
+      reject(new Error("IndexedDB deletion is blocked."));
   });
 }
 
-/** These only address records registered by this adapter; unrelated IndexedDB databases are never enumerated or deleted. */
+/** Deletes one exact app-generated replica; unrelated IndexedDB databases are never opened or deleted. */
 export async function eraseDocument(documentId: string): Promise<void> {
   await deleteDocumentDatabase(documentId);
   await removeRegisteredDocuments([documentId]);
 }
 
 async function eraseScope(scope: string): Promise<void> {
-  const records = await registeredDocuments(scope);
-  await Promise.all(records.map((record) => deleteDocumentDatabase(record.documentId)));
-  await removeRegisteredDocuments(records.map((record) => record.documentId));
+  const records = [
+    ...(await registeredDocuments(scope)),
+    ...(await discoverStrictReplicaRecords()),
+  ].filter((record) => record.scope === scope);
+  const uniqueRecords = [
+    ...new Map(records.map((record) => [record.documentId, record])).values(),
+  ];
+  await Promise.all(
+    uniqueRecords.map((record) => deleteDocumentDatabase(record.documentId)),
+  );
+  await removeRegisteredDocuments(
+    uniqueRecords.map((record) => record.documentId),
+  );
 }
 
 export async function eraseAuthenticatedOwner(userId: string): Promise<void> {
   await eraseScope(`authenticated:${userId}`);
+}
+
+export async function eraseStaleAuthenticatedOwners(
+  currentUserId: string,
+): Promise<void> {
+  const currentScope = `authenticated:${currentUserId}`;
+  const records = [
+    ...(await registeredDocuments(null)),
+    ...(await discoverStrictReplicaRecords()),
+  ].filter(
+    (record) =>
+      record.scope.startsWith("authenticated:") &&
+      record.scope !== currentScope,
+  );
+  const uniqueRecords = [
+    ...new Map(records.map((record) => [record.documentId, record])).values(),
+  ];
+  await Promise.all(
+    uniqueRecords.map((record) => deleteDocumentDatabase(record.documentId)),
+  );
+  await removeRegisteredDocuments(
+    uniqueRecords.map((record) => record.documentId),
+  );
 }
 
 export async function eraseDemo(): Promise<void> {
@@ -149,9 +214,19 @@ export async function eraseDemo(): Promise<void> {
 }
 
 export async function eraseAll(): Promise<void> {
-  const records = await registeredDocuments(null);
-  await Promise.all(records.map((record) => deleteDocumentDatabase(record.documentId)));
-  await removeRegisteredDocuments(records.map((record) => record.documentId));
+  const records = [
+    ...(await registeredDocuments(null)),
+    ...(await discoverStrictReplicaRecords()),
+  ];
+  const uniqueRecords = [
+    ...new Map(records.map((record) => [record.documentId, record])).values(),
+  ];
+  await Promise.all(
+    uniqueRecords.map((record) => deleteDocumentDatabase(record.documentId)),
+  );
+  await removeRegisteredDocuments(
+    uniqueRecords.map((record) => record.documentId),
+  );
 }
 
 function verifyIndexeddbAvailability(): Promise<void> {

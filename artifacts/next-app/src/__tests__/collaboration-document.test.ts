@@ -10,6 +10,7 @@ import {
   createIndexeddbCollaborationPersistence,
   eraseAuthenticatedOwner,
   eraseDemo,
+  eraseStaleAuthenticatedOwners,
 } from "@/lib/collaboration/indexeddb-persistence";
 
 function readBody(update: Uint8Array): string {
@@ -209,6 +210,45 @@ describe("collaboration document", () => {
     expect(readBody(reopenedAfterDemoExit.exportState())).toBe("");
     await reopenedAfterDemoExit.destroy();
     await eraseAuthenticatedOwner("owner-b");
+  });
+
+  it("erases a strict pre-registry owner replica without deleting unrelated databases", async () => {
+    const legacyName =
+      "graphe-collaboration:graphe-yjs:v1:user:legacy-owner:note:91";
+    const unrelatedName = "unrelated-application-database";
+    const lookalikeName = "graphe-collaboration:not-a-graphe-document";
+    await Promise.all([
+      createEmptyIndexeddbDatabase(legacyName),
+      createEmptyIndexeddbDatabase(unrelatedName),
+      createEmptyIndexeddbDatabase(lookalikeName),
+    ]);
+
+    await eraseAuthenticatedOwner("legacy-owner");
+
+    const databases = await globalThis.indexedDB.databases();
+    const names = databases.map((database) => database.name);
+    expect(names).not.toContain(legacyName);
+    expect(names).toContain(unrelatedName);
+    expect(names).toContain(lookalikeName);
+  });
+
+  it("erases stale authenticated owners before activating the current owner", async () => {
+    const staleName =
+      "graphe-collaboration:graphe-yjs:v1:user:stale-owner:note:12";
+    const currentName =
+      "graphe-collaboration:graphe-yjs:v1:user:current-owner:note:12";
+    await Promise.all([
+      createEmptyIndexeddbDatabase(staleName),
+      createEmptyIndexeddbDatabase(currentName),
+    ]);
+
+    await eraseStaleAuthenticatedOwners("current-owner");
+
+    const names = (await globalThis.indexedDB.databases()).map(
+      (database) => database.name,
+    );
+    expect(names).not.toContain(staleName);
+    expect(names).toContain(currentName);
   });
 
   it("merges ordered writes from separate adapters for the same document", async () => {
