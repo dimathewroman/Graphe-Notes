@@ -71,6 +71,9 @@ describe("client API-origin resolver", () => {
 
   it("rejects malformed, noncanonical, path-bearing, and insecure API origin configuration", () => {
     vi.stubEnv("NEXT_PUBLIC_API_ORIGIN", "not a url");
+    expect(() => resolveApiUrl("/api/notes")).toThrow("whitespace or backslashes");
+
+    vi.stubEnv("NEXT_PUBLIC_API_ORIGIN", "not-a-url");
     expect(() => resolveApiUrl("/api/notes")).toThrow("explicit http:// or https://");
 
     vi.stubEnv("NEXT_PUBLIC_API_ORIGIN", "https://api.example.test/v1");
