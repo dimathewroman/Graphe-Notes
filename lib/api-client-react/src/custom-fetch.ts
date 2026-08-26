@@ -1,3 +1,13 @@
+// This browser-safe package intentionally has no Node ambient types. Keep the
+// direct public-env references so Next can inline them and Vitest can stub them.
+declare const process: {
+  readonly env: {
+    readonly NEXT_PUBLIC_API_ORIGIN?: string;
+    readonly NEXT_PUBLIC_ALLOW_LOOPBACK_API_ORIGIN?: string;
+    readonly NODE_ENV?: string;
+  };
+};
+
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
 };
