@@ -48,6 +48,11 @@ import {
 import { eraseNoteCollaborationReplica } from "@/lib/collaboration/note-collaboration-replica";
 import { PerNoteSaveBuffer } from "@/lib/note-save-buffer";
 import { flushPendingNoteSavesOnPageHide } from "@/lib/note-page-lifecycle-save";
+import {
+  createBrowserSaveSessionId,
+  type NoteSaveOrdering,
+} from "@/lib/note-save-ordering";
+import { applyAuthoritativeNoteSaveToCache } from "@/lib/note-save-cache";
 import { cn } from "@/lib/utils";
 import { TableOfContents } from "./editor/TableOfContents";
 import { NoteHeader } from "./editor/NoteHeader";
@@ -90,6 +95,12 @@ export function NoteShell() {
   const { user } = useAuth();
   const isDemoRef = useRef(isDemo);
   isDemoRef.current = isDemo;
+  const saveSessionIdRef = useRef<string | null>(null);
+  if (saveSessionIdRef.current === null) {
+    saveSessionIdRef.current = createBrowserSaveSessionId();
+  }
+  const nextSaveSequenceRef = useRef(0);
+  const serverRevisionByNoteRef = useRef(new Map<number, string>());
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: note, isLoading } = useGetNote(selectedNoteId || 0, {
@@ -131,6 +142,19 @@ export function NoteShell() {
   // layout when the panel closes. Null means "no snapshot held".
   const prevSidebarOpenRef = useRef<boolean | null>(null);
   const prevNoteListOpenRef = useRef<boolean | null>(null);
+
+  const nextSaveOrdering = useCallback((id: number): NoteSaveOrdering => {
+    const baseRevision = serverRevisionByNoteRef.current.get(id);
+    if (!baseRevision) {
+      throw new Error("Missing authoritative server revision for note save");
+    }
+    nextSaveSequenceRef.current += 1;
+    return {
+      baseRevision,
+      saveSessionId: saveSessionIdRef.current!,
+      saveSequence: nextSaveSequenceRef.current,
+    };
+  }, []);
 
   // Editor instance — set via GrapheEditor's onEditorReady callback
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -314,6 +338,9 @@ export function NoteShell() {
     if (note) {
       setTitle(note.title);
       setAuthoritativeServerRevision(note.updatedAt ?? null);
+      if (typeof note.updatedAt === "string") {
+        serverRevisionByNoteRef.current.set(note.id, note.updatedAt);
+      }
       // Seed the live state so the next save reflects the freshly-loaded note.
       liveStateRef.current = {
         title: note.title,
@@ -461,35 +488,21 @@ export function NoteShell() {
             });
           }
         } else {
+          const ordering = nextSaveOrdering(id);
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const savedNote = await updateNoteMut.mutateAsync({
             id,
-            data: data as any,
+            data: { ...data, ...ordering } as any,
           });
+          applyAuthoritativeNoteSaveToCache(queryClient, savedNote);
           if (
             selectedNoteIdRef.current === id &&
             typeof savedNote?.updatedAt === "string"
           ) {
             setAuthoritativeServerRevision(savedNote.updatedAt);
           }
-          // E2: patch the cached list in place instead of refetching. A debounced
-          // autosave is a hot path — invalidateQueries here fired a GET /api/notes
-          // on every save. Merge the saved fields (title/contentText/etc.) + a fresh
-          // updatedAt into the matching row across all cached list variants. Reorder
-          // by sort settles on the next natural refetch (create/delete/move/nav).
-          {
-            const now = new Date().toISOString();
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            queryClient.setQueriesData(
-              { queryKey: getGetNotesQueryKey() },
-              (old: any) =>
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                Array.isArray(old)
-                  ? old.map((n: any) =>
-                      n.id === id ? { ...n, ...data, updatedAt: now } : n,
-                    )
-                  : old,
-            );
+          if (typeof savedNote?.updatedAt === "string") {
+            serverRevisionByNoteRef.current.set(id, savedNote.updatedAt);
           }
         }
         const acknowledged =
@@ -534,7 +547,7 @@ export function NoteShell() {
         captureSafeNoteFailure("version snapshot");
       }
     },
-    [queryClient, updateNoteMut, createVersion],
+    [queryClient, updateNoteMut, createVersion, nextSaveOrdering],
   );
 
   const debouncedSave = useCallback(
@@ -628,10 +641,11 @@ export function NoteShell() {
           }
           return { ok: true };
         }
+        const ordering = nextSaveOrdering(entry.id);
         return authenticatedFetch(`/api/notes/${entry.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(entry.data),
+          body: JSON.stringify({ ...entry.data, ...ordering }),
           keepalive: true,
         });
       },
@@ -791,10 +805,21 @@ export function NoteShell() {
             }
           } else {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await updateNoteMut.mutateAsync({
+            const savedNote = await updateNoteMut.mutateAsync({
               id: selectedNoteId,
-              data: pending.data as any,
+              data: {
+                ...pending.data,
+                ...nextSaveOrdering(selectedNoteId),
+              } as any,
             });
+            applyAuthoritativeNoteSaveToCache(queryClient, savedNote);
+            if (typeof savedNote.updatedAt === "string") {
+              serverRevisionByNoteRef.current.set(
+                selectedNoteId,
+                savedNote.updatedAt,
+              );
+              setAuthoritativeServerRevision(savedNote.updatedAt);
+            }
           }
           pendingSaveRef.current.acknowledge(
             pending.id,
@@ -851,6 +876,7 @@ export function NoteShell() {
       performSave,
       updateNoteMut,
       queryClient,
+      nextSaveOrdering,
     ],
   );
 

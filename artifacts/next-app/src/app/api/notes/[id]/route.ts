@@ -11,6 +11,7 @@ import {
 import { getAuthUser } from "@/lib/auth-server";
 import { hasValidVaultProof } from "@/lib/vault-proof";
 import { canAccessVaultedNote } from "@/lib/vault-note-authorization";
+import { orderedNoteSaveWhere } from "@/lib/note-save-ordering-sql";
 import * as Sentry from "@sentry/nextjs";
 
 export async function GET(
@@ -119,20 +120,65 @@ export async function PATCH(
       );
     }
 
-    const isContentChange =
-      parsed.data.title !== undefined ||
-      parsed.data.content !== undefined ||
-      parsed.data.contentText !== undefined;
+    const {
+      baseRevision,
+      saveSessionId,
+      saveSequence,
+      ...notePatch
+    } = parsed.data;
+    const hasAnyOrderingField =
+      baseRevision !== undefined ||
+      saveSessionId !== undefined ||
+      saveSequence !== undefined;
+    const hasCompleteOrdering =
+      baseRevision !== undefined &&
+      saveSessionId !== undefined &&
+      saveSequence !== undefined;
+    if (hasAnyOrderingField && !hasCompleteOrdering) {
+      return NextResponse.json(
+        { error: "Save ordering fields must be provided together" },
+        { status: 400 },
+      );
+    }
+    if (
+      saveSequence !== undefined &&
+      (!Number.isSafeInteger(saveSequence) || saveSequence < 0)
+    ) {
+      return NextResponse.json(
+        { error: "Save sequence must be a non-negative safe integer" },
+        { status: 400 },
+      );
+    }
 
-    let updatePayload: typeof parsed.data & {
+    const isContentChange =
+      notePatch.title !== undefined ||
+      notePatch.content !== undefined ||
+      notePatch.contentText !== undefined;
+    // A legacy client must never get an unconditional content overwrite after
+    // the nullable migration. Metadata-only updates retain their old contract.
+    if (isContentChange && !hasCompleteOrdering) {
+      return NextResponse.json(
+        { code: "note_save_conflict", reason: "ordering_required" },
+        { status: 409 },
+      );
+    }
+
+    let updatePayload: typeof notePatch & {
       updatedAt?: Date;
       folderId?: number | null;
+      saveSessionId?: string;
+      saveSequence?: number;
     } = isContentChange
-      ? { ...parsed.data, updatedAt: new Date() }
-      : { ...parsed.data };
+      ? {
+          ...notePatch,
+          updatedAt: new Date(),
+          saveSessionId: saveSessionId!,
+          saveSequence: saveSequence!,
+        }
+      : { ...notePatch };
 
     // Auto-move note to a matching folder when tags are updated
-    if (parsed.data.tags !== undefined) {
+    if (notePatch.tags !== undefined) {
       const folders = await db
         .select()
         .from(foldersTable)
@@ -141,7 +187,7 @@ export async function PATCH(
       const matchingFolder = folders.find(
         (f) =>
           f.tagRules?.length > 0 &&
-          parsed.data.tags!.some((t) => f.tagRules.includes(t)),
+          notePatch.tags!.some((t) => f.tagRules.includes(t)),
       );
 
       if (matchingFolder) {
@@ -149,18 +195,29 @@ export async function PATCH(
       }
     }
 
+    const updateWhere = isContentChange
+      ? orderedNoteSaveWhere(routeParams.data.id, user.id, {
+          baseRevision: baseRevision!,
+          saveSessionId: saveSessionId!,
+          saveSequence: saveSequence!,
+        })
+      : and(
+          eq(notesTable.id, routeParams.data.id),
+          eq(notesTable.userId, user.id),
+        );
     const [note] = await db
       .update(notesTable)
       .set(updatePayload)
-      .where(
-        and(
-          eq(notesTable.id, routeParams.data.id),
-          eq(notesTable.userId, user.id),
-        ),
-      )
+      .where(updateWhere)
       .returning();
 
     if (!note) {
+      if (isContentChange) {
+        return NextResponse.json(
+          { code: "note_save_conflict", reason: "stale_or_cross_session" },
+          { status: 409 },
+        );
+      }
       return NextResponse.json({ error: "Note not found" }, { status: 404 });
     }
 

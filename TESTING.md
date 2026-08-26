@@ -30,6 +30,9 @@ disposable local PostgreSQL (never a configured Supabase database):
 pnpm run db:migrations:validate
 ```
 
+To validate migration ordering and checksums without creating or applying to a
+local database, run `pnpm run db:migrations:validate -- --check-only`.
+
 The validator uses tuples-only output with exact parsing and lock-state
 handshakes for both soft-delete race orders. It separately proves hard-delete FK
 rejection and rejects a mutated `USING (true)` policy or explicit client-role

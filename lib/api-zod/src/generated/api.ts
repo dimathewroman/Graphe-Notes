@@ -166,6 +166,10 @@ export const UpdateNoteParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateNoteBodySaveSequenceMin = 0;
+
+
+
 export const UpdateNoteBody = zod.object({
   "title": zod.string().optional(),
   "content": zod.string().optional(),
@@ -174,7 +178,10 @@ export const UpdateNoteBody = zod.object({
   "tags": zod.array(zod.string()).optional(),
   "pinned": zod.boolean().optional(),
   "favorite": zod.boolean().optional(),
-  "coverImage": zod.string().nullish()
+  "coverImage": zod.string().nullish(),
+  "baseRevision": zod.string().optional().describe('Opaque server-issued updatedAt revision observed before an editor content write.'),
+  "saveSessionId": zod.string().uuid().optional().describe('Opaque browser editing-session identifier.'),
+  "saveSequence": zod.number().min(updateNoteBodySaveSequenceMin).optional()
 })
 
 export const UpdateNoteResponse = zod.object({

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, varchar, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, varchar, index, uuid, bigint } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -19,6 +19,10 @@ export const notesTable = pgTable("notes", {
   deletedReason: text("deleted_reason"), // 'deleted' | 'expired'
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  // Durable editor writes are fenced by a browser-session UUID and a strictly
+  // increasing sequence. Both remain nullable for the no-backfill upgrade.
+  saveSessionId: uuid("save_session_id"),
+  saveSequence: bigint("save_sequence", { mode: "number" }),
 }, (table) => [
   index("notes_user_id_deleted_at_idx").on(table.userId, table.deletedAt),
   index("notes_folder_id_idx").on(table.folderId),

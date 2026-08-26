@@ -34,6 +34,7 @@ import type {
   HealthStatus,
   MoveNoteBody,
   Note,
+  NoteSaveConflictResponse,
   PermanentDeleteNote200,
   PermanentDeleteNoteBody,
   QuickBit,
@@ -689,7 +690,7 @@ export const updateNote = async (id: number,
 
 
 
-export const getUpdateNoteMutationOptions = <TError = ErrorType<ErrorResponse>,
+export const getUpdateNoteMutationOptions = <TError = ErrorType<ErrorResponse | NoteSaveConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateNote>>, TError,{id: number;data: BodyType<UpdateNoteBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateNote>>, TError,{id: number;data: BodyType<UpdateNoteBody>}, TContext> => {
 
@@ -718,12 +719,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type UpdateNoteMutationResult = NonNullable<Awaited<ReturnType<typeof updateNote>>>
     export type UpdateNoteMutationBody = BodyType<UpdateNoteBody>
-    export type UpdateNoteMutationError = ErrorType<ErrorResponse>
+    export type UpdateNoteMutationError = ErrorType<ErrorResponse | NoteSaveConflictResponse>
 
     /**
  * @summary Update a note
  */
-export const useUpdateNote = <TError = ErrorType<ErrorResponse>,
+export const useUpdateNote = <TError = ErrorType<ErrorResponse | NoteSaveConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateNote>>, TError,{id: number;data: BodyType<UpdateNoteBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateNote>>,

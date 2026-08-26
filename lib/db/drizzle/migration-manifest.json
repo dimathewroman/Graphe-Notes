@@ -63,6 +63,10 @@
         {
           "path": "0007_attachment_upload_reservations.sql",
           "sha256": "7628b69814f1274fa4155f14249c8c500978851bf0a0f9b4ba02a4c75d51b3b1"
+        },
+        {
+          "path": "0008_note_save_ordering.sql",
+          "sha256": "d034db760be8619c315be5e168c39dec06996e6bc06e1cb30a28067fa2b1f0af"
         }
       ]
     },
@@ -71,7 +75,7 @@
       "files": [
         {
           "path": "fresh/0000_current_schema.sql",
-          "sha256": "4d1510b371d6a4792fe01336006bb86f6e7908b9ddf62ed319256861ee73bdc7"
+          "sha256": "e11858a7245ed23b149c81ae2d6694f58cada76680771363230dc0e86cc3c203"
         },
         {
           "path": "0001_enable_rls_all_tables.sql",

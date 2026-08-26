@@ -159,6 +159,32 @@ export interface UpdateNoteBody {
   favorite?: boolean;
   /** @nullable */
   coverImage?: string | null;
+  /** Opaque server-issued updatedAt revision observed before an editor content write. */
+  baseRevision?: string;
+  /** Opaque browser editing-session identifier. */
+  saveSessionId?: string;
+  /** @minimum 0 */
+  saveSequence?: number;
+}
+
+export type NoteSaveConflictResponseCode = typeof NoteSaveConflictResponseCode[keyof typeof NoteSaveConflictResponseCode];
+
+
+export const NoteSaveConflictResponseCode = {
+  note_save_conflict: 'note_save_conflict',
+} as const;
+
+export type NoteSaveConflictResponseReason = typeof NoteSaveConflictResponseReason[keyof typeof NoteSaveConflictResponseReason];
+
+
+export const NoteSaveConflictResponseReason = {
+  ordering_required: 'ordering_required',
+  stale_or_cross_session: 'stale_or_cross_session',
+} as const;
+
+export interface NoteSaveConflictResponse {
+  code: NoteSaveConflictResponseCode;
+  reason: NoteSaveConflictResponseReason;
 }
 
 export interface MoveNoteBody {

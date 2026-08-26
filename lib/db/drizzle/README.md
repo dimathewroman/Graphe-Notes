@@ -41,3 +41,10 @@ The command is never invoked by local validation, builds, or deployment hooks;
 it runs a read-only transaction and does not print the URL. Its live result and
 runtime-role ownership remain unproven in source. Do not drop the table during
 app rollback; retain it until the cleanup inventory is empty.
+
+`0008_note_save_ordering.sql` is additive and intentionally does not backfill
+existing notes. Roll back application code before considering schema removal,
+but leave the nullable columns in place until no deployed writer can send the
+ordering contract; older content clients fail closed with a typed conflict
+rather than bypassing the server revision fence. Dropping the columns is a
+separate reviewed migration, never a rollback side effect.

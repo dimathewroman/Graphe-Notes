@@ -14,6 +14,7 @@ import { ScrollArea } from "./ui/scroll-area";
 import { executeAiRequest, AI_SETTINGS_QUERY_KEY } from "@/lib/execute-ai-request";
 import { isDemoAiEnabled } from "@/lib/ai-demo-mock";
 import { evaluateAiCapability, type AiCapabilityEvaluation } from "@lib/ai-capabilities";
+import { createBrowserSaveSessionId } from "@/lib/note-save-ordering";
 
 interface AiSettingsResponse {
   activeAiProvider?: string | null;
@@ -217,8 +218,17 @@ export function AIPanel() {
     if (activeEditor) {
       activeEditor.chain().focus().insertContentAt(activeEditor.state.doc.content.size, html).run();
     } else if (selectedNoteId && note) {
-      // Fallback: no live editor mounted — patch persisted content directly.
-      await updateNoteMut.mutateAsync({ id: selectedNoteId, data: { content: `${note.content}<br>${html}` } });
+      // Fallback: no live editor mounted. It still uses the durable ordering
+      // contract, so a stale panel cannot clobber a newer note.
+      await updateNoteMut.mutateAsync({
+        id: selectedNoteId,
+        data: {
+          content: `${note.content}<br>${html}`,
+          baseRevision: new Date(note.updatedAt).toISOString(),
+          saveSessionId: createBrowserSaveSessionId(),
+          saveSequence: 1,
+        },
+      });
       queryClient.invalidateQueries({ queryKey: getGetNotesQueryKey() });
     } else {
       return;

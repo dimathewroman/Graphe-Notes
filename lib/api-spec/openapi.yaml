@@ -256,6 +256,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: The server revision is stale, the session sequence is stale, or an old client omitted required ordering fields.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NoteSaveConflictResponse"
   /notes/{id}/delete:
     patch:
       operationId: softDeleteNote
@@ -1190,6 +1196,28 @@ components:
           type: boolean
         coverImage:
           type: ["string", "null"]
+        baseRevision:
+          type: string
+          description: Opaque server-issued updatedAt revision observed before an editor content write.
+        saveSessionId:
+          type: string
+          format: uuid
+          description: Opaque browser editing-session identifier.
+        saveSequence:
+          type: integer
+          format: int64
+          minimum: 0
+
+    NoteSaveConflictResponse:
+      type: object
+      required: [code, reason]
+      properties:
+        code:
+          type: string
+          enum: [note_save_conflict]
+        reason:
+          type: string
+          enum: [ordering_required, stale_or_cross_session]
     MoveNoteBody:
       type: object
       properties:

@@ -54,6 +54,17 @@ const userId = user.id; // Use this for ALL db queries — never trust client-pr
 
 Never use a user ID from the request body or query params. The authenticated `user.id` is the only trusted source.
 
+### Durable editor ordering
+
+Content-bearing `PATCH /api/notes/:id` requests are authorized as the note owner
+and atomically fenced by the server-issued `updatedAt` base revision plus an
+opaque browser-session UUID and non-negative sequence. The sequence exception
+is available only to the same stored session and only when it is strictly newer;
+another tab cannot use it to overwrite a newer note. The nullable migration has
+no backfill, and legacy content clients receive a typed conflict rather than an
+unconditional overwrite. Session IDs and sequence values are request-control
+metadata only and are never sent to analytics or Sentry.
+
 ---
 
 ## Row Level Security

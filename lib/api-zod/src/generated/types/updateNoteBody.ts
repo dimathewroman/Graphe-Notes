@@ -18,4 +18,10 @@ export interface UpdateNoteBody {
   favorite?: boolean;
   /** @nullable */
   coverImage?: string | null;
+  /** Opaque server-issued updatedAt revision observed before an editor content write. */
+  baseRevision?: string;
+  /** Opaque browser editing-session identifier. */
+  saveSessionId?: string;
+  /** @minimum 0 */
+  saveSequence?: number;
 }

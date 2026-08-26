@@ -78,7 +78,9 @@ CREATE TABLE "folders" (
 	"tag_rules" text[] DEFAULT '{}' NOT NULL,
 	"sort_order" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"save_session_id" uuid,
+	"save_sequence" bigint
 );
 
 CREATE TABLE "note_versions" (

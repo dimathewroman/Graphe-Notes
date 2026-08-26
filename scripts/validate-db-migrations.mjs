@@ -54,6 +54,13 @@ function verifyChecksums() {
 
 verifyChecksums();
 
+if (process.argv.includes("--check-only")) {
+  console.log(
+    "migration static validation passed: ordered production list and checksummed tracks; no database was created or modified",
+  );
+  process.exit(0);
+}
+
 const workDir = mkdtempSync("/private/tmp/graphe-pg-");
 const dataDir = resolve(workDir, "pgdata");
 const socketDir = resolve(workDir, "socket");
@@ -101,6 +108,12 @@ function applyProductionFixture(database) {
   }
 }
 
+function applyProductionMigrations(database) {
+  for (const entry of manifest.tracks.productionUpgrade.migrationFiles) {
+    sqlFile(database, entry.path);
+  }
+}
+
 function validate(database) {
   const result = scalar(
     database,
@@ -111,9 +124,10 @@ function validate(database) {
        (select count(*) from pg_constraint where conname in ('attachments_note_id_notes_id_fk','note_versions_note_id_notes_id_fk') and confdeltype='r'),
        (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and c.relrowsecurity),
        (select count(*) from pg_policies where schemaname='public'),
-       (select count(*) from pg_indexes where schemaname='public' and indexname in ('attachments_user_id_idx','attachments_note_id_idx','attachments_note_id_created_at_idx','note_versions_user_id_idx','note_versions_note_id_created_at_idx','notes_user_id_deleted_at_idx')));`,
+       (select count(*) from pg_indexes where schemaname='public' and indexname in ('attachments_user_id_idx','attachments_note_id_idx','attachments_note_id_created_at_idx','note_versions_user_id_idx','note_versions_note_id_created_at_idx','notes_user_id_deleted_at_idx')),
+       (select count(*) from information_schema.columns where table_schema='public' and table_name='notes' and column_name in ('save_session_id','save_sequence')));`,
   );
-  if (result !== "t,0,3,2,13,52,6") {
+  if (result !== "t,0,3,2,13,52,6,2") {
     throw new Error(`schema invariant validation failed\n${result}`);
   }
   sql(
@@ -126,6 +140,68 @@ function validate(database) {
     "set role authenticated; select * from private.attachment_upload_reservations;",
     { expectFailure: true },
   );
+}
+
+function orderedNoteUpdate(database, id, sessionId, sequence, baseRevision, content) {
+  return scalar(
+    database,
+    `update notes
+       set content='${content}', content_text='${content}',
+           updated_at='2026-08-26T01:02:03.456Z',
+           save_session_id='${sessionId}', save_sequence=${sequence}
+     where id=${id} and user_id='ordering-owner'
+       and (updated_at='${baseRevision}'
+         or (save_session_id='${sessionId}' and save_sequence < ${sequence}))
+     returning content;`,
+  );
+}
+
+function validateNoteSaveOrdering(database) {
+  const base = "2026-08-26T00:00:00.000Z";
+  const sessionA = "11111111-1111-4111-8111-111111111111";
+  const sessionB = "22222222-2222-4222-8222-222222222222";
+  const reset = (id) => {
+    sql(
+      database,
+      `insert into notes(id,user_id,title,content,content_text,updated_at,save_session_id,save_sequence)
+       values (${id},'ordering-owner','ordering','base','base','${base}',null,null);`,
+    );
+  };
+  const content = (id) => scalar(database, `select content from notes where id=${id};`);
+
+  // A1 then A2: A2 follows the same-session strictly-newer exception.
+  reset(101);
+  if (orderedNoteUpdate(database, 101, sessionA, 1, base, "A1") !== "A1" ||
+      orderedNoteUpdate(database, 101, sessionA, 2, base, "A2") !== "A2" ||
+      content(101) !== "A2") {
+    throw new Error("note ordering A1-first invariant failed");
+  }
+
+  // A2 then delayed A1: lower sequence must be rejected after A2 commits.
+  reset(102);
+  if (orderedNoteUpdate(database, 102, sessionA, 2, base, "A2") !== "A2" ||
+      orderedNoteUpdate(database, 102, sessionA, 1, base, "A1") !== "" ||
+      content(102) !== "A2") {
+    throw new Error("note ordering A2-first invariant failed");
+  }
+
+  // Duplicate/stale sequences and another tab cannot consume the exception.
+  reset(103);
+  if (orderedNoteUpdate(database, 103, sessionA, 2, base, "A2") !== "A2" ||
+      orderedNoteUpdate(database, 103, sessionA, 2, base, "duplicate") !== "" ||
+      orderedNoteUpdate(database, 103, sessionA, 1, base, "stale") !== "" ||
+      orderedNoteUpdate(database, 103, sessionB, 99, base, "other-tab") !== "" ||
+      content(103) !== "A2") {
+    throw new Error("note ordering stale/cross-session invariant failed");
+  }
+
+  // Nullable migrated rows have no backfill: exact base accepts once, stale base
+  // does not receive the sequence exception until a session/sequence is stored.
+  reset(104);
+  if (orderedNoteUpdate(database, 104, sessionA, 1, base, "first-ordered") !== "first-ordered" ||
+      content(104) !== "first-ordered") {
+    throw new Error("note ordering nullable-row invariant failed");
+  }
 }
 
 function scalar(database, statement) {
@@ -527,8 +603,9 @@ try {
   ) {
     throw new Error("production fixture policy fingerprint differs");
   }
-  sqlFile("upgrade_path", "0007_attachment_upload_reservations.sql");
+  applyProductionMigrations("upgrade_path");
   validate("upgrade_path");
+  validateNoteSaveOrdering("upgrade_path");
   validateHostedPreflightSql("upgrade_path");
   await validateFinalizeDeleteRace("upgrade_path");
 
@@ -564,7 +641,7 @@ try {
 
   bootstrap("hosted_policy_negative");
   applyProductionFixture("hosted_policy_negative");
-  sqlFile("hosted_policy_negative", "0007_attachment_upload_reservations.sql");
+  applyProductionMigrations("hosted_policy_negative");
   sql(
     "hosted_policy_negative",
     'alter policy "attachments_select" on attachments using (true);',
@@ -573,7 +650,7 @@ try {
 
   bootstrap("hosted_execute_negative");
   applyProductionFixture("hosted_execute_negative");
-  sqlFile("hosted_execute_negative", "0007_attachment_upload_reservations.sql");
+  applyProductionMigrations("hosted_execute_negative");
   sql(
     "hosted_execute_negative",
     "grant execute on function public.rls_auto_enable() to authenticated;",
@@ -581,7 +658,7 @@ try {
   expectHostedPreflightFailure("hosted_execute_negative");
 
   console.log(
-    "migration validation passed: exact tuples/checksums/policies, fresh and 0006-equivalent upgrade, mutated-policy and client-EXECUTE negatives, synchronized soft-delete and hard-delete serial orders, hosted preflight SQL (local only)",
+    "migration validation passed: exact tuples/checksums/policies, fresh and 0006-equivalent upgrade, durable note save ordering, mutated-policy and client-EXECUTE negatives, synchronized soft-delete and hard-delete serial orders, hosted preflight SQL (local only)",
   );
 } finally {
   spawnSync("pg_ctl", ["-D", dataDir, "-m", "fast", "-w", "stop"], {
