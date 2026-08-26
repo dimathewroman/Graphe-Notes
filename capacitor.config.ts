@@ -1,9 +1,4 @@
 import type { CapacitorConfig } from "@capacitor/cli";
+import foundation from "./capacitor.foundation.json";
 
-const config: CapacitorConfig = {
-  appId: "com.leridian.graphe",
-  appName: "Graphe Notes",
-  webDir: "artifacts/static-client/out",
-};
-
-export default config;
+export default foundation satisfies CapacitorConfig;

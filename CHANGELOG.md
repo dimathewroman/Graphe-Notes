@@ -11,6 +11,14 @@
   support. The shell has no live-reload server, cleartext exception, or native
   OAuth claim.
 
+### Fixed
+
+- Hardened the Capacitor foundation verifier to read the canonical JSON config
+  without evaluating TypeScript, reject mutation-spoofed/insecure settings, and
+  require static build before sync. Android backups, device transfer, and the
+  unused broad FileProvider path were removed; the normal Android build now
+  proves only unsigned debug assembly and local unit tests.
+
 - Added `artifacts/static-client`, a reproducible `output: "export"` webDir
   target for future Capacitor packaging. It reuses the browser-safe application
   entrypoints while keeping hosted `/api`, middleware, server-only owners,

@@ -102,12 +102,14 @@ source-controlled Capacitor `webDir`. It reuses browser-safe UI, editor, auth, a
 owners from `artifacts/next-app/src`, but it has no API routes, middleware,
 server instrumentation, database client, service-role client, cron, response
 headers, or telemetry rewrite. `pnpm run build:static-client` emits its static
-assets to `artifacts/static-client/out/`, which `capacitor.config.ts` packages
-into `android/` and `ios/`; the executable boundary guard walks the entrypoint
+assets to `artifacts/static-client/out/`, which `capacitor.config.ts` imports
+from the JSON-only `capacitor.foundation.json` owner and packages into `android/`
+and `ios/`; the executable boundary guard walks the entrypoint
 import graph before the build and rejects those hosted owners. The shell has the
 fixed identity `com.leridian.graphe` / `Graphe Notes` and native `graphe` URL
 registration. It deliberately has no remote `server.url` or transport-security
-exception.
+exception. The Android shell is backup and device-transfer fail-closed and has
+no FileProvider because this foundation does not share local files.
 
 The hosted `artifacts/next-app` deployment remains the only owner of `/api`,
 JWT middleware, server/edge instrumentation, CSP/security headers, PostHog

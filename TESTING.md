@@ -34,11 +34,12 @@ PostHog ingest host is configured.
 
 The Capacitor foundation has a deterministic source/configuration guard for its
 exact app identity, static `webDir`, package pins, no-remote/no-insecure server
-configuration, native URL-scheme registration, and static-build-before-sync
-contract:
+configuration, fail-closed Android backup/no-provider posture, native URL-scheme
+registration, and exact static-build-before-sync contract:
 
 ```bash
 pnpm run check:capacitor-foundation
+pnpm run test:capacitor-foundation
 ```
 
 `pnpm run cap:sync` first rebuilds the static client and then copies it into
@@ -47,6 +48,13 @@ synthetic public build values shown above. An iOS runtime build uses the
 per-command Xcode-beta developer directory; neither host compilation nor the
 source guard proves device launch, OAuth callback completion, or remote API
 authorization.
+
+The mutation-negative check copies only the shell's deterministic owners into a
+temporary fixture and proves that a wrong/comment-spoofed identity, computed
+server config, reversed sync order, backup/provider reintroduction, and either
+missing native scheme are rejected. It never evaluates arbitrary TypeScript
+configuration. `pnpm run android:build` performs only unsigned
+`:app:assembleDebug` and `:app:testDebugUnitTest` through the checked-in wrapper.
 
 Test location: `artifacts/next-app/e2e/`
 

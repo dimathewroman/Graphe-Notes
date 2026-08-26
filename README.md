@@ -98,6 +98,12 @@ scheme on both platforms. The shell always packages the reproducible static
 bundle in `artifacts/static-client/out`; it has no live-reload `server.url`,
 cleartext exception, or mixed-content configuration.
 
+`pnpm run android:build` is an unsigned local proof only: after sync it runs
+`:app:assembleDebug` and `:app:testDebugUnitTest` through the checked-in Gradle
+wrapper. It does not create a release artifact, configure signing, or use
+credentials. Android backup and device-transfer extraction are explicitly
+disabled, and the shell registers no file-sharing provider.
+
 Use public, non-production values for a local static-bundle or native-build
 check. These example values only exercise the build boundary and must never be
 committed as deployment configuration:

@@ -82,6 +82,11 @@ It registers the `graphe` URL scheme at the native boundary only. The shell
 does not yet parse, trust, or exchange deep-link/OAuth values, so registration
 is not an authorization mechanism or evidence of a completed mobile-auth flow.
 
+The Android manifest also disables backup and references exclusions for both
+legacy full backup and modern data extraction/device transfer. This foundation
+does not expose a `FileProvider` or file-path resource because it has no approved
+native file-sharing flow.
+
 The hosted app retains its `/ingest` rewrite. A static build does not fall back
 to that unavailable rewrite: browser PostHog is disabled unless an explicit
 public direct ingest host is supplied. This preserves the existing deliberate

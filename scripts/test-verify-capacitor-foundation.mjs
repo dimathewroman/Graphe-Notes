@@ -1,0 +1,59 @@
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { verifyCapacitorFoundation } from "./verify-capacitor-foundation.mjs";
+
+const repositoryRoot = resolve(import.meta.dirname, "..");
+const fixtureFiles = [
+  "package.json",
+  "capacitor.config.ts",
+  "capacitor.foundation.json",
+  "scripts/build-android-debug.sh",
+  "android/app/build.gradle",
+  "android/app/src/main/AndroidManifest.xml",
+  "android/app/src/main/res/xml/backup_rules.xml",
+  "android/app/src/main/res/xml/data_extraction_rules.xml",
+  "ios/App/App/Info.plist",
+  "ios/App/App.xcodeproj/project.pbxproj",
+];
+
+function fixture() {
+  const root = mkdtempSync(resolve(tmpdir(), "graphe-capacitor-foundation-"));
+  for (const relativePath of fixtureFiles) cpSync(resolve(repositoryRoot, relativePath), resolve(root, relativePath));
+  return root;
+}
+
+function mutate(root, relativePath, transform) {
+  const path = resolve(root, relativePath);
+  writeFileSync(path, transform(readFileSync(path, "utf8")));
+}
+
+function rejects(name, change) {
+  const root = fixture();
+  try {
+    change(root);
+    try {
+      verifyCapacitorFoundation(root);
+    } catch {
+      console.log(`✓ rejects ${name}`);
+      return;
+    }
+    throw new Error(`Verifier accepted ${name}`);
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+}
+
+verifyCapacitorFoundation(repositoryRoot);
+rejects("wrong canonical identity", (root) => mutate(root, "capacitor.foundation.json", (source) => source.replace("com.leridian.graphe", "com.example.wrong")));
+rejects("comment-spoofed identity", (root) => {
+  mutate(root, "capacitor.foundation.json", (source) => source.replace("com.leridian.graphe", "com.example.wrong"));
+  mutate(root, "capacitor.config.ts", (source) => `${source}\n// appId: "com.leridian.graphe"`);
+});
+rejects("computed server config", (root) => mutate(root, "capacitor.config.ts", (source) => source.replace("export default foundation satisfies CapacitorConfig;", "export default { ...foundation, [\"server\"]: {} } satisfies CapacitorConfig;")));
+rejects("reversed Capacitor sync", (root) => mutate(root, "package.json", (source) => source.replace("pnpm run build:mobile-web && pnpm exec cap sync", "pnpm exec cap sync && pnpm run build:mobile-web")));
+rejects("backup reintroduction", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace('android:allowBackup="false"', 'android:allowBackup="true"')));
+rejects("provider reintroduction", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace("</application>", '<provider android:name="androidx.core.content.FileProvider" /></application>')));
+rejects("missing Android scheme", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace('android:scheme="graphe"', 'android:scheme="other"')));
+rejects("missing iOS scheme", (root) => mutate(root, "ios/App/App/Info.plist", (source) => source.replace("<string>graphe</string>", "<string>other</string>")));
+console.log("Capacitor foundation mutation-negative tests passed.");

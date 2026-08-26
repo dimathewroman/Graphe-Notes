@@ -1,21 +1,145 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const repositoryRoot = resolve(import.meta.dirname, "..");
-const read = (relativePath) => {
-  const path = resolve(repositoryRoot, relativePath);
-  if (!existsSync(path)) throw new Error(`Missing required Capacitor foundation file: ${relativePath}`);
-  return readFileSync(path, "utf8");
+const expectedConfig = {
+  appId: "com.leridian.graphe",
+  appName: "Graphe Notes",
+  webDir: "artifacts/static-client/out",
 };
-const requireMatch = (source, pattern, description) => {
-  if (!pattern.test(source)) throw new Error(`Capacitor foundation check failed: ${description}`);
-};
-const rejectMatch = (source, pattern, description) => {
-  if (pattern.test(source)) throw new Error(`Capacitor foundation check failed: ${description}`);
-};
+const expectedConfigWrapper = `import type { CapacitorConfig } from "@capacitor/cli";
+import foundation from "./capacitor.foundation.json";
 
-try {
-  const packageJson = JSON.parse(read("package.json"));
+export default foundation satisfies CapacitorConfig;`;
+
+function fail(message) {
+  throw new Error(`Capacitor foundation check failed: ${message}`);
+}
+
+function read(root, relativePath) {
+  const path = resolve(root, relativePath);
+  if (!existsSync(path)) fail(`missing required file ${relativePath}`);
+  return readFileSync(path, "utf8");
+}
+
+function stripComments(source) {
+  return source
+    .replace(/<!--[\s\S]*?-->/gu, "")
+    .replace(/\/\*[\s\S]*?\*\//gu, "")
+    .replace(/^\s*\/\/.*$/gmu, "");
+}
+
+function equalJson(actual, expected, description) {
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(description);
+}
+
+function attributes(fragment) {
+  const values = new Map();
+  for (const match of fragment.matchAll(/([\w:-]+)\s*=\s*(["'])(.*?)\2/gu)) {
+    values.set(match[1], match[3]);
+  }
+  return values;
+}
+
+function xmlElements(source, name) {
+  const active = stripComments(source);
+  return [...active.matchAll(new RegExp(`<${name}\\b([^>]*)>`, "gu"))].map((match) => attributes(match[1]));
+}
+
+function hasXmlElement(source, name, expectedAttributes) {
+  return xmlElements(source, name).some((element) =>
+    Object.entries(expectedAttributes).every(([key, value]) => element.get(key) === value),
+  );
+}
+
+function gradleAssignments(source, name) {
+  return stripComments(source)
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith(`${name} `) || line.startsWith(`${name}=`))
+    .map((line) => line.replace(new RegExp(`^${name}\\s*=?\\s*`, "u"), "").replace(/["']/gu, "").replace(/;$/u, ""));
+}
+
+function plistElementAfterKey(source, key, element) {
+  const active = stripComments(source);
+  const keyToken = `<key>${key}</key>`;
+  const keyIndex = active.indexOf(keyToken);
+  if (keyIndex === -1) return null;
+  const contentStart = keyIndex + keyToken.length;
+  const elementStart = active.indexOf(`<${element}>`, contentStart);
+  if (elementStart === -1 || !/^\s*$/u.test(active.slice(contentStart, elementStart))) return null;
+  const openTag = `<${element}>`;
+  const closeTag = `</${element}>`;
+  let depth = 0;
+  for (let index = elementStart; index < active.length;) {
+    const nextOpen = active.indexOf(openTag, index);
+    const nextClose = active.indexOf(closeTag, index);
+    if (nextClose === -1) return null;
+    if (nextOpen !== -1 && nextOpen < nextClose) {
+      depth += 1;
+      index = nextOpen + openTag.length;
+    } else {
+      depth -= 1;
+      index = nextClose + closeTag.length;
+      if (depth === 0) return active.slice(elementStart, index);
+    }
+  }
+  return null;
+}
+
+function plistStringAfterKey(source, key) {
+  const value = plistElementAfterKey(source, key, "string");
+  return value?.match(/^<string>([^<]*)<\/string>$/u)?.[1] ?? null;
+}
+
+function verifyAndroid(root) {
+  const build = read(root, "android/app/build.gradle");
+  const namespaces = gradleAssignments(build, "namespace");
+  const applicationIds = gradleAssignments(build, "applicationId");
+  if (namespaces.length !== 1 || namespaces[0] !== expectedConfig.appId) fail("Android namespace differs");
+  if (applicationIds.length !== 1 || applicationIds[0] !== expectedConfig.appId) fail("Android application ID differs");
+
+  const manifest = read(root, "android/app/src/main/AndroidManifest.xml");
+  const applications = xmlElements(manifest, "application");
+  if (applications.length !== 1) fail("Android manifest must contain one application owner");
+  const application = applications[0];
+  if (application.get("android:allowBackup") !== "false") fail("Android backup is not fail-closed");
+  if (application.get("android:dataExtractionRules") !== "@xml/data_extraction_rules") fail("Android data-extraction rules are not fail-closed");
+  if (application.get("android:fullBackupContent") !== "@xml/backup_rules") fail("Android full-backup rules are not fail-closed");
+  if (xmlElements(manifest, "provider").length !== 0) fail("Android FileProvider must not be registered");
+  if (stripComments(manifest).includes("usesCleartextTraffic")) fail("Android cleartext traffic setting is present");
+  if (!hasXmlElement(manifest, "data", { "android:scheme": "graphe" })) fail("Android graphe URL scheme is missing");
+  if (existsSync(resolve(root, "android/app/src/main/res/xml/file_paths.xml"))) fail("unused Android broad file-path resource is present");
+
+  const backupRules = read(root, "android/app/src/main/res/xml/backup_rules.xml");
+  if (!hasXmlElement(backupRules, "full-backup-content", {}) || !hasXmlElement(backupRules, "exclude", { domain: "root", path: "." })) {
+    fail("Android full-backup exclusion is incomplete");
+  }
+  const extractionRules = read(root, "android/app/src/main/res/xml/data_extraction_rules.xml");
+  if (!hasXmlElement(extractionRules, "data-extraction-rules", {}) ||
+      !hasXmlElement(extractionRules, "cloud-backup", {}) ||
+      !hasXmlElement(extractionRules, "device-transfer", {}) ||
+      xmlElements(extractionRules, "exclude").filter((element) => element.get("domain") === "root" && element.get("path") === ".").length < 2) {
+    fail("Android data-extraction exclusions are incomplete");
+  }
+}
+
+function verifyIos(root) {
+  const info = read(root, "ios/App/App/Info.plist");
+  if (plistStringAfterKey(info, "CFBundleIdentifier") !== "$(PRODUCT_BUNDLE_IDENTIFIER)") fail("iOS bundle identifier wiring is missing");
+  if (plistStringAfterKey(info, "CFBundleDisplayName") !== expectedConfig.appName) fail("iOS display name differs");
+  const urlTypes = plistElementAfterKey(info, "CFBundleURLTypes", "array");
+  if (!urlTypes) fail("iOS URL-type registration is missing");
+  const schemes = plistElementAfterKey(urlTypes, "CFBundleURLSchemes", "array");
+  if (!schemes || !/^<array>\s*<string>graphe<\/string>\s*<\/array>$/u.test(schemes)) fail("iOS graphe URL scheme is missing");
+  if (stripComments(info).includes("NSAllowsArbitraryLoads")) fail("iOS arbitrary loads setting is present");
+
+  const project = stripComments(read(root, "ios/App/App.xcodeproj/project.pbxproj"));
+  const bundleIds = [...project.matchAll(/^\s*PRODUCT_BUNDLE_IDENTIFIER\s*=\s*([^;]+);/gmu)].map((match) => match[1].trim());
+  if (bundleIds.length === 0 || bundleIds.some((value) => value !== expectedConfig.appId)) fail("iOS bundle ID differs");
+}
+
+export function verifyCapacitorFoundation(repositoryRoot = resolve(import.meta.dirname, "..")) {
+  const packageJson = JSON.parse(read(repositoryRoot, "package.json"));
   const expectedPackages = {
     "@capacitor/app": "8.1.1",
     "@capacitor/core": "8.5.0",
@@ -25,40 +149,35 @@ try {
   };
   for (const [name, version] of Object.entries(expectedPackages)) {
     const actual = packageJson.dependencies?.[name] ?? packageJson.devDependencies?.[name];
-    if (actual !== version) throw new Error(`${name} must be pinned to ${version}, found ${actual ?? "none"}`);
+    if (actual !== version) fail(`${name} must be pinned to ${version}, found ${actual ?? "none"}`);
   }
 
-  const config = read("capacitor.config.ts");
-  requireMatch(config, /appId:\s*["']com\.leridian\.graphe["']/u, "app ID is not com.leridian.graphe");
-  requireMatch(config, /appName:\s*["']Graphe Notes["']/u, "app name is not Graphe Notes");
-  requireMatch(config, /webDir:\s*["']artifacts\/static-client\/out["']/u, "webDir is not the static-client output");
-  rejectMatch(config, /\bserver\s*:/u, "must not configure a Capacitor server override");
-  rejectMatch(config, /allowMixedContent|cleartext|allowNavigation/u, "must not weaken WebView navigation or transport security");
+  const configWrapper = read(repositoryRoot, "capacitor.config.ts").replace(/\r\n/gu, "\n").trim();
+  if (configWrapper !== expectedConfigWrapper) fail("Capacitor config must be the canonical JSON wrapper");
+  equalJson(JSON.parse(read(repositoryRoot, "capacitor.foundation.json")), expectedConfig, "effective Capacitor config differs");
 
   const scripts = packageJson.scripts ?? {};
-  requireMatch(scripts["build:mobile-web"] ?? "", /build:static-client/u, "mobile build does not use the static-client build");
-  requireMatch(scripts["cap:sync"] ?? "", /build:mobile-web/u, "Capacitor sync does not rebuild the static bundle");
-  requireMatch(scripts["cap:sync"] ?? "", /cap sync/u, "Capacitor sync script is missing");
-  requireMatch(scripts["android:build"] ?? "", /cap build android/u, "Android build script is missing");
-  requireMatch(scripts["ios:build"] ?? "", /DEVELOPER_DIR=\/Applications\/Xcode-beta\.app\/Contents\/Developer/u, "iOS build does not select Xcode-beta per command");
-  requireMatch(scripts["ios:build"] ?? "", /iphonesimulator/u, "iOS build does not target the simulator SDK");
+  if (scripts["build:mobile-web"] !== "pnpm run build:static-client") fail("mobile build script differs");
+  if (scripts["cap:sync"] !== "pnpm run build:mobile-web && pnpm exec cap sync") fail("Capacitor sync must build before syncing");
+  if (scripts["android:build"] !== "pnpm run cap:sync && sh scripts/build-android-debug.sh") fail("Android build must use the unsigned debug Gradle workflow");
+  if (scripts["ios:build"]?.includes("DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer") !== true ||
+      scripts["ios:build"]?.includes("iphonesimulator") !== true) {
+    fail("iOS build does not select Xcode-beta and the simulator SDK per command");
+  }
+  const androidBuildScript = read(repositoryRoot, "scripts/build-android-debug.sh");
+  if (!androidBuildScript.includes('cd "$(dirname "$0")/../android"') ||
+      !androidBuildScript.includes("./gradlew :app:assembleDebug :app:testDebugUnitTest") ||
+      androidBuildScript.includes("cap build")) {
+    fail("Android debug build helper is not limited to unsigned app-scoped Gradle checks");
+  }
 
-  const androidBuild = read("android/app/build.gradle");
-  requireMatch(androidBuild, /namespace\s*=\s*["']com\.leridian\.graphe["']/u, "Android namespace differs");
-  requireMatch(androidBuild, /applicationId\s+["']com\.leridian\.graphe["']/u, "Android application ID differs");
-  const androidManifest = read("android/app/src/main/AndroidManifest.xml");
-  requireMatch(androidManifest, /android:scheme="graphe"/u, "Android graphe URL scheme is missing");
-  rejectMatch(androidManifest, /usesCleartextTraffic="true"/u, "Android cleartext traffic is enabled");
+  verifyAndroid(repositoryRoot);
+  verifyIos(repositoryRoot);
+}
 
-  const iosInfo = read("ios/App/App/Info.plist");
-  requireMatch(iosInfo, /<key>CFBundleIdentifier<\/key>\s*<string>\$\(PRODUCT_BUNDLE_IDENTIFIER\)<\/string>/u, "iOS bundle identifier wiring is missing");
-  requireMatch(iosInfo, /<key>CFBundleDisplayName<\/key>\s*<string>Graphe Notes<\/string>/u, "iOS display name differs");
-  requireMatch(iosInfo, /<key>CFBundleURLSchemes<\/key>\s*<array>\s*<string>graphe<\/string>/u, "iOS graphe URL scheme is missing");
-  rejectMatch(iosInfo, /NSAllowsArbitraryLoads\s*<\/key>\s*<true\/>/u, "iOS arbitrary loads are enabled");
-
-  const iosProject = read("ios/App/App.xcodeproj/project.pbxproj");
-  requireMatch(iosProject, /PRODUCT_BUNDLE_IDENTIFIER = com\.leridian\.graphe;/u, "iOS bundle ID differs");
-  console.log("Capacitor foundation check passed (identity, static sync input, hardened transport, and native URL schemes).");
+try {
+  verifyCapacitorFoundation();
+  console.log("Capacitor foundation check passed (effective config, static sync order, hardened native settings, and URL schemes).");
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);

@@ -1,0 +1,5 @@
+{
+  "appId": "com.leridian.graphe",
+  "appName": "Graphe Notes",
+  "webDir": "artifacts/static-client/out"
+}
