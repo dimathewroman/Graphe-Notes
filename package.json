@@ -12,6 +12,13 @@
     "check": "pnpm run typecheck && pnpm run test",
     "check:static-client-boundary": "node scripts/verify-static-client-boundary.mjs",
     "build:static-client": "pnpm run check:static-client-boundary && pnpm --filter @workspace/static-client run build && node scripts/verify-static-client-output.mjs",
+    "check:capacitor-foundation": "node scripts/verify-capacitor-foundation.mjs",
+    "build:mobile-web": "pnpm run build:static-client",
+    "cap:sync": "pnpm run build:mobile-web && pnpm exec cap sync",
+    "android:build": "pnpm run cap:sync && pnpm exec cap build android",
+    "android:run": "pnpm run cap:sync && pnpm exec cap run android",
+    "ios:build": "pnpm run cap:sync && DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build",
+    "ios:run": "pnpm run cap:sync && DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer pnpm exec cap run ios",
     "db:migrations:validate": "node scripts/validate-db-migrations.mjs",
     "db:hosted-preflight": "node scripts/preflight-hosted-db.mjs",
     "claude-proxy": "node scripts/claude-proxy.mjs"
@@ -33,8 +40,15 @@
     }
   },
   "devDependencies": {
+    "@capacitor/android": "8.5.0",
+    "@capacitor/cli": "8.5.0",
+    "@capacitor/ios": "8.5.0",
     "concurrently": "catalog:",
     "prettier": "^3.8.1",
     "typescript": "~5.9.2"
+  },
+  "dependencies": {
+    "@capacitor/app": "8.1.1",
+    "@capacitor/core": "8.5.0"
   }
 }

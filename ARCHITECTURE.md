@@ -97,13 +97,17 @@ The app is a single-page application. All navigation (notes, folders, quick bits
 
 ### Static-client deployment boundary
 
-`artifacts/static-client` is a second, deliberately small build target for a
-future Capacitor `webDir`. It reuses browser-safe UI, editor, auth, and query
+`artifacts/static-client` is a second, deliberately small build target for the
+source-controlled Capacitor `webDir`. It reuses browser-safe UI, editor, auth, and query
 owners from `artifacts/next-app/src`, but it has no API routes, middleware,
 server instrumentation, database client, service-role client, cron, response
 headers, or telemetry rewrite. `pnpm run build:static-client` emits its static
-assets to `artifacts/static-client/out/`; the executable boundary guard walks
-the entrypoint import graph before the build and rejects those hosted owners.
+assets to `artifacts/static-client/out/`, which `capacitor.config.ts` packages
+into `android/` and `ios/`; the executable boundary guard walks the entrypoint
+import graph before the build and rejects those hosted owners. The shell has the
+fixed identity `com.leridian.graphe` / `Graphe Notes` and native `graphe` URL
+registration. It deliberately has no remote `server.url` or transport-security
+exception.
 
 The hosted `artifacts/next-app` deployment remains the only owner of `/api`,
 JWT middleware, server/edge instrumentation, CSP/security headers, PostHog
@@ -114,8 +118,11 @@ signing and download links use that same contract. The static target uses
 unoptimized images and intentionally disables browser telemetry unless an
 explicit direct ingest host is supplied; its Sentry calls are a local no-op
 rather than server instrumentation, and its sanitizer uses the browser export
-rather than the Node/jsdom path. CORS, native origins, OAuth/deep links, and
-native authentication persistence are separate future decisions.
+rather than the Node/jsdom path. CORS, native origins, OAuth/deep-link
+consumption, and native authentication persistence are separate future
+decisions. `@capacitor/app` establishes only the lifecycle/URL-open bridge
+seam; no current static-client owner consumes a native URL or claims an OAuth
+completion.
 
 ### API Endpoints
 

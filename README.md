@@ -86,8 +86,42 @@ emits `artifacts/static-client/out/`, including `index.html` and
 `auth/callback.html`. Images are intentionally unoptimized; telemetry is off
 unless `NEXT_PUBLIC_POSTHOG_INGEST_HOST` is explicitly provided. Static Sentry
 reporting is also intentionally disabled until it has its own approved client
-transport. This command does not add Capacitor, CORS origins, native OAuth/deep-link configuration, or
-change hosted behavior.
+transport. It does not change hosted behavior, CORS origins, or native OAuth
+handling.
+
+## Capacitor mobile shell
+
+Graphe Notes includes a source-controlled Capacitor v8 foundation for Android
+phones/foldables and iPad. Its immutable native identity is
+`com.leridian.graphe` / **Graphe Notes**, and it registers the `graphe` URL
+scheme on both platforms. The shell always packages the reproducible static
+bundle in `artifacts/static-client/out`; it has no live-reload `server.url`,
+cleartext exception, or mixed-content configuration.
+
+Use public, non-production values for a local static-bundle or native-build
+check. These example values only exercise the build boundary and must never be
+committed as deployment configuration:
+
+```bash
+export NEXT_PUBLIC_API_ORIGIN=https://api.example.com
+export NEXT_PUBLIC_SUPABASE_URL=https://project.supabase.co
+export NEXT_PUBLIC_SUPABASE_ANON_KEY=public-anon-key
+
+pnpm run check:capacitor-foundation
+pnpm run build:mobile-web
+pnpm run cap:sync
+pnpm run android:build
+pnpm run android:run
+pnpm run ios:build
+pnpm run ios:run
+```
+
+The iOS scripts select `/Applications/Xcode-beta.app` only for their own
+command; they do not change the machine-wide Xcode selection. `@capacitor/app`
+is included for lifecycle and URL-open bridge support, but this foundation does
+not yet consume a deep link or complete OAuth. Native auth persistence, an
+approved HTTPS API origin/CORS policy, and OAuth callback routing remain
+separate decisions.
 
 ## Database setup
 

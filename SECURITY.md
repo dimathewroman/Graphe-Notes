@@ -76,6 +76,12 @@ proof headers are attached. Selecting CORS origins is intentionally out of
 scope, so this target is not evidence that a cross-origin native client can
 yet authenticate against the hosted API.
 
+The Capacitor shell packages that static target without `server.url`, a
+cleartext/mixed-content exception, or an unrestricted navigation allowlist.
+It registers the `graphe` URL scheme at the native boundary only. The shell
+does not yet parse, trust, or exchange deep-link/OAuth values, so registration
+is not an authorization mechanism or evidence of a completed mobile-auth flow.
+
 The hosted app retains its `/ingest` rewrite. A static build does not fall back
 to that unavailable rewrite: browser PostHog is disabled unless an explicit
 public direct ingest host is supplied. This preserves the existing deliberate

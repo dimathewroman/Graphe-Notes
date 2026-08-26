@@ -4,6 +4,13 @@
 
 ### Added
 
+- Added the first source-controlled Capacitor v8 mobile-shell foundation for
+  Android and iOS. It pins the `com.leridian.graphe` / Graphe Notes identity,
+  packages the existing static-client `webDir`, registers the `graphe` URL
+  scheme, and includes only `@capacitor/app` for lifecycle/URL-open bridge
+  support. The shell has no live-reload server, cleartext exception, or native
+  OAuth claim.
+
 - Added `artifacts/static-client`, a reproducible `output: "export"` webDir
   target for future Capacitor packaging. It reuses the browser-safe application
   entrypoints while keeping hosted `/api`, middleware, server-only owners,

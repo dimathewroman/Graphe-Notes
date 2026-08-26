@@ -32,6 +32,22 @@ API origin only when creating a deployable bundle. The static build intentionall
 uses unoptimized images and is telemetry-silent unless an explicit direct
 PostHog ingest host is configured.
 
+The Capacitor foundation has a deterministic source/configuration guard for its
+exact app identity, static `webDir`, package pins, no-remote/no-insecure server
+configuration, native URL-scheme registration, and static-build-before-sync
+contract:
+
+```bash
+pnpm run check:capacitor-foundation
+```
+
+`pnpm run cap:sync` first rebuilds the static client and then copies it into
+both native projects. The Android and iOS build commands require the same
+synthetic public build values shown above. An iOS runtime build uses the
+per-command Xcode-beta developer directory; neither host compilation nor the
+source guard proves device launch, OAuth callback completion, or remote API
+authorization.
+
 Test location: `artifacts/next-app/e2e/`
 
 Security regression tests live in
