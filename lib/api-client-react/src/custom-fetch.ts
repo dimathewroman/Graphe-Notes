@@ -19,13 +19,64 @@ export type BodyType<T> = T;
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 const API_PATH_PREFIX = "/api";
+const API_PATH_VALIDATION_ORIGIN = "https://api-path-validation.invalid";
+const CONFIGURED_ORIGIN_PATTERN = /^(https?):\/\/([^/?#]+)(\/?)$/u;
 
-function isRelativeApiPath(value: string): boolean {
+function remainsWithinApiBoundary(pathname: string): boolean {
+  if (pathname !== API_PATH_PREFIX && !pathname.startsWith(`${API_PATH_PREFIX}/`)) {
+    return false;
+  }
+
+  // Preserve encoded identifiers in the returned request target, but validate
+  // their once-decoded path meaning as well. This catches an encoded slash or
+  // backslash paired with dot segments that a downstream server could split.
+  let decodedPathname: string;
+  try {
+    decodedPathname = decodeURIComponent(pathname).replaceAll("\\", "/");
+  } catch {
+    return false;
+  }
+
+  const decodedCanonicalPathname = new URL(
+    decodedPathname,
+    API_PATH_VALIDATION_ORIGIN,
+  ).pathname;
   return (
-    value === API_PATH_PREFIX ||
-    value.startsWith(`${API_PATH_PREFIX}/`) ||
-    value.startsWith(`${API_PATH_PREFIX}?`)
+    decodedCanonicalPathname === API_PATH_PREFIX ||
+    decodedCanonicalPathname.startsWith(`${API_PATH_PREFIX}/`)
   );
+}
+
+function canonicalizeApiPath(input: string): string {
+  if (typeof input !== "string") {
+    throw new TypeError("Only relative /api request paths are allowed.");
+  }
+
+  const pathnameEnd = input.search(/[?#]/u);
+  const rawPathname = pathnameEnd === -1 ? input : input.slice(0, pathnameEnd);
+
+  // WHATWG URL treats backslashes as path separators for special schemes. Reject
+  // them before parsing so they cannot turn an apparently /api-relative target
+  // into a path outside this boundary.
+  if (!rawPathname.startsWith("/") || rawPathname.includes("\\")) {
+    throw new TypeError("Only relative /api request paths are allowed.");
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(input, API_PATH_VALIDATION_ORIGIN);
+  } catch {
+    throw new TypeError("Only relative /api request paths are allowed.");
+  }
+
+  if (
+    parsed.origin !== API_PATH_VALIDATION_ORIGIN ||
+    !remainsWithinApiBoundary(parsed.pathname)
+  ) {
+    throw new TypeError("Only relative /api request paths are allowed.");
+  }
+
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
 function getRuntimeApiOrigin(): string | undefined {
@@ -39,17 +90,29 @@ function allowsInsecureLoopbackOrigin(): boolean {
   );
 }
 
-function isLoopbackHost(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+function isCanonicalLoopbackOrigin(rawAuthority: string, url: URL): boolean {
+  return (
+    /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/u.test(rawAuthority) &&
+    (url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]")
+  );
 }
 
 function resolveConfiguredApiOrigin(): string | null {
   const configuredOrigin = getRuntimeApiOrigin();
   if (configuredOrigin == null || configuredOrigin === "") return null;
 
-  if (configuredOrigin !== configuredOrigin.trim()) {
-    throw new TypeError("NEXT_PUBLIC_API_ORIGIN must not contain surrounding whitespace.");
+  if (/\s|\\/u.test(configuredOrigin)) {
+    throw new TypeError("NEXT_PUBLIC_API_ORIGIN must not contain whitespace or backslashes.");
   }
+
+  const match = CONFIGURED_ORIGIN_PATTERN.exec(configuredOrigin);
+  if (!match || match[2].includes("@") || match[2].includes("%")) {
+    throw new TypeError(
+      "NEXT_PUBLIC_API_ORIGIN must use an explicit http:// or https:// origin with no path, query, or fragment.",
+    );
+  }
+
+  const [, rawProtocol, rawAuthority] = match;
 
   let url: URL;
   try {
@@ -58,17 +121,18 @@ function resolveConfiguredApiOrigin(): string | null {
     throw new TypeError("NEXT_PUBLIC_API_ORIGIN must be a valid HTTPS origin.");
   }
 
-  const isHttpsOrigin = url.protocol === "https:";
+  const isHttpsOrigin = rawProtocol === "https" && url.protocol === "https:";
   const isExplicitDevelopmentLoopback =
+    rawProtocol === "http" &&
     url.protocol === "http:" &&
-    isLoopbackHost(url.hostname) &&
+    isCanonicalLoopbackOrigin(rawAuthority, url) &&
     allowsInsecureLoopbackOrigin();
 
   if (
     (!isHttpsOrigin && !isExplicitDevelopmentLoopback) ||
     url.username ||
     url.password ||
-    !/^\/+$/u.test(url.pathname) ||
+    url.pathname !== "/" ||
     url.search ||
     url.hash
   ) {
@@ -85,22 +149,14 @@ function resolveConfiguredApiOrigin(): string | null {
  * relative URL; a static client may supply the one trusted public API origin.
  * Absolute and non-API request targets are rejected before auth headers exist.
  */
-export function resolveApiUrl(input: RequestInfo | URL): string {
-  if (typeof input !== "string" || !isRelativeApiPath(input)) {
-    throw new TypeError("Only relative /api request paths are allowed.");
-  }
-
+export function resolveApiUrl(input: string): string {
+  const apiPath = canonicalizeApiPath(input);
   const configuredOrigin = resolveConfiguredApiOrigin();
-  return configuredOrigin ? new URL(input, `${configuredOrigin}/`).toString() : input;
+  return configuredOrigin ? new URL(apiPath, `${configuredOrigin}/`).toString() : apiPath;
 }
 
-function isRequest(input: RequestInfo | URL): input is Request {
-  return typeof Request !== "undefined" && input instanceof Request;
-}
-
-function resolveMethod(input: RequestInfo | URL, explicitMethod?: string): string {
+function resolveMethod(explicitMethod?: string): string {
   if (explicitMethod) return explicitMethod.toUpperCase();
-  if (isRequest(input)) return input.method.toUpperCase();
   return "GET";
 }
 
@@ -355,7 +411,7 @@ let _vaultProof: string | null = null;
 export function setVaultProof(proof: string | null) { _vaultProof = proof; }
 export function getVaultProof(): string | null { return _vaultProof; }
 
-export function authenticatedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+export function authenticatedFetch(input: string, init?: RequestInit): Promise<Response> {
   const url = resolveApiUrl(input);
   const headers = new Headers(init?.headers);
   if (_accessToken && !headers.has("authorization")) {
@@ -368,12 +424,12 @@ export function authenticatedFetch(input: RequestInfo | URL, init?: RequestInit)
 }
 
 export async function customFetch<T = unknown>(
-  input: RequestInfo | URL,
+  input: string,
   options: CustomFetchOptions = {},
 ): Promise<T> {
   const { responseType = "auto", headers: headersInit, ...init } = options;
 
-  const method = resolveMethod(input, init.method);
+  const method = resolveMethod(init.method);
 
   if (init.body != null && (method === "GET" || method === "HEAD")) {
     throw new TypeError(`customFetch: ${method} requests cannot have a body.`);
@@ -381,7 +437,7 @@ export async function customFetch<T = unknown>(
 
   // Resolve and validate before constructing credential-bearing headers.
   const url = resolveApiUrl(input);
-  const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
+  const headers = mergeHeaders(headersInit);
 
   if (_accessToken && !headers.has("authorization")) {
     headers.set("authorization", `Bearer ${_accessToken}`);
