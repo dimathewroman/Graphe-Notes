@@ -8,6 +8,11 @@ All notable changes to Graphe Notes are documented here. Format follows [Keep a 
 
 ### Added
 
+- **Trusted static-client API-origin seam.** Hosted web retains relative
+  same-origin `/api` requests. A future static client may configure one public
+  HTTPS API origin; malformed or insecure configuration and caller-supplied
+  absolute request URLs fail before bearer or vault-proof headers are attached.
+  Attachment signing and download links use the same resolver.
 - **Durable editor save ordering.** Authenticated editor content writes now carry an opaque browser-session UUID, a monotonic sequence, and the server-issued `updatedAt` revision. The owner-scoped update accepts a matching revision or a strictly newer sequence from that same session, so delayed same-tab saves cannot overwrite newer content while a separate tab remains fenced. Existing rows are intentionally not backfilled; old content clients fail closed with a typed conflict until upgraded.
 - **Browser-backed note draft lifecycle.** Each note now has an isolated Yjs/IndexedDB replica, with a deterministic demo namespace and per-note undo/redo. The server HTML/contentText API remains authoritative: local recovery is allowed only when the persisted exact `updatedAt` base revision equals the current server revision; missing, malformed, or changed revisions fail closed to server content. The initial scope adds no sync provider, awareness, binary storage, native runtime, or Quick Bit persistence.
 - **Local-replica pilot hardening.** Vaulted notes and any attachment-bearing note now stay on the existing server editor path and purge any matching local replica. The local adapter has explicit browser-only disposition for permanent deletion, logout/account changes, and the existing demo-cache clear boundary; its private registry deletes only adapter-owned databases. Save retries and page-hide flushes are now isolated per note.

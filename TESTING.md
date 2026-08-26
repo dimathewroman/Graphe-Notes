@@ -9,6 +9,11 @@ Reference for the Graphe Notes test suite. Read this before writing or modifying
 Graphe Notes uses **Vitest** for deterministic route/domain regressions and
 **Playwright** for browser E2E testing. Typecheck remains a required build gate.
 
+The client API-origin regression suite covers hosted relative `/api` paths,
+configured HTTPS origins, explicit development/test loopback allowance, invalid
+configuration, encoded path/query preservation, and rejection before bearer or
+vault-proof headers can reach an arbitrary absolute URL.
+
 Test location: `artifacts/next-app/e2e/`
 
 Security regression tests live in

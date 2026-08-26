@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { NodeViewWrapper, type NodeViewProps } from "@tiptap/react";
 import { ExternalLink, Trash2, Link2, Upload, Check, X, Download } from "lucide-react";
 import NextImage from "next/image";
-import { authenticatedFetch } from "@workspace/api-client-react/custom-fetch";
+import { authenticatedFetch, resolveApiUrl } from "@workspace/api-client-react/custom-fetch";
 import { useDemoMode } from "@/lib/demo-context";
 import * as Sentry from "@sentry/nextjs";
 
@@ -83,14 +83,22 @@ function ImageToolbar({
     }
     // v2: use attachment ID for DB-backed download with original filename
     if (attachmentId) {
-      window.open(`/api/attachments/download?id=${encodeURIComponent(attachmentId)}`, "_blank", "noopener,noreferrer");
+      window.open(
+        resolveApiUrl(`/api/attachments/download?id=${encodeURIComponent(attachmentId)}`),
+        "_blank",
+        "noopener,noreferrer",
+      );
       return;
     }
     // v1 legacy: extract storagePath from signed URL, serve file directly
     if (isSupabase) {
       const match = src.match(/\/object\/(?:sign|public)\/([^?]+)/);
       if (match) {
-        window.open(`/api/attachments/download?path=${encodeURIComponent(match[1])}`, "_blank", "noopener,noreferrer");
+        window.open(
+          resolveApiUrl(`/api/attachments/download?path=${encodeURIComponent(match[1])}`),
+          "_blank",
+          "noopener,noreferrer",
+        );
         return;
       }
     }

@@ -54,6 +54,16 @@ const userId = user.id; // Use this for ALL db queries — never trust client-pr
 
 Never use a user ID from the request body or query params. The authenticated `user.id` is the only trusted source.
 
+### Client API-origin boundary
+
+Client bearer and vault-proof headers may be attached only after the shared
+`resolveApiUrl()` validator accepts a relative `/api` path. Hosted web requests
+remain same-origin by default. A static client can use only the configured
+public HTTPS `NEXT_PUBLIC_API_ORIGIN`; malformed, path-bearing, credentialed,
+or insecure origins fail closed. HTTP is restricted to an explicitly enabled
+loopback origin in development/test. Absolute request URLs are rejected before
+credentials are built or a network call starts.
+
 ### Durable editor ordering
 
 Content-bearing `PATCH /api/notes/:id` requests are authorized as the note owner

@@ -519,7 +519,16 @@ To add an endpoint: edit `openapi.yaml` → run `pnpm --filter @workspace/api-sp
 
 ### Custom fetch
 
-The generated hooks use a custom fetch function that automatically attaches the Bearer token from the Supabase session. In development, requests resolve to `http://localhost:3000/api/`.
+The generated hooks and approved direct authenticated calls use the shared
+`resolveApiUrl()` boundary in `lib/api-client-react/src/custom-fetch.ts`. It
+accepts only relative `/api` paths, keeping them relative for hosted web. A
+future static client may set the public `NEXT_PUBLIC_API_ORIGIN` to one HTTPS
+origin; the resolver then targets that origin. It rejects malformed origins,
+absolute caller-supplied URLs, and insecure non-loopback HTTP before bearer or
+vault-proof headers are attached. An HTTP loopback origin is available only for
+explicit development/test use via `NEXT_PUBLIC_ALLOW_LOOPBACK_API_ORIGIN=1`.
+Attachment signing follows `authenticatedFetch`; attachment download links use
+the same resolver while retaining `noopener,noreferrer` window opening.
 
 ### Optimistic updates
 

@@ -8,6 +8,81 @@ export type BodyType<T> = T;
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
+const API_PATH_PREFIX = "/api";
+
+function isRelativeApiPath(value: string): boolean {
+  return (
+    value === API_PATH_PREFIX ||
+    value.startsWith(`${API_PATH_PREFIX}/`) ||
+    value.startsWith(`${API_PATH_PREFIX}?`)
+  );
+}
+
+function getRuntimeApiOrigin(): string | undefined {
+  return process.env.NEXT_PUBLIC_API_ORIGIN;
+}
+
+function allowsInsecureLoopbackOrigin(): boolean {
+  return (
+    (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") &&
+    process.env.NEXT_PUBLIC_ALLOW_LOOPBACK_API_ORIGIN === "1"
+  );
+}
+
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+function resolveConfiguredApiOrigin(): string | null {
+  const configuredOrigin = getRuntimeApiOrigin();
+  if (configuredOrigin == null || configuredOrigin === "") return null;
+
+  if (configuredOrigin !== configuredOrigin.trim()) {
+    throw new TypeError("NEXT_PUBLIC_API_ORIGIN must not contain surrounding whitespace.");
+  }
+
+  let url: URL;
+  try {
+    url = new URL(configuredOrigin);
+  } catch {
+    throw new TypeError("NEXT_PUBLIC_API_ORIGIN must be a valid HTTPS origin.");
+  }
+
+  const isHttpsOrigin = url.protocol === "https:";
+  const isExplicitDevelopmentLoopback =
+    url.protocol === "http:" &&
+    isLoopbackHost(url.hostname) &&
+    allowsInsecureLoopbackOrigin();
+
+  if (
+    (!isHttpsOrigin && !isExplicitDevelopmentLoopback) ||
+    url.username ||
+    url.password ||
+    !/^\/+$/u.test(url.pathname) ||
+    url.search ||
+    url.hash
+  ) {
+    throw new TypeError(
+      "NEXT_PUBLIC_API_ORIGIN must be an HTTPS origin, or an explicitly enabled loopback HTTP origin in development/test.",
+    );
+  }
+
+  return url.origin;
+}
+
+/**
+ * Resolves an application-owned relative API path. Hosted web callers keep a
+ * relative URL; a static client may supply the one trusted public API origin.
+ * Absolute and non-API request targets are rejected before auth headers exist.
+ */
+export function resolveApiUrl(input: RequestInfo | URL): string {
+  if (typeof input !== "string" || !isRelativeApiPath(input)) {
+    throw new TypeError("Only relative /api request paths are allowed.");
+  }
+
+  const configuredOrigin = resolveConfiguredApiOrigin();
+  return configuredOrigin ? new URL(input, `${configuredOrigin}/`).toString() : input;
+}
 
 function isRequest(input: RequestInfo | URL): input is Request {
   return typeof Request !== "undefined" && input instanceof Request;
@@ -17,18 +92,6 @@ function resolveMethod(input: RequestInfo | URL, explicitMethod?: string): strin
   if (explicitMethod) return explicitMethod.toUpperCase();
   if (isRequest(input)) return input.method.toUpperCase();
   return "GET";
-}
-
-// Use loose check for URL — some runtimes (e.g. React Native) polyfill URL
-// differently, so `instanceof URL` can fail.
-function isUrl(input: RequestInfo | URL): input is URL {
-  return typeof URL !== "undefined" && input instanceof URL;
-}
-
-function resolveUrl(input: RequestInfo | URL): string {
-  if (typeof input === "string") return input;
-  if (isUrl(input)) return input.toString();
-  return input.url;
 }
 
 function mergeHeaders(...sources: Array<HeadersInit | undefined>): Headers {
@@ -283,6 +346,7 @@ export function setVaultProof(proof: string | null) { _vaultProof = proof; }
 export function getVaultProof(): string | null { return _vaultProof; }
 
 export function authenticatedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const url = resolveApiUrl(input);
   const headers = new Headers(init?.headers);
   if (_accessToken && !headers.has("authorization")) {
     headers.set("authorization", `Bearer ${_accessToken}`);
@@ -290,7 +354,7 @@ export function authenticatedFetch(input: RequestInfo | URL, init?: RequestInit)
   if (_vaultProof && !headers.has("x-vault-proof")) {
     headers.set("x-vault-proof", _vaultProof);
   }
-  return fetch(input, { ...init, headers });
+  return fetch(url, { ...init, headers });
 }
 
 export async function customFetch<T = unknown>(
@@ -305,6 +369,8 @@ export async function customFetch<T = unknown>(
     throw new TypeError(`customFetch: ${method} requests cannot have a body.`);
   }
 
+  // Resolve and validate before constructing credential-bearing headers.
+  const url = resolveApiUrl(input);
   const headers = mergeHeaders(isRequest(input) ? input.headers : undefined, headersInit);
 
   if (_accessToken && !headers.has("authorization")) {
@@ -327,9 +393,9 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
-  const requestInfo = { method, url: resolveUrl(input) };
+  const requestInfo = { method, url };
 
-  const response = await fetch(input, { ...init, method, headers });
+  const response = await fetch(url, { ...init, method, headers });
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
