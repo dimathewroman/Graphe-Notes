@@ -10,6 +10,12 @@ const expectedConfigWrapper = `import type { CapacitorConfig } from "@capacitor/
 import foundation from "./capacitor.foundation.json";
 
 export default foundation satisfies CapacitorConfig;`;
+const expectedAndroidBuildScript = `#!/bin/sh
+set -eu
+
+cd "$(dirname "$0")/../android"
+exec ./gradlew :app:assembleDebug :app:testDebugUnitTest
+`;
 
 function fail(message) {
   throw new Error(`Capacitor foundation check failed: ${message}`);
@@ -38,6 +44,69 @@ function attributes(fragment) {
     values.set(match[1], match[3]);
   }
   return values;
+}
+
+function parseXmlAttributes(source) {
+  const values = new Map();
+  const attribute = /([A-Za-z_][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)')/uy;
+  let index = 0;
+
+  while (index < source.length) {
+    while (/\s/u.test(source[index] ?? "")) index += 1;
+    if (index === source.length) break;
+    attribute.lastIndex = index;
+    const match = attribute.exec(source);
+    if (!match) fail("Android data-extraction XML has an invalid attribute");
+    if (values.has(match[1])) fail("Android data-extraction XML duplicates an attribute");
+    values.set(match[1], match[2] ?? match[3]);
+    index = attribute.lastIndex;
+  }
+
+  return values;
+}
+
+function parseXmlDocument(source) {
+  const active = stripComments(source).replace(/^\s*<\?xml\s+[^?]*\?>/u, "");
+  const tag = /<[^>]*>/gu;
+  const roots = [];
+  const stack = [];
+  let cursor = 0;
+
+  for (const match of active.matchAll(tag)) {
+    if (!/^\s*$/u.test(active.slice(cursor, match.index))) fail("Android data-extraction XML contains text content");
+    cursor = (match.index ?? 0) + match[0].length;
+    const token = match[0];
+    const closing = token.match(/^<\/([A-Za-z_][\w:.-]*)\s*>$/u);
+
+    if (closing) {
+      const element = stack.pop();
+      if (!element || element.name !== closing[1]) fail("Android data-extraction XML has mismatched elements");
+      continue;
+    }
+
+    const opening = token.match(/^<([A-Za-z_][\w:.-]*)([\s\S]*?)(\/?)>$/u);
+    if (!opening) fail("Android data-extraction XML has an invalid element");
+    const element = {
+      name: opening[1],
+      attributes: parseXmlAttributes(opening[2]),
+      children: [],
+    };
+
+    if (stack.length === 0) roots.push(element);
+    else stack.at(-1).children.push(element);
+    if (opening[3] !== "/") stack.push(element);
+  }
+
+  if (!/^\s*$/u.test(active.slice(cursor)) || stack.length !== 0 || roots.length !== 1) {
+    fail("Android data-extraction XML must contain one balanced root element");
+  }
+
+  return roots[0];
+}
+
+function hasExactAttributes(element, expected) {
+  return element.attributes.size === Object.keys(expected).length &&
+    Object.entries(expected).every(([key, value]) => element.attributes.get(key) === value);
 }
 
 function xmlElements(source, name) {
@@ -114,12 +183,25 @@ function verifyAndroid(root) {
   if (!hasXmlElement(backupRules, "full-backup-content", {}) || !hasXmlElement(backupRules, "exclude", { domain: "root", path: "." })) {
     fail("Android full-backup exclusion is incomplete");
   }
-  const extractionRules = read(root, "android/app/src/main/res/xml/data_extraction_rules.xml");
-  if (!hasXmlElement(extractionRules, "data-extraction-rules", {}) ||
-      !hasXmlElement(extractionRules, "cloud-backup", {}) ||
-      !hasXmlElement(extractionRules, "device-transfer", {}) ||
-      xmlElements(extractionRules, "exclude").filter((element) => element.get("domain") === "root" && element.get("path") === ".").length < 2) {
-    fail("Android data-extraction exclusions are incomplete");
+  const extractionRules = parseXmlDocument(read(root, "android/app/src/main/res/xml/data_extraction_rules.xml"));
+  if (extractionRules.name !== "data-extraction-rules" || !hasExactAttributes(extractionRules, {})) {
+    fail("Android data-extraction root differs");
+  }
+  const requiredParents = new Map([
+    ["cloud-backup", { disableIfNoEncryptionCapabilities: "true" }],
+    ["device-transfer", {}],
+  ]);
+  if (extractionRules.children.length !== requiredParents.size) fail("Android data-extraction parents differ");
+  for (const [name, expectedAttributes] of requiredParents) {
+    const parents = extractionRules.children.filter((element) => element.name === name);
+    if (parents.length !== 1 || !hasExactAttributes(parents[0], expectedAttributes)) {
+      fail(`Android ${name} data-extraction section differs`);
+    }
+    const [exclusion] = parents[0].children;
+    if (parents[0].children.length !== 1 || exclusion.name !== "exclude" ||
+        !hasExactAttributes(exclusion, { domain: "root", path: "." })) {
+      fail(`Android ${name} root data-extraction exclusion is incomplete`);
+    }
   }
 }
 
@@ -165,9 +247,7 @@ export function verifyCapacitorFoundation(repositoryRoot = resolve(import.meta.d
     fail("iOS build does not select Xcode-beta and the simulator SDK per command");
   }
   const androidBuildScript = read(repositoryRoot, "scripts/build-android-debug.sh");
-  if (!androidBuildScript.includes('cd "$(dirname "$0")/../android"') ||
-      !androidBuildScript.includes("./gradlew :app:assembleDebug :app:testDebugUnitTest") ||
-      androidBuildScript.includes("cap build")) {
+  if (androidBuildScript.replace(/\r\n/gu, "\n") !== expectedAndroidBuildScript) {
     fail("Android debug build helper is not limited to unsigned app-scoped Gradle checks");
   }
 

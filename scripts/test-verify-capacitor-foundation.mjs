@@ -54,6 +54,19 @@ rejects("computed server config", (root) => mutate(root, "capacitor.config.ts", 
 rejects("reversed Capacitor sync", (root) => mutate(root, "package.json", (source) => source.replace("pnpm run build:mobile-web && pnpm exec cap sync", "pnpm exec cap sync && pnpm run build:mobile-web")));
 rejects("backup reintroduction", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace('android:allowBackup="false"', 'android:allowBackup="true"')));
 rejects("provider reintroduction", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace("</application>", '<provider android:name="androidx.core.content.FileProvider" /></application>')));
+rejects("data-extraction exclusions under the wrong parent", (root) => mutate(root, "android/app/src/main/res/xml/data_extraction_rules.xml", (source) => source.replace(`    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+    </device-transfer>`, `        <exclude domain="root" path="." />
+    </cloud-backup>
+    <device-transfer>
+    </device-transfer>`)));
+rejects("permissive data-extraction include", (root) => mutate(root, "android/app/src/main/res/xml/data_extraction_rules.xml", (source) => source.replace('        <exclude domain="root" path="." />', '        <exclude domain="root" path="." />\n        <include domain="database" path="." />')));
+rejects("comment-spoofed Android debug helper", (root) => writeFileSync(resolve(root, "scripts/build-android-debug.sh"), `#!/bin/sh
+# cd "$(dirname "$0")/../android"
+# exec ./gradlew :app:assembleDebug :app:testDebugUnitTest
+exit 0
+`));
 rejects("missing Android scheme", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace('android:scheme="graphe"', 'android:scheme="other"')));
 rejects("missing iOS scheme", (root) => mutate(root, "ios/App/App/Info.plist", (source) => source.replace("<string>graphe</string>", "<string>other</string>")));
 console.log("Capacitor foundation mutation-negative tests passed.");
