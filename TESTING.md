@@ -14,13 +14,15 @@ configured HTTPS origins, explicit development/test loopback allowance, invalid
 configuration, encoded path/query preservation, and rejection before bearer or
 vault-proof headers can reach an arbitrary absolute URL.
 
-The static-client workspace package has an executable source-graph guard and
-exported output check. It proves the static entrypoints exclude hosted API handlers,
-middleware, service-role/database owners, and server instrumentation, then
-requires both the root page and auth callback in the emitted `webDir`:
+The static-client workspace package has executable source-graph and exported-output
+guards. They prove the static entrypoints exclude hosted API handlers, middleware,
+service-role/database owners, and server instrumentation; the export contains its
+root page, auth callback, Graphe logo, and compiled Tailwind utilities without raw
+Tailwind directives:
 
 ```bash
 pnpm run check:static-client-boundary
+pnpm run test:static-client-output
 NEXT_PUBLIC_API_ORIGIN=https://api.example.com \
 NEXT_PUBLIC_SUPABASE_URL=https://project.supabase.co \
 NEXT_PUBLIC_SUPABASE_ANON_KEY=public-anon-key \
