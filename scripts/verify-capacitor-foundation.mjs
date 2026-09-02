@@ -139,6 +139,38 @@ function parseXmlDocument(source) {
   return roots[0];
 }
 
+function plistKeys(source) {
+  const keys = [];
+  const stack = [];
+  let keyText = null;
+  const parser = new SaxesParser();
+
+  parser.on("opentag", (tag) => {
+    stack.push(tag.name);
+    if (tag.name === "key") keyText = "";
+  });
+  parser.on("text", (text) => {
+    if (stack.at(-1) === "key") keyText += text;
+  });
+  parser.on("cdata", () => {
+    if (stack.at(-1) === "key") fail("iOS plist keys must use literal text");
+  });
+  parser.on("closetag", () => {
+    if (stack.pop() === "key") {
+      keys.push(keyText);
+      keyText = null;
+    }
+  });
+
+  try {
+    parser.write(source).close();
+  } catch {
+    fail("iOS plist is not well-formed");
+  }
+
+  return keys;
+}
+
 function hasExactAttributes(element, expected) {
   return element.attributes.size === Object.keys(expected).length &&
     Object.entries(expected).every(([key, value]) => element.attributes.get(key) === value);
@@ -248,7 +280,7 @@ function verifyIos(root) {
   if (!urlTypes) fail("iOS URL-type registration is missing");
   const schemes = plistElementAfterKey(urlTypes, "CFBundleURLSchemes", "array");
   if (!schemes || !/^<array>\s*<string>graphe<\/string>\s*<\/array>$/u.test(schemes)) fail("iOS graphe URL scheme is missing");
-  if (stripComments(info).includes("NSAllowsArbitraryLoads")) fail("iOS arbitrary loads setting is present");
+  if (plistKeys(info).includes("NSAllowsArbitraryLoads")) fail("iOS arbitrary loads setting is present");
 
   const project = stripComments(read(root, "ios/App/App.xcodeproj/project.pbxproj"));
   const bundleIds = [...project.matchAll(/^\s*PRODUCT_BUNDLE_IDENTIFIER\s*=\s*([^;]+);/gmu)].map((match) => match[1].trim());

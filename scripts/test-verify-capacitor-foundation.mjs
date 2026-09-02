@@ -75,4 +75,6 @@ exit 0
 `));
 rejects("missing Android scheme", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace('android:scheme="graphe"', 'android:scheme="other"')));
 rejects("missing iOS scheme", (root) => mutate(root, "ios/App/App/Info.plist", (source) => source.replace("<string>graphe</string>", "<string>other</string>")));
+rejects("entity-encoded iOS arbitrary loads", (root) => mutate(root, "ios/App/App/Info.plist", (source) => source.replace("</dict>\n</plist>", "  <key>NSAppTransportSecurity</key>\n  <dict><key>NSAllowsArbitrary&#x4c;oads</key><true/></dict>\n</dict>\n</plist>")), "Capacitor foundation check failed: iOS arbitrary loads setting is present");
+rejects("CDATA-encoded iOS plist key", (root) => mutate(root, "ios/App/App/Info.plist", (source) => source.replace("</dict>\n</plist>", "  <key>NSAppTransportSecurity</key>\n  <dict><key><![CDATA[NSAllowsArbitraryLoads]]></key><true/></dict>\n</dict>\n</plist>")), "Capacitor foundation check failed: iOS plist is not well-formed");
 console.log("Capacitor foundation mutation-negative tests passed.");
