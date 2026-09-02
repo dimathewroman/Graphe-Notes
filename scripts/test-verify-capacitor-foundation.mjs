@@ -57,6 +57,7 @@ rejects("computed server config", (root) => mutate(root, "capacitor.config.ts", 
 rejects("reversed Capacitor sync", (root) => mutate(root, "package.json", (source) => source.replace("pnpm run build:mobile-web && pnpm exec cap sync", "pnpm exec cap sync && pnpm run build:mobile-web")));
 rejects("backup reintroduction", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace('android:allowBackup="false"', 'android:allowBackup="true"')));
 rejects("provider reintroduction", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace("</application>", '<provider android:name="androidx.core.content.FileProvider" /></application>')));
+rejects("cross-syntax comment delimiter smuggling", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace("<application", "/<!---->* usesCleartextTraffic */\n    <application")), "Capacitor foundation check failed: Android cleartext traffic setting is present");
 rejects("data-extraction exclusions under the wrong parent", (root) => mutate(root, "android/app/src/main/res/xml/data_extraction_rules.xml", (source) => source.replace(`    </cloud-backup>
     <device-transfer>
         <exclude domain="root" path="." />

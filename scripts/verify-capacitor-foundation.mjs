@@ -29,10 +29,65 @@ function read(root, relativePath) {
 }
 
 function stripComments(source) {
-  return source
-    .replace(/<!--[\s\S]*?-->/gu, "")
-    .replace(/\/\*[\s\S]*?\*\//gu, "")
-    .replace(/^\s*\/\/.*$/gmu, "");
+  let active = "";
+  let index = 0;
+  let lineHasOnlyWhitespace = true;
+  let quote = null;
+
+  while (index < source.length) {
+    const character = source[index];
+
+    if (quote !== null) {
+      active += character;
+      if (character === "\\" && index + 1 < source.length) {
+        active += source[index + 1];
+        index += 2;
+        continue;
+      }
+      if (character === quote) quote = null;
+      lineHasOnlyWhitespace = character === "\n" ||
+        (lineHasOnlyWhitespace && /\s/u.test(character));
+      index += 1;
+      continue;
+    }
+
+    if (character === '"' || character === "'") {
+      quote = character;
+      active += character;
+      lineHasOnlyWhitespace = false;
+      index += 1;
+      continue;
+    }
+
+    const comment = source.startsWith("<!--", index)
+      ? { close: "-->", start: index + 4 }
+      : source.startsWith("/*", index)
+        ? { close: "*/", start: index + 2 }
+        : lineHasOnlyWhitespace && source.startsWith("//", index)
+          ? { close: "\n", start: index + 2 }
+          : null;
+
+    if (comment !== null) {
+      const end = source.indexOf(comment.close, comment.start);
+      if (end === -1) fail("unterminated comment in native configuration");
+      const afterComment = end + comment.close.length;
+      for (const commentCharacter of source.slice(index, afterComment)) {
+        if (commentCharacter === "\r" || commentCharacter === "\n") {
+          active += commentCharacter;
+        }
+      }
+      index = afterComment;
+      lineHasOnlyWhitespace = active.endsWith("\n") || lineHasOnlyWhitespace;
+      continue;
+    }
+
+    active += character;
+    lineHasOnlyWhitespace = character === "\n" ||
+      (lineHasOnlyWhitespace && /\s/u.test(character));
+    index += 1;
+  }
+
+  return active;
 }
 
 function equalJson(actual, expected, description) {
