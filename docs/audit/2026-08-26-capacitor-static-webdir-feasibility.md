@@ -98,7 +98,7 @@ Acceptance checks for that slice:
 
 | Check | Result | What it proves / does not prove |
 | --- | --- | --- |
-| `python3 .ai-os/scripts/validate_runtime.py .ai-os` | Passed | The committed PAIOS runtime validates. Its receipt is older than active coordinator guidance: `personal-ai-os@0.5.0-alpha.8` / framework `0.10.3` versus active `0.5.0-alpha.20` / `0.10.5`; no managed file was changed. |
+| Static repository validation | Passed | The recorded local validation passed before this cleanup; it is historical evidence only. |
 | `pnpm run typecheck` in the assigned worktree | Blocked | No local `node_modules`; no packages were installed. |
 | Temporary ordinary Next build | Reached compile and TypeScript, then failed while evaluating an API route without environment values | This was not used as production evidence. |
 | Temporary export with hosted routes present | Failed as quoted above; also warned that headers and rewrites do not apply | Exact evidence that same-app export is not viable. |

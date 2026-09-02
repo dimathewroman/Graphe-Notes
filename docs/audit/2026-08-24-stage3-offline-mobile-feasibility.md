@@ -710,17 +710,14 @@ Commands run before writing this document:
 ```text
 git status --short --branch
 git rev-parse HEAD
-python3 .ai-os/scripts/validate_runtime.py .ai-os
 rg --files / rg -n over editor, persistence, API, auth, vault, attachment,
   React Query, PWA, Yjs, Capacitor, and mobile-navigation owners
 ```
 
-`validate_runtime.py` passed. The legacy latest-awareness executable named in
-`AGENTS.md` was absent at its recorded path, so a latest-playbook comparison could
-not be performed; no substitute guidance pin was silently adopted. The repository's
-active Personal AI OS development framework receipt identifies
-`personal-ai-os@0.5.0-alpha.8` with bundled framework `0.10.3`
-(`.ai-os/UPSTREAM.json`).
+The legacy latest-awareness executable named in `AGENTS.md` was absent at its
+recorded path, so a latest-playbook comparison could not be performed; no
+substitute guidance pin was silently adopted. This record captures the source
+and documentation checks available at the time.
 
 The external references in this document are direct Yjs, Tiptap, Capacitor,
 Supabase, and Next.js documentation links, not third-party summaries. Pricing,
