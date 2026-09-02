@@ -36,7 +36,7 @@ test.describe("Data integrity regressions", () => {
     // Fixed in Phase 1.1 (GrapheEditor clears undo history on contentKey change).
 
     const notes = page.getByTestId("note-item");
-    const editor = page.locator(".ProseMirror:visible");
+    const editor = page.locator('.ProseMirror[contenteditable="true"]');
 
     // Edit note A so the shared history has steps to undo.
     await notes.nth(0).click();
