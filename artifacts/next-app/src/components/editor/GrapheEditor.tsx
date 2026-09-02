@@ -15,6 +15,8 @@ import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
 import { EditorState, TextSelection } from "@tiptap/pm/state";
+import { yUndoPluginKey } from "@tiptap/y-tiptap";
+import type * as Y from "yjs";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import UnderlineExt from "@tiptap/extension-underline";
@@ -161,10 +163,10 @@ export function GrapheEditor({
   const bp = useBreakpoint();
   const keyboardHeight = useKeyboardHeight();
   const [showFindReplace, setShowFindReplace] = useState(false);
-  const [collaborationRenderedDocumentId, setCollaborationRenderedDocumentId] =
-    useState<string | null>(null);
-  const [serverBaselineReadyDocumentId, setServerBaselineReadyDocumentId] =
-    useState<string | null>(null);
+  const [collaborationRenderedDocument, setCollaborationRenderedDocument] =
+    useState<Y.Doc | null>(null);
+  const [serverBaselineReadyDocument, setServerBaselineReadyDocument] =
+    useState<Y.Doc | null>(null);
   const persistenceWarningShown = useRef(false);
   const onPersistenceFailure = useCallback(() => {
     if (persistenceWarningShown.current) return;
@@ -189,7 +191,7 @@ export function GrapheEditor({
     noteCollaboration.status === "unavailable" ||
     (noteCollaboration.status === "ready" &&
       (noteCollaboration.bootstrapSource === "local" ||
-        serverBaselineReadyDocumentId === collaborationDocument?.guid));
+        serverBaselineReadyDocument === collaborationDocument));
   const editorLifecycleKey =
     collaborationDocument?.guid ??
     (mode === "note" && collaborationRequested
@@ -248,7 +250,7 @@ export function GrapheEditor({
             Collaboration.configure({
               document: collaborationDocument,
               onFirstRender: () => {
-                setCollaborationRenderedDocumentId(collaborationDocument.guid);
+                setCollaborationRenderedDocument(collaborationDocument);
               },
             }),
           ]
@@ -385,21 +387,20 @@ export function GrapheEditor({
   // before this editor mounted, so seed that empty fragment once with the
   // authenticated server HTML. A permitted local draft already has fragment
   // content and must never pass through this path.
-  const serverBaselineRef = useRef<string | null>(null);
+  const serverBaselineRef = useRef<Y.Doc | null>(null);
   const recordedServerRevisionRef = useRef<string | null>(null);
   useEffect(() => {
     if (
       !editor ||
       !collaborationDocument ||
       noteCollaboration.bootstrapSource !== "server" ||
-      collaborationRenderedDocumentId !== collaborationDocument.guid
+      collaborationRenderedDocument !== collaborationDocument
     ) {
       return;
     }
-    const baselineKey = `${collaborationDocument.guid}:${contentKey ?? "none"}`;
-    if (serverBaselineRef.current === baselineKey) return;
+    if (serverBaselineRef.current === collaborationDocument) return;
     if (editor.isDestroyed) return;
-    serverBaselineRef.current = baselineKey;
+    serverBaselineRef.current = collaborationDocument;
     // The server baseline establishes a fresh Yjs document; it is not a user
     // edit. Excluding it from history prevents the first Undo from clearing
     // the note instead of undoing the user's local change.
@@ -408,6 +409,13 @@ export function GrapheEditor({
       .setContent(content, { emitUpdate: false })
       .setMeta("addToHistory", false)
       .run();
+    // y-tiptap keeps this transaction out of history, but synchronous
+    // normalization can still add an entry while the baseline is applied.
+    // Clear it before beginning the asynchronous persistence work, so no later
+    // command surface can have a legitimate user edit discarded here.
+    if (!editor.isDestroyed) {
+      yUndoPluginKey.getState(editor.state)?.undoManager.clear();
+    }
 
     void (async () => {
       const revision = collaboration?.serverRevision;
@@ -415,14 +423,14 @@ export function GrapheEditor({
         await noteCollaboration.recordAuthoritativeServerRevision(revision);
         recordedServerRevisionRef.current = revision;
       }
-      // A late completion only records its own document id; it cannot unlock
-      // a different note because collaborationBootstrapComplete compares ids.
-      setServerBaselineReadyDocumentId(collaborationDocument.guid);
+      // A late completion cannot unlock a replacement document that reuses the
+      // same guid because collaborationBootstrapComplete compares object identity.
+      setServerBaselineReadyDocument(collaborationDocument);
     })();
   }, [
     collaboration?.serverRevision,
     collaborationDocument,
-    collaborationRenderedDocumentId,
+    collaborationRenderedDocument,
     content,
     contentKey,
     editor,
@@ -441,7 +449,7 @@ export function GrapheEditor({
       !revision ||
       recordedServerRevisionRef.current === revision ||
       (noteCollaboration.bootstrapSource === "server" &&
-        serverBaselineReadyDocumentId !== collaborationDocument.guid)
+        serverBaselineReadyDocument !== collaborationDocument)
     ) {
       return;
     }
@@ -461,7 +469,7 @@ export function GrapheEditor({
     noteCollaboration.bootstrapSource,
     noteCollaboration.recordAuthoritativeServerRevision,
     noteCollaboration.status,
-    serverBaselineReadyDocumentId,
+    serverBaselineReadyDocument,
   ]);
 
   // Reset editor content when the active item changes (note switch / QB switch).

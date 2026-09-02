@@ -29,10 +29,65 @@ function read(root, relativePath) {
 }
 
 function stripComments(source) {
-  return source
-    .replace(/<!--[\s\S]*?-->/gu, "")
-    .replace(/\/\*[\s\S]*?\*\//gu, "")
-    .replace(/^\s*\/\/.*$/gmu, "");
+  let active = "";
+  let index = 0;
+  let lineHasOnlyWhitespace = true;
+  let quote = null;
+
+  while (index < source.length) {
+    const character = source[index];
+
+    if (quote !== null) {
+      active += character;
+      if (character === "\\" && index + 1 < source.length) {
+        active += source[index + 1];
+        index += 2;
+        continue;
+      }
+      if (character === quote) quote = null;
+      lineHasOnlyWhitespace = character === "\n" ||
+        (lineHasOnlyWhitespace && /\s/u.test(character));
+      index += 1;
+      continue;
+    }
+
+    if (character === '"' || character === "'") {
+      quote = character;
+      active += character;
+      lineHasOnlyWhitespace = false;
+      index += 1;
+      continue;
+    }
+
+    const comment = source.startsWith("<!--", index)
+      ? { close: "-->", start: index + 4 }
+      : source.startsWith("/*", index)
+        ? { close: "*/", start: index + 2 }
+        : lineHasOnlyWhitespace && source.startsWith("//", index)
+          ? { close: "\n", start: index + 2 }
+          : null;
+
+    if (comment !== null) {
+      const end = source.indexOf(comment.close, comment.start);
+      if (end === -1) fail("unterminated comment in native configuration");
+      const afterComment = end + comment.close.length;
+      for (const commentCharacter of source.slice(index, afterComment)) {
+        if (commentCharacter === "\r" || commentCharacter === "\n") {
+          active += commentCharacter;
+        }
+      }
+      index = afterComment;
+      lineHasOnlyWhitespace = active.endsWith("\n") || lineHasOnlyWhitespace;
+      continue;
+    }
+
+    active += character;
+    lineHasOnlyWhitespace = character === "\n" ||
+      (lineHasOnlyWhitespace && /\s/u.test(character));
+    index += 1;
+  }
+
+  return active;
 }
 
 function equalJson(actual, expected, description) {
@@ -82,6 +137,38 @@ function parseXmlDocument(source) {
   if (roots.length !== 1) fail("Android data-extraction XML must contain one root element");
 
   return roots[0];
+}
+
+function plistKeys(source) {
+  const keys = [];
+  const stack = [];
+  let keyText = null;
+  const parser = new SaxesParser();
+
+  parser.on("opentag", (tag) => {
+    stack.push(tag.name);
+    if (tag.name === "key") keyText = "";
+  });
+  parser.on("text", (text) => {
+    if (stack.at(-1) === "key") keyText += text;
+  });
+  parser.on("cdata", () => {
+    if (stack.at(-1) === "key") fail("iOS plist keys must use literal text");
+  });
+  parser.on("closetag", () => {
+    if (stack.pop() === "key") {
+      keys.push(keyText);
+      keyText = null;
+    }
+  });
+
+  try {
+    parser.write(source).close();
+  } catch {
+    fail("iOS plist is not well-formed");
+  }
+
+  return keys;
 }
 
 function hasExactAttributes(element, expected) {
@@ -193,7 +280,7 @@ function verifyIos(root) {
   if (!urlTypes) fail("iOS URL-type registration is missing");
   const schemes = plistElementAfterKey(urlTypes, "CFBundleURLSchemes", "array");
   if (!schemes || !/^<array>\s*<string>graphe<\/string>\s*<\/array>$/u.test(schemes)) fail("iOS graphe URL scheme is missing");
-  if (stripComments(info).includes("NSAllowsArbitraryLoads")) fail("iOS arbitrary loads setting is present");
+  if (plistKeys(info).includes("NSAllowsArbitraryLoads")) fail("iOS arbitrary loads setting is present");
 
   const project = stripComments(read(root, "ios/App/App.xcodeproj/project.pbxproj"));
   const bundleIds = [...project.matchAll(/^\s*PRODUCT_BUNDLE_IDENTIFIER\s*=\s*([^;]+);/gmu)].map((match) => match[1].trim());

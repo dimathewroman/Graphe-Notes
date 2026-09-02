@@ -32,7 +32,10 @@
   without evaluating TypeScript, reject mutation-spoofed/insecure settings, and
   require static build before sync. Android backups, device transfer, and the
   unused broad FileProvider path were removed; the normal Android build now
-  proves only unsigned debug assembly and local unit tests.
+  proves only unsigned debug assembly and local unit tests. Native configuration
+  comments are stripped in one lexical pass so mixed comment syntaxes cannot
+  hide a forbidden setting during verification, and iOS plist keys are decoded
+  semantically so XML entities or CDATA cannot disguise an insecure ATS key.
 
 - Added `artifacts/static-client`, a reproducible `output: "export"` webDir
   target for future Capacitor packaging. It reuses the browser-safe application

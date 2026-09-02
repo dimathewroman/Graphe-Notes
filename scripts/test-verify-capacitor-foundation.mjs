@@ -57,6 +57,7 @@ rejects("computed server config", (root) => mutate(root, "capacitor.config.ts", 
 rejects("reversed Capacitor sync", (root) => mutate(root, "package.json", (source) => source.replace("pnpm run build:mobile-web && pnpm exec cap sync", "pnpm exec cap sync && pnpm run build:mobile-web")));
 rejects("backup reintroduction", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace('android:allowBackup="false"', 'android:allowBackup="true"')));
 rejects("provider reintroduction", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace("</application>", '<provider android:name="androidx.core.content.FileProvider" /></application>')));
+rejects("cross-syntax comment delimiter smuggling", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace("<application", "/<!---->* usesCleartextTraffic */\n    <application")), "Capacitor foundation check failed: Android cleartext traffic setting is present");
 rejects("data-extraction exclusions under the wrong parent", (root) => mutate(root, "android/app/src/main/res/xml/data_extraction_rules.xml", (source) => source.replace(`    </cloud-backup>
     <device-transfer>
         <exclude domain="root" path="." />
@@ -74,4 +75,6 @@ exit 0
 `));
 rejects("missing Android scheme", (root) => mutate(root, "android/app/src/main/AndroidManifest.xml", (source) => source.replace('android:scheme="graphe"', 'android:scheme="other"')));
 rejects("missing iOS scheme", (root) => mutate(root, "ios/App/App/Info.plist", (source) => source.replace("<string>graphe</string>", "<string>other</string>")));
+rejects("entity-encoded iOS arbitrary loads", (root) => mutate(root, "ios/App/App/Info.plist", (source) => source.replace("</dict>\n</plist>", "  <key>NSAppTransportSecurity</key>\n  <dict><key>NSAllowsArbitrary&#x4c;oads</key><true/></dict>\n</dict>\n</plist>")), "Capacitor foundation check failed: iOS arbitrary loads setting is present");
+rejects("CDATA-encoded iOS plist key", (root) => mutate(root, "ios/App/App/Info.plist", (source) => source.replace("</dict>\n</plist>", "  <key>NSAppTransportSecurity</key>\n  <dict><key><![CDATA[NSAllowsArbitraryLoads]]></key><true/></dict>\n</dict>\n</plist>")), "Capacitor foundation check failed: iOS plist is not well-formed");
 console.log("Capacitor foundation mutation-negative tests passed.");
