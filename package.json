@@ -2,6 +2,9 @@
   "name": "workspace",
   "version": "0.0.0",
   "license": "MIT",
+  "engines": {
+    "node": ">=22.18.0"
+  },
   "scripts": {
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
     "dev": "pnpm --filter @workspace/next-app run dev",
@@ -9,7 +12,8 @@
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "test": "pnpm run test:capacitor-foundation && pnpm -r --if-present run test",
-    "check": "pnpm run typecheck && pnpm run test",
+    "check": "pnpm run check:codegen && pnpm run typecheck && pnpm run test",
+    "check:codegen": "pnpm --filter @workspace/api-spec run codegen && git diff --exit-code -- lib/api-client-react/src lib/api-zod/src",
     "check:static-client-boundary": "node scripts/verify-static-client-boundary.mjs",
     "test:static-client-output": "node scripts/test-verify-static-client-output.mjs",
     "build:static-client": "pnpm run check:static-client-boundary && pnpm run test:static-client-output && pnpm --filter @workspace/static-client run build",
@@ -56,9 +60,6 @@
       "markdown-it": "14.2.0",
       "esbuild": "0.28.2",
       "uuid": "14.0.0"
-    },
-    "patchedDependencies": {
-      "orval@8.27.0": "patches/orval@8.27.0.patch"
     }
   },
   "devDependencies": {

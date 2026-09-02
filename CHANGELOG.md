@@ -14,9 +14,10 @@
 ### Fixed
 
 - Cleared the current dependency audit findings with compatibility-safe package
-  updates and exact transitive security overrides. The hosted build keeps the
-  server sanitizer external so jsdom can load its packaged assets, and Orval's
-  patched YAML import remains compatible with the hardened `js-yaml` release.
+  updates and exact transitive security overrides. Compatible codegen remains
+  pinned and now has a clean-regeneration drift gate; CI and the repository
+  engine contract now use Node 22.18+. The hosted build keeps the server
+  sanitizer external so jsdom can load its packaged assets.
 - Hardened CI and the local Claude proxy by declaring least-privilege GitHub
   Actions permissions and returning a fixed client-safe message when an
   upstream proxy request fails instead of exposing the caught error text.
