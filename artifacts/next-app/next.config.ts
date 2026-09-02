@@ -32,6 +32,10 @@ const cspDirectives = [
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@workspace/api-client-react", "@workspace/api-zod"],
+  // isomorphic-dompurify loads jsdom on the server. Keep both packages in
+  // Node's runtime loader so jsdom can resolve its bundled stylesheet from its
+  // real package directory instead of a webpack-generated directory.
+  serverExternalPackages: ["isomorphic-dompurify", "jsdom"],
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [

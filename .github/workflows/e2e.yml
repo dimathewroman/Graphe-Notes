@@ -5,6 +5,9 @@ on:
     branches: [master]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 # Shared env vars used by both build and the next start server.
 # Tests run in demo mode — no real credentials required.
 # Placeholders allow Next.js to start without crashing on missing vars.
@@ -74,6 +77,7 @@ jobs:
     timeout-minutes: 35
 
     permissions:
+      contents: read
       pull-requests: write  # Required to post the performance PR comment
 
     # Demo-AI harness: enable the mock AI path for the e2e suite ONLY (baked into

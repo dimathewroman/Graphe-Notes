@@ -207,8 +207,8 @@ createServer((req, res) => {
           return streamCompletion(res, payload.model || model, content, env.usage || {});
         }
         return json(res, 200, completion(payload.model || model, content, env.usage || {}));
-      } catch (e) {
-        return oaiError(res, 500, e?.message || String(e));
+      } catch {
+        return oaiError(res, 500, "Claude proxy request failed");
       }
     });
     return;

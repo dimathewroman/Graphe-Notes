@@ -8,12 +8,12 @@
   },
   "dependencies": {
     "geist": "^1.7.0",
-    "next": "^16.2.12",
+    "next": "^16.3.4",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.14",
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
