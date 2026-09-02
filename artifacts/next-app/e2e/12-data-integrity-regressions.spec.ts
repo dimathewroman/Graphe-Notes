@@ -52,10 +52,23 @@ test.describe("Data integrity regressions", () => {
     const bText = ((await editor.textContent()) ?? "").trim().slice(0, 24);
     expect(bText.length).toBeGreaterThan(4);
 
+    // Server-baseline content can render before collaboration has finished
+    // bootstrapping. Wait until B is truly interactive before exercising Undo.
+    await expect(editor).toBeEditable();
+
     // Undo inside note B. Correct behavior: note B's own content is untouched.
     await editor.click();
     await page.keyboard.press("ControlOrMeta+z");
     await expect(editor).toContainText(bText);
+
+    // Once B receives a real user edit, its own Yjs UndoManager history must
+    // remain available and revert that edit without touching the baseline.
+    const bDraftMarker = "NOTE_B_REAL_EDIT_V1";
+    await page.keyboard.type(bDraftMarker);
+    await expect(editor).toContainText(bDraftMarker);
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect(editor).toContainText(bText);
+    await expect(editor).not.toContainText(bDraftMarker);
   });
 
   // ── V2: no save flush on tab backgrounding ─────────────────────────────────
