@@ -3,7 +3,14 @@ name: CI
 on:
   pull_request:
     branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   workflow_dispatch:
+
+# Keep only the newest run for each PR. Manual runs have their own groups and
+# are never canceled by this policy.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -40,6 +47,7 @@ jobs:
   # required status checks so red CI blocks merge (closes audit §A10a).
   check:
     name: Typecheck
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -73,6 +81,7 @@ jobs:
   # measurements and visual regression comparisons.
   e2e:
     name: E2E Tests
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
